@@ -3488,13 +3488,25 @@ impl HomeWidgets {
                                         div()
                                             .flex()
                                             .flex_col()
-                                            .justify_between()
                                             .flex_shrink_0()
-                                            .pb(px(AXIS_HEIGHT))
+                                            .pb(px(AXIS_HEIGHT + 4.))
                                             .pr(px(16.))
-                                            .child(label(projection.peak.clone()))
-                                            .child(label(projection.midpoint.clone()))
-                                            .child(label("0 min".into())),
+                                            .child(
+                                                div().relative().flex_1().w(px(62.)).children(
+                                                    [
+                                                        (0., projection.peak.clone()),
+                                                        (0.5, projection.midpoint.clone()),
+                                                        (1., "0 min".into()),
+                                                    ]
+                                                    .map(|(at, text)| {
+                                                        label(text)
+                                                            .absolute()
+                                                            .top(gpui_kit::relative(at))
+                                                            .mt(px(-8.))
+                                                            .line_height(px(16.))
+                                                    }),
+                                                ),
+                                            ),
                                     )
                                     .child(
                                         div()

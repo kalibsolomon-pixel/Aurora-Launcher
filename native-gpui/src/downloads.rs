@@ -260,8 +260,7 @@ fn settle_notice(result: &api::ApiResult<Value>) -> String {
 }
 
 /// Shown instead of the rows while the queue is empty.
-/// The empty-queue state: `ui::empty_state` with the body held to a 400px
-/// measure so the sentence wraps into balanced lines.
+/// An unframed empty state, with a bounded reading measure.
 fn empty_queue(t: &crate::theme::AuroraTheme, title: String, body: &'static str) -> gpui::Div {
     div()
         .flex()
@@ -273,10 +272,6 @@ fn empty_queue(t: &crate::theme::AuroraTheme, title: String, body: &'static str)
         .w(px(480.))
         .max_w_full()
         .text_center()
-        .rounded(t.radius_lg)
-        .bg(t.card)
-        .border_1()
-        .border_color(t.border_subtle)
         .child(ui::icon_tile(t, Some("download"), 48., true))
         .child(
             div()
@@ -1139,7 +1134,7 @@ impl Render for Downloads {
                 t,
                 "Downloads",
                 Some(if active_rows.is_empty() && finished_rows.is_empty() {
-                    "Installs you start appear here.".into()
+                    "Track installation progress and recent results.".into()
                 } else {
                     summary.clone().into()
                 }),
@@ -1148,7 +1143,7 @@ impl Render for Downloads {
             page = page.child(
                 div()
                     .w_full()
-                    .min_h(px(460.))
+                    .min_h(px(360.))
                     .flex()
                     .items_center()
                     .justify_center()

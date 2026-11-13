@@ -2010,6 +2010,9 @@ impl Discover {
             cx.notify();
             return;
         };
+        if !append {
+            self.results_scroll.set_offset(gpui::point(px(0.), px(0.)));
+        }
         let Some(host) = self.host.clone() else {
             cx.notify();
             return;
@@ -2532,8 +2535,10 @@ fn section_label(t: &theme::AuroraTheme, text: impl Into<SharedString>) -> Div {
 }
 
 impl Render for Discover {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme::theme(cx).clone();
+        let compact = window.viewport_size().width < px(1000.);
+        let bounded = !compact && window.viewport_size().height >= px(640.);
 
         // Built before the immutable state borrow below; a dialog close that
         // slips past the veto (or an imperative close) still resets
@@ -2591,7 +2596,7 @@ impl Render for Discover {
             .as_ref()
             .and_then(|id| s.instances.iter().position(|i| i.id == *id));
 
-        let mut filters = div().flex().gap(px(12.));
+        let mut filters = div().flex().flex_wrap().gap(px(12.));
         if s.is_pack() {
             filters = filters.child(field(
                 &palette,
@@ -2713,6 +2718,7 @@ impl Render for Discover {
         });
 
         let toolbar = ui::card(&palette)
+            .flex_shrink_0()
             .p(px(12.))
             .gap(px(12.))
             .child(
@@ -2759,7 +2765,9 @@ impl Render for Discover {
             s.summary()
         };
 
-        let mut list = ui::list_card(&palette).id("discover-results");
+        let mut list = ui::list_card(&palette)
+            .id("discover-results")
+            .when(bounded, |list| list.border_0().rounded(px(0.)));
         let total = s.results.len();
         for (index, project) in s.results.iter().enumerate() {
             let id = project.project_id.clone();
@@ -2800,9 +2808,9 @@ impl Render for Discover {
                 ui::row(&palette, index + 1 == total)
                     .id(("result", index))
                     .gap(px(14.))
-                    .h(px(92.))
-                    .min_h(px(92.))
-                    .max_h(px(92.))
+                    .h(px(80.))
+                    .min_h(px(80.))
+                    .max_h(px(80.))
                     .flex_shrink_0()
                     .py(px(0.))
                     .hover(move |style| style.bg(hover))
@@ -2847,7 +2855,7 @@ impl Render for Discover {
                                             })
                                             .child(project.title.clone()),
                                     )
-                                    .when(!project.author.is_empty(), |line| {
+                                    .when(!compact && !project.author.is_empty(), |line| {
                                         line.child(
                                             div()
                                                 .flex_shrink_0()
@@ -2856,27 +2864,46 @@ impl Render for Discover {
                                                 .child(format!("by {}", project.author)),
                                         )
                                     })
-                                    .child(meta),
+                                    .when(!compact, |line| line.child(meta)),
                             )
                             .child(
                                 div()
                                     .overflow_hidden()
-                                    .max_h(px(36.))
-                                    .line_clamp(2)
+                                    .max_h(px(if compact { 18. } else { 36. }))
+                                    .line_clamp(if compact { 1 } else { 2 })
                                     .text_size(px(ui::TEXT_BODY))
                                     .line_height(px(18.))
                                     .text_color(palette.muted_foreground)
+                                    .when(compact, |summary| {
+                                        summary.whitespace_nowrap().text_ellipsis()
+                                    })
                                     .child(project.summary.clone()),
-                            ),
+                            )
+                            .when(compact, |block| {
+                                block.child(
+                                    ui::caption(
+                                        &palette,
+                                        format!(
+                                            "{} · {}",
+                                            project.author,
+                                            download_label(project.downloads)
+                                        ),
+                                    )
+                                    .whitespace_nowrap()
+                                    .overflow_hidden()
+                                    .text_ellipsis(),
+                                )
+                            }),
                     )
                     .child(
                         div()
                             .flex()
                             .flex_none()
-                            .w(px(178.))
+                            .w(px(if compact { 82. } else { 178. }))
+                            .when(compact, |actions| actions.flex_col())
                             .items_center()
                             .justify_end()
-                            .gap(px(8.))
+                            .gap(px(if compact { 4. } else { 8. }))
                             .child({
                                 let id = id.clone();
                                 AuroraButton::new(("details", index), "Details")
@@ -2942,9 +2969,11 @@ impl Render for Discover {
             } else {
                 div().into_any_element()
             }
-        } else {
+        } else if bounded {
             div()
                 .relative()
+                .flex_1()
+                .min_h(px(0.))
                 .rounded(palette.radius_lg)
                 .overflow_hidden()
                 .border_1()
@@ -2952,7 +2981,8 @@ impl Render for Discover {
                 .child(
                     div()
                         .id("discover-result-scroll")
-                        .max_h(px(368.))
+                        .size_full()
+                        .pr(px(8.))
                         .overflow_y_scroll()
                         .track_scroll(&self.results_scroll)
                         .child(list),
@@ -2963,17 +2993,22 @@ impl Render for Discover {
                     &self.results_scroll,
                 ))
                 .into_any_element()
+        } else {
+            list.into_any_element()
         };
 
-        div()
+        let page = div()
             .w_full()
+            .when(bounded, |page| page.h_full())
             .min_w(px(0.))
+            .min_h(px(0.))
             .flex()
             .flex_col()
-            .gap(px(ui::PAGE_GAP))
+            .gap(px(16.))
             .child(
                 div()
                     .flex()
+                    .flex_shrink_0()
                     .items_start()
                     .justify_between()
                     .gap(px(16.))
@@ -3000,13 +3035,18 @@ impl Render for Discover {
                 div()
                     .flex()
                     .flex_col()
+                    .when(bounded, |region| region.flex_1().min_h(px(0.)))
                     .gap(px(12.))
                     .when(has_notes, |block| block.child(notes))
                     .when(!count.is_empty() && !s.results.is_empty(), |block| {
                         block.child(ui::caption(&palette, count.clone()))
                     })
                     .child(results),
-            )
+            );
+        div()
+            .w_full()
+            .when(bounded, |root| root.h_full())
+            .child(page)
             .child(details_panel)
     }
 }

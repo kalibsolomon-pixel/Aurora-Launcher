@@ -464,7 +464,7 @@ fn status_text(status: &str) -> &'static str {
 fn status_line(t: &theme::AuroraTheme, status: &str, extra: Option<&'static str>) -> gpui_kit::Div {
     let (label, color, text_color) = match status {
         "signedIn" => ("Signed in", t.success, t.subtle_foreground),
-        "reauthenticationRequired" => ("Session expired", t.warning, t.warning),
+        "reauthenticationRequired" => ("Sign-in needed", t.warning, t.warning),
         _ => ("Unavailable", t.subtle_foreground, t.subtle_foreground),
     };
     div()
@@ -1296,14 +1296,14 @@ impl Render for Accounts {
                             AuroraButton::new(
                                 gpui_kit::SharedString::from(format!("restore-{id}")),
                                 if reauth {
-                                    "Restore session"
+                                    "Reconnect"
                                 } else {
                                     "Refresh session"
                                 },
                             )
                             .accessibility_label(format!(
                                 "{} session for {}",
-                                if reauth { "Restore" } else { "Refresh" },
+                                if reauth { "Reconnect" } else { "Refresh" },
                                 account.minecraft_name
                             ))
                             .variant(if reauth && selected {
@@ -1394,7 +1394,7 @@ impl Render for Accounts {
                                 )
                                 .child(ui::caption(
                                     &palette,
-                                    "Restore session uses your saved credential. Use Sign in with Microsoft to add an account or recover a session that cannot be restored. Credentials stay in Windows Credential Manager.",
+                                    "Reconnect tries your saved Microsoft credential. If the session cannot be renewed, choose Sign in with Microsoft. Credentials stay in Windows Credential Manager.",
                                 )),
                         ),
                 );

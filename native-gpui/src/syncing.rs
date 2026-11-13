@@ -1131,11 +1131,6 @@ impl Render for Syncing {
             let view = cx.entity();
             let enabled = draft.enabled;
             // The master switch is stated in words, not only by the toggle.
-            let status_label: SharedString = if enabled {
-                status_label.into()
-            } else {
-                format!("Off · {status_label}").into()
-            };
             let status_tone = if enabled {
                 status_tone
             } else {
@@ -1165,7 +1160,7 @@ impl Render for Syncing {
                                 .flex_shrink_0()
                                 .items_center()
                                 .gap(px(16.))
-                                .child(ui::status_badge(t, status_label, status_tone))
+                                .when(enabled, |state| state.child(ui::status_badge(t, status_label, status_tone)))
                                 .child(
                                     AuroraToggle::new("sync-enabled")
                                         .label("Sync selected instances automatically")
@@ -1594,7 +1589,7 @@ impl Render for Syncing {
                             .gap(px(8.))
                             .child(
                                 AuroraButton::new("sync-refresh", "Refresh sync")
-                                    .variant(ButtonVariant::Ghost)
+                                    .icon("refresh")
                                     .disabled(busy)
                                     .on_click({
                                         let view = view.clone();

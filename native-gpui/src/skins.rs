@@ -1820,8 +1820,8 @@ impl Render for Skins {
         let mut appearance = ui::card(&palette).gap(px(14.)).child(
             div()
                 .flex()
-                .flex_col()
-                .items_start()
+                .flex_wrap()
+                .items_center()
                 .justify_between()
                 .gap(px(12.))
                 .child(ui::section_header(
@@ -1831,7 +1831,7 @@ impl Render for Skins {
                         Some(account) => format!("Appearance for {}.", account.name).into(),
                         None => "Sign in to wear skins and capes. Local imports work without an account.".into(),
                     }),
-                ))
+                ).flex_1().min_w(px(280.)))
                 .child(
                     div()
                         .flex()
@@ -1944,13 +1944,7 @@ impl Render for Skins {
                 // The header caption already says to sign in; nothing more to add.
             }
         }
-        let mut appearance_stack = div()
-            .flex()
-            .flex_col()
-            .flex_1()
-            .min_w(px(320.))
-            .gap(px(ui::PAGE_GAP))
-            .child(appearance);
+        let cape_card;
 
         // Library ----------------------------------------------------------------
         let favorites_view = view.clone();
@@ -2339,35 +2333,31 @@ impl Render for Skins {
                         ),
                 );
             }
-            appearance_stack = appearance_stack.child(
-                ui::list_card(&palette)
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap(px(12.))
-                            .px(px(16.))
-                            .py(px(14.))
-                            .child(ui::section_header(
-                                &palette,
-                                "Capes",
-                                Some("Capes on your Minecraft account.".into()),
-                            ))
-                            .when(any_worn, |head| {
-                                head.child(
-                                    AuroraButton::new("skins-cape-disable", "Stop wearing cape")
-                                        .variant(ButtonVariant::Ghost)
-                                        .size(ButtonSize::Small)
-                                        .disabled(locked)
-                                        .on_click(
-                                            cx.listener(|this, _, _, cx| this.disable_cape(cx)),
-                                        ),
-                                )
-                            }),
-                    )
-                    .child(capes),
-            );
+            cape_card = ui::list_card(&palette)
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(12.))
+                        .px(px(16.))
+                        .py(px(14.))
+                        .child(ui::section_header(
+                            &palette,
+                            "Capes",
+                            Some("Capes on your Minecraft account.".into()),
+                        ))
+                        .when(any_worn, |head| {
+                            head.child(
+                                AuroraButton::new("skins-cape-disable", "Stop wearing cape")
+                                    .variant(ButtonVariant::Ghost)
+                                    .size(ButtonSize::Small)
+                                    .disabled(locked)
+                                    .on_click(cx.listener(|this, _, _, cx| this.disable_cape(cx))),
+                            )
+                        }),
+                )
+                .child(capes);
         } else {
             // Keep account-dependent cape status beside current appearance.
             let (title, detail) = match signed_in {
@@ -2378,19 +2368,17 @@ impl Render for Skins {
                 Some(_) => ("Capes", "Loading your capes…"),
                 None => ("Capes", "Sign in to see and wear your capes."),
             };
-            appearance_stack = appearance_stack.child(
-                ui::card(&palette).child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(14.))
-                        .child(ui::icon_tile(&palette, Some("checkroom"), 36., false))
-                        .child(
-                            ui::title_block(&palette, title, Some(detail.into()))
-                                .flex_1()
-                                .min_w(px(0.)),
-                        ),
-                ),
+            cape_card = ui::card(&palette).child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(14.))
+                    .child(ui::icon_tile(&palette, Some("checkroom"), 36., false))
+                    .child(
+                        ui::title_block(&palette, title, Some(detail.into()))
+                            .flex_1()
+                            .min_w(px(0.)),
+                    ),
             );
         }
 
@@ -2399,8 +2387,18 @@ impl Render for Skins {
             appearance_row = appearance_row.child(preview.clone());
         }
         content = content
-            .child(appearance_row.child(appearance_stack))
-            .child(library_card);
+            .child(appearance_row.child(library_card.flex_1().min_w(px(320.))))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(ui::PAGE_GAP))
+                    .items_start()
+                    .child(appearance.flex_1().min_w(px(320.)))
+                    .when(signed_in.is_some(), |row| {
+                        row.child(cape_card.flex_1().min_w(px(240.)))
+                    }),
+            );
 
         // Reviewed dialogs: the base dialog owns the focus trap; Enter never
         // confirms and Escape/backdrop close only while this page's own write

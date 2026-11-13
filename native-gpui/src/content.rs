@@ -106,6 +106,13 @@ struct Entry {
     project: Option<String>,
 }
 
+fn matches_filter(name: &str, file_name: &str, query: &str) -> bool {
+    let query = query.trim().to_lowercase();
+    query.is_empty()
+        || name.to_lowercase().contains(&query)
+        || file_name.to_lowercase().contains(&query)
+}
+
 /// What the core is asked for to draw one row's icon.
 #[derive(Clone, PartialEq)]
 enum IconSource {
@@ -535,6 +542,8 @@ pub struct Content {
     path: Entity<InputState>,
     path_value: String,
     _path_events: Subscription,
+    filter: Entity<InputState>,
+    _filter_events: Subscription,
     review: Option<Review>,
     removing: Option<(Target, Entry)>,
     updates: Entity<ContentUpdates>,
@@ -553,6 +562,11 @@ impl Content {
         cx: &mut Context<Self>,
     ) -> Self {
         let (tx, rx) = async_channel::unbounded();
+        let filter =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Filter installed content…"));
+        let filter_events = cx.subscribe(&filter, |_: &mut Self, _, _: &InputEvent, cx| {
+            cx.notify();
+        });
         let path =
             cx.new(|cx| InputState::new(window, cx).placeholder("Path to a local content file"));
         let subscription = cx.subscribe(&path, |this: &mut Self, input, _: &InputEvent, cx| {
@@ -637,6 +651,8 @@ impl Content {
             path,
             path_value: String::new(),
             _path_events: subscription,
+            filter,
+            _filter_events: filter_events,
             review: None,
             removing: None,
             updates,
@@ -1285,6 +1301,7 @@ fn icon_button(
         .items_center()
         .justify_center()
         .h(px(32.))
+        .w(px(32.))
         .px(px(8.))
         .gap(px(6.))
         .rounded(t.radius)
@@ -1298,8 +1315,7 @@ fn icon_button(
         .styles(|styles| styles.disabled(|style| style.opacity(0.42)))
         .text_size(px(ui::TEXT_CAPTION))
         .text_color(t.muted_foreground)
-        .child(crate::symbols::icon(Some(icon), px(16.), color))
-        .child("Remove…")
+        .child(crate::symbols::icon(Some(icon), px(18.), color))
 }
 
 fn kind_icon(kind: Kind) -> &'static str {
@@ -1511,6 +1527,57 @@ impl Render for Content {
                         ),
                 );
             let mut list = ui::list_card(t).child(toolbar);
+            let query = self.filter.read(cx).value();
+            let visible: Vec<_> = self
+                .entries
+                .iter()
+                .filter(|entry| matches_filter(&entry.name, &entry.file_name, query.as_ref()))
+                .collect();
+            if !self.loading && !self.entries.is_empty() {
+                list = list.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(16.))
+                        .py(px(8.))
+                        .border_b_1()
+                        .border_color(palette.border_subtle)
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(16.))
+                                .child(ui::caption(
+                                    t,
+                                    if query.trim().is_empty() {
+                                        format!("{} installed", self.entries.len())
+                                    } else {
+                                        format!("{} of {} shown", visible.len(), self.entries.len())
+                                    },
+                                ))
+                                .child(
+                                    div().w(px(250.)).child(
+                                        AuroraInput::new(&self.filter)
+                                            .label("Filter installed content"),
+                                    ),
+                                ),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(24.))
+                                .child(
+                                    div()
+                                        .w(px(48.))
+                                        .text_center()
+                                        .child(ui::caption(t, "Enabled")),
+                                )
+                                .child(div().w(px(32.))),
+                        ),
+                );
+            }
             if self.loading {
                 list = list.child(list_placeholder(t, "sync", "Loading content…", None));
             } else if self.entries.is_empty() {
@@ -1522,9 +1589,16 @@ impl Render for Content {
                         "Use Find more to browse Discover, or drop a .jar or .zip onto this page.",
                     ),
                 ));
+            } else if visible.is_empty() {
+                list = list.child(list_placeholder(
+                    t,
+                    "search",
+                    "No matching content.",
+                    Some("Try a different name or file name, or clear the filter."),
+                ));
             }
-            let last_index = self.entries.len().saturating_sub(1);
-            for (index, entry) in self.entries.iter().enumerate() {
+            let last_index = visible.len().saturating_sub(1);
+            for (index, entry) in visible.into_iter().enumerate() {
                 let e = entry.clone();
                 let v = view.clone();
                 let target = self.target().unwrap();
@@ -1593,7 +1667,6 @@ impl Render for Content {
                         .flex()
                         .items_center()
                         .gap(px(8.))
-                        .child(ui::caption(t, if enabled { "Enabled" } else { "Disabled" }))
                         .child(
                             AuroraToggle::new(gpui::SharedString::from(format!(
                                 "toggle-{}",
@@ -1640,7 +1713,7 @@ impl Render for Content {
                 });
                 list = list.child(
                     ui::row(t, index == last_index)
-                        .py(px(10.))
+                        .py(px(8.))
                         .child(match icon {
                             Some(image) => art_tile(
                                 gpui::SharedString::from(format!("icon-{}", entry.id)),
@@ -1665,15 +1738,8 @@ impl Render for Content {
                                 .flex()
                                 .flex_shrink_0()
                                 .items_center()
-                                .gap(px(16.))
+                                .gap(px(24.))
                                 .child(toggle)
-                                .child(
-                                    div()
-                                        .w(px(1.))
-                                        .h(px(20.))
-                                        .flex_shrink_0()
-                                        .bg(palette.border_subtle),
-                                )
                                 .child(remove),
                         ),
                 );
@@ -1932,6 +1998,21 @@ fn ownership_label(ownership: &str) -> &str {
 mod tests {
     use super::*;
     use std::sync::Arc;
+    #[test]
+    fn inventory_filter_matches_display_and_file_names_without_case_or_outer_spaces() {
+        assert!(matches_filter(
+            "Sodium",
+            "sodium-fabric-0.6.jar",
+            " SODIUM "
+        ));
+        assert!(matches_filter(
+            "Performance mod",
+            "sodium-fabric-0.6.jar",
+            "FABRIC-0.6"
+        ));
+        assert!(matches_filter("Sodium", "sodium.jar", "  "));
+        assert!(!matches_filter("Sodium", "sodium.jar", "iris"));
+    }
     #[test]
     fn content_tab_indexes_round_trip_and_clamp_like_slint() {
         for kind in [Kind::Mod, Kind::Resource, Kind::Shader] {

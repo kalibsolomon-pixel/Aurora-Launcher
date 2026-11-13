@@ -1611,7 +1611,9 @@ impl Launcher {
                 ));
             }
             if let Some((label, tone)) = self.readiness_badge(&instance.id) {
-                badges = badges.child(ui::status_badge(t, label, tone));
+                if label != "Sign in needed" {
+                    badges = badges.child(ui::status_badge(t, label, tone));
+                }
             }
             details = details.child(badges);
         }
@@ -1688,8 +1690,7 @@ impl Launcher {
                     ),
             );
         }
-        // Recent activity from Home's cached history fills the hero's right
-        // side; nothing is shown until that history has loaded.
+        // Secondary activity stays together below the launch controls.
         let stats = match (&self.home_widgets, instance) {
             (Some(home), Some(instance)) => home.read(cx).hero_stats(&instance.id),
             _ => Vec::new(),
@@ -1697,25 +1698,24 @@ impl Launcher {
         let stats = (!stats.is_empty()).then(|| {
             div()
                 .flex()
-                .flex_col()
                 .flex_shrink_0()
                 .gap(px(16.))
-                .pl(px(24.))
-                .border_l_1()
+                .pt(px(8.))
+                .border_t_1()
                 .border_color(t.border_subtle)
                 .children(
                     stats
                         .into_iter()
-                        .map(|(label, value)| ui::stat(t, label, value)),
+                        .map(|(label, value)| ui::stat(t, label, value).flex_1()),
                 )
         });
         let hero_index = out.len();
         out.push(
             div()
                 .flex()
-                .items_center()
-                .gap(px(24.))
-                .p(px(24.))
+                .flex_col()
+                .gap(px(12.))
+                .p(px(16.))
                 .h_full()
                 .rounded(px(16.))
                 .bg(gpui::linear_gradient(
@@ -2054,7 +2054,11 @@ impl Render for Launcher {
                     group.child(
                         ui::eyebrow(&palette, title)
                             .px(px(10.))
-                            .pt(px(16.))
+                            .pt(px(if window.viewport_size().height < px(600.) {
+                                8.
+                            } else {
+                                16.
+                            }))
                             .pb(px(6.)),
                     )
                 })
@@ -2106,6 +2110,10 @@ impl Render for Launcher {
             })
             .read(cx)
             .clone();
+        let browse_viewport = self.page == 5
+            && self.fatal_error.is_none()
+            && window.viewport_size().width >= px(1000.)
+            && window.viewport_size().height >= px(640.);
         let mut content = div()
             .flex()
             .flex_col()
@@ -2118,7 +2126,8 @@ impl Render for Launcher {
             .min_w(px(0.))
             .min_h(px(0.))
             .track_scroll(&page_scroll)
-            .overflow_y_scroll();
+            .when(browse_viewport, |page| page.overflow_hidden().pb(px(24.)))
+            .when(!browse_viewport, |page| page.overflow_y_scroll());
         if showcase() {
             // Design screenshots can start part-way down a long page.
             if let Some(y) = std::env::var("AURORA_SHOWCASE_SCROLL")
@@ -2359,7 +2368,13 @@ impl Render for Launcher {
                             .flex()
                             .flex_col()
                             .child(content)
-                            .child(ui::scrollbar(&palette, "page-scrollbar", &page_scroll)),
+                            .when(!browse_viewport, |region| {
+                                region.child(ui::scrollbar(
+                                    &palette,
+                                    "page-scrollbar",
+                                    &page_scroll,
+                                ))
+                            }),
                     )
                     .when_some(
                         self.load_error

@@ -538,6 +538,7 @@ impl RenderOnce for AuroraSlider {
                     .flex()
                     .items_baseline()
                     .justify_between()
+                    .when(!self.show_label, |row| row.justify_end())
                     .gap(px(8.))
                     .when(self.show_label, |row| {
                         row.child(
