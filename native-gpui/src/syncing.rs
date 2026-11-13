@@ -33,7 +33,7 @@ use gpui::{
     Subscription, Window, div, prelude::*, px,
 };
 use gpui_kit::base::{
-    Dialog,
+    Dialog, Switch, SwitchThumb, SwitchTrack,
     input::{InputEvent, InputState},
 };
 use tokio::runtime::Handle;
@@ -1034,6 +1034,52 @@ fn section_card(t: &crate::theme::AuroraTheme) -> Div {
     ui::card(t).gap(px(0.)).pb(px(6.))
 }
 
+/// An inert toggle for a locked group: same switch semantics (role, checked
+/// state, accessible name, disabled) but a muted track and thumb with no
+/// accent, so a switched-off master reads as "paused" instead of "on".
+fn locked_toggle(
+    t: &crate::theme::AuroraTheme,
+    id: impl Into<gpui::ElementId>,
+    label: impl Into<SharedString>,
+    checked: bool,
+) -> impl IntoElement {
+    let id = id.into();
+    Switch::new(id.clone())
+        .checked(checked)
+        .disabled(true)
+        .accessibility_label(label.into())
+        .relative()
+        .w(px(44.))
+        .h(px(36.))
+        .flex()
+        .items_center()
+        .justify_center()
+        .child(
+            SwitchTrack::new((id, "track"))
+                .checked(checked)
+                .disabled(true)
+                .relative()
+                .w(px(36.))
+                .h(px(20.))
+                .rounded_full()
+                .bg(t.control_hover)
+                .child(
+                    SwitchThumb::new(checked)
+                        .disabled(true)
+                        .absolute()
+                        .top(px(2.))
+                        .left(px(if checked { 18. } else { 2. }))
+                        .size(px(16.))
+                        .rounded_full()
+                        .bg(if checked {
+                            t.muted_foreground
+                        } else {
+                            t.subtle_foreground
+                        }),
+                ),
+        )
+}
+
 /// A right-aligned slot for one row's control.
 fn control_slot(child: impl IntoElement) -> Div {
     div()
@@ -1151,21 +1197,40 @@ impl Render for Syncing {
                     .child(status_strip),
             );
 
-            // Everything the master switch governs is dimmed while it is off.
-            let mut body = div()
-                .flex()
-                .flex_col()
-                .gap(px(ui::PAGE_GAP))
-                .when(!enabled, |this| this.opacity(0.55));
+            // While the master switch is off the cards keep full contrast; only
+            // their toggles go inert and a notice in each header says why.
+            let child_locked = editing_disabled || !enabled;
+            let off_notice = |t: &crate::theme::AuroraTheme| {
+                div()
+                    .flex()
+                    .flex_shrink_0()
+                    .items_center()
+                    .gap(px(6.))
+                    .text_size(px(ui::TEXT_CAPTION))
+                    .text_color(t.subtle_foreground)
+                    .child(crate::symbols::icon(
+                        Some("lock"),
+                        px(14.),
+                        t.subtle_foreground,
+                    ))
+                    .child("Turn on sync to change these")
+            };
+            let mut body = div().flex().flex_col().gap(px(ui::PAGE_GAP));
 
             // What to sync.
             let mut categories = section_card(t).child(
-                ui::section_header(
-                    t,
-                    "What to sync",
-                    Some("The kinds of files that stay in step across instances.".into()),
-                )
-                .pb(px(6.)),
+                div()
+                    .flex()
+                    .items_start()
+                    .justify_between()
+                    .gap(px(12.))
+                    .pb(px(6.))
+                    .child(ui::section_header(
+                        t,
+                        "What to sync",
+                        Some("The kinds of files that stay in step across instances.".into()),
+                    ))
+                    .when(!enabled, |this| this.child(off_notice(t))),
             );
             for (index, (id, label)) in CATEGORIES.iter().enumerate() {
                 let checked = draft.categories.iter().any(|current| current == id);
@@ -1177,11 +1242,19 @@ impl Render for Syncing {
                         Some(category_detail(id).into()),
                         index + 1 == CATEGORIES.len(),
                     )
-                    .child(
+                    .child(if !enabled {
+                        locked_toggle(
+                            t,
+                            SharedString::from(format!("sync-category-{id}")),
+                            *label,
+                            checked,
+                        )
+                        .into_any_element()
+                    } else {
                         AuroraToggle::new(SharedString::from(format!("sync-category-{id}")))
                             .label(*label)
                             .checked(checked)
-                            .disabled(editing_disabled)
+                            .disabled(child_locked)
                             .on_change({
                                 let view = view.clone();
                                 move |next: bool, _, _, cx| {
@@ -1189,8 +1262,9 @@ impl Render for Syncing {
                                         this.set_category_checked(id, next, cx)
                                     });
                                 }
-                            }),
-                    ),
+                            })
+                            .into_any_element()
+                    }),
                 );
             }
             body = body.child(categories);
@@ -1214,11 +1288,16 @@ impl Render for Syncing {
                         "Instances",
                         Some("Choose which instances take part in syncing.".into()),
                     ))
-                    .child(ui::badge(
-                        t,
-                        format!("{syncing} of {total} syncing"),
-                        ui::Tone::Neutral,
-                    )),
+                    .child(if enabled {
+                        ui::badge(
+                            t,
+                            format!("{syncing} of {total} syncing"),
+                            ui::Tone::Neutral,
+                        )
+                        .into_any_element()
+                    } else {
+                        off_notice(t).into_any_element()
+                    }),
             );
             if total == 0 {
                 list = list.child(
@@ -1276,22 +1355,31 @@ impl Render for Syncing {
                                 });
                             }),
                         )
-                        .child(
+                        .child(if !enabled {
+                            locked_toggle(
+                                t,
+                                SharedString::from(format!("sync-participant-{}", row.id)),
+                                row.name.clone(),
+                                row.checked,
+                            )
+                            .into_any_element()
+                        } else {
                             AuroraToggle::new(SharedString::from(format!(
                                 "sync-participant-{}",
                                 row.id
                             )))
                             .label(row.name.clone())
                             .checked(row.checked)
-                            .disabled(editing_disabled)
+                            .disabled(child_locked)
                             .on_change(
                                 move |next: bool, _, _, cx| {
                                     toggle_view.update(cx, |this, cx| {
                                         this.set_participant_checked(toggle_id.clone(), next, cx)
                                     });
                                 },
-                            ),
-                        ),
+                            )
+                            .into_any_element()
+                        }),
                 );
             }
             body = body.child(list);
@@ -1324,7 +1412,7 @@ impl Render for Syncing {
                             AuroraToggle::new("override-disabled")
                                 .label("Exclude this instance from syncing")
                                 .checked(value.is_some_and(|value| value.disabled))
-                                .disabled(editing_disabled)
+                                .disabled(child_locked)
                                 .on_change({
                                     let view = view.clone();
                                     let id = id.clone();
@@ -1366,7 +1454,7 @@ impl Render for Syncing {
                         bounds,
                     )
                     .selected(Some(mode))
-                    .disabled(editing_disabled)
+                    .disabled(child_locked)
                     .highlight(self.category_highlight[index])
                     .open(self.category_open[index] && !busy)
                     .on_open_change({

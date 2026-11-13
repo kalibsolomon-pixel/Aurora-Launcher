@@ -1210,7 +1210,7 @@ impl Render for Accounts {
                                 )),
                                 "Refresh session",
                             )
-                            .variant(ButtonVariant::Ghost)
+                            .variant(ButtonVariant::Default)
                             .size(ButtonSize::Small)
                             .icon("sync")
                             .disabled(busy)
@@ -1281,10 +1281,37 @@ impl Render for Accounts {
                             .child(actions),
                     );
                 }
-                content = content.child(list).child(ui::caption(
-                    &palette,
-                    "Sign-in opens in your system browser. Aurora never sees your password.",
-                ));
+                content = content.child(list).child(
+                    ui::card(&palette).child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(16.))
+                            .child(ui::icon_tile(&palette, Some("verified_user"), 40., true))
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(2.))
+                                    .min_w(px(0.))
+                                    .child(
+                                        div()
+                                            .text_size(px(ui::TEXT_BODY + 1.))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(palette.foreground)
+                                            .child("Secure Microsoft sign-in"),
+                                    )
+                                    .child(ui::muted(
+                                        &palette,
+                                        "Sign-in happens in your browser, and Aurora never sees your password.",
+                                    ))
+                                    .child(ui::caption(
+                                        &palette,
+                                        "Sessions are stored in Windows Credential Manager.",
+                                    )),
+                            ),
+                    ),
+                );
             }
         }
 

@@ -1760,6 +1760,8 @@ impl Discover {
             this.sync_queue_markers(cx);
             match event {
                 DownloadsEvent::Changed => cx.notify(),
+                // Already on Discover; nothing to open.
+                DownloadsEvent::OpenDiscover => {}
                 DownloadsEvent::Settled { .. } => {
                     this.apply_effects(DiscoverState::settlement_effects(), cx)
                 }
@@ -2411,7 +2413,8 @@ fn segmented(t: &theme::AuroraTheme) -> Div {
         .flex_shrink_0()
         .items_center()
         .gap(px(2.))
-        .p(px(3.))
+        .h(px(34.))
+        .p(px(2.))
         .rounded(t.radius)
         .bg(t.sunken)
         .border_1()
@@ -2726,6 +2729,7 @@ impl Render for Discover {
             }
             let can_quick_install = !s.is_pack();
             let hover = palette.control;
+            let title_hover = palette.ring;
             list = list.child(
                 ui::row(&palette, index + 1 == total)
                     .id(("result", index))
@@ -2753,6 +2757,7 @@ impl Render for Discover {
                                     .gap(px(8.))
                                     .child(
                                         div()
+                                            .id(("result-title", index))
                                             .min_w(px(0.))
                                             .flex_shrink(1.)
                                             .overflow_hidden()
@@ -2761,6 +2766,14 @@ impl Render for Discover {
                                             .text_size(px(14.))
                                             .font_weight(FontWeight::SEMIBOLD)
                                             .text_color(palette.foreground)
+                                            .cursor_pointer()
+                                            .hover(|style| style.text_color(title_hover))
+                                            .on_click({
+                                                let id = id.clone();
+                                                cx.listener(move |this, _, window, cx| {
+                                                    this.open_details(id.clone(), window, cx);
+                                                })
+                                            })
                                             .child(project.title.clone()),
                                     )
                                     .when(!project.author.is_empty(), |line| {
@@ -2775,6 +2788,7 @@ impl Render for Discover {
                             )
                             .child(
                                 div()
+                                    .max_w(px(560.))
                                     .line_clamp(2)
                                     .text_size(px(ui::TEXT_BODY))
                                     .text_color(palette.muted_foreground)

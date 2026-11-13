@@ -150,15 +150,15 @@ pub fn pose(band: usize, phase: f32, speed: u8) -> Pose {
 /// softly, while raised layers (dialogs, menus) stay nearly opaque so text
 /// never sits on a bright area. The theme owner applies these when the saved
 /// background is [`is_borealis`].
-pub const SIDEBAR_ALPHA: u8 = 0xc8;
-pub const SURFACE_ALPHA: u8 = 0xc8;
-pub const HOVER_ALPHA: u8 = 0xe0;
-pub const SUNKEN_ALPHA: u8 = 0xd8;
-pub const RAISED_ALPHA: u8 = 0xf5;
-pub const CARD_ALPHA: u8 = 0xd8;
+pub const SIDEBAR_ALPHA: u8 = 0xe6;
+pub const SURFACE_ALPHA: u8 = 0xe6;
+pub const HOVER_ALPHA: u8 = 0xf0;
+pub const SUNKEN_ALPHA: u8 = 0xec;
+pub const RAISED_ALPHA: u8 = 0xfa;
+pub const CARD_ALPHA: u8 = 0xee;
 /// The bands are ambience, not content: drawn at this opacity over the opaque
 /// theme background so the canvas stays calm behind text.
-pub const BAND_OPACITY: f32 = 0.5;
+pub const BAND_OPACITY: f32 = 0.32;
 
 /// The saved background ids, in the order of the Settings dropdown.
 pub const BACKGROUNDS: [&str; 2] = ["simple", "borealis"];
@@ -1047,7 +1047,7 @@ mod tests {
                 RAISED_ALPHA,
                 CARD_ALPHA
             ],
-            [0xc8, 0xc8, 0xe0, 0xd8, 0xf5, 0xd8]
+            [0xe6, 0xe6, 0xf0, 0xec, 0xfa, 0xee]
         );
     }
 }

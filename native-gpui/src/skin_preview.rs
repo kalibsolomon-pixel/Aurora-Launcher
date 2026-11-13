@@ -57,6 +57,57 @@ impl PreviewState {
     }
 }
 
+/// A built-in mannequin skin (classic, 64x64) used only to render the neutral
+/// model. Scene state keeps `skin: None`, so the UI still reports "neutral".
+fn neutral_skin() -> Arc<api::HeadAvatar> {
+    static SKIN: std::sync::OnceLock<Arc<api::HeadAvatar>> = std::sync::OnceLock::new();
+    SKIN.get_or_init(|| {
+        const SIZE: usize = 64;
+        let mut px = vec![0u8; SIZE * SIZE * 4];
+        let mut fill = |x0: usize, y0: usize, x1: usize, y1: usize, c: [u8; 3]| {
+            for y in y0..y1 {
+                for x in x0..x1 {
+                    let i = (y * SIZE + x) * 4;
+                    px[i..i + 4].copy_from_slice(&[c[0], c[1], c[2], 255]);
+                }
+            }
+        };
+        let skin = [222, 190, 168];
+        let hair = [88, 72, 70];
+        let shirt = [118, 124, 206];
+        let pants = [66, 74, 112];
+        let shoe = [48, 52, 78];
+        let eye = [58, 62, 96];
+        // Head (8x8x8 at 0,0): skin, then hair on top, back and the upper rows.
+        fill(0, 0, 32, 16, skin);
+        fill(8, 0, 24, 8, hair);
+        fill(24, 8, 32, 16, hair);
+        fill(8, 8, 16, 10, hair);
+        fill(0, 8, 8, 10, hair);
+        fill(16, 8, 24, 10, hair);
+        fill(10, 12, 11, 13, eye);
+        fill(13, 12, 14, 13, eye);
+        // Torso (8x12x4 at 16,16) and both arms: shirt with bare forearms.
+        fill(16, 16, 40, 32, shirt);
+        for (ax, ay) in [(40, 16), (32, 48)] {
+            fill(ax, ay, ax + 16, ay + 16, shirt);
+            fill(ax, ay + 10, ax + 16, ay + 16, skin);
+        }
+        // Legs (4x12x4 at 0,16 and 16,48): trousers with darker shoes.
+        for (lx, ly) in [(0, 16), (16, 48)] {
+            fill(lx, ly, lx + 16, ly + 16, pants);
+            fill(lx, ly + 13, lx + 16, ly + 16, shoe);
+        }
+        Arc::new(api::HeadAvatar {
+            rgba: Vec::new(),
+            skin_rgba: px,
+            skin_height: 64,
+            model: "classic".into(),
+        })
+    })
+    .clone()
+}
+
 pub struct SkinPreview {
     runtime: tokio::runtime::Handle,
     state: PreviewState,
@@ -125,7 +176,11 @@ impl SkinPreview {
         let Some(request) = self.state.start() else {
             return;
         };
-        let work = request.clone();
+        let mut work = request.clone();
+        if work.skin.is_none() {
+            // Neutral model: a tonal mannequin texture so the form reads.
+            work.skin = Some(neutral_skin());
+        }
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.runtime.spawn(async move {
             let result = guarded(async move {
@@ -222,14 +277,22 @@ impl Render for SkinPreview {
             .rounded(t.radius)
             .bg(gpui::linear_gradient(
                 180.,
-                gpui::linear_color_stop(t.sunken, 0.),
                 gpui::linear_color_stop(
                     gpui::Hsla {
-                        l: (t.sunken.l + 0.05).min(1.),
+                        l: (t.sunken.l + 0.06).min(1.),
+                        s: t.accent.s * 0.35,
+                        a: 1.0,
+                        ..t.accent
+                    },
+                    0.,
+                ),
+                gpui::linear_color_stop(
+                    gpui::Hsla {
+                        l: (t.sunken.l + 0.03).min(1.),
                         a: 1.0,
                         ..t.sunken
                     },
-                    1.,
+                    0.72,
                 ),
             ))
             .border_1()
@@ -275,6 +338,27 @@ impl Render for SkinPreview {
                 }
                 cx.stop_propagation();
             }))
+            // Soft floor shadow under the model: stacked ellipses fade outward.
+            .when(self.image.is_some(), |d| {
+                let shadow = |w: f32, h: f32, a: f32| {
+                    div()
+                        .absolute()
+                        .left(px((320. - w) / 2. - 1.))
+                        .top(px(394. - h / 2.))
+                        .w(px(w))
+                        .h(px(h))
+                        .rounded_full()
+                        .bg(gpui::Hsla {
+                            h: 0.,
+                            s: 0.,
+                            l: 0.,
+                            a,
+                        })
+                };
+                d.child(shadow(200., 28., 0.16))
+                    .child(shadow(150., 19., 0.22))
+                    .child(shadow(100., 11., 0.34))
+            })
             .when_some(self.image.clone(), |d, image| {
                 d.child(img(image).w(px(318.)).h(px(438.)))
             })

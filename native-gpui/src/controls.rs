@@ -139,7 +139,8 @@ impl RenderOnce for AuroraButton {
         let nav = self.variant == ButtonVariant::Nav;
         let primary = self.variant == ButtonVariant::Primary;
         let (bg, fg, hover_bg, border) = match self.variant {
-            ButtonVariant::Default => (t.control, t.foreground, t.control_hover, t.border_subtle),
+            // Filled, borderless: one secondary style everywhere.
+            ButtonVariant::Default => (t.control, t.foreground, t.control_hover, t.control),
             ButtonVariant::Primary => (t.accent, t.accent_foreground, t.accent_hover, t.accent),
             ButtonVariant::Danger => (
                 Hsla { a: 0.10, ..t.danger },
@@ -617,6 +618,7 @@ pub struct AuroraSelect {
     trigger_focus: FocusHandle,
     content_focus: FocusHandle,
     bounds: BoundsCell,
+    width: Pixels,
     on_open_change: Option<OpenChangeHandler>,
     on_highlight: Option<IndexHandler>,
     on_confirm: Option<IndexHandler>,
@@ -642,6 +644,7 @@ impl AuroraSelect {
             trigger_focus: trigger_focus.clone(),
             content_focus: content_focus.clone(),
             bounds,
+            width: px(220.),
             on_open_change: None,
             on_highlight: None,
             on_confirm: None,
@@ -665,6 +668,12 @@ impl AuroraSelect {
 
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    /// Trigger width (default 220px). Long values are truncated with an ellipsis.
+    pub fn width(mut self, width: Pixels) -> Self {
+        self.width = width;
         self
     }
 
@@ -768,7 +777,15 @@ impl RenderOnce for AuroraSelect {
             .text_size(px(13.))
             .when(self.disabled, |style| style.opacity(0.45))
             .hover(|style| style.bg(t.surface_hover))
-            .child(div().child(current.clone()))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .overflow_hidden()
+                    .text_ellipsis()
+                    .whitespace_nowrap()
+                    .child(current.clone()),
+            )
             .child(div().text_color(t.muted_foreground).child("▾"))
             .on_click({
                 let on_open_change = self.on_open_change.clone();
@@ -883,7 +900,7 @@ impl RenderOnce for AuroraSelect {
                     }
                 }
             })
-            .w(px(220.))
+            .w(self.width)
             .child(
                 // Capture the trigger bounds every prepaint so the popup can be
                 // positioned under it (the pattern gpui-component's Select uses).

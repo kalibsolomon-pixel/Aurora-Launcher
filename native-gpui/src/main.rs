@@ -1166,9 +1166,13 @@ impl Launcher {
                 let discover =
                     cx.new(|cx| Discover::new(self.host.clone(), self.rt.clone(), window, cx));
                 let downloads = discover.read(cx).downloads();
-                self._subscriptions.push(cx.subscribe(
+                self._subscriptions.push(cx.subscribe_in(
                     &downloads,
-                    |this, downloads, event: &DownloadsEvent, cx| {
+                    window,
+                    |this, downloads, event: &DownloadsEvent, window, cx| {
+                        if matches!(event, DownloadsEvent::OpenDiscover) {
+                            this.open_page(5, window, cx);
+                        }
                         // The Slint host toasts a settled install wherever the
                         // user is; the status line is this host's equivalent.
                         if matches!(event, DownloadsEvent::Settled { .. }) {
@@ -1604,17 +1608,19 @@ impl Launcher {
         let hero_icon = instance.map(|instance| {
             instance_icon(
                 stored_icon(&launcher.icons, &instance.id),
-                112.,
+                96.,
                 true,
                 palette,
             )
         });
+        let hero_index = out.len();
         out.push(
             div()
                 .flex()
                 .items_center()
-                .gap(px(28.))
+                .gap(px(24.))
                 .p(px(28.))
+                .h_full()
                 .rounded(px(16.))
                 .bg(gpui::linear_gradient(
                     100.,
@@ -1719,17 +1725,16 @@ impl Launcher {
             }
         }
         if launcher.instances.len() > 1 || selected.is_none() {
-            let mut tiles = div().flex().flex_wrap().gap(px(12.));
+            let mut tiles = div().flex().flex_col().gap(px(2.));
             for (i, item) in launcher.instances.iter().enumerate() {
                 let id = item.id.clone();
                 let chosen = selected.as_deref() == Some(item.id.as_str());
                 tiles = tiles.child(
-                    ui::tile_button(t, ("instance", i), chosen)
-                        .w(px(248.))
+                    ui::list_button(t, ("instance", i), chosen)
                         .disabled(self.controls_blocked())
                         .child(instance_icon(
                             stored_icon(&launcher.icons, &item.id),
-                            40.,
+                            34.,
                             chosen,
                             palette,
                         ))
@@ -1754,15 +1759,42 @@ impl Launcher {
                         })),
                 );
             }
-            out.push(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(12.))
-                    .child(ui::section_header(t, "Your instances", None))
-                    .child(tiles)
-                    .into_any_element(),
-            );
+            let switcher = div()
+                .flex()
+                .flex_col()
+                .flex_shrink_0()
+                .w(px(272.))
+                .gap(px(8.))
+                .p(px(10.))
+                .rounded(px(16.))
+                .bg(t.card)
+                .border_1()
+                .border_color(t.border_subtle)
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(8.))
+                        .pt(px(6.))
+                        .child(ui::eyebrow(t, "YOUR INSTANCES"))
+                        .child(ui::caption(t, launcher.instances.len().to_string())),
+                )
+                .child(tiles);
+            if hero_index < out.len() {
+                let hero = out.remove(hero_index);
+                out.insert(
+                    hero_index,
+                    div()
+                        .flex()
+                        .gap(px(16.))
+                        .child(div().flex_1().min_w(px(0.)).child(hero))
+                        .child(switcher)
+                        .into_any_element(),
+                );
+            } else {
+                out.push(switcher.into_any_element());
+            }
         }
         out
     }
@@ -1992,6 +2024,11 @@ impl Render for Launcher {
                 }
             }
             7 => {
+                content = content.child(ui::page_header(
+                    &palette,
+                    "Skins",
+                    Some("Preview, import and wear skins and capes.".into()),
+                ));
                 let mut appearance = div().flex().flex_wrap().gap_6();
                 if let Some(preview) = &self.skin_preview {
                     appearance = appearance.child(preview.clone());

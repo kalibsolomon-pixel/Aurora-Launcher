@@ -791,9 +791,9 @@ fn update_card(t: &theme::AuroraTheme) -> gpui::Div {
     div()
         .flex()
         .flex_col()
-        .gap(px(8.))
-        .px(px(16.))
-        .py(px(12.))
+        .gap(px(6.))
+        .px(px(14.))
+        .py(px(10.))
         .rounded(t.radius_lg)
         .bg(t.card)
         .border_1()
@@ -807,7 +807,7 @@ fn quiet_card(t: &theme::AuroraTheme, title: &str, detail: &str) -> gpui::Div {
             .flex()
             .items_center()
             .gap(px(12.))
-            .child(ui::icon_tile(t, Some("system_update"), 36., false))
+            .child(ui::icon_tile(t, Some("system_update"), 28., false))
             .child(ui::title_block(t, title.to_owned(), Some(detail.to_owned().into())).flex_1()),
     )
 }
@@ -866,12 +866,12 @@ impl Render for ClientUpdates {
                 .flex()
                 .items_center()
                 .gap(px(12.))
-                .child(ui::icon_tile(&palette, Some("system_update"), 36., false))
+                .child(ui::icon_tile(&palette, Some("system_update"), 28., false))
                 .child(
                     ui::title_block(&palette, "Aurora Client updates", Some(status.into()))
                         .flex_1(),
                 )
-                .child(
+                .child(if self.state.applicable || busy {
                     AuroraButton::new(
                         "client-updates-check",
                         if checking {
@@ -885,8 +885,12 @@ impl Render for ClientUpdates {
                     .disabled(busy || self.blocked || !self.state.applicable)
                     .on_click(move |_, _, cx| {
                         v.update(cx, |s, cx| s.start_check(cx));
-                    }),
-                ),
+                    })
+                    .into_any_element()
+                } else {
+                    // Nothing to run: a status, not a dead button.
+                    ui::badge(&palette, "Not installed", ui::Tone::Neutral).into_any_element()
+                }),
         );
         if !self.state.message.is_empty() {
             let message = self.state.completed.as_ref().map_or_else(
@@ -895,7 +899,7 @@ impl Render for ClientUpdates {
             );
             card = card.child(
                 div()
-                    .pl(px(48.))
+                    .pl(px(40.))
                     .text_size(px(ui::TEXT_CAPTION))
                     .text_color(palette.foreground)
                     .child(message),
@@ -904,7 +908,7 @@ impl Render for ClientUpdates {
         if let Some(error) = &self.state.error {
             card = card.child(
                 div()
-                    .pl(px(48.))
+                    .pl(px(40.))
                     .text_size(px(ui::TEXT_CAPTION))
                     .text_color(palette.danger)
                     .child(error.clone()),

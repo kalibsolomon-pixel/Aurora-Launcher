@@ -1756,27 +1756,7 @@ impl Render for Skins {
             .flex_col()
             .gap(px(ui::PAGE_GAP))
             .w_full()
-            .text_color(palette.foreground)
-            .child(
-                div()
-                    .flex()
-                    .items_start()
-                    .justify_between()
-                    .gap(px(16.))
-                    .child(ui::page_header(
-                        &palette,
-                        "Skins",
-                        Some("Preview, import and wear skins and capes.".into()),
-                    ))
-                    .child(
-                        div().flex_shrink_0().child(
-                            AuroraButton::new("skins-refresh", "Refresh")
-                                .icon("refresh")
-                                .disabled(locked || no_host)
-                                .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
-                        ),
-                    ),
-            );
+            .text_color(palette.foreground);
 
         if no_host {
             return div().size_full().child(content.child(ui::empty_state(
@@ -1844,13 +1824,25 @@ impl Render for Skins {
                     }),
                 ))
                 .child(
-                    div().flex_shrink_0().child(
-                        AuroraButton::new("skins-preview-current", "Preview")
-                            .size(ButtonSize::Small)
-                            .icon("visibility")
-                            .disabled(no_host)
-                            .on_click(cx.listener(|this, _, _, cx| this.preview_current(cx))),
-                    ),
+                    div()
+                        .flex()
+                        .flex_shrink_0()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(
+                            AuroraButton::new("skins-preview-current", "Preview")
+                                .size(ButtonSize::Small)
+                                .icon("visibility")
+                                .disabled(no_host)
+                                .on_click(cx.listener(|this, _, _, cx| this.preview_current(cx))),
+                        )
+                        .child(
+                            AuroraButton::new("skins-refresh", "Refresh")
+                                .size(ButtonSize::Small)
+                                .icon("refresh")
+                                .disabled(locked || no_host)
+                                .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
+                        ),
                 ),
         );
         appearance = appearance.child(

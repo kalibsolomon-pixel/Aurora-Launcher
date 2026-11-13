@@ -2223,7 +2223,7 @@ impl Render for InstanceEditor {
                         .child(ui::section_header(
                             &t,
                             "Your instances",
-                            Some("Select one to edit its settings.".into()),
+                            Some("Choose an instance to edit.".into()),
                         ))
                         .child(ui::caption(
                             &t,
@@ -2252,7 +2252,6 @@ impl Render for InstanceEditor {
                             .accessibility_label(label)
                             .disabled(busy)
                             .selected(selected)
-                            .relative()
                             .w_full()
                             .flex()
                             .items_center()
@@ -2269,18 +2268,6 @@ impl Render for InstanceEditor {
                             .focus(move |style| style.bg(hover))
                             .on_click(move |_, window, cx| {
                                 view.update(cx, |v, cx| v.choose(id.clone(), window, cx));
-                            })
-                            .when(selected, |row| {
-                                row.child(
-                                    div()
-                                        .absolute()
-                                        .left_0()
-                                        .top(px(10.))
-                                        .bottom(px(10.))
-                                        .w(px(3.))
-                                        .rounded_full()
-                                        .bg(t.ring),
-                                )
                             })
                             .child(ui::icon_tile(
                                 &t,
@@ -2380,12 +2367,14 @@ impl Render for InstanceEditor {
                                             Some("folder_open"),
                                             ButtonVariant::Default,
                                         ))
-                                        .child(action_button(
-                                            "select",
-                                            "Select instance",
-                                            None,
-                                            ButtonVariant::Default,
-                                        )),
+                                        .when(!active, |buttons| {
+                                            buttons.child(action_button(
+                                                "select",
+                                                "Make active",
+                                                None,
+                                                ButtonVariant::Default,
+                                            ))
+                                        }),
                                 ),
                         )
                         .child(callout(&t, icon, tone, attention, instance_note(instance))),

@@ -167,7 +167,7 @@ fn mods(inv: api::ModInventory) -> Vec<Entry> {
                 "{} · {} · {} · {}",
                 version,
                 if e.enabled { "Enabled" } else { "Disabled" },
-                e.ownership,
+                ownership_label(&e.ownership),
                 provenance(&e.provenance)
             );
             for w in e.warnings {
@@ -762,7 +762,19 @@ impl Content {
                         self.loading = false;
                         self.revision = self.revision.wrapping_add(1);
                     }
+                    let first_state = self.state.is_none();
+                    // The launcher's own selection, offered once as the starting point.
+                    let preferred = state
+                        .config
+                        .selected_instance_id
+                        .clone()
+                        .filter(|id| state.instances.iter().any(|i| &i.id == id));
                     self.state = Some(state);
+                    if first_state && self.selected.is_none() {
+                        if let Some(id) = preferred {
+                            self.select(id, cx);
+                        }
+                    }
                 }
                 Err(e) => self.message = error(e),
             },
@@ -1288,7 +1300,12 @@ impl Render for Content {
                     .pl(px(8.))
                     .pr(px(16.))
                     .rounded(palette.radius)
-                    .child(ui::icon_tile(t, Some("grid_view"), 32., chosen))
+                    .child(ui::icon_tile(
+                        t,
+                        state.icons.get(&instance.id).map(String::as_str),
+                        32.,
+                        chosen,
+                    ))
                     .child(ui::title_block(
                         t,
                         instance.display_name.clone(),
@@ -1759,6 +1776,15 @@ impl Render for Content {
         )
     }
 }
+/// Readable ownership for row metadata; unknown core values pass through.
+fn ownership_label(ownership: &str) -> &str {
+    match ownership {
+        "userManaged" => "Added manually",
+        "packManaged" => "From modpack",
+        other => other,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -103,7 +103,7 @@ const MAX_ANCHOR_ROW: i32 = 63;
 /// Responsive grid geometry (matches the Slint `WidgetGrid` constants).
 const GRID_GAP: f32 = 14.0;
 const MIN_CARD_WIDTH: f32 = 150.0;
-const CARD_HEIGHT: f32 = 288.0;
+const CARD_HEIGHT: f32 = 304.0;
 
 /// Saved columns for a viewport width; clamping renders, it never writes.
 pub(crate) fn responsive_columns(width_px: f32) -> i32 {
@@ -3042,13 +3042,14 @@ impl HomeWidgets {
         let card_px = requested_dims(widget).0.max(1) as f32 * pitch_x - GRID_GAP;
         let wide = card_px >= 420.;
 
+        // Transient work never reads as part of the title: it is a quiet
+        // dot and caption beside the controls.
+        let activity: Option<&'static str> = match id.as_str() {
+            "recent-servers" if self.core.refreshing_servers => Some("Refreshing status…"),
+            "recent-servers" if self.core.server_enriching && !loading => Some("Loading details…"),
+            _ => None,
+        };
         let caption: Option<String> = match id.as_str() {
-            "recent-servers" if self.core.refreshing_servers => {
-                Some("Refreshing status…".to_owned())
-            }
-            "recent-servers" if self.core.server_enriching && !loading => {
-                Some("Loading details…".to_owned())
-            }
             "instance-details" => self
                 .core
                 .selected_instance()
@@ -3195,12 +3196,26 @@ impl HomeWidgets {
                     }),
             );
         let mut right = div().flex().items_center().gap(px(8.));
-        if shows_loading {
+        if let Some(activity) = activity.or(shows_loading.then_some("Loading…")) {
             right = right.child(
                 div()
-                    .text_size(px(ui::TEXT_CAPTION))
-                    .text_color(palette.subtle_foreground)
-                    .child("Loading…"),
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .child(
+                        div()
+                            .size(px(6.))
+                            .rounded_full()
+                            .bg(palette.ring)
+                            .opacity(0.8),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(ui::TEXT_CAPTION))
+                            .text_color(palette.subtle_foreground)
+                            .whitespace_nowrap()
+                            .child(activity),
+                    ),
             );
         }
         if inline_controls {
@@ -3301,45 +3316,51 @@ impl HomeWidgets {
                     None => {
                         let label = |text: String| {
                             div()
-                                .text_size(px(ui::TEXT_MICRO))
-                                .text_color(palette.subtle_foreground)
+                                .text_size(px(ui::TEXT_CAPTION))
+                                .text_color(palette.muted_foreground)
                                 .child(text)
                         };
                         let today = playtime_data.map_or(0, |data| data.today);
                         let count = projection.points.len();
                         // Weekday under each bar for the 7-day range; the two
                         // ends of the range otherwise.
-                        let axis =
-                            if period == Period::Week && count == 7 {
-                                div().flex().h(px(AXIS_HEIGHT)).items_end().children(
-                                    (0..count).map(|index| {
-                                        let day = today.saturating_sub((count - 1 - index) as u64);
-                                        let last = index + 1 == count;
-                                        div()
-                                            .flex_1()
-                                            .flex()
-                                            .justify_center()
-                                            .text_size(px(ui::TEXT_MICRO))
-                                            .text_color(if last {
-                                                palette.foreground
-                                            } else {
-                                                palette.subtle_foreground
-                                            })
-                                            .child(if last { "Today" } else { weekday_label(day) })
-                                    }),
+                        let axis = if period == Period::Week && count == 7 {
+                            div()
+                                .flex()
+                                .h(px(AXIS_HEIGHT))
+                                .items_end()
+                                .children((0..count).map(|index| {
+                                    let day = today.saturating_sub((count - 1 - index) as u64);
+                                    let last = index + 1 == count;
+                                    div()
+                                        .flex_1()
+                                        .flex()
+                                        .justify_center()
+                                        .text_size(px(ui::TEXT_CAPTION))
+                                        .when(last, |this| this.font_weight(FontWeight::SEMIBOLD))
+                                        .text_color(if last {
+                                            palette.foreground
+                                        } else {
+                                            palette.muted_foreground
+                                        })
+                                        .child(if last { "Today" } else { weekday_label(day) })
+                                }))
+                        } else {
+                            div()
+                                .flex()
+                                .h(px(AXIS_HEIGHT))
+                                .items_end()
+                                .justify_between()
+                                .child(label(format!(
+                                    "{} days ago",
+                                    if period == Period::Week { 7 } else { 30 }
+                                )))
+                                .child(
+                                    label("Today".into())
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(palette.foreground),
                                 )
-                            } else {
-                                div()
-                                    .flex()
-                                    .h(px(AXIS_HEIGHT))
-                                    .items_end()
-                                    .justify_between()
-                                    .child(label(format!(
-                                        "{} days ago",
-                                        if period == Period::Week { 7 } else { 30 }
-                                    )))
-                                    .child(label("Today".into()))
-                            };
+                        };
                         card = card
                             .child(
                                 div()
@@ -3375,15 +3396,15 @@ impl HomeWidgets {
                                                     .flex_1()
                                                     .border_b_1()
                                                     .border_color(palette.border)
-                                                    .child(
+                                                    .children([0., 0.5].map(|at| {
                                                         div()
                                                             .absolute()
-                                                            .top(px(0.))
+                                                            .top(gpui_kit::relative(at))
                                                             .left(px(0.))
                                                             .right(px(0.))
                                                             .h(px(1.))
-                                                            .bg(palette.border_subtle),
-                                                    )
+                                                            .bg(palette.border_subtle)
+                                                    }))
                                                     .when(projection.empty_period, |plot| {
                                                         plot.child(
                                                             div()
@@ -3712,7 +3733,7 @@ impl HomeWidgets {
 // ---------------------------------------------------------------------------
 
 /// Height of the weekday / range axis under the chart.
-const AXIS_HEIGHT: f32 = 16.;
+const AXIS_HEIGHT: f32 = 20.;
 
 /// The plot's bar: a fraction of the plot, never under 2 px. The plot's own
 /// height is flexible, so the bar is a percentage of it.

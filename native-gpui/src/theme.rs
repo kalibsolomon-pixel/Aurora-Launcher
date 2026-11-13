@@ -67,8 +67,8 @@ impl Default for AuroraTheme {
             sunken: rgb(0x0d0e13).into(),
             surface_hover: rgb(0x242631).into(),
             card: rgb(0x16171d).into(),
-            control: rgba(0xffffff0f).into(),
-            control_hover: rgba(0xffffff1c).into(),
+            control: rgba(0xffffff14).into(),
+            control_hover: rgba(0xffffff22).into(),
             border: rgb(0x343743).into(),
             border_subtle: rgba(0xffffff14).into(),
             foreground: rgb(0xedf1fb).into(),
@@ -155,7 +155,7 @@ fn resolved(appearance: Option<&crate::api::Appearance>) -> AuroraTheme {
     palette.accent_foreground = color(&accent.accent_contrast, palette.accent_foreground);
     palette.ring = color(&accent.accent, palette.ring);
     palette.accent_soft = Hsla {
-        a: 0.16,
+        a: 0.13,
         ..palette.ring
     };
     palette.selection = Hsla {

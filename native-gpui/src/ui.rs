@@ -322,6 +322,27 @@ pub fn setting_row(
         )
 }
 
+/// A selectable full-width list row (pickers inside a card). Selection is the
+/// app-wide accent wash; no border, so lists stay quiet.
+pub fn list_button(t: &AuroraTheme, id: impl Into<ElementId>, selected: bool) -> Button {
+    let hover = t.control;
+    let ring = t.ring;
+    Button::new(id)
+        .selected(selected)
+        .flex()
+        .items_center()
+        .gap(px(10.))
+        .w_full()
+        .px(px(8.))
+        .py(px(7.))
+        .rounded(t.radius)
+        .when(selected, |b| b.bg(t.accent_soft))
+        .hover(move |style| style.bg(hover))
+        .border_1()
+        .border_color(gpui_kit::transparent_black())
+        .focus(move |style| style.border_color(ring))
+}
+
 /// A selectable card-like button (instance pickers, choice grids). The base
 /// [`Button`] keeps role, focus and keyboard activation; add children freely.
 pub fn tile_button(t: &AuroraTheme, id: impl Into<ElementId>, selected: bool) -> Button {
