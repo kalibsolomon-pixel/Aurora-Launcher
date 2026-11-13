@@ -2786,12 +2786,12 @@ impl Render for Discover {
                         .child(crate::symbols::icon(
                             Some("download"),
                             px(13.),
-                            palette.subtle_foreground,
+                            palette.muted_foreground,
                         ))
                         .child(
                             div()
-                                .text_size(px(ui::TEXT_CAPTION))
-                                .text_color(palette.subtle_foreground)
+                                .text_size(px(ui::TEXT_BODY))
+                                .text_color(palette.muted_foreground)
                                 .child(download_label(project.downloads)),
                         ),
                 );
@@ -2808,9 +2808,9 @@ impl Render for Discover {
                 ui::row(&palette, index + 1 == total)
                     .id(("result", index))
                     .gap(px(14.))
-                    .h(px(72.))
-                    .min_h(px(72.))
-                    .max_h(px(72.))
+                    .h(px(88.))
+                    .min_h(px(88.))
+                    .max_h(px(88.))
                     .flex_shrink_0()
                     .py(px(0.))
                     .hover(move |style| style.bg(hover))
@@ -2830,47 +2830,35 @@ impl Render for Discover {
                             .min_w(px(0.))
                             .gap(px(3.))
                             .child(
-                                div()
-                                    .flex()
-                                    .items_baseline()
-                                    .gap(px(8.))
-                                    .child(
-                                        div()
-                                            .id(("result-title", index))
-                                            .min_w(px(0.))
-                                            .flex_shrink(1.)
-                                            .overflow_hidden()
-                                            .whitespace_nowrap()
-                                            .text_ellipsis()
-                                            .text_size(px(14.))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(palette.foreground)
-                                            .cursor_pointer()
-                                            .hover(|style| style.text_color(title_hover))
-                                            .on_click({
-                                                let id = id.clone();
-                                                cx.listener(move |this, _, window, cx| {
-                                                    this.open_details(id.clone(), window, cx);
-                                                })
+                                div().flex().items_baseline().gap(px(8.)).child(
+                                    div()
+                                        .id(("result-title", index))
+                                        .min_w(px(0.))
+                                        .flex_shrink(1.)
+                                        .overflow_hidden()
+                                        .whitespace_nowrap()
+                                        .text_ellipsis()
+                                        .text_size(px(14.))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(palette.foreground)
+                                        .cursor_pointer()
+                                        .hover(|style| style.text_color(title_hover))
+                                        .on_click({
+                                            let id = id.clone();
+                                            cx.listener(move |this, _, window, cx| {
+                                                this.open_details(id.clone(), window, cx);
                                             })
-                                            .child(project.title.clone()),
-                                    )
-                                    .when(!compact && !project.author.is_empty(), |line| {
-                                        line.child(
-                                            div()
-                                                .flex_shrink_0()
-                                                .text_size(px(ui::TEXT_CAPTION))
-                                                .text_color(palette.subtle_foreground)
-                                                .child(format!("by {}", project.author)),
-                                        )
-                                    })
-                                    .when(!compact, |line| line.child(meta)),
+                                        })
+                                        .child(project.title.clone()),
+                                ),
                             )
                             .child(
                                 div()
                                     .overflow_hidden()
-                                    .max_h(px(if compact { 18. } else { 36. }))
-                                    .line_clamp(if compact { 1 } else { 2 })
+                                    .max_h(px(18.))
+                                    .line_clamp(1)
+                                    .whitespace_nowrap()
+                                    .text_ellipsis()
                                     .text_size(px(ui::TEXT_BODY))
                                     .line_height(px(18.))
                                     .text_color(palette.muted_foreground)
@@ -2879,21 +2867,25 @@ impl Render for Discover {
                                     })
                                     .child(project.summary.clone()),
                             )
-                            .when(compact, |block| {
-                                block.child(
-                                    ui::caption(
-                                        &palette,
-                                        format!(
-                                            "{} · {}",
-                                            project.author,
-                                            download_label(project.downloads)
-                                        ),
-                                    )
-                                    .whitespace_nowrap()
-                                    .overflow_hidden()
-                                    .text_ellipsis(),
-                                )
-                            }),
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(12.))
+                                    .when(!project.author.is_empty(), |line| {
+                                        line.child(
+                                            div()
+                                                .min_w(px(0.))
+                                                .overflow_hidden()
+                                                .whitespace_nowrap()
+                                                .text_ellipsis()
+                                                .text_size(px(ui::TEXT_BODY))
+                                                .text_color(palette.muted_foreground)
+                                                .child(format!("by {}", project.author)),
+                                        )
+                                    })
+                                    .child(meta),
+                            ),
                     )
                     .child(
                         div()
@@ -2920,7 +2912,7 @@ impl Render for Discover {
                                     AuroraButton::new(("install", index), "Install")
                                         .accessibility_label(format!("Install {}", project.title))
                                         .size(ButtonSize::Small)
-                                        .variant(ButtonVariant::Primary)
+                                        .variant(ButtonVariant::Soft)
                                         .icon("download")
                                         .disabled(installed || row_busy || s.target.is_none())
                                         .on_click(cx.listener(move |this, _, _, cx| {

@@ -312,7 +312,7 @@ impl Render for SkinPreview {
             .role(Role::Group)
             .aria_label("Player preview")
             .aria_description(if neutral {
-                "Import a PNG in the local library to preview a skin."
+                "Name your skin and choose Import PNG to preview it here."
             } else {
                 "Drag or use arrow keys to rotate. Plus and minus zoom; Home resets."
             })
@@ -457,7 +457,7 @@ impl Render for SkinPreview {
             .gap(px(14.))
             .p(px(16.))
             .w(px(if neutral { 280. } else { 320. }))
-            .h(px(if neutral { 216. } else { 430. }))
+            .h(px(if neutral { 238. } else { 430. }))
             .when(neutral, |card| {
                 card.bg(gpui::transparent_black()).border_0().p(px(0.))
             })

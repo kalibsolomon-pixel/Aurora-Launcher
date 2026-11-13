@@ -3428,7 +3428,7 @@ impl HomeWidgets {
                     None => {
                         let label = |text: String| {
                             div()
-                                .text_size(px(ui::TEXT_CAPTION))
+                                .text_size(px(ui::TEXT_BODY))
                                 .text_color(palette.muted_foreground)
                                 .child(text)
                         };
@@ -3492,7 +3492,7 @@ impl HomeWidgets {
                                             .pb(px(AXIS_HEIGHT + 4.))
                                             .pr(px(16.))
                                             .child(
-                                                div().relative().flex_1().w(px(62.)).children(
+                                                div().relative().flex_1().w(px(68.)).children(
                                                     [
                                                         (0., projection.peak.clone()),
                                                         (0.5, projection.midpoint.clone()),

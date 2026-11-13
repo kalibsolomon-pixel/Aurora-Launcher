@@ -235,7 +235,10 @@ impl RenderOnce for AuroraButton {
                     .selected(|style| {
                         style
                             .bg(soft)
-                            .border_color(if nav { clear } else { Hsla { a: 0.55, ..ring } })
+                            .border_color(Hsla {
+                                a: if nav { 0.35 } else { 0.55 },
+                                ..ring
+                            })
                             .text_color(selected_fg)
                     })
                     .disabled(|style| {
@@ -351,7 +354,7 @@ impl RenderOnce for AuroraInput {
             .bg(t.sunken)
             .border_1()
             .border_color(t.border_subtle)
-            .text_size(px(13.))
+            .text_size(px(crate::ui::TEXT_BODY))
             .styles(|styles| {
                 styles
                     .focused(|style| style.border_color(t.ring))

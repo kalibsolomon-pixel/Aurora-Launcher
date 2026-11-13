@@ -1254,7 +1254,30 @@ impl Render for Syncing {
             for (index, (id, label)) in CATEGORIES.iter().enumerate() {
                 let checked = draft.categories.iter().any(|current| current == id);
                 let id = *id;
-                category_grid = category_grid.child(
+                let choice_id = SharedString::from(format!("sync-category-{id}"));
+                let row = if !enabled {
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(4.))
+                        .py(px(8.))
+                        .border_b_1()
+                        .border_color(t.border_subtle)
+                        .child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(12.))
+                                .child(
+                                    div()
+                                        .text_size(px(ui::TEXT_BODY))
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .child(*label),
+                                )
+                                .child(saved_choice(t, choice_id, *label, checked)),
+                        )
+                        .child(ui::muted(t, category_detail(id)))
+                } else {
                     ui::setting_row(
                         t,
                         *label,
@@ -1262,16 +1285,8 @@ impl Render for Syncing {
                         index + 1 == CATEGORIES.len(),
                     )
                     .py(px(8.))
-                    .child(if !enabled {
-                        saved_choice(
-                            t,
-                            SharedString::from(format!("sync-category-{id}")),
-                            *label,
-                            checked,
-                        )
-                        .into_any_element()
-                    } else {
-                        AuroraToggle::new(SharedString::from(format!("sync-category-{id}")))
+                    .child(
+                        AuroraToggle::new(choice_id)
                             .label(*label)
                             .checked(checked)
                             .disabled(child_locked)
@@ -1282,10 +1297,10 @@ impl Render for Syncing {
                                         this.set_category_checked(id, next, cx)
                                     });
                                 }
-                            })
-                            .into_any_element()
-                    }),
-                );
+                            }),
+                    )
+                };
+                category_grid = category_grid.child(row);
             }
             if self.section == 0 {
                 body = body.child(categories.child(category_grid));

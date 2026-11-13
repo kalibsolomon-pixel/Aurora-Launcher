@@ -1551,7 +1551,10 @@ impl Render for Content {
                                 .child(ui::caption(
                                     t,
                                     if query.trim().is_empty() {
-                                        format!("{} installed", self.entries.len())
+                                        format!(
+                                            "{} installed · Scroll for imports",
+                                            self.entries.len()
+                                        )
                                     } else {
                                         format!("{} of {} shown", visible.len(), self.entries.len())
                                     },
@@ -1574,7 +1577,12 @@ impl Render for Content {
                                         .text_center()
                                         .child(ui::caption(t, "Enabled")),
                                 )
-                                .child(div().w(px(32.))),
+                                .child(
+                                    div()
+                                        .w(px(72.))
+                                        .text_center()
+                                        .child(ui::caption(t, "Actions")),
+                                ),
                         ),
                 );
             }
@@ -1641,9 +1649,8 @@ impl Render for Content {
                     )
                     .child(
                         div()
-                            .text_size(px(ui::TEXT_CAPTION))
+                            .text_size(px(ui::TEXT_BODY))
                             .text_color(palette.muted_foreground)
-                            .when(disabled_row, |d| d.opacity(0.8))
                             .text_ellipsis()
                             .child(gpui::SharedString::from(line.join(" · "))),
                     );
@@ -1699,12 +1706,12 @@ impl Render for Content {
                 let e = entry.clone();
                 let v = view.clone();
                 let target = self.target().unwrap();
-                let remove = icon_button(
-                    t,
+                let remove = AuroraButton::new(
                     gpui::SharedString::from(format!("remove-{}", entry.id)),
-                    "delete",
-                    format!("Remove {}", entry.name),
+                    "Remove",
                 )
+                .accessibility_label(format!("Remove {}", entry.name))
+                .size(ButtonSize::Small)
                 .disabled(busy || !entry.remove)
                 .on_click(move |_, _, cx| {
                     v.update(cx, |s, cx| {

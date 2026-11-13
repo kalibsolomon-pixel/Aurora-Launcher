@@ -471,7 +471,10 @@ fn status_line(t: &theme::AuroraTheme, status: &str, extra: Option<&'static str>
         .flex()
         .items_center()
         .gap(px(6.))
-        .text_size(px(ui::TEXT_CAPTION))
+        .text_size(px(ui::TEXT_BODY))
+        .when(status == "reauthenticationRequired", |line| {
+            line.font_weight(gpui::FontWeight::MEDIUM)
+        })
         .child(div().flex_shrink_0().size(px(6.)).rounded_full().bg(color))
         .child(div().text_color(text_color).child(label))
         .when_some(extra, |row, extra| {
@@ -1267,7 +1270,15 @@ impl Render for Accounts {
                         .justify_end()
                         .w(px(72.))
                         .child(if selected {
-                            ui::badge(&palette, "Selected", ui::Tone::Accent).into_any_element()
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(5.))
+                                .text_size(px(ui::TEXT_BODY))
+                                .text_color(palette.muted_foreground)
+                                .child(crate::symbols::icon(Some("check"), px(14.), palette.ring))
+                                .child("Selected")
+                                .into_any_element()
                         } else {
                             AuroraButton::new(
                                 gpui_kit::SharedString::from(format!(

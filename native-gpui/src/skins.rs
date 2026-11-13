@@ -2256,6 +2256,7 @@ impl Render for Skins {
         }
         let library_card = ui::list_card(&palette).child(library_head).child(library);
         let import_card = ui::card(&palette)
+            .min_h(px(238.))
             .child(ui::section_header(
                 &palette,
                 "Import a skin",
