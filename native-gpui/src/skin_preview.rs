@@ -256,6 +256,31 @@ impl Render for SkinPreview {
             }
             div().flex_1().min_w(px(0.)).child(button)
         };
+        // Icon-only Subtle tool button (28px) with an accessible name.
+        let tool = |id: &'static str,
+                    label: &'static str,
+                    icon: &'static str,
+                    action: fn(&mut Self, &mut Context<Self>)| {
+            let entity = entity.clone();
+            let (hover, ring, color) = (t.control, t.ring, t.muted_foreground);
+            gpui::base::Button::new(id)
+                .aria_label(label)
+                .flex()
+                .flex_shrink_0()
+                .items_center()
+                .justify_center()
+                .size(px(28.))
+                .rounded(t.radius)
+                .border_1()
+                .border_color(gpui::transparent_black())
+                .hover(move |style| style.bg(hover))
+                .active(|style| style.opacity(0.88))
+                .focus(move |style| style.border_color(ring))
+                .child(crate::symbols::icon(Some(icon), px(16.), color))
+                .on_click(move |_, _, cx| {
+                    entity.update(cx, |s, cx| action(s, cx));
+                })
+        };
         let layers_entity = entity.clone();
         let rear = self.rear;
         let neutral = self.state.scene.skin.is_none();
@@ -395,61 +420,59 @@ impl Render for SkinPreview {
             .flex_shrink_0()
             .text_color(t.foreground)
             .child(stage)
-            // View: front / back as one segmented control.
+            // One toolbar: view segments left, icon-only tools right.
             .child(
                 div()
                     .flex()
-                    .gap(px(2.))
-                    .p(px(3.))
-                    .rounded(t.radius)
-                    .bg(t.sunken)
-                    .border_1()
-                    .border_color(t.border_subtle)
-                    .child(control(
-                        "preview-front",
-                        "Front",
-                        None,
-                        ButtonVariant::Ghost,
-                        !rear,
-                        |s, cx| s.view_back(false, cx),
-                    ))
-                    .child(control(
-                        "preview-back",
-                        "Back",
-                        None,
-                        ButtonVariant::Ghost,
-                        rear,
-                        |s, cx| s.view_back(true, cx),
-                    )),
-            )
-            .child(
-                div()
-                    .flex()
-                    .gap(px(6.))
-                    .child(control(
-                        "preview-zoom-out",
-                        "Zoom out",
-                        Some("zoom_out"),
-                        ButtonVariant::Default,
-                        false,
-                        |s, cx| s.zoom(-0.08, cx),
-                    ))
-                    .child(control(
-                        "preview-zoom-in",
-                        "Zoom in",
-                        Some("zoom_in"),
-                        ButtonVariant::Default,
-                        false,
-                        |s, cx| s.zoom(0.08, cx),
-                    ))
-                    .child(control(
-                        "preview-reset",
-                        "Reset",
-                        Some("restart_alt"),
-                        ButtonVariant::Default,
-                        false,
-                        |s, cx| s.reset(cx),
-                    )),
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .flex()
+                            .w(px(132.))
+                            .flex_shrink_0()
+                            .gap(px(2.))
+                            .p(px(3.))
+                            .rounded(t.radius)
+                            .bg(t.sunken)
+                            .border_1()
+                            .border_color(t.border_subtle)
+                            .child(control(
+                                "preview-front",
+                                "Front",
+                                None,
+                                ButtonVariant::Ghost,
+                                !rear,
+                                |s, cx| s.view_back(false, cx),
+                            ))
+                            .child(control(
+                                "preview-back",
+                                "Back",
+                                None,
+                                ButtonVariant::Ghost,
+                                rear,
+                                |s, cx| s.view_back(true, cx),
+                            )),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(2.))
+                            .child(tool("preview-zoom-in", "Zoom in", "zoom_in", |s, cx| {
+                                s.zoom(0.08, cx)
+                            }))
+                            .child(tool("preview-zoom-out", "Zoom out", "zoom_out", |s, cx| {
+                                s.zoom(-0.08, cx)
+                            }))
+                            .child(tool(
+                                "preview-reset",
+                                "Reset view",
+                                "restart_alt",
+                                |s, cx| s.reset(cx),
+                            )),
+                    ),
             )
             .child(ui::divider(&t))
             .child(

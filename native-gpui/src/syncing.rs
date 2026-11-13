@@ -1060,19 +1060,11 @@ fn locked_toggle(
                 .items_center()
                 .gap(px(5.))
                 .text_size(px(ui::TEXT_BODY))
-                .text_color(if checked {
-                    t.muted_foreground
-                } else {
-                    t.subtle_foreground
-                })
+                .text_color(t.muted_foreground)
                 .child(crate::symbols::icon(
                     Some(if checked { "check" } else { "remove" }),
                     px(16.),
-                    if checked {
-                        t.muted_foreground
-                    } else {
-                        t.subtle_foreground
-                    },
+                    t.muted_foreground,
                 ))
                 .child(if checked { "Included" } else { "Not included" }),
         )
@@ -1126,35 +1118,19 @@ impl Render for Syncing {
         }
 
         // --- Status ---------------------------------------------------------
-        let status_strip = {
-            let (badge, text) = match &self.status.value {
+        let (status_label, status_tone, status_text) = {
+            let ((label, tone), text) = match &self.status.value {
                 Some(status) if status.running => (
-                    ui::status_badge(t, "Syncing", ui::Tone::Accent),
+                    ("Syncing", ui::Tone::Accent),
                     "Syncing selected instances…".to_owned(),
                 ),
-                Some(status) => (
-                    ui::status_badge(t, "Idle", ui::Tone::Neutral),
-                    status.message.clone(),
-                ),
+                Some(status) => (("Idle", ui::Tone::Neutral), status.message.clone()),
                 None => (
-                    ui::status_badge(t, "Unknown", ui::Tone::Neutral),
+                    ("Unknown", ui::Tone::Neutral),
                     "Sync status not loaded yet.".to_owned(),
                 ),
             };
-            div()
-                .flex()
-                .items_center()
-                .gap(px(10.))
-                .pt(px(14.))
-                .child(badge)
-                .child(
-                    div()
-                        .flex_1()
-                        .min_w(px(0.))
-                        .text_size(px(ui::TEXT_BODY))
-                        .text_color(palette.muted_foreground)
-                        .child(text),
-                )
+            (label, tone, text)
         };
 
         // --- Preferences ----------------------------------------------------
@@ -1180,19 +1156,37 @@ impl Render for Syncing {
                         )
                         .py(px(0.))
                         .child(
-                            AuroraToggle::new("sync-enabled")
-                                .label("Sync selected instances automatically")
-                                .checked(enabled)
-                                .disabled(editing_disabled)
-                                .on_change({
-                                    let view = view.clone();
-                                    move |next: bool, _, _, cx| {
-                                        view.update(cx, |this, cx| this.set_enabled(next, cx));
-                                    }
-                                }),
+                            div()
+                                .flex()
+                                .flex_shrink_0()
+                                .items_center()
+                                .gap(px(16.))
+                                .child(ui::status_badge(t, status_label, status_tone))
+                                .child(
+                                    AuroraToggle::new("sync-enabled")
+                                        .label("Sync selected instances automatically")
+                                        .checked(enabled)
+                                        .disabled(editing_disabled)
+                                        .on_change({
+                                            let view = view.clone();
+                                            move |next: bool, _, _, cx| {
+                                                view.update(cx, |this, cx| {
+                                                    this.set_enabled(next, cx)
+                                                });
+                                            }
+                                        }),
+                                ),
                         ),
                     )
-                    .child(status_strip),
+                    .when(!status_text.trim().is_empty(), |card| {
+                        card.child(
+                            div()
+                                .pt(px(12.))
+                                .text_size(px(ui::TEXT_CAPTION))
+                                .text_color(palette.muted_foreground)
+                                .child(status_text),
+                        )
+                    }),
             );
 
             // While the master switch is off the cards keep full contrast; only
@@ -1240,6 +1234,7 @@ impl Render for Syncing {
                         Some(category_detail(id).into()),
                         index + 1 == CATEGORIES.len(),
                     )
+                    .py(px(11.))
                     .child(if !enabled {
                         locked_toggle(
                             t,
@@ -1593,6 +1588,19 @@ impl Render for Syncing {
             root = root.child(actions);
         } else {
             let view = cx.entity();
+            let status_strip = div()
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .child(ui::status_badge(t, status_label, status_tone))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .text_size(px(ui::TEXT_BODY))
+                        .text_color(palette.muted_foreground)
+                        .child(status_text.clone()),
+                );
             root = root.child(status_strip_card(t, status_strip)).child(
                 ui::card(t)
                     .child(

@@ -1895,7 +1895,8 @@ fn discord_badge(state: Option<&api::DiscordState>) -> Option<(&'static str, ui:
     Some(if !state.configured {
         ("Not configured", ui::Tone::Warning)
     } else if !state.preferences.enabled {
-        ("Off", ui::Tone::Neutral)
+        // "Off" would only repeat the Rich Presence toggle below.
+        return None;
     } else {
         match state.connection.as_str() {
             "connected" => ("Connected", ui::Tone::Success),
@@ -2155,25 +2156,30 @@ impl Render for Settings {
                 card = card.child(
                     ui::setting_row(t, "Motion", Some(motion_detail(accelerated).into()), false)
                         .child(
-                            control_slot(AuroraSlider::new(&self.motion_slider, "Motion speed"))
-                                // The slider reports no pointer state, so the
-                                // press and release around it are tracked here.
-                                .capture_any_mouse_down({
-                                    let pointer = self.motion_pointer.clone();
-                                    move |event: &MouseDownEvent, _, _| {
-                                        if event.button == MouseButton::Left {
-                                            pointer.set(true);
-                                        }
+                            control_slot(
+                                div()
+                                    .w_full()
+                                    .child(AuroraSlider::new(&self.motion_slider, "Motion speed")),
+                            )
+                            .w(px(CONTROL_WIDTH + 56.))
+                            // The slider reports no pointer state, so the
+                            // press and release around it are tracked here.
+                            .capture_any_mouse_down({
+                                let pointer = self.motion_pointer.clone();
+                                move |event: &MouseDownEvent, _, _| {
+                                    if event.button == MouseButton::Left {
+                                        pointer.set(true);
                                     }
-                                })
-                                .capture_any_mouse_up({
-                                    let pointer = self.motion_pointer.clone();
-                                    move |_, window, cx| {
-                                        // After the slider's own release handling.
-                                        let pointer = pointer.clone();
-                                        window.defer(cx, move |_, _| pointer.set(false));
-                                    }
-                                }),
+                                }
+                            })
+                            .capture_any_mouse_up({
+                                let pointer = self.motion_pointer.clone();
+                                move |_, window, cx| {
+                                    // After the slider's own release handling.
+                                    let pointer = pointer.clone();
+                                    window.defer(cx, move |_, _| pointer.set(false));
+                                }
+                            }),
                         ),
                 );
             }

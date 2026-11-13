@@ -260,6 +260,39 @@ fn settle_notice(result: &api::ApiResult<Value>) -> String {
 }
 
 /// Shown instead of the rows while the queue is empty.
+/// The empty-queue state: `ui::empty_state` with the body held to a 400px
+/// measure so the sentence wraps into balanced lines.
+fn empty_queue(t: &crate::theme::AuroraTheme, title: String, body: &'static str) -> gpui::Div {
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap(px(10.))
+        .py(px(40.))
+        .px(px(24.))
+        .rounded(t.radius_lg)
+        .bg(t.card)
+        .border_1()
+        .border_color(t.border_subtle)
+        .child(ui::icon_tile(t, Some("download"), 48., true))
+        .child(
+            div()
+                .pt(px(4.))
+                .text_size(px(ui::TEXT_SECTION))
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(t.foreground)
+                .child(title),
+        )
+        .child(
+            div()
+                .max_w(px(400.))
+                .text_size(px(ui::TEXT_BODY))
+                .text_color(t.muted_foreground)
+                .text_center()
+                .child(body),
+        )
+}
+
 const EMPTY_TEXT: &str = "Installs you start from Discover appear here. Several can run at once; installs into the same instance take turns.";
 
 fn phase_label(phase: Phase) -> &'static str {
@@ -1111,7 +1144,7 @@ impl Render for Downloads {
             ));
         if active_rows.is_empty() && finished_rows.is_empty() {
             page = page.child(
-                ui::empty_state(t, "download", summary.clone(), EMPTY_TEXT)
+                empty_queue(t, summary.clone(), EMPTY_TEXT)
                     .h(px(300.))
                     .justify_center()
                     .child(

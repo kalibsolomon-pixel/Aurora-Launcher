@@ -1595,7 +1595,7 @@ impl Launcher {
                             })),
                     )
                     .child(
-                        self.button("instance-settings", "Instance settings")
+                        self.button("instance-settings", "Settings")
                             .size(ButtonSize::Large)
                             .icon("tune")
                             .on_click(cx.listener(|this, _, window, cx| {
@@ -1608,35 +1608,40 @@ impl Launcher {
         let hero_icon = instance.map(|instance| {
             instance_icon(
                 stored_icon(&launcher.icons, &instance.id),
-                96.,
+                80.,
                 true,
                 palette,
             )
         });
-        // A large, faint echo of the instance glyph anchors the hero's open
-        // right side without adding information.
-        let watermark = instance.map(|instance| {
+        // Recent activity from Home's cached history fills the hero's right
+        // side; nothing is shown until that history has loaded.
+        let stats = match (&self.home_widgets, instance) {
+            (Some(home), Some(instance)) => home.read(cx).hero_stats(&instance.id),
+            _ => Vec::new(),
+        };
+        let stats = (!stats.is_empty()).then(|| {
             div()
-                .absolute()
-                .right(px(-28.))
-                .bottom(px(-44.))
-                .child(symbols::icon(
-                    stored_icon(&launcher.icons, &instance.id),
-                    px(240.),
-                    gpui::Hsla { a: 0.07, ..t.ring },
-                ))
+                .flex()
+                .flex_col()
+                .flex_shrink_0()
+                .gap(px(16.))
+                .pl(px(24.))
+                .border_l_1()
+                .border_color(t.border_subtle)
+                .children(
+                    stats
+                        .into_iter()
+                        .map(|(label, value)| ui::stat(t, label, value)),
+                )
         });
         let hero_index = out.len();
         out.push(
             div()
-                .relative()
-                .overflow_hidden()
                 .flex()
                 .items_center()
                 .gap(px(24.))
                 .p(px(28.))
                 .h_full()
-                .children(watermark)
                 .rounded(px(16.))
                 .bg(gpui::linear_gradient(
                     100.,
@@ -1647,6 +1652,7 @@ impl Launcher {
                 .border_color(t.border_subtle)
                 .children(hero_icon)
                 .child(details)
+                .children(stats)
                 .into_any_element(),
         );
         if let Some(id) = selected.clone() {
@@ -1779,7 +1785,7 @@ impl Launcher {
                 .flex()
                 .flex_col()
                 .flex_shrink_0()
-                .w(px(272.))
+                .w(px(248.))
                 .gap(px(8.))
                 .p(px(10.))
                 .rounded(px(16.))

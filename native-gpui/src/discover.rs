@@ -2740,7 +2740,11 @@ impl Render for Discover {
                 ui::row(&palette, index + 1 == total)
                     .id(("result", index))
                     .gap(px(14.))
-                    .py(px(12.))
+                    .h(px(76.))
+                    .min_h(px(76.))
+                    .max_h(px(76.))
+                    .flex_shrink_0()
+                    .py(px(0.))
                     .hover(move |style| style.bg(hover))
                     .child(artwork::tile(
                         ("art", index),

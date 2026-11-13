@@ -1237,7 +1237,11 @@ fn icon_button(
     label: String,
 ) -> gpui_kit::base::Button {
     let clear = gpui::transparent_black();
-    let (hover, ring, color) = (t.control_hover, t.ring, t.muted_foreground);
+    let (hover, ring) = (t.control_hover, t.ring);
+    let color = gpui::Hsla {
+        a: 0.75,
+        ..t.foreground
+    };
     gpui_kit::base::Button::new(id)
         .aria_label(label)
         .flex()
@@ -1497,9 +1501,39 @@ impl Render for Content {
                         .copied()
                         .filter(|m| *m != "No provider provenance"),
                 );
-                let mut text =
-                    ui::title_block(t, entry.name.clone(), Some(line.join(" · ").into()))
-                        .when(disabled_row, |d| d.opacity(0.55));
+                let mut text = div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(2.))
+                    .min_w(px(0.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.))
+                            .min_w(px(0.))
+                            .child(
+                                div()
+                                    .min_w(px(0.))
+                                    .text_size(px(ui::TEXT_BODY + 1.))
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(palette.foreground)
+                                    .when(disabled_row, |d| d.opacity(0.8))
+                                    .text_ellipsis()
+                                    .child(entry.name.clone()),
+                            )
+                            .when(disabled_row, |d| {
+                                d.child(ui::badge(t, "Disabled", ui::Tone::Neutral))
+                            }),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(ui::TEXT_CAPTION))
+                            .text_color(palette.muted_foreground)
+                            .when(disabled_row, |d| d.opacity(0.8))
+                            .text_ellipsis()
+                            .child(gpui::SharedString::from(line.join(" · "))),
+                    );
                 for note in notes {
                     let warn = note.starts_with("Warning:");
                     text = text.child(

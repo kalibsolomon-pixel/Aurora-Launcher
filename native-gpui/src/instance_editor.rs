@@ -1998,34 +1998,37 @@ fn rows_with(
     items: Vec<(&'static str, Option<String>, gpui::AnyElement, bool)>,
 ) -> Div {
     let count = items.len();
-    div().flex().flex_col().children(items.into_iter().enumerate().map(
-        |(ix, (title, description, control, stacked))| {
-            let last = ix + 1 == count;
-            let description = description.map(SharedString::from);
-            if stacked {
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(10.))
-                    .py(px(14.))
-                    .when(!last, |this| {
-                        this.border_b_1().border_color(t.border_subtle)
-                    })
-                    .child(label_block(t, title, description))
-                    .child(div().w_full().child(control))
-            } else {
-                setting(t, title, description, last).child(
+    div()
+        .flex()
+        .flex_col()
+        .children(items.into_iter().enumerate().map(
+            |(ix, (title, description, control, stacked))| {
+                let last = ix + 1 == count;
+                let description = description.map(SharedString::from);
+                if stacked {
                     div()
                         .flex()
-                        .flex_shrink_0()
-                        .items_center()
-                        .justify_end()
-                        .gap(px(8.))
-                        .child(control),
-                )
-            }
-        },
-    ))
+                        .flex_col()
+                        .gap(px(10.))
+                        .py(px(14.))
+                        .when(!last, |this| {
+                            this.border_b_1().border_color(t.border_subtle)
+                        })
+                        .child(label_block(t, title, description))
+                        .child(div().w_full().child(control))
+                } else {
+                    setting(t, title, description, last).child(
+                        div()
+                            .flex()
+                            .flex_shrink_0()
+                            .items_center()
+                            .justify_end()
+                            .gap(px(8.))
+                            .child(control),
+                    )
+                }
+            },
+        ))
 }
 
 /// A form card: header on top, rows beneath.
@@ -2126,13 +2129,16 @@ fn instance_badges(
     instance: &api::InstanceSummary,
     active: bool,
     compact: bool,
-) -> Div {
+) -> Option<Div> {
     let mut badges = div().flex().flex_shrink_0().items_center().gap(px(6.));
+    let mut any = false;
     if active {
+        any = true;
         badges = badges.child(ui::status_badge(t, "Active", ui::Tone::Accent));
     }
     if !compact {
         if let Some(aurora) = &instance.aurora {
+            any = true;
             badges = badges.child(ui::badge(
                 t,
                 format!("Aurora {}", aurora.version),
@@ -2140,6 +2146,7 @@ fn instance_badges(
             ));
         }
         if let Some(pack) = &instance.pack {
+            any = true;
             badges = badges.child(ui::badge(
                 t,
                 format!("{} {}", pack.name, pack.pack_version),
@@ -2152,15 +2159,19 @@ fn instance_badges(
         .as_ref()
         .is_some_and(|recovery| recovery.status != "completed")
     {
+        any = true;
         badges = badges.child(ui::badge(t, "Recovery needed", ui::Tone::Warning));
     } else if instance.state == "installing" {
+        any = true;
         badges = badges.child(ui::badge(t, "Install incomplete", ui::Tone::Warning));
     } else if needs_install(instance) {
+        any = true;
         badges = badges.child(ui::badge(t, "Update pending", ui::Tone::Warning));
     } else if instance.state != "ready" {
+        any = true;
         badges = badges.child(ui::badge(t, instance.state.clone(), ui::Tone::Warning));
     }
-    badges
+    any.then_some(badges)
 }
 
 /// The surface of a dialog popup.
@@ -2298,94 +2309,86 @@ impl Render for InstanceEditor {
                         instance.platform_label()
                     );
                     list = list.child(
-                        ui::list_button(&t, SharedString::from(format!("instance-{}", id)), selected)
-                            .accessibility_label(label)
-                            .disabled(busy)
-                            .on_click(move |_, window, cx| {
-                                view.update(cx, |v, cx| v.choose(id.clone(), window, cx));
-                            })
-                            .child(ui::icon_tile(
-                                &t,
-                                icon_for(&state.icons, &instance.id),
-                                32.,
-                                selected,
-                            ))
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(1.))
-                                    .flex_1()
-                                    .min_w(px(0.))
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(6.))
-                                            .child(
+                        ui::list_button(
+                            &t,
+                            SharedString::from(format!("instance-{}", id)),
+                            selected,
+                        )
+                        .accessibility_label(label)
+                        .disabled(busy)
+                        .on_click(move |_, window, cx| {
+                            view.update(cx, |v, cx| v.choose(id.clone(), window, cx));
+                        })
+                        .child(ui::icon_tile(
+                            &t,
+                            icon_for(&state.icons, &instance.id),
+                            32.,
+                            selected,
+                        ))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap(px(1.))
+                                .flex_1()
+                                .min_w(px(0.))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(6.))
+                                        .child(
+                                            div()
+                                                .flex_1()
+                                                .min_w(px(0.))
+                                                .truncate()
+                                                .text_size(px(ui::TEXT_BODY))
+                                                .font_weight(gpui::FontWeight::MEDIUM)
+                                                .text_color(t.foreground)
+                                                .child(instance.display_name.clone()),
+                                        )
+                                        .when(needs_attention(instance), |row| {
+                                            row.child(symbols::icon(
+                                                Some("warning"),
+                                                px(13.),
+                                                t.warning,
+                                            ))
+                                        })
+                                        .when(active, |row| {
+                                            row.child(
                                                 div()
-                                                    .flex_1()
-                                                    .min_w(px(0.))
-                                                    .truncate()
-                                                    .text_size(px(ui::TEXT_BODY))
+                                                    .flex()
+                                                    .flex_shrink_0()
+                                                    .items_center()
+                                                    .gap(px(4.))
+                                                    .text_size(px(ui::TEXT_MICRO))
                                                     .font_weight(gpui::FontWeight::MEDIUM)
-                                                    .text_color(t.foreground)
-                                                    .child(instance.display_name.clone()),
+                                                    .text_color(t.ring)
+                                                    .child(
+                                                        div()
+                                                            .size(px(6.))
+                                                            .rounded_full()
+                                                            .bg(t.ring),
+                                                    )
+                                                    .child("Active"),
                                             )
-                                            .when(needs_attention(instance), |row| {
-                                                row.child(symbols::icon(
-                                                    Some("warning"),
-                                                    px(13.),
-                                                    t.warning,
-                                                ))
-                                            })
-                                            .when(active, |row| {
-                                                row.child(
-                                                    div()
-                                                        .flex()
-                                                        .flex_shrink_0()
-                                                        .items_center()
-                                                        .gap(px(4.))
-                                                        .text_size(px(ui::TEXT_MICRO))
-                                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                                        .text_color(t.ring)
-                                                        .child(
-                                                            div()
-                                                                .size(px(6.))
-                                                                .rounded_full()
-                                                                .bg(t.ring),
-                                                        )
-                                                        .child("Active"),
-                                                )
-                                            }),
-                                    )
-                                    .child(
-                                        div()
-                                            .truncate()
-                                            .text_size(px(ui::TEXT_CAPTION))
-                                            .text_color(t.muted_foreground)
-                                            .child(detail),
-                                    ),
-                            ),
+                                        }),
+                                )
+                                .child(
+                                    div()
+                                        .truncate()
+                                        .text_size(px(ui::TEXT_CAPTION))
+                                        .text_color(t.muted_foreground)
+                                        .child(detail),
+                                ),
+                        ),
                     );
                 }
-                list_col = Some(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .gap(px(16.))
-                        .flex_shrink_0()
-                        .w(px(LIST_W))
-                        .child(list),
-                );
+                // One master card: the list, then (below) a summary footer.
+                list_col = Some(list.flex_shrink_0().w(px(LIST_W)));
             }
         }
-        let mut detail = div()
-            .flex()
-            .flex_col()
-            .gap(px(16.))
-            .flex_1()
-            .min_w(px(0.));
+        let mut detail = div().flex().flex_col().gap(px(16.)).flex_1().min_w(px(0.));
 
         // ---- The selected instance ---------------------------------------
         if let Some(id) = self.selected.clone() {
@@ -2444,7 +2447,8 @@ impl Render for InstanceEditor {
                                         .text_color(t.foreground)
                                         .child(instance.display_name.clone()),
                                 )
-                                .child(instance_badges(&t, instance, active, false))
+                                // The list already marks the active instance.
+                                .children(instance_badges(&t, instance, false, false))
                                 .when(!attention, |col| {
                                     col.child(
                                         div()
@@ -2501,7 +2505,7 @@ impl Render for InstanceEditor {
             }
 
             // Compact summary of the selected instance under the list.
-            if let (Some(instance), Some(col)) = (&instance, list_col.take()) {
+            if let (Some(_), Some(col)) = (&instance, list_col.take()) {
                 let memory = self
                     .baseline
                     .as_ref()
@@ -2513,46 +2517,39 @@ impl Render for InstanceEditor {
                     .and_then(|config| config.custom_java().map(str::to_owned))
                     .map(|_| "Custom path".to_owned())
                     .unwrap_or_else(|| "Managed runtime".to_owned());
-                let lines = [
-                    ("Minecraft", instance.minecraft_version.clone()),
-                    ("Loader", instance.platform_label()),
-                    ("Memory", memory),
-                    ("Java", java),
-                ];
-                let count = lines.len();
+                let lines = [("Memory", memory), ("Java", java)];
+                // Footer of the master card: version and loader are already in
+                // the rows above, so only Memory and Java are summarised.
+                let cell = |label: &'static str, value: String| {
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.))
+                        .flex_1()
+                        .min_w(px(0.))
+                        .child(ui::caption(&t, label))
+                        .child(
+                            div()
+                                .truncate()
+                                .text_size(px(ui::TEXT_BODY))
+                                .text_color(t.foreground)
+                                .child(value),
+                        )
+                };
+                let mut lines = lines.into_iter();
+                let mut grid = div().flex().flex_col().gap(px(10.)).px(px(8.)).pb(px(2.));
+                while let (Some(left), right) = (lines.next(), lines.next()) {
+                    grid = grid.child(
+                        div()
+                            .flex()
+                            .gap(px(12.))
+                            .child(cell(left.0, left.1))
+                            .children(right.map(|(label, value)| cell(label, value))),
+                    );
+                }
                 list_col = Some(
-                    col.child(
-                        ui::card(&t)
-                            .p(px(16.))
-                            .gap(px(8.))
-                            .child(
-                                div()
-                                    .text_size(px(ui::TEXT_BODY))
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(t.foreground)
-                                    .child("Instance details"),
-                            )
-                            .children(lines.into_iter().enumerate().map(|(ix, (label, value))| {
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap(px(12.))
-                                    .py(px(6.))
-                                    .when(ix + 1 != count, |row| {
-                                        row.border_b_1().border_color(t.border_subtle)
-                                    })
-                                    .child(ui::caption(&t, label))
-                                    .child(
-                                        div()
-                                            .min_w(px(0.))
-                                            .truncate()
-                                            .text_size(px(ui::TEXT_BODY))
-                                            .text_color(t.foreground)
-                                            .child(value),
-                                    )
-                            })),
-                    ),
+                    col.child(div().mx(px(8.)).my(px(6.)).h(px(1.)).bg(t.border_subtle))
+                        .child(grid),
                 );
             }
 

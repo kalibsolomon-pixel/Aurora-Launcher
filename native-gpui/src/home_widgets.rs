@@ -103,7 +103,9 @@ const MAX_ANCHOR_ROW: i32 = 63;
 /// Responsive grid geometry (matches the Slint `WidgetGrid` constants).
 const GRID_GAP: f32 = 16.0;
 const MIN_CARD_WIDTH: f32 = 120.0;
-const CARD_HEIGHT: f32 = 336.0;
+/// Sized so a typical three-row Servers list fills its card (the list scrolls
+/// beyond that) while the Playtime chart keeps a readable plot.
+const CARD_HEIGHT: f32 = 280.0;
 
 /// Saved columns for a viewport width; clamping renders, it never writes.
 pub(crate) fn responsive_columns(width_px: f32) -> i32 {
@@ -156,6 +158,18 @@ pub(crate) fn relative(at: u64, now: u64) -> String {
 
 fn server_timestamp(at: u64) -> u64 {
     if at > 100_000_000_000 { at / 1000 } else { at }
+}
+
+/// Like [`relative`], but with sub-day precision: "Just now", "12 min ago",
+/// "3 h ago", then the day-level wording.
+fn last_played_text(at: u64, now: u64) -> String {
+    let at = server_timestamp(at);
+    match now.saturating_sub(at) {
+        0..=59 => "Just now".into(),
+        secs @ 60..=3_599 => format!("{} min ago", secs / 60),
+        secs @ 3_600..=86_399 => format!("{} h ago", secs / 3_600),
+        _ => relative(at, now),
+    }
 }
 
 fn server_played(at: u64, now: u64) -> String {
@@ -1031,6 +1045,76 @@ impl Core {
             || self.saved_favorite_in_flight.is_some()
     }
 
+    /// Up to three (label, value) quick stats from cached history only: no
+    /// I/O. Empty while history is loading, unread, or cached for another
+    /// instance. Playtime, worlds and the daily history describe `self.instance`
+    /// (launcher-wide when none is selected); servers are launcher-wide and are
+    /// narrowed to `instance_id` whenever the data is instance-scoped.
+    fn hero_stats(&self, instance_id: &str, now: u64) -> Vec<(String, String)> {
+        let Some(playtime) = self.playtime.as_ref().filter(|_| !self.loading) else {
+            return Vec::new();
+        };
+        let scoped = match self.instance.as_deref() {
+            Some(cached) if cached == instance_id => true,
+            Some(_) => return Vec::new(),
+            None => false,
+        };
+        let mut stats = Vec::with_capacity(3);
+
+        // Most recent known play: exact timestamps from servers and worlds,
+        // else the newest UTC day with recorded playtime.
+        let exact = self
+            .servers
+            .iter()
+            .filter(|t| !scoped || t.instance_id == instance_id)
+            .map(|t| t.last_played_at)
+            .chain(self.worlds.iter().map(|w| w.last_played_at))
+            .filter(|&at| at > 0)
+            .map(server_timestamp)
+            .max();
+        let day_start = playtime
+            .history()
+            .iter()
+            .filter(|d| d.duration_ms > 0)
+            .map(|d| d.day.saturating_mul(86_400))
+            .max();
+        match (exact, day_start) {
+            (Some(at), day) if day.is_none_or(|day| at >= day) => {
+                stats.push(("Last played".into(), last_played_text(at, now)));
+            }
+            (_, Some(day)) => stats.push(("Last played".into(), relative(day, now))),
+            _ => {}
+        }
+
+        let week = playtime
+            .summary
+            .as_ref()
+            .map(|p| p.last_7_days_ms)
+            .or_else(|| {
+                playtime.daily.as_ref().filter(|d| !d.is_empty()).map(|_| {
+                    playtime_total(&playtime_bins(playtime.history(), playtime.today, 7, 7))
+                })
+            });
+        if let Some(ms) = week {
+            stats.push(("This week".into(), duration(ms)));
+        }
+
+        if !self.worlds.is_empty() {
+            let count = self.worlds.len();
+            stats.push((
+                "Worlds".into(),
+                if count >= WORLD_READ {
+                    format!("{WORLD_READ}+")
+                } else {
+                    count.to_string()
+                },
+            ));
+        } else if let Some(all_time) = playtime.summary.as_ref().filter(|p| p.all_time_ms > 0) {
+            stats.push(("All time".into(), duration(all_time.all_time_ms)));
+        }
+        stats
+    }
+
     fn selected_instance_id(&self) -> Option<&str> {
         self.state.as_ref()?.config.selected_instance_id.as_deref()
     }
@@ -1899,6 +1983,20 @@ impl HomeWidgets {
     /// (and, for saved destinations, its frozen instance) must still exist.
     pub fn can_quick_play(&self, mode: &str, id: &str, instance_id: &str) -> bool {
         self.core.can_quick_play(mode, id, instance_id)
+    }
+
+    /// Up to three (label, value) quick stats for the Home hero, read from the
+    /// cached history only (no I/O, no async work). Empty until the history for
+    /// `instance_id` has loaded.
+    pub fn hero_stats(
+        &self,
+        instance_id: &str,
+    ) -> Vec<(gpui_kit::SharedString, gpui_kit::SharedString)> {
+        self.core
+            .hero_stats(instance_id, now_secs())
+            .into_iter()
+            .map(|(label, value)| (label.into(), value.into()))
+            .collect()
     }
 
     /// Display name of a recent server destination for the launch progress
@@ -4437,6 +4535,97 @@ mod tests {
             222
         );
         assert_eq!(data.today, 100);
+    }
+
+    #[test]
+    fn hero_stats_read_cached_history_only_and_stay_honest() {
+        let today = 20_000;
+        let now = today * 86_400 + 40_000;
+        let playtime = |week_ms: u64, all_ms: u64| api::Playtime {
+            last_7_days_ms: week_ms,
+            all_time_ms: all_ms,
+            ..api::Playtime::default()
+        };
+        let stat = |label: &str, value: &str| (label.to_string(), value.to_string());
+        let load = |core: &mut Core, results: HistoryResults| {
+            let read = core.begin_data_refresh().unwrap();
+            // Mid-refresh nothing is trustworthy.
+            assert!(core.hero_stats("instance", now).is_empty());
+            core.receive_history(&read, &results);
+        };
+
+        // Nothing loaded yet.
+        let mut core = core_with_default_layout();
+        core.set_state(
+            Some(launcher_state(Some("instance"), &[("instance", "1.21.11")])),
+            1,
+        );
+        assert!(core.hero_stats("instance", now).is_empty());
+
+        // Instance scope: exact server time, weekly total, world count.
+        let mut results = empty_results();
+        results.playtime = Ok(playtime(8 * 3_600_000 + 10 * 60_000, 99 * 3_600_000));
+        results.daily = Ok(vec![daily(today, 60_000)]);
+        results.servers = Ok(vec![
+            server(1, now - 7_200, false),
+            api::RecentTarget {
+                instance_id: "other".into(),
+                ..server(2, now - 60, false)
+            },
+        ]);
+        results.worlds = Ok(vec![
+            server(10, 5, false),
+            server(11, 6, false),
+            server(12, 7, false),
+        ]);
+        load(&mut core, results);
+        assert_eq!(
+            core.hero_stats("instance", now),
+            [
+                stat("Last played", "2 h ago"),
+                stat("This week", "8 h 10 min"),
+                stat("Worlds", "3")
+            ]
+        );
+        // Another instance's cached data is never shown as this one's.
+        assert!(core.hero_stats("other", now).is_empty());
+
+        // Launcher-wide scope with no worlds: all-time takes the third slot
+        // and the day-level history backs "Last played".
+        let mut wide = core_with_default_layout();
+        let mut results = empty_results();
+        results.playtime = Ok(playtime(0, 3_600_000));
+        results.daily = Ok(vec![daily(today - 1, 60_000), daily(today, 0)]);
+        load(&mut wide, results);
+        assert_eq!(
+            wide.hero_stats("whatever", now),
+            [
+                stat("Last played", "Yesterday"),
+                stat("This week", "0 min"),
+                stat("All time", "1 h")
+            ]
+        );
+
+        // The weekly total falls back to the daily bins without a summary.
+        let mut fallback = core_with_default_layout();
+        let mut results = empty_results();
+        results.playtime = Err(api::ApiError::new("unavailable", "unavailable"));
+        results.daily = Ok(vec![daily(today, 120_000), daily(today - 20, 999_999)]);
+        load(&mut fallback, results);
+        assert_eq!(
+            fallback.hero_stats("", now),
+            [stat("Last played", "Today"), stat("This week", "2 min")]
+        );
+    }
+
+    #[test]
+    fn last_played_text_uses_finer_units_within_a_day() {
+        let now = 1_800_000_000;
+        assert_eq!(last_played_text(now - 5, now), "Just now");
+        assert_eq!(last_played_text(now - 12 * 60, now), "12 min ago");
+        assert_eq!(last_played_text(now - 3 * 3_600 - 5, now), "3 h ago");
+        assert_eq!(last_played_text((now - 3 * 3_600) * 1000, now), "3 h ago");
+        assert_eq!(last_played_text(now - 86_400 - 5, now), "Yesterday");
     }
 
     #[test]

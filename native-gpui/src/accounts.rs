@@ -541,7 +541,11 @@ fn icon_button(
         .active(|style| style.opacity(0.88))
         .focus(move |style| style.border_color(ring))
         .styles(|styles| styles.disabled(|style| style.opacity(0.42)))
-        .child(crate::symbols::icon(Some(icon), px(16.), t.muted_foreground))
+        .child(crate::symbols::icon(
+            Some(icon),
+            px(16.),
+            t.muted_foreground,
+        ))
 }
 
 // ---------------------------------------------------------------------------
@@ -1114,9 +1118,8 @@ impl Render for Accounts {
                 notices.push(("Finishing sign-in cancellation…".into(), ui::Tone::Neutral));
             }
             Some(
-                AuroraButton::new("sign-in", "Sign in with Microsoft")
-                    .variant(ButtonVariant::Primary)
-                    .icon("login")
+                AuroraButton::new("sign-in", "Add account")
+                    .icon("person_add")
                     .disabled(busy || self.core.accounts.is_none() || self.core.cancel.is_some())
                     .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx)))
                     .into_any_element(),
@@ -1282,9 +1285,11 @@ impl Render for Accounts {
                                 )),
                             )
                             .disabled(busy)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.open_remove_review(review_id.clone(), name.clone(), cx);
-                            })),
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    this.open_remove_review(review_id.clone(), name.clone(), cx);
+                                },
+                            )),
                         );
                     list = list.child(
                         ui::row(&palette, index + 1 == count)
@@ -1330,8 +1335,8 @@ impl Render for Accounts {
                     );
                 }
 
-                // Right column: profile card for the active account, then the
-                // compact sign-in note.
+                // Right column: profile card for the active account. The sign-in
+                // note sits under the list so both columns end together.
                 let mut side = div()
                     .flex()
                     .flex_col()
@@ -1424,8 +1429,7 @@ impl Render for Accounts {
                             .child(actions),
                     );
                 }
-                side = side.child(
-                    ui::card(&palette).gap(px(10.)).child(
+                let info = ui::card(&palette).gap(px(10.)).child(
                         div()
                             .flex()
                             .items_start()
@@ -1454,14 +1458,22 @@ impl Render for Accounts {
                                         "Sessions are stored in Windows Credential Manager.",
                                     )),
                             ),
-                    ),
-                );
+                    );
                 content = content.child(
                     div()
                         .flex()
                         .items_start()
                         .gap(px(ui::PAGE_GAP))
-                        .child(div().flex_1().min_w(px(0.)).child(list))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .gap(px(16.))
+                                .flex_1()
+                                .min_w(px(0.))
+                                .child(list)
+                                .child(info),
+                        )
                         .child(side),
                 );
             }
