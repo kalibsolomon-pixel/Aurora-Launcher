@@ -2924,14 +2924,14 @@ impl Render for Discover {
                                         .w_full()
                                         .h(px(28.))
                                         .rounded(palette.radius)
-                                        .bg(palette.success.opacity(0.10))
+                                        .bg(palette.control)
                                         .text_size(px(ui::TEXT_CAPTION))
                                         .font_weight(FontWeight::MEDIUM)
-                                        .text_color(palette.success)
+                                        .text_color(palette.foreground)
                                         .child(crate::symbols::icon(
                                             Some("check"),
                                             px(14.),
-                                            palette.success,
+                                            palette.ring,
                                         ))
                                         .child("Installed"),
                                 )

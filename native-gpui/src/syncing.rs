@@ -1172,7 +1172,9 @@ impl Render for Syncing {
                                 .flex_shrink_0()
                                 .items_center()
                                 .gap(px(16.))
-                                .when(enabled, |state| state.child(ui::status_badge(t, status_label, status_tone)))
+                                .when(enabled, |state| {
+                                    state.child(ui::status_badge(t, status_label, status_tone))
+                                })
                                 .child(
                                     AuroraToggle::new("sync-enabled")
                                         .label("Sync selected instances automatically")
@@ -1298,9 +1300,7 @@ impl Render for Syncing {
                                 }
                             }),
                     )
-                    .child(
-                        ui::title_block(t, *label, Some(category_detail(id).into())).flex_1(),
-                    );
+                    .child(ui::title_block(t, *label, Some(category_detail(id).into())).flex_1());
                 category_grid = category_grid.child(row);
             }
             let summary_only = !enabled && !self.edit_off_choices && !self.policy.dirty;
@@ -1308,8 +1308,13 @@ impl Render for Syncing {
                 let (included, excluded): (Vec<_>, Vec<_>) = CATEGORIES
                     .iter()
                     .partition(|(id, _)| draft.categories.iter().any(|current| current == id));
-                let chips = div().grid().grid_cols(5).gap_x(px(16.)).gap_y(px(2.)).pt(px(2.)).children(included.iter().map(
-                    |(_, label)| {
+                let chips = div()
+                    .grid()
+                    .grid_cols(5)
+                    .gap_x(px(16.))
+                    .gap_y(px(2.))
+                    .pt(px(2.))
+                    .children(included.iter().map(|(_, label)| {
                         div()
                             .flex()
                             .items_center()
@@ -1319,8 +1324,7 @@ impl Render for Syncing {
                             .text_color(t.foreground)
                             .child(crate::symbols::icon(Some("check"), px(14.), t.ring))
                             .child(*label)
-                    },
-                ));
+                    }));
                 let excluded_note = (!excluded.is_empty()).then(|| {
                     ui::muted(
                         t,
@@ -1366,8 +1370,13 @@ impl Render for Syncing {
                 let participants = participant_rows(&draft, self.instances.as_ref());
                 let joined: Vec<&ParticipantRow> =
                     participants.iter().filter(|row| row.checked).collect();
-                let names = div().flex().flex_wrap().gap_x(px(22.)).gap_y(px(4.)).pt(px(2.)).children(
-                    joined.iter().map(|row| {
+                let names = div()
+                    .flex()
+                    .flex_wrap()
+                    .gap_x(px(22.))
+                    .gap_y(px(4.))
+                    .pt(px(2.))
+                    .children(joined.iter().map(|row| {
                         div()
                             .flex()
                             .items_center()
@@ -1379,10 +1388,13 @@ impl Render for Syncing {
                             } else {
                                 t.muted_foreground
                             })
-                            .child(crate::symbols::icon(Some("grid_view"), px(14.), t.muted_foreground))
+                            .child(crate::symbols::icon(
+                                Some("grid_view"),
+                                px(14.),
+                                t.muted_foreground,
+                            ))
                             .child(row.name.clone())
-                    }),
-                );
+                    }));
                 body = body.child(
                     section_card(t)
                         .child(
@@ -1422,43 +1434,52 @@ impl Render for Syncing {
                 );
                 let steps = [
                     ("tune", "Choose files", "Settings, packs and screenshots."),
-                    ("grid_view", "Include instances", "Only these share the files."),
+                    (
+                        "grid_view",
+                        "Include instances",
+                        "Only these share the files.",
+                    ),
                     ("sync", "Turn Sync on", "Changes copy automatically."),
                 ];
-                body = body.child(
-                    section_card(t)
-                        .child(ui::section_header(t, "How Sync works", None))
-                        .child(
-                            div().grid().grid_cols(3).gap(px(16.)).pt(px(4.)).children(
-                                steps.into_iter().enumerate().map(|(index, (icon, title, detail))| {
-                                    div()
-                                        .flex()
-                                        .items_start()
-                                        .gap(px(12.))
-                                        .child(
-                                            div()
-                                                .flex()
-                                                .flex_shrink_0()
-                                                .items_center()
-                                                .justify_center()
-                                                .size(px(32.))
-                                                .rounded(t.radius)
-                                                .bg(t.accent_soft)
-                                                .child(crate::symbols::icon(Some(icon), px(16.), t.ring)),
-                                        )
-                                        .child(
-                                            ui::title_block(
-                                                t,
-                                                format!("{}. {title}", index + 1),
-                                                Some(detail.into()),
+                body =
+                    body.child(
+                        section_card(t)
+                            .child(ui::section_header(t, "How Sync works", None))
+                            .child(div().grid().grid_cols(3).gap(px(16.)).pt(px(4.)).children(
+                                steps.into_iter().enumerate().map(
+                                    |(index, (icon, title, detail))| {
+                                        div()
+                                            .flex()
+                                            .items_start()
+                                            .gap(px(12.))
+                                            .child(
+                                                div()
+                                                    .flex()
+                                                    .flex_shrink_0()
+                                                    .items_center()
+                                                    .justify_center()
+                                                    .size(px(32.))
+                                                    .rounded(t.radius)
+                                                    .bg(t.accent_soft)
+                                                    .child(crate::symbols::icon(
+                                                        Some(icon),
+                                                        px(16.),
+                                                        t.ring,
+                                                    )),
                                             )
-                                            .flex_1()
-                                            .min_w(px(0.)),
-                                        )
-                                }),
-                            ),
-                        ),
-                );
+                                            .child(
+                                                ui::title_block(
+                                                    t,
+                                                    format!("{}. {title}", index + 1),
+                                                    Some(detail.into()),
+                                                )
+                                                .flex_1()
+                                                .min_w(px(0.)),
+                                            )
+                                    },
+                                ),
+                            )),
+                    );
             } else if self.section == 0 {
                 body = body.child(categories.child(category_grid));
             }

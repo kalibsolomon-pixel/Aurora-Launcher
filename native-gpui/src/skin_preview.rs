@@ -457,9 +457,13 @@ impl Render for SkinPreview {
                                 .border_1()
                                 .border_color(t.border_subtle)
                                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                                .child(tool("preview-zoom-in", "Zoom in", "Zoom in", "zoom_in", |s, cx| {
-                                    s.zoom(0.08, cx)
-                                }))
+                                .child(tool(
+                                    "preview-zoom-in",
+                                    "Zoom in",
+                                    "Zoom in",
+                                    "zoom_in",
+                                    |s, cx| s.zoom(0.08, cx),
+                                ))
                                 .child(tool(
                                     "preview-zoom-out",
                                     "Zoom out",

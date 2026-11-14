@@ -2455,58 +2455,56 @@ impl Render for InstanceEditor {
                     ("check_circle", t.success)
                 };
                 let note = instance_note(instance);
-                let mut head = ui::card(&t).gap(px(14.)).child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(14.))
-                        .child(ui::icon_tile(&t, stored_icon.as_deref(), 44., true))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(5.))
-                                .flex_1()
-                                .min_w(px(0.))
-                                .child(
-                                    div()
-                                        .min_w(px(0.))
-                                        .max_w(px(TEXT_MAX))
-                                        .text_size(px(18.))
-                                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                                        .text_color(t.foreground)
-                                        .child(instance.display_name.clone()),
-                                )
-                                // The list already marks the active instance.
-                                .children(instance_badges(&t, instance, false, false))
-                                .when(!attention, |col| {
-                                    col.child(
+                let mut head =
+                    ui::card(&t).gap(px(14.)).child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(14.))
+                            .child(ui::icon_tile(&t, stored_icon.as_deref(), 44., true))
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_col()
+                                    .gap(px(5.))
+                                    .flex_1()
+                                    .min_w(px(0.))
+                                    .child(
                                         div()
-                                            .flex()
-                                            .items_start()
-                                            .gap(px(6.))
-                                            .child(div().pt(px(1.)).child(symbols::icon(
-                                                Some(icon),
-                                                px(14.),
-                                                tone,
-                                            )))
-                                            .child(
-                                                div()
-                                                    .flex_1()
-                                                    .min_w(px(0.))
-                                                    .text_size(px(ui::TEXT_CAPTION))
-                                                    .text_color(t.muted_foreground)
-                                                    .child(note.clone()),
-                                            ),
+                                            .min_w(px(0.))
+                                            .max_w(px(TEXT_MAX))
+                                            .text_size(px(18.))
+                                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                                            .text_color(t.foreground)
+                                            .child(instance.display_name.clone()),
                                     )
-                                }),
-                        )
-                        .child(
-                            div()
-                                .flex()
-                                .flex_shrink_0()
-                                .gap(px(8.))
-                                .when(!active, |buttons| {
+                                    // The list already marks the active instance.
+                                    .children(instance_badges(&t, instance, false, false))
+                                    .when(!attention, |col| {
+                                        col.child(
+                                            div()
+                                                .flex()
+                                                .items_start()
+                                                .gap(px(6.))
+                                                .child(div().pt(px(1.)).child(symbols::icon(
+                                                    Some(icon),
+                                                    px(14.),
+                                                    tone,
+                                                )))
+                                                .child(
+                                                    div()
+                                                        .flex_1()
+                                                        .min_w(px(0.))
+                                                        .text_size(px(ui::TEXT_CAPTION))
+                                                        .text_color(t.muted_foreground)
+                                                        .child(note.clone()),
+                                                ),
+                                        )
+                                    }),
+                            )
+                            .child(div().flex().flex_shrink_0().gap(px(8.)).when(
+                                !active,
+                                |buttons| {
                                     buttons.child(
                                         action_button(
                                             "select",
@@ -2516,9 +2514,9 @@ impl Render for InstanceEditor {
                                         )
                                         .size(ButtonSize::Small),
                                     )
-                                }),
-                        ),
-                );
+                                },
+                            )),
+                    );
                 if attention {
                     head = head.child(callout(&t, icon, tone, true, note));
                 }
@@ -2659,25 +2657,31 @@ impl Render for InstanceEditor {
                     .unwrap_or_else(|| "Managed runtime".to_owned());
                 let lines = [("Memory", memory), ("Java", java)];
                 // Summarize saved values without exposing an editable draft here.
-                let grid = div().flex().flex_col().children(lines.into_iter().enumerate().map(
-                    |(index, (label, value))| {
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap(px(12.))
-                            .py(px(8.))
-                            .when(index > 0, |row| row.border_t_1().border_color(t.border))
-                            .child(ui::caption(&t, label))
-                            .child(
+                let grid = div()
+                    .flex()
+                    .flex_col()
+                    .children(
+                        lines
+                            .into_iter()
+                            .enumerate()
+                            .map(|(index, (label, value))| {
                                 div()
-                                    .text_size(px(ui::TEXT_BODY))
-                                    .font_weight(gpui::FontWeight::MEDIUM)
-                                    .text_color(t.foreground)
-                                    .child(value),
-                            )
-                    },
-                ));
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .gap(px(12.))
+                                    .py(px(8.))
+                                    .when(index > 0, |row| row.border_t_1().border_color(t.border))
+                                    .child(ui::caption(&t, label))
+                                    .child(
+                                        div()
+                                            .text_size(px(ui::TEXT_BODY))
+                                            .font_weight(gpui::FontWeight::MEDIUM)
+                                            .text_color(t.foreground)
+                                            .child(value),
+                                    )
+                            }),
+                    );
                 side_runtime = Some(
                     ui::card(&t)
                         .gap(px(12.))

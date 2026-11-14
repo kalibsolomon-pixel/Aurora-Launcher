@@ -183,7 +183,15 @@ impl RenderOnce for AuroraButton {
                 Hsla { a: 0.36, ..t.ring },
             ),
             ButtonVariant::Subtle => (clear, t.muted_foreground, t.control, clear),
-            ButtonVariant::DangerSubtle => (clear, t.danger, Hsla { a: 0.10, ..t.danger }, clear),
+            ButtonVariant::DangerSubtle => (
+                clear,
+                t.danger,
+                Hsla {
+                    a: 0.10,
+                    ..t.danger
+                },
+                clear,
+            ),
         };
         let (height, pad, text, icon_size) = match self.size {
             ButtonSize::Small => (30., 10., 13., 15.),

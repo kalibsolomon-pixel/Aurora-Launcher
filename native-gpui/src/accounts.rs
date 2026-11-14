@@ -464,7 +464,7 @@ fn status_text(status: &str) -> &'static str {
 fn status_line(t: &theme::AuroraTheme, status: &str, extra: Option<&'static str>) -> gpui_kit::Div {
     let (label, color, text_color) = match status {
         "signedIn" => ("Signed in", t.success, t.subtle_foreground),
-        "reauthenticationRequired" => ("Sign-in needed", t.warning, t.warning),
+        "reauthenticationRequired" => ("Sign-in needed", t.warning, t.muted_foreground),
         _ => ("Unavailable", t.subtle_foreground, t.subtle_foreground),
     };
     div()
@@ -472,9 +472,6 @@ fn status_line(t: &theme::AuroraTheme, status: &str, extra: Option<&'static str>
         .items_center()
         .gap(px(6.))
         .text_size(px(ui::TEXT_BODY))
-        .when(status == "reauthenticationRequired", |line| {
-            line.font_weight(gpui::FontWeight::MEDIUM)
-        })
         .child(div().flex_shrink_0().size(px(6.)).rounded_full().bg(color))
         .child(div().text_color(text_color).child(label))
         .when_some(extra, |row, extra| {
@@ -556,18 +553,17 @@ fn icon_button(
         .font_weight(FontWeight::MEDIUM)
         .text_color(t.danger)
         .rounded(t.radius)
-        .bg(Hsla { a: 0.08, ..t.danger })
+        .bg(Hsla {
+            a: 0.08,
+            ..t.danger
+        })
         .border_1()
         .border_color(gpui::transparent_black())
         .hover(move |style| style.bg(hover))
         .active(|style| style.opacity(0.88))
         .focus(move |style| style.border_color(ring))
         .styles(|styles| styles.disabled(|style| style.opacity(0.42)))
-        .child(crate::symbols::icon(
-            Some(icon),
-            px(16.),
-            t.danger,
-        ))
+        .child(crate::symbols::icon(Some(icon), px(16.), t.danger))
         .child("Remove…")
 }
 
@@ -1347,7 +1343,11 @@ impl Render for Accounts {
                             div().w(px(128.)).child(
                                 AuroraButton::new(
                                     gpui_kit::SharedString::from(format!("restore-{id}")),
-                                    if reauth { "Reconnect" } else { "Refresh session" },
+                                    if reauth {
+                                        "Reconnect"
+                                    } else {
+                                        "Refresh session"
+                                    },
                                 )
                                 .accessibility_label(format!(
                                     "{} session for {}",
@@ -1363,12 +1363,20 @@ impl Render for Accounts {
                                 })
                                 .full_width()
                                 .disabled(busy)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.refresh_session(restore_id.clone(), cx);
-                                })),
+                                .on_click(cx.listener(
+                                    move |this, _, _, cx| {
+                                        this.refresh_session(restore_id.clone(), cx);
+                                    },
+                                )),
                             ),
                         )
-                        .child(div().w(px(1.)).h(px(20.)).mx(px(10.)).bg(palette.border_subtle))
+                        .child(
+                            div()
+                                .w(px(1.))
+                                .h(px(20.))
+                                .mx(px(10.))
+                                .bg(palette.border_subtle),
+                        )
                         .child(
                             icon_button(
                                 &palette,

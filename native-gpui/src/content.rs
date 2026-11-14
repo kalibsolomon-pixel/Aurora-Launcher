@@ -1755,8 +1755,8 @@ impl Render for Content {
                     .map(required_label);
                 let required = required_by.is_some();
                 notes.retain(|note| !note.starts_with(REQUIRED_NOTE));
-                let inline_meta =
-                    window.viewport_size().width >= px(INLINE_COLUMNS_MIN_WIDTH) && notes.is_empty();
+                let inline_meta = window.viewport_size().width >= px(INLINE_COLUMNS_MIN_WIDTH)
+                    && notes.is_empty();
                 let disabled_row = entry.enabled == Some(false);
                 let mut line = vec![entry.file_name.as_str()];
                 line.extend(meta.iter().copied().filter(|m| {

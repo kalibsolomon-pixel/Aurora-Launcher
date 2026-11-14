@@ -3481,43 +3481,41 @@ impl HomeWidgets {
                         let count = projection.points.len();
                         // Weekday under each bar for the 7-day range; the two
                         // ends of the range otherwise.
-                        let axis = if period == Period::Week && count == 7 {
-                            div()
-                                .flex()
-                                .h(px(AXIS_HEIGHT))
-                                .items_end()
-                                .children((0..count).map(|index| {
-                                    let day = today.saturating_sub((count - 1 - index) as u64);
-                                    let last = index + 1 == count;
-                                    div()
-                                        .flex_1()
-                                        .flex()
-                                        .justify_center()
-                                        .text_size(px(ui::TEXT_BODY))
-                                        .when(last, |this| this.font_weight(FontWeight::SEMIBOLD))
-                                        .text_color(if last {
-                                            palette.foreground
-                                        } else {
-                                            palette.foreground.opacity(0.75)
-                                        })
-                                        .child(if last { "Today" } else { weekday_label(day) })
-                                }))
-                        } else {
-                            div()
-                                .flex()
-                                .h(px(AXIS_HEIGHT))
-                                .items_end()
-                                .justify_between()
-                                .child(label(format!(
-                                    "{} days ago",
-                                    if period == Period::Week { 7 } else { 30 }
-                                )))
-                                .child(
-                                    label("Today".into())
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(palette.foreground),
+                        let axis =
+                            if period == Period::Week && count == 7 {
+                                div().flex().h(px(AXIS_HEIGHT)).items_end().children(
+                                    (0..count).map(|index| {
+                                        let day = today.saturating_sub((count - 1 - index) as u64);
+                                        let last = index + 1 == count;
+                                        div()
+                                            .flex_1()
+                                            .flex()
+                                            .justify_center()
+                                            .text_size(px(ui::TEXT_BODY))
+                                            .text_color(if last {
+                                                palette.foreground
+                                            } else {
+                                                palette.foreground.opacity(0.75)
+                                            })
+                                            .child(if last { "Today" } else { weekday_label(day) })
+                                    }),
                                 )
-                        };
+                            } else {
+                                div()
+                                    .flex()
+                                    .h(px(AXIS_HEIGHT))
+                                    .items_end()
+                                    .justify_between()
+                                    .child(label(format!(
+                                        "{} days ago",
+                                        if period == Period::Week { 7 } else { 30 }
+                                    )))
+                                    .child(
+                                        label("Today".into())
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(palette.foreground),
+                                    )
+                            };
                         card = card
                             .child(
                                 div()

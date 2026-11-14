@@ -2213,15 +2213,20 @@ impl Render for Skins {
                                 )
                                 // Destructive removal sits apart from routine actions.
                                 .child(
-                                    AuroraButton::new(format!("skins-remove-{}", preset.id), "Remove")
-                                        .accessibility_label("Remove skin")
-                                        .icon("delete")
-                                        .size(ButtonSize::Small)
-                                        .variant(ButtonVariant::DangerSubtle)
-                                        .disabled(locked)
-                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                    AuroraButton::new(
+                                        format!("skins-remove-{}", preset.id),
+                                        "Remove",
+                                    )
+                                    .accessibility_label("Remove skin")
+                                    .icon("delete")
+                                    .size(ButtonSize::Small)
+                                    .variant(ButtonVariant::DangerSubtle)
+                                    .disabled(locked)
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
                                             this.open_remove_review(remove_id.clone(), cx);
-                                        })),
+                                        },
+                                    )),
                                 ),
                         )
                         .child(
@@ -2258,8 +2263,7 @@ impl Render for Skins {
                                             this.open_rename(rename_id.clone(), window, cx);
                                         },
                                     )),
-                                )
-,
+                                ),
                         ),
                 );
             }
@@ -2463,9 +2467,7 @@ impl Render for Skins {
                 .items_start()
                 .child(
                     appearance
-                        .when(signed_in.is_none(), |card| {
-                            card.p(px(16.))
-                        })
+                        .when(signed_in.is_none(), |card| card.p(px(16.)))
                         .flex_1()
                         .min_w(px(320.)),
                 )

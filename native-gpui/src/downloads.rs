@@ -1843,11 +1843,7 @@ mod tests {
         );
         // Cancellation keeps its wording.
         assert_eq!(
-            running_status(
-                JobPhase::Cancelling,
-                Some("installingGame"),
-                "Cancelling…"
-            ),
+            running_status(JobPhase::Cancelling, Some("installingGame"), "Cancelling…"),
             ("Cancelling", "Cancelling…".to_owned())
         );
     }

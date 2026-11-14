@@ -238,8 +238,8 @@ fn pill(t: &AuroraTheme, label: SharedString, tone: Tone, dot: bool) -> Div {
         .h(px(22.))
         .px(px(9.))
         .rounded_full()
-        .bg(Hsla { a: 0.13, ..color })
-        .text_size(px(TEXT_MICRO + 0.5))
+        .bg(Hsla { a: 0.18, ..color })
+        .text_size(px(TEXT_CAPTION))
         .font_weight(FontWeight::MEDIUM)
         .text_color(if tone == Tone::Neutral {
             t.muted_foreground
