@@ -1867,21 +1867,30 @@ impl Render for Content {
                         .justify_center()
                         .child(
                             div()
+                                .id(gpui::SharedString::from(format!("locked-{}", entry.id)))
+                                .aria_label(format!("{} is required and stays enabled", entry.name))
                                 .relative()
-                                .w(px(44.))
-                                .h(px(36.))
+                                .w(px(40.))
+                                .h(px(24.))
+                                .rounded_full()
+                                .bg(palette.accent)
                                 .child(
-                                    AuroraToggle::new(gpui::SharedString::from(format!(
-                                        "toggle-{}",
-                                        entry.id
-                                    )))
-                                    .label(format!("{} is required and stays enabled", entry.name))
-                                    .checked(true)
-                                    .disabled(true),
-                                )
-                                .child(div().absolute().left(px(24.)).top(px(12.)).child(
-                                    crate::symbols::icon(Some("lock"), px(12.), palette.accent),
-                                )),
+                                    div()
+                                        .absolute()
+                                        .top(px(3.))
+                                        .left(px(19.))
+                                        .size(px(18.))
+                                        .rounded_full()
+                                        .bg(palette.accent_foreground)
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(crate::symbols::icon(
+                                            Some("lock"),
+                                            px(12.),
+                                            palette.accent,
+                                        )),
+                                ),
                         )
                         .into_any_element(),
                     Some(enabled) => div()

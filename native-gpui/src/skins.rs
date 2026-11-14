@@ -2192,6 +2192,22 @@ impl Render for Skins {
                                     )
                                     .flex_1(),
                                 )
+                                .child(
+                                    AuroraButton::new(format!("skins-favorite-{}", preset.id), "")
+                                        .accessibility_label(if preset.favorite {
+                                            "Unfavorite"
+                                        } else {
+                                            "Favorite"
+                                        })
+                                        .icon("star")
+                                        .size(ButtonSize::Small)
+                                        .variant(ButtonVariant::Subtle)
+                                        .selected(preset.favorite)
+                                        .disabled(locked)
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.favorite(favorite_id.clone(), next_favorite, cx);
+                                        })),
+                                )
                                 // Destructive removal sits apart from routine actions.
                                 .child(
                                     AuroraButton::new(format!("skins-remove-{}", preset.id), "Remove")
@@ -2223,25 +2239,6 @@ impl Render for Skins {
                                     .on_click(cx.listener(
                                         move |this, _, _, cx| {
                                             this.preview_preset(preview_id.clone(), cx);
-                                        },
-                                    )),
-                                )
-                                .child(
-                                    AuroraButton::new(
-                                        format!("skins-favorite-{}", preset.id),
-                                        if preset.favorite {
-                                            "Unfavorite"
-                                        } else {
-                                            "Favorite"
-                                        },
-                                    )
-                                    .icon("star")
-                                    .size(ButtonSize::Small)
-                                    .selected(preset.favorite)
-                                    .disabled(locked)
-                                    .on_click(cx.listener(
-                                        move |this, _, _, cx| {
-                                            this.favorite(favorite_id.clone(), next_favorite, cx);
                                         },
                                     )),
                                 )

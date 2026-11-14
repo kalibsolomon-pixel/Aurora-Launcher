@@ -3493,12 +3493,12 @@ impl HomeWidgets {
                                         .flex_1()
                                         .flex()
                                         .justify_center()
-                                        .text_size(px(ui::TEXT_BODY - 1.))
+                                        .text_size(px(ui::TEXT_BODY))
                                         .when(last, |this| this.font_weight(FontWeight::SEMIBOLD))
                                         .text_color(if last {
                                             palette.foreground
                                         } else {
-                                            palette.muted_foreground
+                                            palette.foreground.opacity(0.75)
                                         })
                                         .child(if last { "Today" } else { weekday_label(day) })
                                 }))
