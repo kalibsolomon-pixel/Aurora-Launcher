@@ -1085,7 +1085,7 @@ impl Launcher {
             discover.update(cx, |discover, cx| discover.open_for(instance, kind, cx));
         }
     }
-    /// Discover's "Back to instance": Content with that instance and kind.
+    /// Open Content for an explicit instance and kind from another page.
     fn return_to_content(
         &mut self,
         instance: String,
@@ -2559,13 +2559,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             this.sync_mutation_guards(cx);
                             cx.notify();
                         }),
-                        cx.subscribe(
+                        cx.subscribe_in(
                             &editor,
-                            |this: &mut Launcher, _, _: &InstanceEditorEvent, cx| {
-                                this.reload_guarded(cx);
-                                this.refresh_content_views(cx);
-                                if let Some(syncing) = &this.syncing {
-                                    syncing.update(cx, |syncing, cx| syncing.refresh(cx));
+                            window,
+                            |this: &mut Launcher, _, event: &InstanceEditorEvent, window, cx| {
+                                match event {
+                                    InstanceEditorEvent::Changed => {
+                                        this.reload_guarded(cx);
+                                        this.refresh_content_views(cx);
+                                        if let Some(syncing) = &this.syncing {
+                                            syncing.update(cx, |syncing, cx| syncing.refresh(cx));
+                                        }
+                                    }
+                                    InstanceEditorEvent::OpenContent { instance } => {
+                                        this.return_to_content(instance.clone(), 0, window, cx);
+                                    }
                                 }
                                 cx.notify();
                             },

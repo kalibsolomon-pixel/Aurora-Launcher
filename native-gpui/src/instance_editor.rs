@@ -20,6 +20,7 @@ use std::{cell::Cell, collections::BTreeMap, ops::Range, rc::Rc};
 
 pub enum InstanceEditorEvent {
     Changed,
+    OpenContent { instance: String },
 }
 impl EventEmitter<InstanceEditorEvent> for InstanceEditor {}
 
@@ -2547,6 +2548,25 @@ impl Render for InstanceEditor {
                             cx.notify();
                         })),
                 );
+                if index == 0 {
+                    tabs = tabs.child(
+                        AuroraButton::new("instance-content", "Content")
+                            .accessibility_label("Open content for selected instance")
+                            .variant(ButtonVariant::Ghost)
+                            .size(ButtonSize::Small)
+                            .disabled(busy || instance.is_none())
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if this.busy {
+                                    return;
+                                }
+                                if let Some(instance) = this.selected_instance() {
+                                    cx.emit(InstanceEditorEvent::OpenContent {
+                                        instance: instance.id.clone(),
+                                    });
+                                }
+                            })),
+                    );
+                }
             }
             detail = detail.child(div().flex().child(tabs));
             if self.section == 0 {
