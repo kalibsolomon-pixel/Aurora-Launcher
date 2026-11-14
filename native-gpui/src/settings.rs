@@ -26,8 +26,8 @@
 //!   validated custom-accent derivation.
 //!
 //! Honest parity limits, kept deliberate:
-//! - The signed updater binds the runtime Slint host. Update review and
-//!   installation stay deferred; this host only reports status on request.
+//! - Launcher updates use the shared signed download and installer handoff.
+//!   No updater trust or installation policy lives in the renderer.
 //! - The picker is an inline panel under the Accent row, not a window-level
 //!   popover with outside-click dismissal; Escape and Cancel dismiss it.
 
@@ -72,6 +72,7 @@ pub enum SettingsEvent {
     /// being queued, a restored value, or an acknowledged one. Feed it to the
     /// Borealis view.
     Motion(u8),
+    Installing(bool),
 }
 
 // ---------------------------------------------------------------------------
@@ -372,7 +373,7 @@ pub fn update_status_event(name: &str, payload: &serde_json::Value) -> Option<ap
     serde_json::from_value(payload.clone()).ok()
 }
 
-/// Download progress text for the deferred launcher update review.
+/// Download progress text for the signed Launcher installer.
 pub fn launcher_progress_text(payload: &serde_json::Value) -> Option<String> {
     let done = payload.get("downloadedBytes")?.as_u64()?;
     Some(match payload.get("totalBytes").and_then(|t| t.as_u64()) {
@@ -383,6 +384,16 @@ pub fn launcher_progress_text(payload: &serde_json::Value) -> Option<String> {
         ),
         None => format!("Downloading: {done} bytes"),
     })
+}
+
+fn launcher_offer(value: &serde_json::Value) -> Option<String> {
+    (value.get("kind")?.as_str()? == "updateAvailable").then(|| {
+        value
+            .get("candidate")?
+            .as_str()
+            .filter(|v| !v.is_empty())
+            .map(str::to_owned)
+    })?
 }
 
 fn availability_text(value: &serde_json::Value) -> String {
@@ -658,6 +669,8 @@ enum Message {
     FolderOpened(ApiResult<()>),
     StatusRead(ApiResult<api::ApplicationStatus>),
     UpdatesChecked(ApiResult<api::UpdateOverview>),
+    LauncherDownloaded(String, ApiResult<serde_json::Value>),
+    LauncherInstalled(ApiResult<serde_json::Value>),
 }
 enum ShortcutOperation {
     CreateDesktop,
@@ -687,6 +700,8 @@ pub struct Settings {
     data_root: Option<String>,
     updates: Option<api::UpdateOverview>,
     update_busy: bool,
+    downloaded_version: Option<String>,
+    install_blocked: bool,
     update_detail: Option<String>,
     updates_error: Option<String>,
     accent_hex: Entity<InputState>,
@@ -779,6 +794,8 @@ impl Settings {
             data_root: None,
             updates: None,
             update_busy: false,
+            downloaded_version: None,
+            install_blocked: true,
             update_detail: None,
             updates_error: None,
             accent_hex,
@@ -1256,6 +1273,64 @@ impl Settings {
 
     // -- updates ------------------------------------------------------------
 
+    pub fn set_install_blocked(&mut self, blocked: bool, cx: &mut Context<Self>) {
+        if self.install_blocked != blocked {
+            self.install_blocked = blocked;
+            cx.notify();
+        }
+    }
+
+    fn launcher_operation(&mut self, install: bool, cx: &mut Context<Self>) {
+        let Some(host) = self.host.clone() else {
+            return;
+        };
+        let Some(version) = self
+            .updates
+            .as_ref()
+            .and_then(|o| launcher_offer(&o.launcher.availability))
+        else {
+            return;
+        };
+        if self.update_busy
+            || (install
+                && (self.install_blocked || self.downloaded_version.as_deref() != Some(&version)))
+        {
+            return;
+        }
+        self.update_busy = true;
+        self.updates_error = None;
+        self.update_detail = Some(
+            if install {
+                "Revalidating the signed installer before exiting\u{2026}"
+            } else {
+                "Downloading and verifying the signed installer\u{2026}"
+            }
+            .into(),
+        );
+        if install {
+            cx.emit(SettingsEvent::Installing(true));
+        }
+        cx.notify();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.rt.spawn(async move {
+            let message = if install {
+                Message::LauncherInstalled(
+                    guarded(api::install_launcher_update(host, version)).await,
+                )
+            } else {
+                let result = guarded(api::download_launcher_update(host, version.clone())).await;
+                Message::LauncherDownloaded(version, result)
+            };
+            let _ = tx.send(message);
+        });
+        cx.spawn(async move |weak, cx| {
+            if let Ok(message) = rx.await {
+                let _ = weak.update(cx, |view, cx| view.receive(message, cx));
+            }
+        })
+        .detach();
+    }
+
     fn check_updates(&mut self, cx: &mut Context<Self>) {
         let Some(host) = self.host.clone() else {
             return;
@@ -1347,6 +1422,29 @@ impl Settings {
             Message::StatusRead(result) => {
                 if let Ok(status) = result {
                     self.data_root = Some(status.managed_data_root);
+                }
+            }
+            Message::LauncherDownloaded(version, result) => {
+                self.update_busy = false;
+                match result {
+                    Ok(_) => {
+                        self.downloaded_version = Some(version);
+                        self.update_detail = Some("Signature, hash and package identity verified. Exit and install closes Aurora and starts the installer.".into());
+                    }
+                    Err(error) => {
+                        self.downloaded_version = None;
+                        self.updates_error = Some(error.message);
+                    }
+                }
+            }
+            Message::LauncherInstalled(result) => {
+                self.update_busy = false;
+                match result {
+                    Ok(_) => cx.quit(),
+                    Err(error) => {
+                        cx.emit(SettingsEvent::Installing(false));
+                        self.updates_error = Some(error.message);
+                    }
                 }
             }
             Message::UpdatesChecked(result) => {
@@ -2578,7 +2676,7 @@ impl Render for Settings {
                     t,
                     "Check for updates",
                     Some(
-                        "Installing updates stays with the supported launcher; this host only reports status."
+                        "Updates are installed only after you download and verify the signed installer."
                             .into(),
                     ),
                     true,
@@ -2593,6 +2691,21 @@ impl Render for Settings {
                         })),
                 )),
             );
+                if let Some(version) = self
+                    .updates
+                    .as_ref()
+                    .and_then(|o| launcher_offer(&o.launcher.availability))
+                {
+                    let ready = self.downloaded_version.as_deref() == Some(&version);
+                    let install = ready;
+                    card = card.child(ui::setting_row(t, format!("Aurora Launcher {version}"), Some(if ready && self.install_blocked {
+                        "Finish running games, sign-in and other operations before installing.".into()
+                    } else { "Your instances, accounts and preferences stay in place.".into() }), true)
+                        .child(control_slot(AuroraButton::new("launcher-update-action", if ready { "Exit and install" } else { "Download update" })
+                            .variant(ButtonVariant::Primary)
+                            .disabled(self.update_busy || no_host || (ready && self.install_blocked))
+                            .on_click(cx.listener(move |this, _, _, cx| this.launcher_operation(install, cx))))));
+                }
                 if let Some(detail) = &self.update_detail {
                     card = card.child(div().pt(px(12.)).child(ui::caption(t, detail.clone())));
                 }
@@ -2613,10 +2726,7 @@ impl Render for Settings {
                         .child(ui::icon_tile(t, Some("rocket_launch"), 40., true))
                         .child(ui::title_block(
                             t,
-                            format!(
-                                "Aurora Launcher {} (experimental GPUI renderer)",
-                                env!("CARGO_PKG_VERSION")
-                            ),
+                            format!("Aurora Launcher {}", env!("CARGO_PKG_VERSION")),
                             Some(
                                 format!(
                                     "Released under the {} license.",
@@ -3143,5 +3253,20 @@ mod tests {
             1.0,
             "an empty track never divides by zero"
         );
+    }
+    #[test]
+    fn launcher_actions_require_an_exact_available_offer() {
+        assert_eq!(
+            launcher_offer(&serde_json::json!({"kind":"updateAvailable","candidate":"2.3.0"}))
+                .as_deref(),
+            Some("2.3.0")
+        );
+        for state in [
+            serde_json::json!({"kind":"upToDate","candidate":"2.3.0"}),
+            serde_json::json!({"kind":"updateAvailable"}),
+            serde_json::json!({"kind":"updateAvailable","candidate":""}),
+        ] {
+            assert!(launcher_offer(&state).is_none());
+        }
     }
 }

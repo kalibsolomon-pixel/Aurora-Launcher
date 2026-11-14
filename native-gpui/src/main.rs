@@ -108,12 +108,17 @@ pub(crate) fn showcase() -> bool {
 
 /// `--showcase <dir>`: the directory must carry the disposable marker so the
 /// owner's managed data can never be opened this way.
+#[cfg(debug_assertions)]
 fn showcase_root() -> Option<PathBuf> {
     let mut args = std::env::args().skip_while(|a| a != "--showcase").skip(1);
     let root = PathBuf::from(args.next()?);
     root.join("AURORA_DISPOSABLE_DIAGNOSTIC")
         .is_file()
         .then_some(root)
+}
+#[cfg(not(debug_assertions))]
+fn showcase_root() -> Option<PathBuf> {
+    None
 }
 const READINESS_RECHECK_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
 
@@ -514,6 +519,32 @@ impl Launcher {
                 updates.set_target(target, self.serial, cx);
                 updates.set_blocked(blocked, cx);
             });
+        }
+        if let Some(settings) = &self.settings {
+            let blocked = self.busy
+                || account_busy
+                || skin_busy
+                || client_update_busy
+                || home_busy
+                || self.load_in_flight
+                || self.readiness_in_flight
+                || self.sync_running
+                || self.downloads_running(cx)
+                || self.pack_import_busy
+                || self
+                    .processes
+                    .values()
+                    .any(|p| matches!(p.status.as_str(), "starting" | "running"))
+                || self
+                    .pack_import
+                    .as_ref()
+                    .is_some_and(|v| v.read(cx).is_busy())
+                || self.discover.as_ref().is_some_and(|v| v.read(cx).is_busy())
+                || self
+                    .content
+                    .as_ref()
+                    .is_some_and(|v| v.read(cx).is_busy(cx));
+            settings.update(cx, |settings, cx| settings.set_install_blocked(blocked, cx));
         }
         if let Some(home) = &self.home_widgets {
             let blocked = self.busy
@@ -1319,6 +1350,12 @@ impl Launcher {
             self._subscriptions.push(cx.subscribe(
                 &settings,
                 |this, settings, event: &SettingsEvent, cx| {
+                    if let SettingsEvent::Installing(busy) = event {
+                        this.busy = *busy;
+                        this.sync_mutation_guards(cx);
+                        cx.notify();
+                        return;
+                    }
                     // The acknowledged state plus any live accent preview, so
                     // the root's `theme::apply` never overwrites a preview.
                     this.appearance = settings.read(cx).display_appearance();
@@ -1329,6 +1366,7 @@ impl Launcher {
                                 layer.set_background(background, cx)
                             }
                             SettingsEvent::Motion(speed) => layer.set_motion(*speed, cx),
+                            SettingsEvent::Installing(_) => {}
                         });
                     }
                     // Invalidate older root snapshots before they can restore an old theme.
@@ -2430,6 +2468,7 @@ impl Render for Launcher {
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let showcase_root = showcase_root();
+    #[cfg(debug_assertions)]
     if std::env::args().any(|a| a == "--showcase") && showcase_root.is_none() {
         return Err("--showcase needs a directory containing AURORA_DISPOSABLE_DIAGNOSTIC".into());
     }
@@ -2437,7 +2476,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         showcase_root.is_some(),
         std::sync::atomic::Ordering::Relaxed,
     );
-    let diagnostic = std::env::args().any(|a| a == "--diagnostic") || showcase_root.is_some();
+    let diagnostic = cfg!(debug_assertions)
+        && (std::env::args().any(|a| a == "--diagnostic") || showcase_root.is_some());
     if !diagnostic && aurora_launcher_lib::run_artwork_decoder_if_requested() {
         return Ok(());
     }

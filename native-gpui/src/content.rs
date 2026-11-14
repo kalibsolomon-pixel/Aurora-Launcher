@@ -712,7 +712,7 @@ impl Content {
             revision: self.revision,
         })
     }
-    fn is_busy(&self, cx: &gpui::App) -> bool {
+    pub fn is_busy(&self, cx: &gpui::App) -> bool {
         self.busy || self.updates.read(cx).is_busy()
     }
     fn sync_updates(&self, cx: &mut Context<Self>) {

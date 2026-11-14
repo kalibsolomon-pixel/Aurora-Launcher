@@ -37,25 +37,25 @@ package IDs, data/credential paths, the `native-preview` update channel and
 authority refs stable. Historical signed assets retain their original names.
 See `docs/releases/BRANDING_CONTRACT.md` and the release branding regression tests.
 
-Aurora Launcher is the standalone, cross-platform launcher for the separate Aurora Fabric client mod. The application is native Rust with a Slint interface over the Rust launcher core. Tauri, WebView, Svelte and the web frontend are retired; do not reintroduce them. The launcher consumes Aurora as a future versioned artifact; never copy or couple to the mod's source tree.
+Aurora Launcher is the standalone, cross-platform launcher for the separate Aurora Fabric client mod. The application is native Rust with a GPUI interface over the Rust launcher core. Tauri, WebView, Svelte and the web frontend are retired; do not reintroduce them. The launcher consumes Aurora as a future versioned artifact; never copy or couple to the mod's source tree.
 
 ## Commands
 
 ```sh
-cargo run --manifest-path native/Cargo.toml
+cargo run --manifest-path native-gpui/Cargo.toml
 cargo fmt --manifest-path core/Cargo.toml --all -- --check
-cargo fmt --manifest-path native/Cargo.toml --all -- --check
+cargo fmt --manifest-path native-gpui/Cargo.toml --all -- --check
 cargo check --manifest-path core/Cargo.toml --all-targets --locked
 cargo test --manifest-path core/Cargo.toml --locked
-cargo test --manifest-path native/Cargo.toml --locked
-cargo build --manifest-path native/Cargo.toml --release --locked
+cargo test --manifest-path native-gpui/Cargo.toml --locked --bin aurora-launcher -j 2
+cargo build --manifest-path native-gpui/Cargo.toml --release --locked
 npm ci
 npm test
 ```
 
 ## Boundaries
 
-- Slint is presentation only. Installation, downloads, authentication, secure credentials, integrity checks, Java/runtime handling, filesystem mutation, and process launch belong in Rust.
+- GPUI is presentation only. Installation, downloads, authentication, secure credentials, integrity checks, Java/runtime handling, filesystem mutation, and process launch belong in Rust.
 - Cross the frontend/native boundary through narrow, typed commands/events. Keep Rust DTO field naming and error shapes synchronized with `native/src/api.rs`.
 - Use platform application-data APIs. Never default an instance to the user's normal `.minecraft`, and never write mutable data beside the executable.
 - Grow Rust by launcher domain, not in a giant `main.rs` or catch-all service. Add modules only with implemented behavior.
@@ -228,12 +228,12 @@ rule. See `docs/instance-tiles-icons/README.md`.
 
 ## Native application boundary
 
-The Slint application in `native/` is the only supported UI. The Rust backend
+The GPUI application in `native-gpui/` is the production UI (owner decision, 2026-11-14). The Slint host in `native/` is retained as a reference. The Rust backend
 lives in `core/`; it has no Tauri, WebView or frontend runtime dependency.
 
 - Implement launcher operations in `core/src/application.rs` against `host::Host`.
   Native presentation uses typed calls and serialized DTOs in `native/src/api.rs`.
-- UI tokens, shared controls and domain state remain in `native/ui/`. Do not move
+- Production UI tokens and shared controls remain in `native-gpui/src/`; historical Slint controls remain in `native/ui/`. Do not move
   downloads, authentication, installation, filesystem changes or launch into UI.
 - Readiness remains deep verification, triggered by changed inputs or explicit
   refresh, with at most one in-flight check.
@@ -258,7 +258,7 @@ lives in `core/`; it has no Tauri, WebView or frontend runtime dependency.
   Java, Fabric API and mixin Java requirements; never silently change the Loader
   or infer compatibility from a release title. Branch/CI artifacts remain excluded.
   Explicit diagnostic manifest overrides retain the deterministic loopback path.
-  This does not change new-instance release selection or launcher update authority.
+  New-instance discovery and updates share per-environment GitHub asset validation. One stable Client tag may publish one JAR per distinct Minecraft suffix; duplicate suffixes or mixed generic/suffixed JARs are rejected. Release pins resolve by Client version and Minecraft environment. Launcher update authority is unchanged.
 - Home widget placements may carry optional bounded `grid` dimensions (1–6 columns,
   1–3 rows). Absent geometry preserves legacy size presets. Save through the core's
   atomic configuration API; unknown widget entries survive. Native writes are

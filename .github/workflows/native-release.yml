@@ -10,7 +10,7 @@ on:
         description: Native numeric version
         type: string
         required: true
-        default: '2.1.1'
+        default: '2.2.0'
       minimum_version:
         description: Oldest accepted installed native version
         type: string
@@ -110,13 +110,13 @@ jobs:
           if ($LASTEXITCODE) { throw 'Release tests failed' }
           cargo fmt --manifest-path core/Cargo.toml --all -- --check
           if ($LASTEXITCODE) { throw 'Core format failed' }
-          cargo fmt --manifest-path native/Cargo.toml --all -- --check
+          cargo fmt --manifest-path native-gpui/Cargo.toml --all -- --check
           if ($LASTEXITCODE) { throw 'Native format failed' }
           cargo test --manifest-path core/Cargo.toml --locked --no-default-features --features native-preview
           if ($LASTEXITCODE) { throw 'Core tests failed' }
-          cargo test --manifest-path native/Cargo.toml --locked
+          cargo test --manifest-path native-gpui/Cargo.toml --locked --bin aurora-launcher -j 2
           if ($LASTEXITCODE) { throw 'Native tests failed' }
-          cargo build --manifest-path native/Cargo.toml --locked --release
+          cargo build --manifest-path native-gpui/Cargo.toml --locked --release
           if ($LASTEXITCODE) { throw 'Native build failed' }
       - name: Install packaging compiler
         shell: pwsh

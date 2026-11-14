@@ -373,12 +373,20 @@ pub async fn create_instance(
     if let Some(pin) = &record.installed().aurora {
         if crate::distribution::operational_manifest()
             .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?
-            .resolve_exact(&pin.version, Some(pin.channel))
+            .resolve_environment(
+                &pin.version,
+                Some(pin.channel),
+                &record.installed().minecraft_version,
+            )
             .is_none()
         {
             let release = endpoints
                 .release_manifest()
-                .resolve_exact(&pin.version, Some(pin.channel))
+                .resolve_environment(
+                    &pin.version,
+                    Some(pin.channel),
+                    &record.installed().minecraft_version,
+                )
                 .ok_or_else(|| {
                     InstanceError::ReleaseInvalid("Discovered Client metadata is missing.".into())
                 })?;
@@ -897,7 +905,11 @@ pub(crate) fn resolve_optional_aurora(
         crate::aurora::merged_release_manifest(managed, record.id(), endpoints.release_manifest())
             .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?;
     let release = manifest
-        .resolve_exact(&pin.version, Some(pin.channel))
+        .resolve_environment(
+            &pin.version,
+            Some(pin.channel),
+            &record.installed().minecraft_version,
+        )
         .cloned()
         .ok_or_else(|| InstanceError::AuroraReleaseNotFound {
             channel: pin.channel,
@@ -1131,7 +1143,11 @@ pub async fn install_instance_configuration(
         )
         .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?;
         let release = merged
-            .resolve_exact(&pin.version, Some(pin.channel))
+            .resolve_environment(
+                &pin.version,
+                Some(pin.channel),
+                &installed.minecraft_version,
+            )
             .ok_or_else(|| InstanceError::AuroraReleaseNotFound {
                 channel: pin.channel,
                 aurora_version: pin.version.clone(),

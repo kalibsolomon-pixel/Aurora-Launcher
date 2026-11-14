@@ -338,7 +338,11 @@ pub fn preview(
             let merged = aurora::merged_release_manifest(managed, id, endpoints.release_manifest())
                 .map_err(|error| invalid(error.to_string()))?;
             let release = merged
-                .resolve_exact(&pin.version, Some(pin.channel))
+                .resolve_environment(
+                    &pin.version,
+                    Some(pin.channel),
+                    &record.installed().minecraft_version,
+                )
                 .ok_or_else(|| invalid("release metadata unavailable"))?;
             super::platform::required_content(record.installed(), Some(release))
                 .map_err(invalid)?;
@@ -534,7 +538,11 @@ pub async fn apply(
         let merged = aurora::merged_release_manifest(managed, id, endpoints.release_manifest())
             .map_err(|error| invalid(error.to_string()))?;
         let release = merged
-            .resolve_exact(&pin.version, Some(pin.channel))
+            .resolve_environment(
+                &pin.version,
+                Some(pin.channel),
+                &approved.target.minecraft_version,
+            )
             .ok_or_else(|| invalid("release disappeared"))?;
         let game_plan = super::lifecycle::resolve_instance_game_plan(
             managed,
@@ -698,7 +706,11 @@ fn commit(
             let merged = aurora::merged_release_manifest(managed, id, endpoints.release_manifest())
                 .map_err(|error| invalid(error.to_string()))?;
             let release = merged
-                .resolve_exact(&pin.version, Some(pin.channel))
+                .resolve_environment(
+                    &pin.version,
+                    Some(pin.channel),
+                    &approved.target.minecraft_version,
+                )
                 .expect("revalidated release");
             for file in &approved.install {
                 verify(managed, id, file)?;

@@ -136,7 +136,11 @@ fn candidates(
                     })
                     .and_then(|manifest| {
                         manifest
-                            .resolve_exact(state.aurora_version(), Some(state.channel()))
+                            .resolve_environment(
+                                state.aurora_version(),
+                                Some(state.channel()),
+                                state.minecraft_version(),
+                            )
                             .cloned()
                     })
                     .is_some_and(|release| {

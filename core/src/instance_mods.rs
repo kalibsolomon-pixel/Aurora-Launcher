@@ -598,7 +598,11 @@ pub(crate) fn managed_artifact_file_name(
             .aurora
             .as_ref()
             .expect("absence returned above");
-        if let Some(release) = manifest.resolve_exact(&pin.version, Some(pin.channel)) {
+        if let Some(release) = manifest.resolve_environment(
+            &pin.version,
+            Some(pin.channel),
+            &record.installed().minecraft_version,
+        ) {
             let requirements =
                 crate::instances::platform::required_content(record.installed(), Some(release))
                     .map_err(ModError::InstalledState)?;
@@ -713,7 +717,11 @@ pub(crate) fn verified_required_mods_with_manifest(
         }
         let pin = record.installed().aurora.as_ref().expect("checked above");
         let release = manifest
-            .resolve_exact(&pin.version, Some(pin.channel))
+            .resolve_environment(
+                &pin.version,
+                Some(pin.channel),
+                &record.installed().minecraft_version,
+            )
             .ok_or_else(|| ModError::InstalledState("active release metadata is missing".into()))?;
         crate::instances::platform::required_content(record.installed(), Some(release))
             .map_err(ModError::InstalledState)?;

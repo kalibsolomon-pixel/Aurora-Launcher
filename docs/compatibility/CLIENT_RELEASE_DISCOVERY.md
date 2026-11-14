@@ -11,8 +11,10 @@ artifacts are excluded.
 Rust requests the pinned official GitHub Releases API. It requires the exact
 versioned Aurora JAR, expected SHA-256, uploaded asset state and bounded size.
 Both historical `aurora-<version>.jar` and
-`aurora-<version>-mc<minecraft>.jar` names are supported; multiple matching
-runtime JARs are rejected. A Minecraft filename suffix must match the selected
+`aurora-<version>-mc<minecraft>.jar` names are supported. A publication can contain one runtime JAR per distinct
+Minecraft suffix, as in Client 3.4.0. Duplicate environments or a generic JAR
+mixed with suffixed JARs are rejected. Discovery and installed update checks
+share this asset validation. A Minecraft filename suffix must match the selected
 environment, and never substitutes for verified dependency checks.
 Acquisition and cache reuse verify bytes through the existing SHA-256 store.
 Only verified JAR metadata supplies mod identity and Fabric dependency facts;
@@ -23,13 +25,14 @@ verified mod dependencies. Historical embedded releases remain for existing exac
 pins and environment policy; they no longer decide the latest Client version.
 Unsupported new environments fail explicitly, without changing instance settings.
 
-The reviewed 2026-11-11 environment additions are:
+The verified 2026-11-14 release matrix is:
 
 | Minecraft | Published Client | Fabric Loader | Fabric API | Java |
 | --- | --- | --- | --- | --- |
-| 26.1.2 | 3.2.2 | 0.20.1 | 0.155.3+26.1.2 | 25 |
-| 26.2 | 3.2.3 | 0.20.1 | 0.161.0+26.2 | 25 |
-| 26.3 | 3.3.0 | 0.20.1 | 0.166.0+26.3 | 25 |
+| 26.1.2 | 3.4.0 | 0.20.1 | 0.155.3+26.1.2 | 25 |
+| 26.2 | 3.4.0 | 0.20.1 | 0.161.0+26.2 | 25 |
+| 26.3 | 3.4.0 | 0.20.1 | 0.166.0+26.3 | 25 |
+| 1.21.11 (legacy) | 3.2.1 | 0.19.5 | 0.141.6+1.21.11 | 21 |
 
 The 26.1 checkpoint targets **26.1.2**; 26.1 and 26.1.1 are not declared
 compatible. All three public Client JARs were checked against GitHub's expected
@@ -42,6 +45,8 @@ Minecraft, Loader, Java and Fabric API environment and never cross these rows.
 Checks and previews modify only reconstructable cache resources. New instances
 and explicit Aurora enablement use the same source. Exact release metadata stays
 with the instance so retry, offline validation and launch work after restart.
+Exact identity includes both Client version and Minecraft environment; a
+version-only lookup refuses ambiguous multi-environment releases.
 Existing instances move only through the explicit fingerprinted update/enable
 transaction, retaining verification, backups, rollback and user-content protection.
 

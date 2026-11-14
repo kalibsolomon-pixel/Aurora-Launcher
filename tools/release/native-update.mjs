@@ -15,6 +15,8 @@ const compare = (a,b) => versionParts(a).map((n,i)=>n-versionParts(b)[i]).find(n
 function exactKeys(value, keys) {
   if (!value || Array.isArray(value) || Object.keys(value).sort().join() !== [...keys].sort().join()) throw Error('Unexpected native manifest fields');
 }
+// `runtime: slint` is the legacy native-channel wire identity, not a renderer
+// claim. Shipped clients require it to accept the GPUI migration on this channel.
 export function validateNativePayload(value) {
   exactKeys(value, ['schemaVersion','product','channel','runtime','platform','architecture','packageType','version','minimumInstalledVersion','sourceSha','url','sizeBytes','sha256','installerSignature']);
   versionParts(value.version); versionParts(value.minimumInstalledVersion);
