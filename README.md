@@ -41,7 +41,7 @@ Modrinth modpacks for Fabric, Forge, and NeoForge are available from version
 modpacks are outside this release's scope. See the
 [2.1.1 release notes](docs/releases/NATIVE_2_1_1_NOTES.md) for loader and update limits.
 
-Aurora Client 3.4.0 supports Minecraft 26.1.2, 26.2 and 26.3. The latest compatible 1.21.11 Client (3.2.1) remains available as legacy. Client releases and update checks come directly from the official Client GitHub releases, with verified artifacts and exact environment matching.
+Aurora Client 3.5.0 supports Minecraft 26.1.2, 26.2 and 26.3. The latest compatible 1.21.11 Client (3.2.1) remains available as legacy. Client releases and update checks come directly from the official Client GitHub releases, with verified artifacts and exact environment matching.
 
 Worlds stay local. Syncing does not automatically merge conflicting server edits.
 The archived WebView application keeps its separate installation and update
