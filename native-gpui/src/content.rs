@@ -155,8 +155,8 @@ fn provenance(p: &Option<api::Provenance>) -> String {
         })
         .unwrap_or_else(|| "No provider provenance".into())
 }
-/// Below this window width each row stacks its file name under the name.
-const INLINE_COLUMNS_MIN_WIDTH: f32 = 1000.;
+/// Match Discover's artwork size and row rhythm across every content category.
+const CONTENT_ROW_HEIGHT: f32 = 100.;
 /// Note prefix for a mod other enabled mods depend on; shown as a badge.
 const REQUIRED_NOTE: &str = "Required by other mods: ";
 /// "Cannot change this mod: A requires x; B requires x." → "Required by A, B".
@@ -1373,15 +1373,25 @@ impl Render for Content {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.entity();
         let reserved = if window.viewport_size().width < px(1000.) {
-            380.
+            352.
         } else {
-            343.
+            315.
         };
         let reserved = reserved
+            + if self.message.is_empty() { 0. } else { 68. }
             + if self.updates_open { 130. } else { 0. }
             + if self.actions_open { 50. } else { 0. }
             + if self.import_open { 210. } else { 0. };
-        let page_size = ((f32::from(window.viewport_size().height) - reserved) / 50.)
+        // Leave room for every note without clipping rows or the pager.
+        let row_height = self
+            .entries
+            .iter()
+            .map(|entry| {
+                let (_, _, notes) = describe(&entry.details);
+                (84. + notes.len() as f32 * 22.).max(CONTENT_ROW_HEIGHT)
+            })
+            .fold(CONTENT_ROW_HEIGHT, f32::max);
+        let page_size = ((f32::from(window.viewport_size().height) - reserved) / row_height)
             .floor()
             .clamp(1., 8.) as usize;
         let busy = self.is_busy(cx);
@@ -1702,40 +1712,7 @@ impl Render for Content {
                     Some("Try a different name or file name, or clear the filter."),
                 ));
             }
-            if window.viewport_size().width >= px(INLINE_COLUMNS_MIN_WIDTH) && !visible.is_empty() {
-                list = list.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(12.))
-                        .h(px(28.))
-                        .px(px(16.))
-                        .border_b_1()
-                        .border_color(palette.border_subtle)
-                        .text_size(px(ui::TEXT_CAPTION))
-                        .text_color(palette.muted_foreground)
-                        .child(div().w(px(48.)).child("Enabled"))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_1()
-                                .gap(px(24.))
-                                .child(div().w(px(360.)).child("Name"))
-                                .child(div().flex_1().child("File name")),
-                        )
-                        .when(self.actions_open, |header| {
-                            header.child(div().w(px(88.)).text_center().child("Actions"))
-                        }),
-                );
-            }
             let total = visible.len();
-            // The pager itself costs a row. If one more item fits without it,
-            // show the whole inventory instead of creating a one-item last page.
-            let page_size = if total == page_size + 1 {
-                total
-            } else {
-                page_size
-            };
             let current_page = self.inventory_page.min(total.saturating_sub(1) / page_size);
             let start = current_page * page_size;
             let end = (start + page_size).min(total);
@@ -1755,8 +1732,6 @@ impl Render for Content {
                     .map(required_label);
                 let required = required_by.is_some();
                 notes.retain(|note| !note.starts_with(REQUIRED_NOTE));
-                let inline_meta = window.viewport_size().width >= px(INLINE_COLUMNS_MIN_WIDTH)
-                    && notes.is_empty();
                 let disabled_row = entry.enabled == Some(false);
                 let mut line = vec![entry.file_name.as_str()];
                 line.extend(meta.iter().copied().filter(|m| {
@@ -1769,28 +1744,17 @@ impl Render for Content {
                 let mut text = div()
                     .flex()
                     .flex_col()
-                    .gap(px(2.))
+                    .flex_1()
+                    .w(px(0.))
+                    .gap(px(6.))
                     .line_height(px(18.))
                     .min_w(px(0.))
-                    .when(inline_meta, |row| {
-                        row.flex_row().items_center().gap(px(24.))
-                    })
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap(px(8.))
                             .min_w(px(0.))
-                            .when(inline_meta, |name| name.w(px(360.)).flex_shrink_0())
-                            .when_some(icon, |name, image| {
-                                name.child(art_tile(
-                                    gpui::SharedString::from(format!("icon-{}", entry.id)),
-                                    Some(image),
-                                    &entry.letter,
-                                    32.,
-                                    &palette,
-                                ))
-                            })
                             .child(
                                 div()
                                     .min_w(px(0.))
@@ -1804,35 +1768,28 @@ impl Render for Content {
                             )
                             .when(disabled_row, |name| {
                                 name.child(ui::badge(t, "Disabled", ui::Tone::Neutral))
-                            })
-                            .when_some(required_by.clone(), |name, label| {
-                                name.child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(5.))
-                                        .h(px(22.))
-                                        .text_size(px(ui::TEXT_CAPTION))
-                                        .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(t.muted_foreground)
-                                        .child(crate::symbols::icon(Some("lock"), px(12.), t.ring))
-                                        .child(label),
-                                )
                             }),
                     )
                     .child(
                         div()
-                            .flex_1()
                             .min_w(px(0.))
-                            .text_size(px(ui::TEXT_BODY))
-                            .text_color(palette.muted_foreground)
+                            .text_size(px(ui::TEXT_BODY - 1.))
+                            .text_color(palette.foreground.opacity(0.75))
                             .text_ellipsis()
-                            .child(if inline_meta {
-                                gpui::SharedString::from(entry.file_name.clone())
-                            } else {
-                                gpui::SharedString::from(line.join(" · "))
-                            }),
-                    );
+                            .child(line.join(" · ")),
+                    )
+                    .when_some(required_by.clone(), |text, label| {
+                        text.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(5.))
+                                .text_size(px(ui::TEXT_CAPTION))
+                                .text_color(t.muted_foreground)
+                                .child(crate::symbols::icon(Some("lock"), px(12.), t.ring))
+                                .child(label),
+                        )
+                    });
                 for note in notes {
                     let warn = note.starts_with("Warning:");
                     text = text.child(
@@ -1853,7 +1810,8 @@ impl Render for Content {
                                     palette.warning,
                                 ))
                             })
-                            .child(note.to_owned()),
+                            .min_w(px(0.))
+                            .child(div().min_w(px(0.)).child(note.to_owned())),
                     );
                 }
                 let toggle = match entry.enabled {
@@ -1862,23 +1820,24 @@ impl Render for Content {
                     // says it cannot be turned off.
                     Some(true) if required => div()
                         .flex()
-                        .w(px(48.))
+                        .w(px(76.))
                         .items_center()
                         .justify_center()
                         .child(
                             div()
                                 .id(gpui::SharedString::from(format!("locked-{}", entry.id)))
                                 .aria_label(format!("{} is required and stays enabled", entry.name))
-                                .relative()
+                                .flex()
+                                .items_center()
+                                .justify_end()
+                                .px(px(3.))
                                 .w(px(40.))
                                 .h(px(24.))
                                 .rounded_full()
                                 .bg(palette.accent)
                                 .child(
                                     div()
-                                        .absolute()
-                                        .top(px(3.))
-                                        .left(px(19.))
+                                        .flex_none()
                                         .size(px(18.))
                                         .rounded_full()
                                         .bg(palette.accent_foreground)
@@ -1895,7 +1854,7 @@ impl Render for Content {
                         .into_any_element(),
                     Some(enabled) => div()
                         .flex()
-                        .w(px(48.))
+                        .w(px(76.))
                         .items_center()
                         .justify_center()
                         .gap(px(8.))
@@ -1915,21 +1874,32 @@ impl Render for Content {
                             }),
                         )
                         .into_any_element(),
-                    None => {
-                        ui::status_badge(t, status_word.unwrap_or("Unknown"), ui::Tone::Neutral)
-                            .into_any_element()
-                    }
+                    None => div()
+                        .w(px(76.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(ui::status_badge(
+                            t,
+                            if status_word == Some("Activation managed in game") {
+                                "In game"
+                            } else {
+                                "Unknown"
+                            },
+                            ui::Tone::Neutral,
+                        ))
+                        .into_any_element(),
                 };
                 let e = entry.clone();
                 let v = view.clone();
                 let target = self.target().unwrap();
                 let remove = AuroraButton::new(
                     gpui::SharedString::from(format!("remove-{}", entry.id)),
-                    "Remove",
+                    "Delete",
                 )
-                .accessibility_label(format!("Remove {}", entry.name))
+                .accessibility_label(format!("Delete {}", entry.name))
                 .icon("delete")
-                .variant(ButtonVariant::Subtle)
+                .variant(ButtonVariant::Default)
                 .size(ButtonSize::Small)
                 .disabled(busy || !entry.remove)
                 .on_click(move |_, _, cx| {
@@ -1945,23 +1915,30 @@ impl Render for Content {
                         cx.notify();
                     });
                 });
+                let hover = palette.control;
                 list = list.child(
                     ui::row(t, index == last_index)
-                        .min_h(px(50.))
-                        .py(px(4.))
-                        .child(toggle)
-                        .child(text.flex_1())
+                        .gap(px(14.))
+                        .min_h(px(row_height))
+                        .flex_shrink_0()
+                        .py(px(8.))
+                        .hover(move |style| style.bg(hover))
+                        .child(art_tile(
+                            gpui::SharedString::from(format!("icon-{}", entry.id)),
+                            icon,
+                            &entry.letter,
+                            48.,
+                            &palette,
+                        ))
+                        .child(text)
                         .child(
                             div()
                                 .flex()
                                 .flex_shrink_0()
                                 .items_center()
-                                .gap(px(24.))
-                                .when(self.actions_open, |actions| {
-                                    actions.child(
-                                        div().w(px(88.)).flex().justify_center().child(remove),
-                                    )
-                                }),
+                                .gap(px(16.))
+                                .child(toggle)
+                                .child(div().w(px(88.)).flex().justify_end().child(remove)),
                         ),
                 );
             }
@@ -2198,11 +2175,11 @@ impl Render for Content {
                 div()
                     .text_size(px(ui::TEXT_SECTION))
                     .font_weight(gpui::FontWeight::SEMIBOLD)
-                    .child("Remove content"),
+                    .child("Delete content"),
             )
             .child(ui::muted(
                 t,
-                format!("Remove {name}? This removes the selected entry from this instance."),
+                format!("Delete {name}? This removes the selected file from this instance."),
             ))
             .when(!self.message.is_empty(), |d| {
                 d.child(ui::caption(t, self.message.clone()))
@@ -2224,7 +2201,7 @@ impl Render for Content {
                             }),
                     )
                     .child(
-                        AuroraButton::new("remove-confirm", "Remove")
+                        AuroraButton::new("remove-confirm", "Delete")
                             .variant(ButtonVariant::Danger)
                             .disabled(busy)
                             .on_click(move |_, _, cx| {
@@ -2242,7 +2219,7 @@ impl Render for Content {
         root.child(
             Dialog::new(cx)
                 .open(self.removing.is_some())
-                .accessibility_label("Remove content")
+                .accessibility_label("Delete content")
                 .close_on_backdrop_press(false)
                 .on_ok(|_, _, _| false)
                 .on_cancel(move |_, _, cx| !veto.read(cx).is_busy(cx))

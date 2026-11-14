@@ -1,0 +1,6 @@
+PASS: Shader delete Cancel preserves file
+PASS: Shader delete removes zip
+PASS: Resource disable and enable persist options.txt
+PASS: Resource delete removes zip
+PASS: Mod disable and enable rename file
+PASS: Mod delete removes jar; stale post-action UIA read verified via filesystem and fresh snapshot
