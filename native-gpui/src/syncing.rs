@@ -488,6 +488,8 @@ pub struct Syncing {
     category_highlight: [usize; 7],
     category_focus: [(FocusHandle, FocusHandle); 7],
     category_bounds: [BoundsCell; 7],
+    /// The category checkboxes are open for editing while Sync is off.
+    edit_off_choices: bool,
     _input_events: Vec<Subscription>,
     message: String,
 }
@@ -601,6 +603,7 @@ impl Syncing {
             paths,
             override_exclusions,
             input_reload: false,
+            edit_off_choices: false,
             override_loaded_for: None,
             category_open: [false; 7],
             category_highlight: [0; 7],
@@ -1156,7 +1159,7 @@ impl Render for Syncing {
                                 if enabled {
                                     "Selected instances automatically share the categories below."
                                 } else {
-                                    "Turned off. Checked files start syncing when you turn it on."
+                                    "Turned off. Nothing is synced until you turn it on."
                                 }
                                 .into(),
                             ),
@@ -1297,7 +1300,73 @@ impl Render for Syncing {
                     );
                 category_grid = category_grid.child(row);
             }
-            if self.section == 0 {
+            let summary_only = !enabled && !self.edit_off_choices && !self.policy.dirty;
+            if self.section == 0 && summary_only {
+                let (included, excluded): (Vec<_>, Vec<_>) = CATEGORIES
+                    .iter()
+                    .partition(|(id, _)| draft.categories.iter().any(|current| current == id));
+                let chips = div().flex().flex_wrap().gap(px(8.)).pt(px(6.)).pb(px(2.)).children(included.iter().map(
+                    |(_, label)| {
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .h(px(30.))
+                            .px(px(12.))
+                            .rounded(t.radius)
+                            .bg(t.control)
+                            .text_size(px(ui::TEXT_BODY))
+                            .text_color(t.foreground)
+                            .child(crate::symbols::icon(Some("check"), px(14.), t.muted_foreground))
+                            .child(*label)
+                    },
+                ));
+                let excluded_note = (!excluded.is_empty()).then(|| {
+                    ui::caption(
+                        t,
+                        format!(
+                            "Not included: {}.",
+                            excluded
+                                .iter()
+                                .map(|(_, label)| *label)
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        ),
+                    )
+                });
+                body = body.child(
+                    section_card(t)
+                        .child(
+                            div()
+                                .flex()
+                                .items_start()
+                                .justify_between()
+                                .gap(px(12.))
+                                .child(ui::section_header(
+                                    t,
+                                    "Saved choices",
+                                    Some("These files start syncing when you turn Sync on.".into()),
+                                ))
+                                .child(
+                                    AuroraButton::new("sync-edit-choices", "Edit choices")
+                                        .size(ButtonSize::Small)
+                                        .icon("edit")
+                                        .disabled(editing_disabled)
+                                        .on_click({
+                                            let view = view.clone();
+                                            move |_, _, cx| {
+                                                view.update(cx, |this, cx| {
+                                                    this.edit_off_choices = true;
+                                                    cx.notify();
+                                                })
+                                            }
+                                        }),
+                                ),
+                        )
+                        .child(chips)
+                        .children(excluded_note),
+                );
+            } else if self.section == 0 {
                 body = body.child(categories.child(category_grid));
             }
 

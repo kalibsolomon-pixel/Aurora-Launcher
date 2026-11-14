@@ -2791,12 +2791,12 @@ impl Render for Discover {
                         .child(crate::symbols::icon(
                             Some("download"),
                             px(13.),
-                            palette.muted_foreground,
+                            palette.foreground.opacity(0.75),
                         ))
                         .child(
                             div()
                                 .text_size(px(ui::TEXT_CAPTION))
-                                .text_color(palette.muted_foreground)
+                                .text_color(palette.foreground.opacity(0.75))
                                 .child(download_label(project.downloads)),
                         ),
                 );
@@ -2816,7 +2816,7 @@ impl Render for Discover {
                             .whitespace_nowrap()
                             .text_ellipsis()
                             .text_size(px(ui::TEXT_CAPTION))
-                            .text_color(palette.muted_foreground)
+                            .text_color(palette.foreground.opacity(0.75))
                             .child(format!("by {}", project.author)),
                     )
                 })

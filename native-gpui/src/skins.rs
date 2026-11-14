@@ -2256,7 +2256,7 @@ impl Render for Skins {
                                     )
                                     .icon("delete")
                                     .size(ButtonSize::Small)
-                                    .variant(ButtonVariant::Danger)
+                                    .variant(ButtonVariant::DangerSubtle)
                                     .disabled(locked)
                                     .on_click(cx.listener(
                                         move |this, _, _, cx| {
