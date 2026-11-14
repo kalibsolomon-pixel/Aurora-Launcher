@@ -13,27 +13,27 @@ pub const RELEASES_URL: &str =
     "https://api.github.com/repos/kalibsolomon-pixel/Aurora-Client/releases?per_page=30";
 const REPOSITORY: &str = "https://github.com/kalibsolomon-pixel/Aurora-Client";
 const MAX_METADATA_BYTES: usize = 1024 * 1024;
-const MAX_JAR_BYTES: u64 = 512 * 1024 * 1024;
+const MAX_JAR_BYTES: u64 = 32 * 1024 * 1024;
 
 #[derive(Deserialize)]
-struct GithubRelease {
-    tag_name: String,
-    html_url: String,
-    draft: bool,
-    prerelease: bool,
-    published_at: Option<String>,
+pub(crate) struct GithubRelease {
+    pub(crate) tag_name: String,
+    pub(crate) html_url: String,
+    pub(crate) draft: bool,
+    pub(crate) prerelease: bool,
+    pub(crate) published_at: Option<String>,
     #[serde(default)]
-    body: Option<String>,
-    assets: Vec<GithubAsset>,
+    pub(crate) body: Option<String>,
+    pub(crate) assets: Vec<GithubAsset>,
 }
 
 #[derive(Deserialize)]
-struct GithubAsset {
-    name: String,
-    browser_download_url: String,
-    size: u64,
-    digest: Option<String>,
-    state: String,
+pub(crate) struct GithubAsset {
+    pub(crate) name: String,
+    pub(crate) browser_download_url: String,
+    pub(crate) size: u64,
+    pub(crate) digest: Option<String>,
+    pub(crate) state: String,
 }
 
 fn invalid(reason: impl Into<String>) -> ClientUpdateError {
@@ -59,7 +59,9 @@ pub(crate) fn artifact_minecraft<'a>(name: &'a str, version: &str) -> Option<Opt
 }
 
 impl GithubRelease {
-    fn artifact(&self) -> Result<(String, ArtifactSource), ClientUpdateError> {
+    pub(crate) fn artifacts(
+        &self,
+    ) -> Result<(String, Vec<(&GithubAsset, ArtifactSource)>), ClientUpdateError> {
         let version = self
             .tag_name
             .strip_prefix('v')
@@ -77,35 +79,55 @@ impl GithubRelease {
                 "Only an official published stable Client release is eligible.",
             ));
         }
-        let mut matches = self
+        let matches: Vec<_> = self
             .assets
             .iter()
-            .filter(|asset| artifact_minecraft(&asset.name, version).is_some());
-        let asset = matches
-            .next()
-            .ok_or_else(|| invalid("The published Client JAR is missing."))?;
-        let name = &asset.name;
-        if matches.next().is_some()
-            || asset.state != "uploaded"
-            || asset.size == 0
-            || asset.size > MAX_JAR_BYTES
-            || asset.browser_download_url
-                != format!("{REPOSITORY}/releases/download/{}/{name}", self.tag_name)
-        {
-            return Err(invalid(
-                "The published Client artifact identity is invalid.",
-            ));
+            .filter(|asset| artifact_minecraft(&asset.name, version).is_some())
+            .collect();
+        if matches.is_empty() {
+            return Err(invalid("The published Client JAR is missing."));
         }
-        let digest = asset
-            .digest
-            .as_deref()
-            .and_then(|digest| digest.strip_prefix("sha256:"))
-            .ok_or_else(|| {
-                invalid("GitHub did not publish an expected SHA-256 for this Client JAR.")
-            })?;
-        let source = ArtifactSource::https(&asset.browser_download_url, digest, Some(asset.size))
-            .map_err(|error| invalid(error.to_string()))?;
-        Ok((version.to_owned(), source))
+        let mut environments = std::collections::HashSet::new();
+        let mut artifacts = Vec::new();
+        for asset in &matches {
+            let environment = artifact_minecraft(&asset.name, version).unwrap();
+            if !environments.insert(environment) || (matches.len() > 1 && environment.is_none()) {
+                return Err(invalid(
+                    "The published Client JARs have ambiguous Minecraft identities.",
+                ));
+            }
+            let name = &asset.name;
+            if asset.state != "uploaded"
+                || asset.size == 0
+                || asset.size > MAX_JAR_BYTES
+                || asset.browser_download_url
+                    != format!("{REPOSITORY}/releases/download/{}/{name}", self.tag_name)
+            {
+                return Err(invalid(
+                    "The published Client artifact identity is invalid.",
+                ));
+            }
+            let digest = asset
+                .digest
+                .as_deref()
+                .and_then(|digest| digest.strip_prefix("sha256:"))
+                .ok_or_else(|| {
+                    invalid("GitHub did not publish an expected SHA-256 for this Client JAR.")
+                })?;
+            let source =
+                ArtifactSource::https(&asset.browser_download_url, digest, Some(asset.size))
+                    .map_err(|error| invalid(error.to_string()))?;
+            artifacts.push((*asset, source));
+        }
+        Ok((version.to_owned(), artifacts))
+    }
+    #[cfg(test)]
+    fn artifact(&self) -> Result<(String, ArtifactSource), ClientUpdateError> {
+        let (version, mut assets) = self.artifacts()?;
+        if assets.len() != 1 {
+            return Err(invalid("Expected one test artifact."));
+        }
+        Ok((version, assets.remove(0).1))
     }
 }
 
@@ -194,15 +216,26 @@ async fn discover_at(
         if release.assets.is_empty() {
             continue;
         }
-        match discover_release(managed, options, &release).await {
-            Ok(found) => {
-                let candidate = &found.releases()[0];
-                if selected.insert(candidate.minecraft_version().to_owned()) {
-                    manifest = manifest.with_release(candidate.clone())?;
-                }
+        let (version, artifacts) = release.artifacts()?;
+        for (asset, source) in artifacts {
+            if artifact_minecraft(&asset.name, &version)
+                .flatten()
+                .is_some_and(|minecraft| {
+                    !environments.contains(minecraft) || selected.contains(minecraft)
+                })
+            {
+                continue;
             }
-            Err(ClientUpdateError::Incompatible(_)) => continue,
-            Err(error) => return Err(error),
+            match discover_release(managed, options, &release, &version, asset, &source).await {
+                Ok(found) => {
+                    let candidate = &found.releases()[0];
+                    if selected.insert(candidate.minecraft_version().to_owned()) {
+                        manifest = manifest.with_release(candidate.clone())?;
+                    }
+                }
+                Err(ClientUpdateError::Incompatible(_)) => continue,
+                Err(error) => return Err(error),
+            }
         }
         if selected.len() == environments.len() {
             break;
@@ -220,10 +253,12 @@ async fn discover_release(
     managed: &ManagedPaths,
     options: &DownloadOptions,
     release: &GithubRelease,
+    version: &str,
+    asset: &GithubAsset,
+    source: &ArtifactSource,
 ) -> Result<ReleaseManifest, ClientUpdateError> {
-    let (version, source) = release.artifact()?;
     let verified = crate::cache::ArtifactCache::new(managed.clone())
-        .acquire_with(&source, options)
+        .acquire_with(source, options)
         .await
         .map_err(|error| {
             invalid(format!(
@@ -236,19 +271,21 @@ async fn discover_release(
         metadata.ok_or_else(|| invalid("The verified Client JAR has no valid Fabric metadata."))?;
     if !warnings.is_empty()
         || metadata.id != "aurora"
-        || metadata.version.as_deref() != Some(&version)
+        || metadata.version.as_deref() != Some(version)
     {
         return Err(invalid(
             "The verified JAR does not match the published Aurora Client identity.",
         ));
     }
-    normalize(release, &version, &metadata)
+    normalize(release, version, &metadata, asset, source)
 }
 
 fn normalize(
     release: &GithubRelease,
     version: &str,
     metadata: &crate::instance_mods::ModMetadata,
+    asset: &GithubAsset,
+    artifact: &ArtifactSource,
 ) -> Result<ReleaseManifest, ClientUpdateError> {
     if ["minecraft", "fabricloader", "java"]
         .iter()
@@ -265,11 +302,6 @@ fn normalize(
     }
     let profiles = super::production_manifest()?;
     for profile in profiles.releases() {
-        let asset = release
-            .assets
-            .iter()
-            .find(|asset| artifact_minecraft(&asset.name, version).is_some())
-            .ok_or_else(|| invalid("The published Client JAR is missing."))?;
         if artifact_minecraft(&asset.name, version)
             .flatten()
             .is_some_and(|minecraft| minecraft != profile.minecraft_version())
@@ -297,7 +329,6 @@ fn normalize(
         {
             continue;
         }
-        let (_, artifact) = release.artifact()?;
         let mut value = serde_json::to_value(profile)
             .map_err(|_| invalid("Could not normalize Client compatibility."))?;
         value["auroraVersion"] = version.into();
@@ -433,14 +464,30 @@ mod tests {
             nested_mod_versions: Default::default(),
             mixin_java_requirements: vec![],
         };
-        let manifest = normalize(&release, "3.1.0", &metadata).unwrap();
+        let manifest = normalize(
+            &release,
+            "3.1.0",
+            &metadata,
+            &release.assets[0],
+            &release.artifact().unwrap().1,
+        )
+        .unwrap();
         let normalized = &manifest.releases()[0];
         assert_eq!(normalized.aurora_version(), "3.1.0");
         assert_eq!(normalized.fabric_loader_version(), "0.19.5");
         assert!(normalized.artifact().url().contains("/v3.1.0/"));
         let mut incompatible = metadata;
         incompatible.depends[0].requirement = "~1.22.0".into();
-        assert!(normalize(&release, "3.1.0", &incompatible).is_err());
+        assert!(
+            normalize(
+                &release,
+                "3.1.0",
+                &incompatible,
+                &release.assets[0],
+                &release.artifact().unwrap().1
+            )
+            .is_err()
+        );
     }
     #[tokio::test]
     async fn github_errors_and_untrusted_endpoints_fail_without_instance_mutation() {
@@ -534,6 +581,9 @@ mod tests {
             ("3.3.0", "26.3", 25, true),
             ("3.2.3", "26.2", 25, true),
             ("3.3.1", "26.3", 25, true),
+            ("3.4.0", "26.3", 25, true),
+            ("3.4.0", "26.1.2", 25, true),
+            ("3.4.0", "26.2", 25, true),
         ] {
             let mut archive = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
             archive
@@ -553,6 +603,16 @@ mod tests {
             };
             documents.push(serde_json::json!({"tag_name":format!("v{version}"),"html_url":format!("{REPOSITORY}/releases/tag/v{version}"),"draft":false,"prerelease":false,"published_at":"2026-11-11T00:00:00Z","assets":[{"name":name,"browser_download_url":format!("{REPOSITORY}/releases/download/v{version}/{name}"),"size":jar.len(),"digest":format!("sha256:{digest}"),"state":"uploaded"}]}));
         }
+        // GitHub publishes all current environments together under one tag.
+        let mut bundle = documents.pop().unwrap();
+        for _ in 0..2 {
+            let sibling = documents.pop().unwrap();
+            bundle["assets"]
+                .as_array_mut()
+                .unwrap()
+                .extend(sibling["assets"].as_array().unwrap().iter().cloned());
+        }
+        documents.push(bundle);
         let mut draft = documents[0].clone();
         draft["draft"] = true.into();
         draft["tag_name"] = "release-manifest".into();
@@ -570,9 +630,9 @@ mod tests {
         .unwrap();
         assert_eq!(found.releases().len(), 4);
         for (minecraft, version, java) in [
-            ("26.1.2", "3.2.2", 25),
-            ("26.2", "3.2.3", 25),
-            ("26.3", "3.3.1", 25),
+            ("26.1.2", "3.4.0", 25),
+            ("26.2", "3.4.0", 25),
+            ("26.3", "3.4.0", 25),
             ("1.21.11", "3.2.1", 21),
         ] {
             let candidate = found.latest_compatible(minecraft, None).unwrap();

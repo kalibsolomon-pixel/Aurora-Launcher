@@ -38,10 +38,11 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use aurora_launcher_lib::host::Host;
-use gpui::{Context, Render, RenderImage, Window, div, img, prelude::*, px};
+use gpui::base::Button;
+use gpui::{Context, FontWeight, Hsla, Render, RenderImage, Window, div, img, prelude::*, px};
 use tokio::runtime::Handle;
 
-use crate::controls::AuroraButton;
+use crate::controls::{AuroraButton, ButtonSize};
 use crate::images;
 use crate::theme::theme;
 
@@ -555,82 +556,142 @@ impl Render for Media {
         let palette = theme(cx).clone();
         let core = &self.core;
         let entity = cx.entity();
-        let muted = |text: String| {
+        // A centred, quiet message with a leading glyph.
+        let note = |text: String, color: Hsla| {
             div()
-                .text_size(px(12.))
-                .text_color(palette.muted_foreground)
-                .child(text)
+                .flex()
+                .flex_col()
+                .flex_1()
+                .items_center()
+                .justify_center()
+                .gap(px(8.))
+                .child(crate::symbols::icon(
+                    Some("music_note"),
+                    px(22.),
+                    palette.subtle_foreground,
+                ))
+                .child(
+                    div()
+                        .max_w(px(300.))
+                        .text_size(px(12.))
+                        .text_color(color)
+                        .text_center()
+                        .child(text),
+                )
         };
 
-        let mut root = div().flex().flex_col().gap(px(8.)).min_w_0();
+        let mut root = div()
+            .flex()
+            .flex_col()
+            .flex_1()
+            .justify_center()
+            .gap(px(12.))
+            .min_w_0();
         match &core.phase {
             Phase::Diagnostics => {
-                root = root.child(muted(
+                root = root.child(note(
                     "Media controls are unavailable in this diagnostic window: there is no launcher host, so nothing is read or changed."
                         .into(),
+                    palette.muted_foreground,
                 ));
             }
             Phase::Unsupported => {
-                root = root.child(muted("Media controls are available on Windows.".into()));
+                root = root.child(note(
+                    "Media controls are available on Windows.".into(),
+                    palette.muted_foreground,
+                ));
             }
             Phase::Inactive => {
-                root = root.child(muted("Nothing is playing.".into()));
+                root = root.child(note("Nothing is playing.".into(), palette.muted_foreground));
             }
             Phase::Loading => {
-                root = root.child(muted("Connecting to system media…".into()));
+                root = root.child(note(
+                    "Connecting to system media…".into(),
+                    palette.muted_foreground,
+                ));
             }
             Phase::Failed(message) => {
-                root = root
-                    .child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(palette.danger)
-                            .child(message.clone()),
-                    )
-                    .child(AuroraButton::new("media-retry", "Retry").on_click({
-                        let entity = entity.clone();
-                        move |_, _, cx| {
-                            entity.update(cx, |this, cx| this.refresh(cx));
-                        }
-                    }));
+                root = root.child(note(message.clone(), palette.danger)).child(
+                    div().flex().justify_center().child(
+                        AuroraButton::new("media-retry", "Retry")
+                            .size(ButtonSize::Small)
+                            .icon("refresh")
+                            .on_click({
+                                let entity = entity.clone();
+                                move |_, _, cx| {
+                                    entity.update(cx, |this, cx| this.refresh(cx));
+                                }
+                            }),
+                    ),
+                );
             }
             Phase::Live if !core.view.active => {
-                root = root.child(muted("Nothing is playing.".into()));
+                root = root.child(note("Nothing is playing.".into(), palette.muted_foreground));
             }
             Phase::Live => {
                 let view = &core.view;
                 let art = view.art.clone();
+                let command = |command: MediaCommand| {
+                    let entity = entity.clone();
+                    move |_: &gpui::ClickEvent, _: &mut Window, cx: &mut gpui::App| {
+                        entity.update(cx, |this, cx| this.send_command(command.clone(), cx));
+                    }
+                };
                 root = root
                     .child(
                         div()
                             .flex()
                             .items_center()
-                            .gap(px(10.))
+                            .gap(px(14.))
                             .min_w_0()
-                            .when_some(art, |row, art| {
-                                row.child(
-                                    div()
-                                        .size(px(48.))
-                                        .rounded(palette.radius)
-                                        .overflow_hidden()
-                                        .child(img(art).size(px(48.))),
-                                )
+                            .child(match art {
+                                Some(art) => div()
+                                    .flex_shrink_0()
+                                    .size(px(56.))
+                                    .rounded(px(10.))
+                                    .overflow_hidden()
+                                    .border_1()
+                                    .border_color(palette.border_subtle)
+                                    .child(img(art).size(px(54.))),
+                                None => div()
+                                    .flex()
+                                    .flex_shrink_0()
+                                    .items_center()
+                                    .justify_center()
+                                    .size(px(56.))
+                                    .rounded(px(10.))
+                                    .bg(palette.control)
+                                    .border_1()
+                                    .border_color(palette.border_subtle)
+                                    .child(crate::symbols::icon(
+                                        Some("music_note"),
+                                        px(26.),
+                                        palette.muted_foreground,
+                                    )),
                             })
                             .child(
                                 div()
                                     .flex()
                                     .flex_col()
                                     .gap(px(2.))
+                                    .flex_1()
                                     .min_w_0()
                                     .child(
                                         div()
-                                            .text_size(px(13.))
+                                            .overflow_hidden()
+                                            .text_ellipsis()
+                                            .whitespace_nowrap()
+                                            .text_size(px(14.))
+                                            .font_weight(FontWeight::SEMIBOLD)
                                             .text_color(palette.foreground)
                                             .child(view.title.clone()),
                                     )
                                     .when(!view.artist.is_empty(), |col| {
                                         col.child(
                                             div()
+                                                .overflow_hidden()
+                                                .text_ellipsis()
+                                                .whitespace_nowrap()
                                                 .text_size(px(12.))
                                                 .text_color(palette.muted_foreground)
                                                 .child(view.artist.clone()),
@@ -639,8 +700,11 @@ impl Render for Media {
                                     .when(!view.source.is_empty(), |col| {
                                         col.child(
                                             div()
-                                                .text_size(px(12.))
-                                                .text_color(palette.muted_foreground)
+                                                .overflow_hidden()
+                                                .text_ellipsis()
+                                                .whitespace_nowrap()
+                                                .text_size(px(11.))
+                                                .text_color(palette.subtle_foreground)
                                                 .child(view.source.clone()),
                                         )
                                     }),
@@ -649,66 +713,92 @@ impl Render for Media {
                     .child(
                         div()
                             .flex()
-                            .flex_wrap()
-                            .gap(px(6.))
+                            .items_center()
+                            .justify_center()
+                            .gap(px(8.))
                             .child(
-                                AuroraButton::new("media-previous", "Previous track")
-                                    .disabled(!view.can_previous)
-                                    .on_click({
-                                        let entity = entity.clone();
-                                        move |_, _, cx| {
-                                            entity.update(cx, |this, cx| {
-                                                this.send_command(MediaCommand::Previous, cx)
-                                            });
-                                        }
-                                    }),
-                            )
-                            .child(
-                                AuroraButton::new(
-                                    "media-toggle",
-                                    if view.playing { "Pause" } else { "Play" },
+                                transport_button(
+                                    &palette,
+                                    "media-previous",
+                                    "skip_previous",
+                                    "Previous track",
+                                    !view.can_previous,
+                                    false,
                                 )
-                                .disabled(!view.can_toggle)
-                                .on_click({
-                                    let entity = entity.clone();
-                                    move |_, _, cx| {
-                                        entity.update(cx, |this, cx| {
-                                            this.send_command(MediaCommand::Toggle, cx)
-                                        });
-                                    }
-                                }),
+                                .on_click(command(MediaCommand::Previous)),
                             )
                             .child(
-                                AuroraButton::new("media-next", "Next track")
-                                    .disabled(!view.can_next)
-                                    .on_click({
-                                        let entity = entity.clone();
-                                        move |_, _, cx| {
-                                            entity.update(cx, |this, cx| {
-                                                this.send_command(MediaCommand::Next, cx)
-                                            });
-                                        }
-                                    }),
+                                transport_button(
+                                    &palette,
+                                    "media-toggle",
+                                    if view.playing { "pause" } else { "play_arrow" },
+                                    if view.playing { "Pause" } else { "Play" },
+                                    !view.can_toggle,
+                                    true,
+                                )
+                                .on_click(command(MediaCommand::Toggle)),
+                            )
+                            .child(
+                                transport_button(
+                                    &palette,
+                                    "media-next",
+                                    "skip_next",
+                                    "Next track",
+                                    !view.can_next,
+                                    false,
+                                )
+                                .on_click(command(MediaCommand::Next)),
                             )
                             // Session count decides whether switching players
                             // is offered at all; the worker rechecks.
                             .when(view.sessions > 1, |row| {
-                                row.child(AuroraButton::new("media-cycle", "Next player").on_click(
-                                    {
-                                        let entity = entity.clone();
-                                        move |_, _, cx| {
-                                            entity.update(cx, |this, cx| {
-                                                this.send_command(MediaCommand::Cycle, cx)
-                                            });
-                                        }
-                                    },
-                                ))
+                                row.child(
+                                    AuroraButton::new("media-cycle", "Next player")
+                                        .size(ButtonSize::Small)
+                                        .icon("sync")
+                                        .on_click(command(MediaCommand::Cycle)),
+                                )
                             }),
                     );
             }
         }
         root
     }
+}
+
+/// A round transport control: icon only, with the action as its accessible
+/// name. The main action (play / pause) is the accent-filled one.
+fn transport_button(
+    t: &crate::theme::AuroraTheme,
+    id: &'static str,
+    icon: &'static str,
+    label: &'static str,
+    disabled: bool,
+    main: bool,
+) -> Button {
+    let (bg, hover, fg) = if main {
+        (t.accent, t.accent_hover, t.accent_foreground)
+    } else {
+        (t.control, t.control_hover, t.foreground)
+    };
+    let size = if main { 40. } else { 34. };
+    Button::new(id)
+        .aria_label(label)
+        .disabled(disabled)
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .size(px(size))
+        .rounded_full()
+        .bg(bg)
+        .hover(move |style| style.bg(hover))
+        .styles(|styles| styles.disabled(|style| style.opacity(0.42)))
+        .child(crate::symbols::icon(
+            Some(icon),
+            px(if main { 22. } else { 18. }),
+            fg,
+        ))
 }
 
 // ---------------------------------------------------------------------------

@@ -1,14 +1,15 @@
 {
   "name": "aurora-launcher",
-  "version": "2.1.1",
+  "version": "2.2.0",
   "description": "Launcher for the Aurora client mod for Minecraft: Java Edition",
   "type": "module",
   "scripts": {
-    "dev": "cargo run --manifest-path native/Cargo.toml",
-    "check": "cargo check --manifest-path core/Cargo.toml --all-targets && cargo check --manifest-path native/Cargo.toml --all-targets",
-    "build": "cargo build --manifest-path native/Cargo.toml --locked --release",
+    "dev": "cargo run --manifest-path native-gpui/Cargo.toml",
+    "check": "cargo check --manifest-path core/Cargo.toml --all-targets && cargo check --manifest-path native-gpui/Cargo.toml --all-targets",
+    "build": "cargo build --manifest-path native-gpui/Cargo.toml --locked --release",
     "test": "node --test tools/release/*.test.mjs",
-    "verify:version": "node tools/release/verify-version.mjs"
+    "verify:version": "node tools/release/verify-version.mjs",
+    "dev:slint": "cargo run --manifest-path native/Cargo.toml"
   },
   "license": "MIT",
   "devDependencies": {

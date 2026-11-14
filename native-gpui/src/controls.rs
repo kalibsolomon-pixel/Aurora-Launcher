@@ -16,8 +16,9 @@ use gpui_kit::base::actions::{Confirm, SelectDown, SelectUp};
 use gpui_kit::base::input::{Input, InputAccessibility, InputEditorStyle, InputState};
 use gpui_kit::base::slider::SliderState;
 use gpui_kit::base::{
-    Align, Button, ElementExt, InputBase, POPUP_PRIORITY, Placement, Positioner, RoleOverride,
-    Select, Slider, SliderIndicator, SliderThumb, SliderTrack, Switch, SwitchThumb, SwitchTrack,
+    Align, Button, Checkbox, CheckboxState, ElementExt, InputBase, POPUP_PRIORITY, Placement,
+    Positioner, RoleOverride, Select, Slider, SliderIndicator, SliderThumb, SliderTrack, Switch,
+    SwitchThumb, SwitchTrack,
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
@@ -46,6 +47,23 @@ pub enum ButtonVariant {
     Primary,
     Danger,
     Ghost,
+    /// Sidebar navigation: full width, left aligned, accent wash when selected.
+    Nav,
+    /// Accent-tinted secondary action for repeated per-row actions (Install,
+    /// Play) where a solid primary per row would be too loud.
+    Soft,
+    /// Quiet tertiary text action (Details, Cancel in dense rows).
+    Subtle,
+    /// Quiet destructive text action in dense rows.
+    DangerSubtle,
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+pub enum ButtonSize {
+    Small,
+    #[default]
+    Medium,
+    Large,
 }
 
 /// A themed button on the unstyled [`Button`] behavior root.
@@ -58,7 +76,11 @@ pub enum ButtonVariant {
 pub struct AuroraButton {
     id: ElementId,
     label: SharedString,
+    accessibility_label: Option<SharedString>,
     variant: ButtonVariant,
+    size: ButtonSize,
+    icon: Option<&'static str>,
+    full_width: bool,
     disabled: bool,
     selected: bool,
     on_click: Option<ClickHandler>,
@@ -69,7 +91,11 @@ impl AuroraButton {
         Self {
             id: id.into(),
             label: label.into(),
+            accessibility_label: None,
             variant: ButtonVariant::Default,
+            size: ButtonSize::Medium,
+            icon: None,
+            full_width: false,
             disabled: false,
             selected: false,
             on_click: None,
@@ -78,6 +104,28 @@ impl AuroraButton {
 
     pub fn variant(mut self, variant: ButtonVariant) -> Self {
         self.variant = variant;
+        self
+    }
+
+    /// Context for repeated row actions without repeating it in the visible label.
+    pub fn accessibility_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.accessibility_label = Some(label.into());
+        self
+    }
+
+    pub fn size(mut self, size: ButtonSize) -> Self {
+        self.size = size;
+        self
+    }
+
+    /// A leading Material Symbols glyph (a `crate::symbols` name).
+    pub fn icon(mut self, icon: &'static str) -> Self {
+        self.icon = Some(icon);
+        self
+    }
+
+    pub fn full_width(mut self) -> Self {
+        self.full_width = true;
         self
     }
 
@@ -103,34 +151,118 @@ impl AuroraButton {
 impl RenderOnce for AuroraButton {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = theme(cx);
-        let ghost = self.variant == ButtonVariant::Ghost;
-        let (bg, fg, hover_bg) = match self.variant {
-            ButtonVariant::Default => (t.surface, t.foreground, t.surface_hover),
-            ButtonVariant::Primary => (t.accent, t.accent_foreground, t.accent_hover),
-            ButtonVariant::Danger => (t.surface, t.danger, t.surface_hover),
+        let clear = gpui_kit::transparent_black();
+        let nav = self.variant == ButtonVariant::Nav;
+        let primary = self.variant == ButtonVariant::Primary;
+        let (bg, fg, hover_bg, border) = match self.variant {
+            // Filled, borderless: one secondary style everywhere.
+            ButtonVariant::Default => (t.control, t.foreground, t.control_hover, t.control),
+            ButtonVariant::Primary => (t.accent, t.accent_foreground, t.accent_hover, t.accent),
+            ButtonVariant::Danger => (
+                Hsla {
+                    a: 0.10,
+                    ..t.danger
+                },
+                t.danger,
+                Hsla {
+                    a: 0.18,
+                    ..t.danger
+                },
+                Hsla {
+                    a: 0.28,
+                    ..t.danger
+                },
+            ),
             // Transparent at rest so translucent Borealis surfaces show through.
-            ButtonVariant::Ghost => (gpui_kit::transparent_black(), t.foreground, t.surface_hover),
+            ButtonVariant::Ghost => (clear, t.foreground, t.control, clear),
+            ButtonVariant::Nav => (clear, t.muted_foreground, t.control, clear),
+            ButtonVariant::Soft => (
+                Hsla { a: 0.28, ..t.ring },
+                t.foreground,
+                Hsla { a: 0.38, ..t.ring },
+                Hsla { a: 0.36, ..t.ring },
+            ),
+            ButtonVariant::Subtle => (clear, t.muted_foreground, t.control, clear),
+            ButtonVariant::DangerSubtle => (
+                clear,
+                t.muted_foreground,
+                Hsla {
+                    a: 0.10,
+                    ..t.danger
+                },
+                clear,
+            ),
+        };
+        let (height, pad, text, icon_size) = match self.size {
+            ButtonSize::Small => (30., 10., 13., 15.),
+            ButtonSize::Medium => (34., 14., 14., 16.),
+            ButtonSize::Large => (44., 22., 15., 20.),
+        };
+        let (soft, ring, selected_fg) = (t.accent_soft, t.ring, t.foreground);
+        let (disabled_bg, disabled_fg, disabled_border) =
+            (t.sunken, t.subtle_foreground, t.border_subtle);
+        let icon_color = if self.disabled {
+            disabled_fg
+        } else if nav && self.selected {
+            t.ring
+        } else if primary || nav {
+            fg
+        } else {
+            Hsla { a: 0.85, ..fg }
+        };
+        let weight = if primary || self.selected {
+            gpui_kit::FontWeight::SEMIBOLD
+        } else {
+            gpui_kit::FontWeight::MEDIUM
         };
 
         let mut button = Button::new(self.id)
+            .aria_label(
+                self.accessibility_label
+                    .unwrap_or_else(|| self.label.clone()),
+            )
             .disabled(self.disabled)
             .selected(self.selected)
-            .min_h(px(36.))
-            .px(px(12.))
-            .py(px(6.))
+            .flex()
+            .flex_shrink_0()
+            .items_center()
+            .gap(px(if nav { 10. } else { 7. }))
+            .when(nav || self.full_width, |b| b.w_full())
+            .when(nav, |b| b.justify_start())
+            .when(!nav, |b| b.justify_center())
+            .h(px(height))
+            .px(px(if nav { 10. } else { pad }))
             .rounded(t.radius)
-            .text_size(px(13.))
+            .text_size(px(text))
+            .font_weight(weight)
             .bg(bg)
             .text_color(fg)
             .border_1()
-            .border_color(if ghost { t.border } else { bg })
-            .hover(|style| style.bg(hover_bg))
-            .active(|style| style.opacity(0.9))
-            .focus(|style| style.border_color(t.ring))
+            .border_color(border)
+            .hover(|style| style.bg(if nav && self.selected { soft } else { hover_bg }))
+            .active(|style| style.opacity(0.88))
+            .focus_visible(|style| style.border_color(ring))
             .styles(|styles| {
                 styles
-                    .selected(|style| style.border_color(t.accent))
-                    .disabled(|style| style.opacity(0.45))
+                    .selected(|style| {
+                        style
+                            .bg(soft)
+                            .border_color(Hsla {
+                                a: if nav { 0.35 } else { 0.55 },
+                                ..ring
+                            })
+                            .text_color(selected_fg)
+                    })
+                    .disabled(|style| {
+                        style
+                            .bg(disabled_bg)
+                            .text_color(disabled_fg)
+                            .border_color(disabled_border)
+                            .opacity(0.62)
+                    })
+            })
+            .when_some(self.icon, |b, icon| {
+                b.child(crate::symbols::icon(Some(icon), px(icon_size), icon_color))
             })
             .child(self.label);
 
@@ -229,12 +361,13 @@ impl RenderOnce for AuroraInput {
             .flex()
             .items_center()
             .w_full()
-            .h(px(30.))
-            .px(px(10.))
+            .h(px(34.))
+            .px(px(12.))
             .rounded(t.radius)
+            .bg(t.sunken)
             .border_1()
-            .border_color(t.border)
-            .text_size(px(13.))
+            .border_color(t.border_subtle)
+            .text_size(px(crate::ui::TEXT_BODY))
             .styles(|styles| {
                 styles
                     .focused(|style| style.border_color(t.ring))
@@ -300,9 +433,21 @@ impl AuroraToggle {
 impl RenderOnce for AuroraToggle {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = theme(cx);
-        let track_on: Hsla = t.accent;
-        let track_off: Hsla = t.surface_hover;
-        let thumb_on: Hsla = t.accent_foreground;
+        let track_on: Hsla = if self.disabled {
+            t.accent.opacity(0.45)
+        } else {
+            t.accent
+        };
+        let track_off: Hsla = if self.disabled {
+            t.sunken
+        } else {
+            t.surface_hover
+        };
+        let thumb_on: Hsla = if self.disabled {
+            t.accent_foreground.opacity(0.75)
+        } else {
+            t.accent_foreground
+        };
         let thumb_off: Hsla = t.muted_foreground;
 
         let mut switch = Switch::new(self.id.clone())
@@ -320,30 +465,27 @@ impl RenderOnce for AuroraToggle {
                     .checked(self.checked)
                     .disabled(self.disabled)
                     .relative()
-                    .w(px(36.))
-                    .h(px(20.))
+                    .w(px(40.))
+                    .h(px(24.))
+                    .flex()
+                    .items_center()
+                    .px(px(2.))
+                    .when(self.checked, |this| this.justify_end())
                     .rounded_full()
                     .bg(track_off)
+                    .border_1()
+                    .border_color(t.subtle_foreground.opacity(0.7))
                     .styles(|styles| {
-                        styles
-                            .checked(|style| style.bg(track_on))
-                            .disabled(|style| style.opacity(0.45))
+                        styles.checked(|style| style.bg(track_on).border_color(track_on))
                     })
                     .child(
                         SwitchThumb::new(self.checked)
                             .disabled(self.disabled)
-                            .absolute()
-                            .top(px(2.))
-                            .left(px(2.))
-                            .when(self.checked, |this| this.left(px(18.)))
-                            .size(px(16.))
+                            .flex_shrink_0()
+                            .size(px(18.))
                             .rounded_full()
                             .bg(thumb_off)
-                            .styles(|styles| {
-                                styles
-                                    .checked(|style| style.bg(thumb_on))
-                                    .disabled(|style| style.opacity(0.6))
-                            }),
+                            .styles(|styles| styles.checked(|style| style.bg(thumb_on))),
                     ),
             );
 
@@ -353,6 +495,103 @@ impl RenderOnce for AuroraToggle {
                 switch.on_change(move |next, event, window, cx| on_change(next, event, window, cx));
         }
         switch
+    }
+}
+
+/// File selections are checkboxes; switches remain reserved for on/off operations.
+#[derive(IntoElement)]
+pub struct AuroraCheckbox {
+    id: ElementId,
+    label: SharedString,
+    checked: bool,
+    disabled: bool,
+    dormant: bool,
+    on_change: Option<ChangeHandler>,
+}
+
+impl AuroraCheckbox {
+    pub fn new(id: impl Into<ElementId>, label: impl Into<SharedString>) -> Self {
+        Self {
+            id: id.into(),
+            label: label.into(),
+            checked: false,
+            disabled: false,
+            dormant: false,
+            on_change: None,
+        }
+    }
+    pub fn checked(mut self, checked: bool) -> Self {
+        self.checked = checked;
+        self
+    }
+    /// A saved choice whose feature is currently off: still editable, but a
+    /// checked box renders neutral instead of in the accent.
+    pub fn dormant(mut self, dormant: bool) -> Self {
+        self.dormant = dormant;
+        self
+    }
+    pub fn disabled(mut self, disabled: bool) -> Self {
+        self.disabled = disabled;
+        self
+    }
+    pub fn on_change(
+        mut self,
+        handler: impl Fn(bool, &ClickEvent, &mut Window, &mut App) + 'static,
+    ) -> Self {
+        self.on_change = Some(Rc::new(handler));
+        self
+    }
+}
+
+impl RenderOnce for AuroraCheckbox {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let t = theme(cx);
+        let ring = t.ring;
+        let mark = match (self.checked, self.dormant) {
+            (true, false) => t.foreground,
+            (true, true) => t.foreground,
+            _ => gpui_kit::transparent_black(),
+        };
+        let mut checkbox = Checkbox::new(self.id)
+            .accessibility_label(self.label)
+            .checked(self.checked)
+            .disabled(self.disabled)
+            .flex()
+            .items_center()
+            .justify_center()
+            .size(px(36.))
+            .rounded(t.radius)
+            .border_1()
+            .border_color(gpui_kit::transparent_black())
+            .focus_visible(move |style| style.border_color(ring))
+            .hover(|style| style.bg(t.control_hover))
+            .styles(|styles| styles.disabled(|style| style.opacity(0.45)))
+            .child(
+                div()
+                    .size(px(20.))
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(px(4.))
+                    .border_1()
+                    .border_color(match (self.checked, self.dormant) {
+                        (true, false) => t.accent,
+                        (true, true) => t.muted_foreground,
+                        _ => t.subtle_foreground,
+                    })
+                    .bg(match (self.checked, self.dormant) {
+                        (true, false) => t.accent,
+                        (true, true) => t.control_hover,
+                        _ => t.sunken,
+                    })
+                    .child(crate::symbols::icon(Some("check"), px(16.), mark)),
+            );
+        if let Some(on_change) = self.on_change {
+            checkbox = checkbox.on_change(move |state, event, window, cx| {
+                on_change(state == CheckboxState::Checked, event, window, cx)
+            });
+        }
+        checkbox
     }
 }
 
@@ -372,6 +611,7 @@ pub struct AuroraSlider {
     state: Entity<SliderState>,
     label: SharedString,
     disabled: bool,
+    show_label: bool,
 }
 
 impl AuroraSlider {
@@ -380,11 +620,17 @@ impl AuroraSlider {
             state: state.clone(),
             label: label.into(),
             disabled: false,
+            show_label: true,
         }
     }
 
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    pub fn show_label(mut self, show: bool) -> Self {
+        self.show_label = show;
         self
     }
 }
@@ -414,18 +660,21 @@ impl RenderOnce for AuroraSlider {
                     .flex()
                     .items_baseline()
                     .justify_between()
+                    .when(!self.show_label, |row| row.justify_end())
                     .gap(px(8.))
-                    .child(
-                        div()
-                            .text_size(px(13.))
-                            .text_color(t.muted_foreground)
-                            .child(self.label.clone()),
-                    )
+                    .when(self.show_label, |row| {
+                        row.child(
+                            div()
+                                .text_size(px(13.))
+                                .text_color(t.muted_foreground)
+                                .child(self.label.clone()),
+                        )
+                    })
                     .child(
                         div()
                             .text_size(px(13.))
                             .text_color(t.foreground)
-                            .child(format!("{}", value.end() as i64)),
+                            .child(format!("{} / 100", value.end() as i64)),
                     ),
             )
             .child(
@@ -539,6 +788,8 @@ pub struct AuroraSelect {
     trigger_focus: FocusHandle,
     content_focus: FocusHandle,
     bounds: BoundsCell,
+    width: Pixels,
+    full_width: bool,
     on_open_change: Option<OpenChangeHandler>,
     on_highlight: Option<IndexHandler>,
     on_confirm: Option<IndexHandler>,
@@ -564,6 +815,8 @@ impl AuroraSelect {
             trigger_focus: trigger_focus.clone(),
             content_focus: content_focus.clone(),
             bounds,
+            width: px(220.),
+            full_width: false,
             on_open_change: None,
             on_highlight: None,
             on_confirm: None,
@@ -587,6 +840,17 @@ impl AuroraSelect {
 
     pub fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
+        self
+    }
+
+    /// Trigger width (default 220px). Long values are truncated with an ellipsis.
+    pub fn width(mut self, width: Pixels) -> Self {
+        self.width = width;
+        self
+    }
+
+    pub fn full_width(mut self) -> Self {
+        self.full_width = true;
         self
     }
 
@@ -677,19 +941,28 @@ impl RenderOnce for AuroraSelect {
             .justify_between()
             .gap(px(6.))
             .w_full()
-            .h(px(30.))
-            .px(px(10.))
+            .h(px(34.))
+            .px(px(12.))
             .rounded(t.radius)
+            .bg(t.control)
             .border_1()
             .border_color(if self.open || focused {
                 t.ring
             } else {
-                t.border
+                t.border_subtle
             })
             .text_size(px(13.))
             .when(self.disabled, |style| style.opacity(0.45))
             .hover(|style| style.bg(t.surface_hover))
-            .child(div().child(current.clone()))
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .overflow_hidden()
+                    .text_ellipsis()
+                    .whitespace_nowrap()
+                    .child(current.clone()),
+            )
             .child(div().text_color(t.muted_foreground).child("▾"))
             .on_click({
                 let on_open_change = self.on_open_change.clone();
@@ -721,11 +994,12 @@ impl RenderOnce for AuroraSelect {
             .max_h(available_height.min(px(288.)))
             .overflow_y_scroll()
             .track_scroll(&scroll)
-            .py(px(4.))
+            .p(px(4.))
             .rounded(t.radius)
             .border_1()
             .border_color(t.border)
-            .bg(t.surface)
+            .bg(t.raised)
+            .shadow_lg()
             .on_mouse_down_out({
                 let close = close.clone();
                 move |_, window, cx| close(window, cx)
@@ -769,7 +1043,8 @@ impl RenderOnce for AuroraSelect {
                     .aria_selected(selected)
                     .when(highlighted, |this| this.aria_active_descendant())
                     .px(px(10.))
-                    .py(px(5.))
+                    .py(px(6.))
+                    .rounded(px(6.))
                     .flex_shrink_0()
                     .text_ellipsis()
                     .text_size(px(13.))
@@ -802,7 +1077,8 @@ impl RenderOnce for AuroraSelect {
                     }
                 }
             })
-            .w(px(220.))
+            .w(self.width)
+            .when(self.full_width, |select| select.w_full())
             .child(
                 // Capture the trigger bounds every prepaint so the popup can be
                 // positioned under it (the pattern gpui-component's Select uses).

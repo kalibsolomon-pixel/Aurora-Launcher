@@ -16,7 +16,8 @@ use crate::{
     artwork::{self, ArtworkCache, RawArtwork},
     backend::guarded,
     content_updates::{ContentUpdates, ContentUpdatesEvent},
-    controls::{AuroraButton, AuroraInput, ButtonVariant},
+    controls::{AuroraButton, AuroraInput, AuroraSelect, AuroraToggle, ButtonSize, ButtonVariant},
+    ui,
 };
 use aurora_launcher_lib::host::Host;
 use gpui::{
@@ -27,8 +28,10 @@ use gpui_kit::base::{
     input::{InputEvent, InputState},
 };
 use serde_json::Value;
+use std::cell::Cell;
 use std::collections::HashSet;
 use std::path::PathBuf;
+use std::rc::Rc;
 use tokio::runtime::Handle;
 
 /// Icons requested per core call (the Slint host's `ICON_BATCH`).
@@ -103,6 +106,13 @@ struct Entry {
     project: Option<String>,
 }
 
+fn matches_filter(name: &str, file_name: &str, query: &str) -> bool {
+    let query = query.trim().to_lowercase();
+    query.is_empty()
+        || name.to_lowercase().contains(&query)
+        || file_name.to_lowercase().contains(&query)
+}
+
 /// What the core is asked for to draw one row's icon.
 #[derive(Clone, PartialEq)]
 enum IconSource {
@@ -135,9 +145,8 @@ fn provenance(p: &Option<api::Provenance>) -> String {
     p.as_ref()
         .map(|p| {
             format!(
-                "{} · {}{}",
-                p.provider,
-                p.project_id,
+                "{}{}",
+                provider_label(&p.provider),
                 p.display_version
                     .as_ref()
                     .map(|v| format!(" · {v}"))
@@ -145,6 +154,33 @@ fn provenance(p: &Option<api::Provenance>) -> String {
             )
         })
         .unwrap_or_else(|| "No provider provenance".into())
+}
+/// Match Discover's artwork size and row rhythm across every content category.
+const CONTENT_ROW_HEIGHT: f32 = 100.;
+/// Note prefix for a mod other enabled mods depend on; shown as a badge.
+const REQUIRED_NOTE: &str = "Required by other mods: ";
+/// "Cannot change this mod: A requires x; B requires x." → "Required by A, B".
+fn required_label(reason: &str) -> String {
+    let names: Vec<&str> = reason
+        .trim_start_matches("Cannot change this mod: ")
+        .trim_end_matches('.')
+        .split("; ")
+        .filter_map(|part| part.split(" requires ").next())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .collect();
+    if names.is_empty() {
+        "Required".to_owned()
+    } else {
+        format!("Required by {}", names.join(", "))
+    }
+}
+fn provider_label(provider: &str) -> &str {
+    match provider {
+        "modrinth" => "Modrinth",
+        "curseforge" => "CurseForge",
+        other => other,
+    }
 }
 fn mods(inv: api::ModInventory) -> Vec<Entry> {
     inv.entries
@@ -166,11 +202,15 @@ fn mods(inv: api::ModInventory) -> Vec<Entry> {
                 "{} · {} · {} · {}",
                 version,
                 if e.enabled { "Enabled" } else { "Disabled" },
-                e.ownership,
+                ownership_label(&e.ownership),
                 provenance(&e.provenance)
             );
             for w in e.warnings {
-                details.push_str(&format!("\nWarning: {}", w.message));
+                if w.code == "required_by_other_mods" {
+                    details.push_str(&format!("\n{REQUIRED_NOTE}{}", w.message));
+                } else {
+                    details.push_str(&format!("\nWarning: {}", w.message));
+                }
             }
             for reason in [e.action_blocked_reason, e.removal_blocked_reason]
                 .into_iter()
@@ -532,10 +572,21 @@ pub struct Content {
     path: Entity<InputState>,
     path_value: String,
     _path_events: Subscription,
+    filter: Entity<InputState>,
+    _filter_events: Subscription,
     review: Option<Review>,
     removing: Option<(Target, Entry)>,
+    import_open: bool,
+    updates_open: bool,
+    actions_open: bool,
+    inventory_page: usize,
     updates: Entity<ContentUpdates>,
     _update_events: Subscription,
+    instance_open: bool,
+    instance_highlight: usize,
+    instance_trigger: gpui::FocusHandle,
+    instance_content: gpui::FocusHandle,
+    instance_bounds: Rc<Cell<Option<gpui::Bounds<gpui::Pixels>>>>,
 }
 impl Content {
     pub fn new(
@@ -545,6 +596,12 @@ impl Content {
         cx: &mut Context<Self>,
     ) -> Self {
         let (tx, rx) = async_channel::unbounded();
+        let filter =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Filter installed content…"));
+        let filter_events = cx.subscribe(&filter, |this: &mut Self, _, _: &InputEvent, cx| {
+            this.inventory_page = 0;
+            cx.notify();
+        });
         let path =
             cx.new(|cx| InputState::new(window, cx).placeholder("Path to a local content file"));
         let subscription = cx.subscribe(&path, |this: &mut Self, input, _: &InputEvent, cx| {
@@ -629,10 +686,21 @@ impl Content {
             path,
             path_value: String::new(),
             _path_events: subscription,
+            filter,
+            _filter_events: filter_events,
             review: None,
             removing: None,
+            import_open: false,
+            updates_open: false,
+            actions_open: false,
+            inventory_page: 0,
             updates,
             _update_events: update_events,
+            instance_open: false,
+            instance_highlight: 0,
+            instance_trigger: cx.focus_handle(),
+            instance_content: cx.focus_handle(),
+            instance_bounds: Rc::new(Cell::new(None)),
         };
         this.refresh(cx);
         this
@@ -644,7 +712,7 @@ impl Content {
             revision: self.revision,
         })
     }
-    fn is_busy(&self, cx: &gpui::App) -> bool {
+    pub fn is_busy(&self, cx: &gpui::App) -> bool {
         self.busy || self.updates.read(cx).is_busy()
     }
     fn sync_updates(&self, cx: &mut Context<Self>) {
@@ -761,7 +829,19 @@ impl Content {
                         self.loading = false;
                         self.revision = self.revision.wrapping_add(1);
                     }
+                    let first_state = self.state.is_none();
+                    // The launcher's own selection, offered once as the starting point.
+                    let preferred = state
+                        .config
+                        .selected_instance_id
+                        .clone()
+                        .filter(|id| state.instances.iter().any(|i| &i.id == id));
                     self.state = Some(state);
+                    if first_state && self.selected.is_none() {
+                        if let Some(id) = preferred {
+                            self.select(id, cx);
+                        }
+                    }
                 }
                 Err(e) => self.message = error(e),
             },
@@ -867,6 +947,7 @@ impl Content {
         self.invalidate_review();
         self.revision = self.revision.wrapping_add(1);
         self.selected = Some(id);
+        self.inventory_page = 0;
         self.removing = None;
         self.icons.reset();
         self.load();
@@ -885,6 +966,7 @@ impl Content {
         self.invalidate_review();
         self.revision = self.revision.wrapping_add(1);
         self.selected = Some(instance);
+        self.inventory_page = 0;
         self.kind = Kind::from_index(kind);
         self.removing = None;
         self.icons.reset();
@@ -907,6 +989,7 @@ impl Content {
         self.invalidate_review();
         self.revision = self.revision.wrapping_add(1);
         self.kind = kind;
+        self.inventory_page = 0;
         self.removing = None;
         self.icons.reset();
         self.load();
@@ -1101,6 +1184,7 @@ impl Content {
                     "Finish the current operation, then drop the file again.".into()
                 }
                 Ok(path) => {
+                    self.import_open = true;
                     self.message.clear();
                     // Keep the field and the reviewed path in step so the
                     // preview guard accepts this review.
@@ -1144,21 +1228,247 @@ impl Drop for Content {
 fn error(e: api::ApiError) -> String {
     format!("{}: {}", e.code, e.message)
 }
+/// The status words `details` carries; they are drawn as a badge instead.
+const STATUS_WORDS: [&str; 4] = [
+    "Enabled",
+    "Disabled",
+    "Activation managed in game",
+    "Activation unknown",
+];
+
+/// Splits an entry's `details` into its metadata segments (status removed),
+/// the status word it carried, and its note lines (warnings, blocked reasons).
+fn describe(details: &str) -> (Vec<&str>, Option<&str>, Vec<&str>) {
+    let mut lines = details.lines();
+    let first = lines.next().unwrap_or("");
+    let mut status = None;
+    let mut meta = Vec::new();
+    for segment in first.split(" · ") {
+        if STATUS_WORDS.contains(&segment) {
+            status = Some(segment);
+        } else if !segment.is_empty() {
+            meta.push(segment);
+        }
+    }
+    (meta, status, lines.filter(|l| !l.is_empty()).collect())
+}
+
+/// A quiet centered message inside a list card.
+fn list_placeholder(
+    t: &crate::theme::AuroraTheme,
+    icon: &str,
+    title: &str,
+    body: Option<&str>,
+) -> gpui::Div {
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap(px(8.))
+        .py(px(36.))
+        .px(px(24.))
+        .child(ui::icon_tile(t, Some(icon), 40., false))
+        .child(
+            div()
+                .pt(px(2.))
+                .text_size(px(ui::TEXT_BODY + 1.))
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(t.foreground)
+                .child(title.to_owned()),
+        )
+        .when_some(body, |this, body| {
+            this.child(
+                div()
+                    .max_w(px(420.))
+                    .text_size(px(ui::TEXT_BODY))
+                    .text_color(t.muted_foreground)
+                    .text_center()
+                    .child(body.to_owned()),
+            )
+        })
+}
+
+/// A quiet icon-only row action; the label is the accessible name.
+/// Uniform artwork tile: a rounded `control` well with a hairline border and
+/// the image filling it, so every row reads alike whatever the icon's own
+/// padding or transparency.
+fn art_tile(
+    id: impl Into<gpui::ElementId>,
+    image: Option<std::sync::Arc<gpui::RenderImage>>,
+    glyph: &str,
+    side: f32,
+    t: &crate::theme::AuroraTheme,
+) -> gpui::Stateful<gpui::Div> {
+    let base = div()
+        .id(id)
+        .size(px(side))
+        .flex_none()
+        .flex()
+        .items_center()
+        .justify_center()
+        .overflow_hidden()
+        .rounded(px(10.))
+        .bg(t.control)
+        .border_1()
+        .border_color(t.border_subtle);
+    match image {
+        Some(image) => base.child(
+            gpui::img(image)
+                .size_full()
+                .object_fit(gpui::ObjectFit::Cover),
+        ),
+        None => base
+            .text_size(px(side * 0.45))
+            .text_color(t.ring)
+            .child(glyph.to_owned()),
+    }
+}
+
+fn icon_button(
+    t: &crate::theme::AuroraTheme,
+    id: impl Into<gpui::ElementId>,
+    icon: &'static str,
+    label: String,
+) -> gpui_kit::base::Button {
+    // Removal opens a review; reserve danger emphasis for that confirmation.
+    let ring = t.ring;
+    let hover = gpui::Hsla {
+        a: 0.16,
+        ..t.danger
+    };
+    let color = t.subtle_foreground;
+    gpui_kit::base::Button::new(id)
+        .aria_label(label)
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .h(px(32.))
+        .w(px(32.))
+        .px(px(8.))
+        .gap(px(6.))
+        .rounded(t.radius)
+        .bg(t.control)
+        .border_1()
+        .border_color(t.border_subtle)
+        .cursor_pointer()
+        .hover(move |style| style.bg(hover))
+        .active(|style| style.opacity(0.88))
+        .focus(move |style| style.border_color(ring))
+        .styles(|styles| styles.disabled(|style| style.opacity(0.42)))
+        .text_size(px(ui::TEXT_CAPTION))
+        .text_color(t.muted_foreground)
+        .child(crate::symbols::icon(Some(icon), px(18.), color))
+}
+
+fn kind_icon(kind: Kind) -> &'static str {
+    match kind {
+        Kind::Mod => "extension",
+        Kind::Resource => "image",
+        Kind::Shader => "auto_awesome",
+    }
+}
+
 impl Render for Content {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.entity();
+        let reserved = if window.viewport_size().width < px(1000.) {
+            352.
+        } else {
+            315.
+        };
+        let reserved = reserved
+            + if self.message.is_empty() { 0. } else { 68. }
+            + if self.updates_open { 130. } else { 0. }
+            + if self.actions_open { 50. } else { 0. }
+            + if self.import_open { 210. } else { 0. };
+        // Leave room for every note without clipping rows or the pager.
+        let row_height = self
+            .entries
+            .iter()
+            .map(|entry| {
+                let (_, _, notes) = describe(&entry.details);
+                (84. + notes.len() as f32 * 22.).max(CONTENT_ROW_HEIGHT)
+            })
+            .fold(CONTENT_ROW_HEIGHT, f32::max);
+        let page_size = ((f32::from(window.viewport_size().height) - reserved) / row_height)
+            .floor()
+            .clamp(1., 8.) as usize;
         let busy = self.is_busy(cx);
         let previewing = self.preview_request.is_some();
         let palette = crate::theme::theme(cx).clone();
+        let t = &palette;
         let available = self.host.is_some();
         self.path.update(cx, |p, cx| p.set_disabled(busy, cx));
+        // Compact instance chooser: one select in the page header row.
+        let instance_picker = self
+            .state
+            .as_ref()
+            .filter(|state| !state.instances.is_empty())
+            .map(|state| {
+                let ids: Vec<String> = state.instances.iter().map(|i| i.id.clone()).collect();
+                let options: Vec<gpui::SharedString> = state
+                    .instances
+                    .iter()
+                    .map(|i| gpui::SharedString::from(i.display_name.clone()))
+                    .collect();
+                let selected = self
+                    .selected
+                    .as_deref()
+                    .and_then(|id| ids.iter().position(|candidate| candidate == id));
+                div()
+                    .flex()
+                    .flex_shrink_0()
+                    .flex_col()
+                    .gap(px(4.))
+                    .child(ui::caption(t, "Instance"))
+                    .child(
+                        AuroraSelect::new(
+                            "content-instance",
+                            "Instance",
+                            options,
+                            &self.instance_trigger,
+                            &self.instance_content,
+                            self.instance_bounds.clone(),
+                        )
+                        .width(px(260.))
+                        .selected(selected)
+                        .highlight(self.instance_highlight)
+                        .open(self.instance_open && !busy)
+                        .disabled(busy)
+                        .on_open_change(cx.processor(|this, open, _window, cx| {
+                            if this.instance_open != open {
+                                this.instance_open = open;
+                                if open {
+                                    this.instance_highlight = 0;
+                                }
+                                cx.notify();
+                            }
+                        }))
+                        .on_highlight(cx.processor(|this, index, _window, cx| {
+                            if this.instance_highlight != index {
+                                this.instance_highlight = index;
+                                cx.notify();
+                            }
+                        }))
+                        .on_confirm(cx.processor(
+                            move |this, index: usize, _window, cx| {
+                                this.instance_open = false;
+                                if let Some(id) = ids.get(index) {
+                                    this.select(id.clone(), cx);
+                                }
+                                cx.notify();
+                            },
+                        )),
+                    )
+            });
         // Files dropped from the file manager feed the local import review.
         // The outline shows whether the dragged file would be accepted.
         let (accept, reject) = (palette.accent, palette.danger);
         let mut root = div()
             .flex()
             .flex_col()
-            .gap(px(8.))
+            .gap(px(ui::PAGE_GAP))
             .border_1()
             .border_color(gpui::transparent_black())
             .rounded(palette.radius)
@@ -1172,36 +1482,59 @@ impl Render for Content {
             .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
                 this.drop_files(paths.paths(), window, cx);
             }))
-            .child(div().text_2xl().child("Content"))
-            .child(self.message.clone());
-        if let Some(state) = &self.state {
-            let mut instances = div().flex().flex_wrap().gap(px(8.));
-            for instance in &state.instances {
-                let id = instance.id.clone();
-                let v = view.clone();
-                instances = instances.child(
-                    AuroraButton::new(
-                        gpui::SharedString::from(format!("content-instance-{id}")),
-                        instance.display_name.clone(),
-                    )
-                    .selected(self.selected.as_deref() == Some(&id))
-                    .disabled(busy)
-                    .on_click(move |_, _, cx| {
-                        v.update(cx, |s, cx| {
-                            s.select(id.clone(), cx);
-                            cx.notify();
-                        });
-                    }),
-                );
-            }
-            root = root.child(instances);
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_end()
+                    .justify_between()
+                    .gap(px(16.))
+                    .child(div().flex_1().min_w(px(280.)).child(ui::page_header(
+                        t,
+                        "Content",
+                        Some(
+                            "Manage the mods, resource packs and shaders installed in each instance."
+                                .into(),
+                        ),
+                    )))
+                    .when_some(instance_picker, |this, picker| this.child(picker)),
+            );
+        if !self.message.is_empty() {
+            root = root.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(10.))
+                    .px(px(14.))
+                    .py(px(10.))
+                    .rounded(palette.radius)
+                    .bg(palette.control)
+                    .border_1()
+                    .border_color(palette.border_subtle)
+                    .text_size(px(ui::TEXT_BODY))
+                    .text_color(palette.muted_foreground)
+                    .child(crate::symbols::icon(Some("info"), px(16.), palette.ring))
+                    .child(div().flex_1().min_w(px(0.)).child(self.message.clone())),
+            );
         }
         if self.selected.is_some() {
-            let mut toolbar = div().flex().flex_wrap().gap(px(8.));
+            // Category tabs (left) and list actions (right) share one toolbar row.
+            let mut tabs = div()
+                .flex()
+                .items_center()
+                .gap(px(2.))
+                .p(px(3.))
+                .rounded(palette.radius)
+                .bg(palette.sunken)
+                .border_1()
+                .border_color(palette.border_subtle);
             for kind in [Kind::Mod, Kind::Resource, Kind::Shader] {
                 let v = view.clone();
-                toolbar = toolbar.child(
+                tabs = tabs.child(
                     AuroraButton::new(kind.api(), kind.label())
+                        .size(ButtonSize::Small)
+                        .variant(ButtonVariant::Ghost)
+                        .icon(kind_icon(kind))
                         .selected(self.kind == kind)
                         .disabled(busy)
                         .on_click(move |_, _, cx| {
@@ -1212,35 +1545,179 @@ impl Render for Content {
                         }),
                 );
             }
-            let v = view.clone();
-            toolbar = toolbar.child(
-                AuroraButton::new("content-find-more", "Find more").on_click(move |_, _, cx| {
-                    v.update(cx, |s, cx| s.find_more(cx));
-                }),
-            );
-            let v = view.clone();
-            toolbar = toolbar.child(
-                AuroraButton::new("content-folder", "Open folder")
-                    .disabled(busy)
-                    .on_click(move |_, _, cx| {
-                        v.read(cx).folder();
-                    }),
-            );
-            let v = view.clone();
-            toolbar = toolbar.child(
-                AuroraButton::new("content-retry", "Refresh content")
-                    .disabled(busy)
-                    .on_click(move |_, _, cx| {
-                        v.update(cx, |s, cx| s.refresh(cx));
-                    }),
-            );
-            root = root.child(toolbar);
-            if self.loading {
-                root = root.child("Loading content…");
-            } else if self.entries.is_empty() {
-                root = root.child("No content found.");
+            root = root.child(tabs);
+            let find = view.clone();
+            let open = view.clone();
+            let reload = view.clone();
+            let toolbar = div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_between()
+                .gap(px(12.))
+                .px(px(12.))
+                .py(px(10.))
+                .border_b_1()
+                .border_color(palette.border_subtle)
+                .when(self.actions_open, |toolbar| {
+                    toolbar.child(
+                        div()
+                            .w_full()
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .gap(px(8.))
+                            .pt(px(8.))
+                            .border_t_1()
+                            .border_color(palette.border_subtle)
+                            .child(
+                                AuroraButton::new("content-folder", "Open folder")
+                                    .size(ButtonSize::Small)
+                                    .icon("folder_open")
+                                    .disabled(busy)
+                                    .on_click(move |_, _, cx| open.read(cx).folder()),
+                            )
+                            .child(
+                                AuroraButton::new("content-retry", "Refresh content")
+                                    .size(ButtonSize::Small)
+                                    .icon("refresh")
+                                    .disabled(busy)
+                                    .on_click(move |_, _, cx| {
+                                        reload.update(cx, |s, cx| s.refresh(cx))
+                                    }),
+                            )
+                            .child(
+                                AuroraButton::new(
+                                    "content-updates-open",
+                                    if self.updates_open {
+                                        "Close updates"
+                                    } else {
+                                        "Updates"
+                                    },
+                                )
+                                .size(ButtonSize::Small)
+                                .icon("update")
+                                .selected(self.updates_open)
+                                .disabled(busy || previewing)
+                                .on_click(cx.listener(
+                                    |this, _, _, cx| {
+                                        this.updates_open = !this.updates_open;
+                                        cx.notify();
+                                    },
+                                )),
+                            ),
+                    )
+                });
+            let mut list = ui::list_card(t).when(self.actions_open, |list| list.child(toolbar));
+            let query = self.filter.read(cx).value();
+            let visible: Vec<_> = self
+                .entries
+                .iter()
+                .filter(|entry| matches_filter(&entry.name, &entry.file_name, query.as_ref()))
+                .collect();
+            if !self.loading {
+                list = list.child(
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .gap(px(10.))
+                        .items_center()
+                        .justify_between()
+                        .px(px(16.))
+                        .py(px(8.))
+                        .border_b_1()
+                        .border_color(palette.border_subtle)
+                        .child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .items_center()
+                                .gap(px(if window.viewport_size().width < px(1000.) {
+                                    12.
+                                } else {
+                                    16.
+                                }))
+                                .child(ui::caption(
+                                    t,
+                                    if query.trim().is_empty() {
+                                        format!("{} installed", self.entries.len())
+                                    } else {
+                                        format!("{} of {} shown", visible.len(), self.entries.len())
+                                    },
+                                ))
+                                .child(
+                                    div()
+                                        .w(px(if window.viewport_size().width < px(1000.) {
+                                            180.
+                                        } else {
+                                            250.
+                                        }))
+                                        .child(
+                                            AuroraInput::new(&self.filter)
+                                                .label("Filter installed content"),
+                                        ),
+                                )
+                                .child(
+                                    AuroraButton::new("content-find-more", "Find more")
+                                        .size(ButtonSize::Small)
+                                        .variant(ButtonVariant::Default)
+                                        .icon("explore")
+                                        .on_click(move |_, _, cx| {
+                                            find.update(cx, |s, cx| s.find_more(cx))
+                                        }),
+                                )
+                                .child(
+                                    AuroraButton::new("content-import-open", "Import local")
+                                        .size(ButtonSize::Small)
+                                        .icon("upload_file")
+                                        .selected(self.import_open)
+                                        .disabled(busy || previewing)
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.import_open = !this.import_open;
+                                            cx.notify();
+                                        })),
+                                ),
+                        )
+                        .child(
+                            div().flex().items_center().gap(px(6.)).child(
+                                AuroraButton::new("content-actions", "Manage content")
+                                    .size(ButtonSize::Small)
+                                    .variant(ButtonVariant::Default)
+                                    .icon("tune")
+                                    .selected(self.actions_open)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.actions_open = !this.actions_open;
+                                        cx.notify();
+                                    })),
+                            ),
+                        ),
+                );
             }
-            for entry in &self.entries {
+            if self.loading {
+                list = list.child(list_placeholder(t, "sync", "Loading content…", None));
+            } else if self.entries.is_empty() {
+                list = list.child(list_placeholder(
+                    t,
+                    kind_icon(self.kind),
+                    "No content found.",
+                    Some(
+                        "Use Find more to browse Discover, or drop a .jar or .zip onto this page.",
+                    ),
+                ));
+            } else if visible.is_empty() {
+                list = list.child(list_placeholder(
+                    t,
+                    "search",
+                    "No matching content.",
+                    Some("Try a different name or file name, or clear the filter."),
+                ));
+            }
+            let total = visible.len();
+            let current_page = self.inventory_page.min(total.saturating_sub(1) / page_size);
+            let start = current_page * page_size;
+            let end = (start + page_size).min(total);
+            let last_index = end.saturating_sub(1);
+            for (index, entry) in visible.into_iter().enumerate().skip(start).take(page_size) {
                 let e = entry.clone();
                 let v = view.clone();
                 let target = self.target().unwrap();
@@ -1248,159 +1725,431 @@ impl Render for Content {
                     .icon
                     .as_ref()
                     .and_then(|icon| self.icons.cache.image(&icon.key()));
-                let mut row = div().flex().flex_col().gap(px(4.)).child(
-                    div()
+                let (meta, status_word, mut notes) = describe(&entry.details);
+                let required_by = notes
+                    .iter()
+                    .find_map(|note| note.strip_prefix(REQUIRED_NOTE))
+                    .map(required_label);
+                let required = required_by.is_some();
+                notes.retain(|note| !note.starts_with(REQUIRED_NOTE));
+                let disabled_row = entry.enabled == Some(false);
+                let mut line = vec![entry.file_name.as_str()];
+                line.extend(meta.iter().copied().filter(|m| {
+                    *m != "No provider provenance"
+                        && *m != "Added manually"
+                        && *m != "Installed by Aurora"
+                        && *m != "Not pack owned"
+                        && !entry.file_name.contains(*m)
+                }));
+                let mut text = div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .w(px(0.))
+                    .gap(px(6.))
+                    .line_height(px(18.))
+                    .min_w(px(0.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.))
+                            .min_w(px(0.))
+                            .child(
+                                div()
+                                    .min_w(px(0.))
+                                    .text_size(px(ui::TEXT_BODY + 1.))
+                                    .line_height(px(20.))
+                                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                                    .text_color(palette.foreground)
+                                    .when(disabled_row, |d| d.opacity(0.8))
+                                    .text_ellipsis()
+                                    .child(entry.name.clone()),
+                            )
+                            .when(disabled_row, |name| {
+                                name.child(ui::badge(t, "Disabled", ui::Tone::Neutral))
+                            }),
+                    )
+                    .child(
+                        div()
+                            .min_w(px(0.))
+                            .text_size(px(ui::TEXT_BODY - 1.))
+                            .text_color(palette.foreground.opacity(0.75))
+                            .text_ellipsis()
+                            .child(line.join(" · ")),
+                    )
+                    .when_some(required_by.clone(), |text, label| {
+                        text.child(
+                            div()
+                                .flex()
+                                .items_center()
+                                .gap(px(5.))
+                                .text_size(px(ui::TEXT_CAPTION))
+                                .text_color(t.muted_foreground)
+                                .child(crate::symbols::icon(Some("lock"), px(12.), t.ring))
+                                .child(label),
+                        )
+                    });
+                for note in notes {
+                    let warn = note.starts_with("Warning:");
+                    text = text.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(5.))
+                            .text_size(px(ui::TEXT_CAPTION))
+                            .text_color(if warn {
+                                palette.warning
+                            } else {
+                                palette.subtle_foreground
+                            })
+                            .when(warn, |d| {
+                                d.child(crate::symbols::icon(
+                                    Some("warning"),
+                                    px(13.),
+                                    palette.warning,
+                                ))
+                            })
+                            .min_w(px(0.))
+                            .child(div().min_w(px(0.)).child(note.to_owned())),
+                    );
+                }
+                let toggle = match entry.enabled {
+                    // Locked on: other enabled mods depend on this one. The
+                    // switch keeps the column's rhythm; the lock on its thumb
+                    // says it cannot be turned off.
+                    Some(true) if required => div()
                         .flex()
-                        .items_start()
-                        .gap(px(12.))
-                        .child(artwork::tile(
+                        .w(px(76.))
+                        .items_center()
+                        .justify_center()
+                        .child(
+                            div()
+                                .id(gpui::SharedString::from(format!("locked-{}", entry.id)))
+                                .aria_label(format!("{} is required and stays enabled", entry.name))
+                                .flex()
+                                .items_center()
+                                .justify_end()
+                                .px(px(3.))
+                                .w(px(40.))
+                                .h(px(24.))
+                                .rounded_full()
+                                .bg(palette.accent)
+                                .child(
+                                    div()
+                                        .flex_none()
+                                        .size(px(18.))
+                                        .rounded_full()
+                                        .bg(palette.accent_foreground)
+                                        .flex()
+                                        .items_center()
+                                        .justify_center()
+                                        .child(crate::symbols::icon(
+                                            Some("lock"),
+                                            px(12.),
+                                            palette.accent,
+                                        )),
+                                ),
+                        )
+                        .into_any_element(),
+                    Some(enabled) => div()
+                        .flex()
+                        .w(px(76.))
+                        .items_center()
+                        .justify_center()
+                        .gap(px(8.))
+                        .child(
+                            AuroraToggle::new(gpui::SharedString::from(format!(
+                                "toggle-{}",
+                                entry.id
+                            )))
+                            .label(format!("Enable {}", entry.name))
+                            .checked(enabled)
+                            .disabled(busy || !entry.toggle || required)
+                            .on_change(move |_, _, _, cx| {
+                                v.update(cx, |s, cx| {
+                                    s.toggle(&target, e.clone(), cx);
+                                    cx.notify();
+                                });
+                            }),
+                        )
+                        .into_any_element(),
+                    None => div()
+                        .w(px(76.))
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .child(ui::status_badge(
+                            t,
+                            if status_word == Some("Activation managed in game") {
+                                "In game"
+                            } else {
+                                "Unknown"
+                            },
+                            ui::Tone::Neutral,
+                        ))
+                        .into_any_element(),
+                };
+                let e = entry.clone();
+                let v = view.clone();
+                let target = self.target().unwrap();
+                let remove = AuroraButton::new(
+                    gpui::SharedString::from(format!("remove-{}", entry.id)),
+                    "Delete",
+                )
+                .accessibility_label(format!("Delete {}", entry.name))
+                .icon("delete")
+                .variant(ButtonVariant::Default)
+                .size(ButtonSize::Small)
+                .disabled(busy || !entry.remove)
+                .on_click(move |_, _, cx| {
+                    v.update(cx, |s, cx| {
+                        if !s.is_busy(cx)
+                            && s.target().as_ref() == Some(&target)
+                            && s.entries
+                                .iter()
+                                .any(|current| current.id == e.id && current.remove)
+                        {
+                            s.removing = Some((target.clone(), e.clone()));
+                        }
+                        cx.notify();
+                    });
+                });
+                let hover = palette.control;
+                list = list.child(
+                    ui::row(t, index == last_index)
+                        .gap(px(14.))
+                        .min_h(px(row_height))
+                        .flex_shrink_0()
+                        .py(px(8.))
+                        .hover(move |style| style.bg(hover))
+                        .child(art_tile(
                             gpui::SharedString::from(format!("icon-{}", entry.id)),
                             icon,
                             &entry.letter,
-                            px(40.),
+                            48.,
                             &palette,
+                        ))
+                        .child(text)
+                        .child(
+                            div()
+                                .flex()
+                                .flex_shrink_0()
+                                .items_center()
+                                .gap(px(16.))
+                                .child(toggle)
+                                .child(div().w(px(88.)).flex().justify_end().child(remove)),
+                        ),
+                );
+            }
+            if total > page_size {
+                list = list.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(12.))
+                        .px(px(16.))
+                        .py(px(10.))
+                        .border_t_1()
+                        .border_color(palette.border_subtle)
+                        .child(ui::caption(
+                            t,
+                            format!("{}–{} of {} items", start + 1, end, total),
                         ))
                         .child(
                             div()
                                 .flex()
-                                .flex_col()
-                                .gap(px(4.))
-                                .child(entry.name.clone())
+                                .gap(px(8.))
                                 .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(palette.muted_foreground)
-                                        .child(entry.file_name.clone()),
+                                    AuroraButton::new("content-previous", "Previous")
+                                        .size(ButtonSize::Small)
+                                        .disabled(current_page == 0)
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.inventory_page = current_page.saturating_sub(1);
+                                            cx.notify();
+                                        })),
                                 )
                                 .child(
-                                    div()
-                                        .text_sm()
-                                        .text_color(palette.muted_foreground)
-                                        .child(entry.details.clone()),
+                                    AuroraButton::new("content-next", "Next")
+                                        .size(ButtonSize::Small)
+                                        .disabled(end >= total)
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.inventory_page = current_page + 1;
+                                            cx.notify();
+                                        })),
                                 ),
                         ),
                 );
-                let mut actions = div().flex().gap(px(8.)).child(
-                    AuroraButton::new(
-                        gpui::SharedString::from(format!("toggle-{}", entry.id)),
-                        if entry.enabled == Some(true) {
-                            "Disable"
-                        } else {
-                            "Enable"
-                        },
-                    )
-                    .disabled(busy || !entry.toggle)
-                    .on_click(move |_, _, cx| {
-                        v.update(cx, |s, cx| {
-                            s.toggle(&target, e.clone(), cx);
-                            cx.notify();
-                        });
-                    }),
-                );
-                let e = entry.clone();
-                let v = view.clone();
-                let target = self.target().unwrap();
-                actions = actions.child(
-                    AuroraButton::new(
-                        gpui::SharedString::from(format!("remove-{}", entry.id)),
-                        "Remove…",
-                    )
-                    .disabled(busy || !entry.remove)
-                    .on_click(move |_, _, cx| {
-                        v.update(cx, |s, cx| {
-                            if !s.is_busy(cx)
-                                && s.target().as_ref() == Some(&target)
-                                && s.entries
-                                    .iter()
-                                    .any(|current| current.id == e.id && current.remove)
-                            {
-                                s.removing = Some((target.clone(), e.clone()));
-                            }
-                            cx.notify();
-                        });
-                    }),
-                );
-                row = row.child(actions);
-                root = root.child(row);
             }
-            root = root
-                .child("Import local content")
-                .child(AuroraInput::new(&self.path).label("Local file path"));
+            // ------------------------------------------------------ local import
             let v = view.clone();
-            root = root.child(
-                AuroraButton::new(
-                    "preview-local",
-                    if previewing {
-                        "Reading file…"
-                    } else {
-                        "Preview file"
-                    },
+            let mut import = ui::card(t)
+                .gap(px(14.))
+                .child(
+                    div().flex().items_start().justify_between().gap(px(16.))
+                        .child(ui::section_header(
+                            t,
+                            "Import local content",
+                            Some("Drop a .jar or .zip here, or enter its path. Review it before installing.".into()),
+                        ))
+                        .child(
+                            AuroraButton::new("content-import-close", "Close import")
+                                .size(ButtonSize::Small)
+                                .disabled(busy || previewing)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.import_open = false;
+                                    cx.notify();
+                                })),
+                        ),
                 )
-                .disabled(busy || previewing || self.path_value.trim().is_empty())
-                .on_click(move |_, _, cx| {
-                    v.update(cx, |s, cx| {
-                        s.preview(cx);
-                        cx.notify();
-                    });
-                }),
-            );
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(10.))
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w(px(0.))
+                                .child(AuroraInput::new(&self.path).label("Local file path")),
+                        )
+                        .child(
+                            AuroraButton::new(
+                                "preview-local",
+                                if previewing {
+                                    "Reading file…"
+                                } else {
+                                    "Preview file"
+                                },
+                            )
+                            .icon("upload_file")
+                            .disabled(busy || previewing || self.path_value.trim().is_empty())
+                            .on_click(move |_, _, cx| {
+                                v.update(cx, |s, cx| {
+                                    s.preview(cx);
+                                    cx.notify();
+                                });
+                            }),
+                        ),
+                );
             if let Some(review) = &self.review {
                 let value = &review.value;
-                let mut description = format!(
-                    "{}\nTarget: {}\nType: {} · {} bytes\n{}",
-                    value["fileName"].as_str().unwrap_or("File"),
-                    value["instanceName"].as_str().unwrap_or("Instance"),
-                    value["contentType"].as_str().unwrap_or("Unknown"),
-                    value["sizeBytes"].as_u64().unwrap_or(0),
-                    value["note"].as_str().unwrap_or("")
-                );
-                for key in ["warnings", "blockers"] {
-                    if let Some(items) = value[key].as_array() {
-                        for item in items {
-                            description.push_str(&format!(
-                                "\n{}: {}",
-                                if key == "blockers" {
-                                    "Blocked"
-                                } else {
-                                    "Warning"
-                                },
-                                item.as_str()
-                                    .map(str::to_owned)
-                                    .unwrap_or_else(|| item.to_string())
-                            ));
-                        }
-                    }
-                }
                 let allowed = review_allowed(value)
                     && review.path == self.path_value
                     && self.target().as_ref() == Some(&review.target);
-                root = root.child(description);
-                let v = view.clone();
-                root = root.child(
-                    AuroraButton::new("install-local", "Install reviewed file")
-                        .disabled(busy || !allowed)
-                        .on_click(move |_, _, cx| {
-                            v.update(cx, |s, cx| {
-                                s.mutate(None, true, cx);
-                                cx.notify();
-                            });
-                        }),
+                let mut block = div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .p(px(14.))
+                    .rounded(palette.radius)
+                    .bg(palette.sunken)
+                    .border_1()
+                    .border_color(palette.border_subtle)
+                    .child(ui::title_block(
+                        t,
+                        value["fileName"].as_str().unwrap_or("File").to_owned(),
+                        Some(
+                            format!(
+                                "Target: {}",
+                                value["instanceName"].as_str().unwrap_or("Instance")
+                            )
+                            .into(),
+                        ),
+                    ))
+                    .child(ui::caption(
+                        t,
+                        format!(
+                            "Type: {} · {} bytes",
+                            value["contentType"].as_str().unwrap_or("Unknown"),
+                            value["sizeBytes"].as_u64().unwrap_or(0)
+                        ),
+                    ));
+                if let Some(note) = value["note"].as_str().filter(|n| !n.is_empty()) {
+                    block = block.child(ui::muted(t, note.to_owned()));
+                }
+                for key in ["warnings", "blockers"] {
+                    if let Some(items) = value[key].as_array() {
+                        for item in items {
+                            let blocked = key == "blockers";
+                            block = block.child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .text_size(px(ui::TEXT_CAPTION))
+                                    .text_color(if blocked {
+                                        palette.danger
+                                    } else {
+                                        palette.warning
+                                    })
+                                    .child(crate::symbols::icon(
+                                        Some(if blocked { "error" } else { "warning" }),
+                                        px(14.),
+                                        if blocked {
+                                            palette.danger
+                                        } else {
+                                            palette.warning
+                                        },
+                                    ))
+                                    .child(format!(
+                                        "{}: {}",
+                                        if blocked { "Blocked" } else { "Warning" },
+                                        item.as_str()
+                                            .map(str::to_owned)
+                                            .unwrap_or_else(|| item.to_string())
+                                    )),
+                            );
+                        }
+                    }
+                }
+                let install = view.clone();
+                let close = view.clone();
+                block = block.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .pt(px(8.))
+                        .child(
+                            AuroraButton::new("install-local", "Install reviewed file")
+                                .variant(ButtonVariant::Primary)
+                                .disabled(busy || !allowed)
+                                .on_click(move |_, _, cx| {
+                                    install.update(cx, |s, cx| {
+                                        s.mutate(None, true, cx);
+                                        cx.notify();
+                                    });
+                                }),
+                        )
+                        .child(
+                            AuroraButton::new("discard-local", "Close review")
+                                .disabled(busy)
+                                .on_click(move |_, _, cx| {
+                                    close.update(cx, |s, cx| {
+                                        s.invalidate_review();
+                                        cx.notify();
+                                    });
+                                }),
+                        ),
                 );
-                let v = view.clone();
-                root = root.child(
-                    AuroraButton::new("discard-local", "Close review")
-                        .disabled(busy)
-                        .on_click(move |_, _, cx| {
-                            v.update(cx, |s, cx| {
-                                s.invalidate_review();
-                                cx.notify();
-                            });
-                        }),
-                );
+                import = import.child(block);
             }
-            root = root.child(self.updates.clone());
+            if self.import_open {
+                root = root.child(import);
+            }
+            if self.updates_open {
+                root = root.child(self.updates.clone());
+            }
+            root = root.child(list);
         } else if available {
-            root = root.child("Choose an instance to manage its content.");
+            root = root.child(ui::empty_state(
+                t,
+                "extension",
+                "No instance selected",
+                "Choose an instance to manage its content.",
+            ));
         }
         let cancel = view.clone();
         let confirm = view.clone();
@@ -1414,21 +2163,33 @@ impl Render for Content {
         let panel = div()
             .w(px(440.))
             .p(px(24.))
-            .bg(palette.surface)
+            .bg(palette.raised)
+            .border_1()
+            .border_color(palette.border_subtle)
             .text_color(palette.foreground)
-            .rounded(palette.radius)
+            .rounded(palette.radius_lg)
             .flex()
             .flex_col()
             .gap(px(12.))
-            .child("Remove content")
-            .child(format!(
-                "Remove {name}? This removes the selected entry from this instance."
+            .child(
+                div()
+                    .text_size(px(ui::TEXT_SECTION))
+                    .font_weight(gpui::FontWeight::SEMIBOLD)
+                    .child("Delete content"),
+            )
+            .child(ui::muted(
+                t,
+                format!("Delete {name}? This removes the selected file from this instance."),
             ))
-            .child(self.message.clone())
+            .when(!self.message.is_empty(), |d| {
+                d.child(ui::caption(t, self.message.clone()))
+            })
             .child(
                 div()
                     .flex()
+                    .justify_end()
                     .gap(px(8.))
+                    .pt(px(8.))
                     .child(
                         AuroraButton::new("remove-cancel", "Cancel")
                             .disabled(busy)
@@ -1440,7 +2201,7 @@ impl Render for Content {
                             }),
                     )
                     .child(
-                        AuroraButton::new("remove-confirm", "Remove")
+                        AuroraButton::new("remove-confirm", "Delete")
                             .variant(ButtonVariant::Danger)
                             .disabled(busy)
                             .on_click(move |_, _, cx| {
@@ -1458,7 +2219,7 @@ impl Render for Content {
         root.child(
             Dialog::new(cx)
                 .open(self.removing.is_some())
-                .accessibility_label("Remove content")
+                .accessibility_label("Delete content")
                 .close_on_backdrop_press(false)
                 .on_ok(|_, _, _| false)
                 .on_cancel(move |_, _, cx| !veto.read(cx).is_busy(cx))
@@ -1475,10 +2236,47 @@ impl Render for Content {
         )
     }
 }
+/// Readable ownership for row metadata; unknown core values pass through.
+fn ownership_label(ownership: &str) -> &str {
+    match ownership {
+        "userManaged" => "Added manually",
+        "packManaged" => "From modpack",
+        "providerManaged" => "Installed by Aurora",
+        other => other,
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::sync::Arc;
+    #[test]
+    fn required_label_names_the_dependent_mods() {
+        assert_eq!(
+            required_label("Cannot change this mod: EntityCulling requires fabric-api."),
+            "Required by EntityCulling"
+        );
+        assert_eq!(
+            required_label("Cannot change this mod: A requires x; B requires x."),
+            "Required by A, B"
+        );
+        assert_eq!(required_label(""), "Required");
+    }
+    #[test]
+    fn inventory_filter_matches_display_and_file_names_without_case_or_outer_spaces() {
+        assert!(matches_filter(
+            "Sodium",
+            "sodium-fabric-0.6.jar",
+            " SODIUM "
+        ));
+        assert!(matches_filter(
+            "Performance mod",
+            "sodium-fabric-0.6.jar",
+            "FABRIC-0.6"
+        ));
+        assert!(matches_filter("Sodium", "sodium.jar", "  "));
+        assert!(!matches_filter("Sodium", "sodium.jar", "iris"));
+    }
     #[test]
     fn content_tab_indexes_round_trip_and_clamp_like_slint() {
         for kind in [Kind::Mod, Kind::Resource, Kind::Shader] {
@@ -1784,5 +2582,20 @@ mod tests {
         let e = packs(inv).pop().unwrap();
         assert!(!e.toggle && !e.remove);
         assert!(e.details.contains("managed in game"));
+    }
+
+    #[test]
+    fn row_details_split_into_metadata_status_and_notes() {
+        let (meta, status, notes) = describe(
+            "1.2 · Disabled · userManaged · No provider provenance
+Warning: old
+Blocked reason",
+        );
+        assert_eq!(meta, ["1.2", "userManaged", "No provider provenance"]);
+        assert_eq!(status, Some("Disabled"));
+        assert_eq!(notes, ["Warning: old", "Blocked reason"]);
+        let (_, status, notes) = describe("Activation managed in game · Pack owned");
+        assert_eq!(status, Some("Activation managed in game"));
+        assert!(notes.is_empty());
     }
 }

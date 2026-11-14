@@ -38,23 +38,24 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 use aurora_launcher_lib::host::Host;
-use gpui_kit::base::ElementExt;
+use gpui_kit::base::{Button, ElementExt};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    AnyElement, AnyWindowHandle, AppContext as _, Bounds, Context, Entity, EventEmitter,
-    FocusHandle, InteractiveElement as _, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent,
-    MouseMoveEvent, ParentElement as _, Pixels, Render, RenderImage, Role, ScrollHandle,
-    StatefulInteractiveElement as _, Styled, Window, div, img, px, rgba,
+    AnyElement, AnyWindowHandle, AppContext as _, Bounds, Context, Div, Entity, EventEmitter,
+    FocusHandle, FontWeight, InteractiveElement as _, IntoElement, KeyDownEvent, MouseButton,
+    MouseDownEvent, MouseMoveEvent, ParentElement as _, Pixels, Render, RenderImage, Role,
+    ScrollHandle, StatefulInteractiveElement as _, Styled, Window, div, img, px,
 };
 use serde_json::Value;
 use tokio::runtime::Handle;
 
 use crate::api::{self, ApiResult, HomeLayout, WidgetGrid, WidgetPlacement};
 use crate::backend::guarded;
-use crate::controls::{AuroraButton, ButtonVariant};
+use crate::controls::{AuroraButton, ButtonSize, ButtonVariant};
 use crate::images;
 use crate::media::Media;
 use crate::theme;
+use crate::ui;
 
 /// Events for the integrating parent view.
 #[derive(Debug)]
@@ -100,9 +101,11 @@ const MAX_GRID_ROWS: i32 = 3;
 const MAX_ANCHOR_ROW: i32 = 63;
 
 /// Responsive grid geometry (matches the Slint `WidgetGrid` constants).
-const GRID_GAP: f32 = 14.0;
-const MIN_CARD_WIDTH: f32 = 150.0;
-const CARD_HEIGHT: f32 = 196.0;
+const GRID_GAP: f32 = 16.0;
+const MIN_CARD_WIDTH: f32 = 120.0;
+/// Sized so a typical three-row Servers list fills its card (the list scrolls
+/// beyond that) while the Playtime chart keeps a readable plot.
+const CARD_HEIGHT: f32 = 280.0;
 
 /// Saved columns for a viewport width; clamping renders, it never writes.
 pub(crate) fn responsive_columns(width_px: f32) -> i32 {
@@ -140,6 +143,25 @@ pub(crate) fn duration(ms: u64) -> String {
     }
 }
 
+/// Milliseconds → "45m", "2h", "2.3h": narrow enough that neighbouring bar
+/// labels never touch.
+pub(crate) fn short_duration(ms: u64) -> String {
+    let minutes = ms / 60_000;
+    match minutes {
+        0 if ms > 0 => "<1m".into(),
+        0 => String::new(),
+        1..=59 => format!("{minutes}m"),
+        _ => {
+            let tenths = (minutes * 10 + 30) / 60;
+            if tenths % 10 == 0 {
+                format!("{}h", tenths / 10)
+            } else {
+                format!("{}.{}h", tenths / 10, tenths % 10)
+            }
+        }
+    }
+}
+
 /// Seconds (or milliseconds) since epoch → "Today", "Yesterday", "3 days ago".
 pub(crate) fn relative(at: u64, now: u64) -> String {
     let at = if at > 100_000_000_000 { at / 1000 } else { at };
@@ -155,6 +177,18 @@ pub(crate) fn relative(at: u64, now: u64) -> String {
 
 fn server_timestamp(at: u64) -> u64 {
     if at > 100_000_000_000 { at / 1000 } else { at }
+}
+
+/// Like [`relative`], but with sub-day precision: "Just now", "12 min ago",
+/// "3 h ago", then the day-level wording.
+fn last_played_text(at: u64, now: u64) -> String {
+    let at = server_timestamp(at);
+    match now.saturating_sub(at) {
+        0..=59 => "Just now".into(),
+        secs @ 60..=3_599 => format!("{} min ago", secs / 60),
+        secs @ 3_600..=86_399 => format!("{} h ago", secs / 3_600),
+        _ => relative(at, now),
+    }
 }
 
 fn server_played(at: u64, now: u64) -> String {
@@ -209,6 +243,18 @@ pub(crate) fn effective(saved: HomeLayout) -> HomeLayout {
             .cloned()
             .collect();
         layout.widgets = native.into_iter().chain(others).collect();
+        // Fill the first row: Playtime and Servers split it evenly.
+        for (id, columns) in [("playtime", 3), ("recent-servers", 3)] {
+            if let Some(widget) = layout.widgets.iter_mut().find(|w| w.id == id)
+                && widget.grid.is_none()
+            {
+                widget.grid = Some(WidgetGrid {
+                    columns,
+                    rows: 1,
+                    position: None,
+                });
+            }
+        }
     }
     for (id, _) in NATIVE {
         if !layout.widgets.iter().any(|w| w.id == id) {
@@ -457,11 +503,31 @@ fn bin_label(bin: &PlaytimeBin, today: u64) -> String {
 }
 
 fn chart_peak(bins: &[PlaytimeBin]) -> u64 {
-    bins.iter()
-        .map(|b| b.duration_ms)
-        .max()
-        .unwrap_or(0)
-        .max(60_000)
+    nice_peak(
+        bins.iter()
+            .map(|b| b.duration_ms)
+            .max()
+            .unwrap_or(0)
+            .max(60_000),
+    )
+}
+
+/// Rounds a peak up so both the peak and its midpoint read as round values
+/// (20 min steps under an hour, whole hours to 6 h, two hours above).
+fn nice_peak(ms: u64) -> u64 {
+    const MIN: u64 = 60_000;
+    let step = if ms <= 60 * MIN {
+        20 * MIN
+    } else if ms <= 120 * MIN {
+        60 * MIN
+    } else if ms <= 6 * 60 * MIN {
+        60 * MIN
+    } else if ms <= 12 * 60 * MIN {
+        2 * 60 * MIN
+    } else {
+        ms.div_ceil(10 * 60 * MIN) * 60 * MIN
+    };
+    ms.div_ceil(step) * step
 }
 
 fn axis_duration(ms: u64) -> String {
@@ -469,8 +535,10 @@ fn axis_duration(ms: u64) -> String {
     let hours = ms / 3_600_000;
     if hours >= 1000 {
         format!("{:.1e} h", hours as f64)
+    } else if ms == 0 {
+        "0".into()
     } else {
-        duration(ms)
+        short_duration(ms)
     }
 }
 
@@ -546,6 +614,14 @@ pub(crate) enum Period {
 }
 
 impl Period {
+    fn caption(self) -> &'static str {
+        match self {
+            Self::Week => "Last 7 days",
+            Self::Month => "Last 30 days",
+            Self::AllTime => "All time",
+        }
+    }
+
     fn label(self) -> &'static str {
         match self {
             Self::Week => "7 days",
@@ -559,6 +635,8 @@ impl Period {
 pub(crate) struct PointView {
     pub label: String,
     pub value: String,
+    /// Compact value shown above the bar.
+    pub short: String,
     pub detail: String,
     pub fraction: f32,
 }
@@ -577,6 +655,7 @@ fn points_from_bins(bins: &[PlaytimeBin], today: u64) -> Vec<PointView> {
                 ),
                 fraction: bin.duration_ms as f32 / peak as f32,
                 value: duration(bin.duration_ms),
+                short: short_duration(bin.duration_ms),
             }
         })
         .collect()
@@ -616,6 +695,7 @@ impl PlaytimeData {
 pub(crate) struct PlaytimeView {
     pub points: Vec<PointView>,
     pub peak: String,
+    pub midpoint: String,
     pub total: String,
     pub total_detail: String,
     /// Rendered instead of the chart while data is loading or missing.
@@ -634,6 +714,7 @@ pub(crate) fn playtime_view(
     let unavailable = |status: &str| PlaytimeView {
         points: Vec::new(),
         peak: String::new(),
+        midpoint: String::new(),
         total: String::new(),
         total_detail: String::new(),
         status: Some(status.into()),
@@ -674,6 +755,7 @@ pub(crate) fn playtime_view(
     PlaytimeView {
         points: points_from_bins(&bins, data.today),
         peak: axis_duration(chart_peak(&bins)),
+        midpoint: axis_duration(chart_peak(&bins) / 2),
         total,
         total_detail,
         status,
@@ -1008,6 +1090,76 @@ impl Core {
         self.save_in_flight.is_some()
             || !self.favorite_pending.is_empty()
             || self.saved_favorite_in_flight.is_some()
+    }
+
+    /// Up to three (label, value) quick stats from cached history only: no
+    /// I/O. Empty while history is loading, unread, or cached for another
+    /// instance. Playtime, worlds and the daily history describe `self.instance`
+    /// (launcher-wide when none is selected); servers are launcher-wide and are
+    /// narrowed to `instance_id` whenever the data is instance-scoped.
+    fn hero_stats(&self, instance_id: &str, now: u64) -> Vec<(String, String)> {
+        let Some(playtime) = self.playtime.as_ref().filter(|_| !self.loading) else {
+            return Vec::new();
+        };
+        let scoped = match self.instance.as_deref() {
+            Some(cached) if cached == instance_id => true,
+            Some(_) => return Vec::new(),
+            None => false,
+        };
+        let mut stats = Vec::with_capacity(3);
+
+        // Most recent known play: exact timestamps from servers and worlds,
+        // else the newest UTC day with recorded playtime.
+        let exact = self
+            .servers
+            .iter()
+            .filter(|t| !scoped || t.instance_id == instance_id)
+            .map(|t| t.last_played_at)
+            .chain(self.worlds.iter().map(|w| w.last_played_at))
+            .filter(|&at| at > 0)
+            .map(server_timestamp)
+            .max();
+        let day_start = playtime
+            .history()
+            .iter()
+            .filter(|d| d.duration_ms > 0)
+            .map(|d| d.day.saturating_mul(86_400))
+            .max();
+        match (exact, day_start) {
+            (Some(at), day) if day.is_none_or(|day| at >= day) => {
+                stats.push(("Last played".into(), last_played_text(at, now)));
+            }
+            (_, Some(day)) => stats.push(("Last played".into(), relative(day, now))),
+            _ => {}
+        }
+
+        let week = playtime
+            .summary
+            .as_ref()
+            .map(|p| p.last_7_days_ms)
+            .or_else(|| {
+                playtime.daily.as_ref().filter(|d| !d.is_empty()).map(|_| {
+                    playtime_total(&playtime_bins(playtime.history(), playtime.today, 7, 7))
+                })
+            });
+        if let Some(ms) = week {
+            stats.push(("This week".into(), duration(ms)));
+        }
+
+        if !self.worlds.is_empty() {
+            let count = self.worlds.len();
+            stats.push((
+                "Worlds".into(),
+                if count >= WORLD_READ {
+                    format!("{WORLD_READ}+")
+                } else {
+                    count.to_string()
+                },
+            ));
+        } else if let Some(all_time) = playtime.summary.as_ref().filter(|p| p.all_time_ms > 0) {
+            stats.push(("All time".into(), duration(all_time.all_time_ms)));
+        }
+        stats
     }
 
     fn selected_instance_id(&self) -> Option<&str> {
@@ -1736,9 +1888,35 @@ pub struct HomeWidgets {
     media_creating: bool,
     /// Media's constructor takes a window, which entity updates do not carry.
     window: AnyWindowHandle,
+    /// Launching needs a sign-in first; quick-play actions are secondary.
+    needs_sign_in: bool,
 }
 
 impl HomeWidgets {
+    pub fn customize_button(&self, entity: Entity<Self>) -> AuroraButton {
+        let editing = self.core.editing;
+        AuroraButton::new(
+            "widgets-customize",
+            if editing { "Done" } else { "Customize" },
+        )
+        .variant(if editing {
+            ButtonVariant::Primary
+        } else {
+            ButtonVariant::Default
+        })
+        .size(ButtonSize::Small)
+        .icon(if editing { "check" } else { "tune" })
+        .disabled(
+            self.host.is_none()
+                || self.core.is_busy()
+                || self.core.blocked
+                || self.core.layout_error.is_some(),
+        )
+        .on_click(move |_, _, cx| {
+            entity.update(cx, |this, cx| this.set_editing(!this.core.editing, cx))
+        })
+    }
+
     /// Builds the inactive page. After activation with a host, the persisted
     /// layout loads first and the visible cards' data follows; with no host it stays in an
     /// unavailable diagnostic state and initiates zero API calls.
@@ -1763,6 +1941,7 @@ impl HomeWidgets {
             media: None,
             media_creating: false,
             window: window.window_handle(),
+            needs_sign_in: false,
         };
         view.reload(cx);
         view
@@ -1797,6 +1976,14 @@ impl HomeWidgets {
         self.dispatch_pending(cx);
         self.sync_media(cx);
         cx.notify();
+    }
+
+    /// Whether launching currently needs a sign-in first.
+    pub fn set_needs_sign_in(&mut self, needs: bool, cx: &mut Context<Self>) {
+        if self.needs_sign_in != needs {
+            self.needs_sign_in = needs;
+            cx.notify();
+        }
     }
 
     /// The parent's gate on new work; running writes still complete.
@@ -1878,6 +2065,20 @@ impl HomeWidgets {
     /// (and, for saved destinations, its frozen instance) must still exist.
     pub fn can_quick_play(&self, mode: &str, id: &str, instance_id: &str) -> bool {
         self.core.can_quick_play(mode, id, instance_id)
+    }
+
+    /// Up to three (label, value) quick stats for the Home hero, read from the
+    /// cached history only (no I/O, no async work). Empty until the history for
+    /// `instance_id` has loaded.
+    pub fn hero_stats(
+        &self,
+        instance_id: &str,
+    ) -> Vec<(gpui_kit::SharedString, gpui_kit::SharedString)> {
+        self.core
+            .hero_stats(instance_id, now_secs())
+            .into_iter()
+            .map(|(label, value)| (label.into(), value.into()))
+            .collect()
     }
 
     /// Display name of a recent server destination for the launch progress
@@ -2041,10 +2242,21 @@ impl HomeWidgets {
     }
 
     fn start_enrich(&mut self, cx: &mut Context<Self>, ids: Vec<String>) {
+        let serial = self.core.data_serial;
+        if crate::showcase() {
+            // Design-review mode has no network: settle immediately with an
+            // empty result through the normal reply path so the widget leaves
+            // its loading state.
+            self.run(
+                cx,
+                async move { Ok(Vec::<api::ServerPresentation>::new()) },
+                move |view, result, cx| view.receive(Reply::Enrich(serial, result), cx),
+            );
+            return;
+        }
         let Some(host) = self.host.clone() else {
             return;
         };
-        let serial = self.core.data_serial;
         self.run(
             cx,
             async move { api::server_presentations(host, ids).await },
@@ -2467,78 +2679,78 @@ impl Render for HomeWidgets {
             .flex()
             .flex_col()
             .gap(px(12.))
-            .text_color(palette.foreground)
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(8.))
-                    .child(div().text_size(px(20.)).child("Widgets"))
-                    .child(
-                        AuroraButton::new(
-                            "widgets-customize",
-                            if editing { "Done" } else { "Customize" },
-                        )
-                        .variant(ButtonVariant::Ghost)
-                        .disabled(
-                            no_host
-                                || self.core.is_busy()
-                                || self.core.blocked
-                                || self.core.layout_error.is_some(),
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.set_editing(!this.core.editing, cx);
-                        })),
-                    ),
-            );
+            .text_color(palette.foreground);
 
         if no_host {
-            return div().size_full().child(page.child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(palette.muted_foreground)
-                    .child(
+            return div().w_full().child(
+                page.child(
+                    ui::card(&palette).child(ui::muted(
+                        &palette,
                         "Home widgets are unavailable: this diagnostic window has no launcher host, so no layout or history is read.",
-                    ),
-            ));
+                    )),
+                ),
+            );
         }
 
         if editing {
-            page = page.child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_center()
-                    .gap(px(6.))
-                    .text_size(px(12.))
-                    .text_color(palette.muted_foreground)
-                    .child("Drag headers to move · Drag corners to resize · Arrows move, Shift and arrows resize · Escape cancels")
-                    .child(
-                        AuroraButton::new("widgets-reset", "Reset layout").on_click(cx.listener(
-                            |this, _, _, cx| {
-                                this.edit(cx, reset_layout);
-                            },
-                        )),
-                    ),
-            );
             let layout = self.core.layout.clone().unwrap_or(HomeLayout {
                 widgets: Vec::new(),
             });
+            let mut adders = div().flex().flex_wrap().items_center().gap(px(8.));
+            let mut any_adders = false;
             for (id, title) in NATIVE {
                 if layout.widgets.iter().any(|w| w.id == id && w.enabled) {
                     continue;
                 }
+                any_adders = true;
                 let target = id.to_owned();
-                page = page.child(
+                adders = adders.child(
                     AuroraButton::new(format!("widgets-add-{target}"), format!("Add {title}"))
-                        .variant(ButtonVariant::Ghost)
+                        .size(ButtonSize::Small)
+                        .icon("add")
                         .on_click(cx.listener(move |this, _, _, cx| {
                             let target = target.clone();
                             this.edit(cx, |layout| set_enabled(layout, &target, true));
                         })),
                 );
             }
+            page = page.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(10.))
+                    .px(px(16.))
+                    .py(px(12.))
+                    .rounded(palette.radius_lg)
+                    .bg(palette.accent_soft)
+                    .border_1()
+                    .border_color(palette.border_subtle)
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(12.))
+                            .child(
+                                div()
+                                    .flex_1()
+                                    .min_w(px(240.))
+                                    .text_size(px(ui::TEXT_CAPTION))
+                                    .text_color(palette.muted_foreground)
+                                    .child("Drag headers to move · Drag corners to resize · Arrows move, Shift and arrows resize · Escape cancels"),
+                            )
+                            .child(
+                                AuroraButton::new("widgets-reset", "Reset layout")
+                                    .size(ButtonSize::Small)
+                                    .icon("restart_alt")
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.edit(cx, reset_layout);
+                                    })),
+                            ),
+                    )
+                    .when(any_adders, |this| this.child(adders)),
+            );
         }
 
         for error in [
@@ -2551,28 +2763,27 @@ impl Render for HomeWidgets {
         {
             page = page.child(
                 div()
-                    .text_size(px(12.))
+                    .text_size(px(ui::TEXT_CAPTION))
                     .text_color(palette.danger)
                     .child(error),
             );
         }
         if self.core.layout_error.is_some() || self.core.history_error.is_some() {
             page = page.child(
-                AuroraButton::new("widgets-retry", "Retry Home")
-                    .disabled(self.core.blocked || self.core.layout_loading)
-                    .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
+                div().flex().child(
+                    AuroraButton::new("widgets-retry", "Retry Home")
+                        .size(ButtonSize::Small)
+                        .icon("refresh")
+                        .disabled(self.core.blocked || self.core.layout_loading)
+                        .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
+                ),
             );
         }
 
         let Some(layout) = self.core.layout.clone() else {
-            return div().size_full().child(
-                page.child(
-                    div()
-                        .text_size(px(13.))
-                        .text_color(palette.muted_foreground)
-                        .child("Loading the saved widget layout…"),
-                ),
-            );
+            return div()
+                .w_full()
+                .child(page.child(ui::muted(&palette, "Loading the saved widget layout…")));
         };
 
         let placements: Vec<(WidgetPlacement, (i32, i32, i32, i32))> = layout
@@ -2655,9 +2866,9 @@ impl Render for HomeWidgets {
                             .left(px(column as f32 * pitch_x))
                             .w(px(card_width))
                             .h(px(CARD_HEIGHT))
-                            .rounded(palette.radius)
+                            .rounded(palette.radius_lg)
                             .border_1()
-                            .border_color(rgba(0x34374359)),
+                            .border_color(palette.border_subtle),
                     );
                 }
             }
@@ -2804,12 +3015,8 @@ impl Render for HomeWidgets {
                 .track_focus(&resize_focus)
                 .tab_stop(true)
                 .absolute()
-                .top(px(row as f32 * pitch_y + height as f32 * pitch_y
-                    - GRID_GAP
-                    - 32.))
-                .left(px(column as f32 * pitch_x + width as f32 * pitch_x
-                    - GRID_GAP
-                    - 32.))
+                .top(px(height as f32 * pitch_y - GRID_GAP - 32.))
+                .left(px(width as f32 * pitch_x - GRID_GAP - 32.))
                 .w(px(32.))
                 .h(px(32.))
                 .flex()
@@ -2892,8 +3099,8 @@ impl Render for HomeWidgets {
                     .left(px(preview.0 as f32 * pitch_x))
                     .w(px(preview.2 as f32 * pitch_x - GRID_GAP))
                     .h(px(preview.3 as f32 * pitch_y - GRID_GAP))
-                    .rounded(palette.radius)
-                    .border_1()
+                    .rounded(palette.radius_lg)
+                    .border_2()
                     .border_color(palette.accent),
             );
             if preview != base {
@@ -2911,8 +3118,8 @@ impl Render for HomeWidgets {
                                 .left(px(column as f32 * pitch_x))
                                 .w(px(width as f32 * pitch_x - GRID_GAP))
                                 .h(px(height as f32 * pitch_y - GRID_GAP))
-                                .rounded(palette.radius)
-                                .border_1()
+                                .rounded(palette.radius_lg)
+                                .border_2()
                                 .border_color(palette.danger),
                         );
                     }
@@ -2920,9 +3127,7 @@ impl Render for HomeWidgets {
             }
         }
 
-        div()
-            .size_full()
-            .child(page.child(div().size_full().child(grid)))
+        div().w_full().child(page.child(div().w_full().child(grid)))
     }
 }
 
@@ -2990,247 +3195,470 @@ impl HomeWidgets {
         let palette = theme::theme(cx).clone();
         let view = cx.entity();
         let id = widget.id.clone();
+        // Rendered width of this card, used only to pick a header layout.
+        let card_px = requested_dims(widget).0.max(1) as f32 * pitch_x - GRID_GAP;
+        let wide = card_px >= 360.;
+
+        // Transient work never reads as part of the title: it is a quiet
+        // dot and caption beside the controls.
+        let activity: Option<&'static str> = match id.as_str() {
+            "recent-servers" if self.core.refreshing_servers => Some("Refreshing status…"),
+            "recent-servers" if self.core.server_enriching && !loading => Some("Loading details…"),
+            _ => None,
+        };
+        let caption: Option<String> = match id.as_str() {
+            "instance-details" => self
+                .core
+                .selected_instance()
+                .map(|i| i.display_name.clone()),
+            _ => None,
+        };
+        let shows_loading =
+            loading && matches!(id.as_str(), "playtime" | "recent-servers" | "recent-worlds");
+
+        // The widget's own controls: segmented tabs (and quiet actions) go in
+        // the header when the card is wide enough, on their own row otherwise.
+        let mut tabs: Option<AnyElement> = None;
+        let mut extra: Option<AnyElement> = None;
+        match id.as_str() {
+            "playtime" => {
+                tabs = Some(
+                    segmented(&palette)
+                        .children(
+                            [Period::Week, Period::Month, Period::AllTime].map(|choice| {
+                                segment(
+                                    format!("playtime-period-{}", choice.label()),
+                                    choice.label(),
+                                    period == choice,
+                                )
+                                .on_click({
+                                    let view = view.clone();
+                                    move |_, _, cx| {
+                                        view.update(cx, |this, cx| this.set_period(choice, cx));
+                                    }
+                                })
+                            }),
+                        )
+                        .into_any_element(),
+                );
+            }
+            "recent-servers" => {
+                let server_view = self.core.server_view;
+                tabs = Some(
+                    segmented(&palette)
+                        .child(
+                            segment(
+                                "servers-recent",
+                                "Recent",
+                                server_view == ServerView::Recents,
+                            )
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.set_server_view(ServerView::Recents, cx);
+                            })),
+                        )
+                        .child(
+                            segment(
+                                "servers-favorites",
+                                "Favorites",
+                                server_view == ServerView::Favorites,
+                            )
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.set_server_view(ServerView::Favorites, cx);
+                            })),
+                        )
+                        .child(
+                            segment("servers-saved", "Saved", server_view == ServerView::Saved)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    this.set_server_view(ServerView::Saved, cx);
+                                })),
+                        )
+                        .into_any_element(),
+                );
+                extra = Some(
+                    icon_button(
+                        &palette,
+                        "servers-refresh".to_owned(),
+                        "refresh",
+                        "Refresh status".to_owned(),
+                        self.core.refreshing_servers || busy,
+                        false,
+                    )
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.start_status_refresh(cx);
+                    }))
+                    .into_any_element(),
+                );
+            }
+            "recent-worlds" => {
+                let saved_worlds = self.core.saved_worlds;
+                tabs = Some(
+                    segmented(&palette)
+                        .child(segment("worlds-recent", "Recent", !saved_worlds).on_click(
+                            cx.listener(|this, _, _, cx| {
+                                this.set_saved_worlds(false, cx);
+                            }),
+                        ))
+                        .child(segment("worlds-saved", "Saved", saved_worlds).on_click(
+                            cx.listener(|this, _, _, cx| {
+                                this.set_saved_worlds(true, cx);
+                            }),
+                        ))
+                        .into_any_element(),
+                );
+            }
+            _ => {}
+        }
+        let inline_controls = wide && !editing;
+
+        let mut header = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap_x(px(12.))
+            .gap_y(px(8.))
+            .min_h(px(28.))
+            .child(
+                div()
+                    .flex()
+                    .items_baseline()
+                    .gap(px(8.))
+                    .min_w(px(0.))
+                    .when(editing, |this| {
+                        this.items_center().child(crate::symbols::icon(
+                            Some("drag_indicator"),
+                            px(16.),
+                            palette.subtle_foreground,
+                        ))
+                    })
+                    .child(
+                        div()
+                            .text_size(px(ui::TEXT_SECTION))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(palette.foreground)
+                            .whitespace_nowrap()
+                            .child(title),
+                    )
+                    .when_some(caption, |this, caption| {
+                        this.child(
+                            div()
+                                .min_w(px(0.))
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .whitespace_nowrap()
+                                .text_size(px(ui::TEXT_CAPTION))
+                                .text_color(palette.subtle_foreground)
+                                .child(caption),
+                        )
+                    }),
+            );
+        let mut right = div().flex().items_center().gap(px(8.));
+        if let Some(activity) = activity.or(shows_loading.then_some("Loading…")) {
+            right = right.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .child(
+                        div()
+                            .size(px(6.))
+                            .rounded_full()
+                            .bg(palette.ring)
+                            .opacity(0.8),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(ui::TEXT_CAPTION))
+                            .text_color(palette.subtle_foreground)
+                            .whitespace_nowrap()
+                            .child(activity),
+                    ),
+            );
+        }
+        if inline_controls {
+            if let Some(tabs) = tabs.take() {
+                right = right.child(tabs);
+            }
+            if let Some(extra) = extra.take() {
+                right = right.child(extra);
+            }
+        }
+        if editing {
+            let target = id.clone();
+            right = right.child(
+                icon_button(
+                    &palette,
+                    format!("widget-remove-{id}"),
+                    "close",
+                    format!("Remove {title}"),
+                    false,
+                    false,
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    let target = target.clone();
+                    this.edit(cx, |layout| set_enabled(layout, &target, false));
+                })),
+            );
+        }
+        header = header.child(right);
+
         let mut card = div()
             .id(format!("widget-card-{id}"))
             .role(Role::Group)
             .aria_label(title)
             .flex()
             .flex_col()
-            .gap(px(6.))
-            .p(px(14.))
+            .gap(px(12.))
+            .p(px(16.))
             .size_full()
-            .rounded(palette.radius)
-            .bg(palette.surface)
+            .rounded(palette.radius_lg)
+            .bg(palette.card)
             .border_1()
-            .border_color(palette.border)
+            .border_color(if editing {
+                palette.border
+            } else {
+                palette.border_subtle
+            })
             .overflow_hidden()
-            .child(
+            .child(header);
+        if !inline_controls && (tabs.is_some() || extra.is_some()) {
+            card = card.child(
                 div()
                     .flex()
+                    .flex_wrap()
                     .items_center()
+                    .justify_between()
                     .gap(px(8.))
-                    .child(div().text_size(px(13.)).child(title))
-                    .when(
-                        loading
-                            && matches!(
-                                id.as_str(),
-                                "playtime" | "recent-servers" | "recent-worlds"
-                            ),
-                        |this| {
-                            this.child(
-                                div()
-                                    .text_size(px(12.))
-                                    .text_color(palette.muted_foreground)
-                                    .child("Loading…"),
-                            )
-                        },
-                    )
-                    .when(editing, |this| {
-                        let target = id.clone();
-                        this.child(
-                            AuroraButton::new(format!("widget-remove-{id}"), "Remove")
-                                .variant(ButtonVariant::Ghost)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    let target = target.clone();
-                                    this.edit(cx, |layout| set_enabled(layout, &target, false));
-                                })),
-                        )
-                    }),
+                    .children(tabs.take())
+                    .children(extra.take()),
             );
+        }
 
         match id.as_str() {
             "playtime" => {
-                let narrow = (requested_dims(widget).0.max(1) as f32 * pitch_x - GRID_GAP) < 440.;
+                let narrow = card_px < 380.;
                 let projection = playtime_view(playtime_data, period, narrow, loading);
-                card = card.child(div().flex().flex_wrap().gap(px(4.)).children(
-                    [Period::Week, Period::Month, Period::AllTime].map(|choice| {
-                        AuroraButton::new(
-                            format!("playtime-period-{}", choice.label()),
-                            choice.label(),
-                        )
-                        .variant(ButtonVariant::Ghost)
-                        .selected(period == choice)
-                        .on_click({
-                            let view = view.clone();
-                            move |_, _, cx| {
-                                view.update(cx, |this, cx| this.set_period(choice, cx));
-                            }
-                        })
-                    }),
-                ));
                 let total = div()
                     .id("playtime-total")
-                    .text_size(px(13.))
+                    .text_size(px(ui::TEXT_TITLE))
+                    .font_weight(FontWeight::SEMIBOLD)
+                    .text_color(palette.foreground)
                     .child(if loading {
                         "Loading…".to_string()
                     } else {
                         projection.total.clone()
                     });
-                card = card.child(if projection.total_detail.is_empty() {
+                let total = if projection.total_detail.is_empty() {
                     total
                 } else {
                     total.aria_description(projection.total_detail.clone())
-                });
+                };
+                card = card.child(total);
                 match &projection.status {
                     Some(status) => {
-                        card = card.child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(palette.muted_foreground)
-                                .child(status.clone()),
-                        );
+                        card = card.child(empty_note(&palette, "bar_chart", status.clone()));
                     }
                     None => {
-                        let chart_height = 96.;
                         let label = |text: String| {
                             div()
-                                .text_size(px(11.))
+                                .text_size(px(ui::TEXT_BODY + 1.))
                                 .text_color(palette.muted_foreground)
                                 .child(text)
                         };
-                        // Slint's plot: the peak and "0 min" in a label gutter, a
-                        // 1 px baseline under the bars, and discrete centred
-                        // columns (at most 20 px wide) so wide cells never read
-                        // edge to edge.
+                        let today = playtime_data.map_or(0, |data| data.today);
+                        let count = projection.points.len();
+                        // Weekday under each bar for the 7-day range; the two
+                        // ends of the range otherwise.
+                        let axis =
+                            if period == Period::Week && count == 7 {
+                                div().flex().h(px(AXIS_HEIGHT)).items_end().children(
+                                    (0..count).map(|index| {
+                                        let day = today.saturating_sub((count - 1 - index) as u64);
+                                        let last = index + 1 == count;
+                                        div()
+                                            .flex_1()
+                                            .flex()
+                                            .justify_center()
+                                            .text_size(px(ui::TEXT_BODY))
+                                            .text_color(if last {
+                                                palette.foreground
+                                            } else {
+                                                palette.foreground.opacity(0.75)
+                                            })
+                                            .child(if last { "Today" } else { weekday_label(day) })
+                                    }),
+                                )
+                            } else {
+                                div()
+                                    .flex()
+                                    .h(px(AXIS_HEIGHT))
+                                    .items_end()
+                                    .justify_between()
+                                    .child(label(format!(
+                                        "{} days ago",
+                                        if period == Period::Week { 7 } else { 30 }
+                                    )))
+                                    .child(
+                                        label("Today".into())
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(palette.foreground),
+                                    )
+                            };
                         card = card
                             .child(
                                 div()
                                     .id("playtime-chart")
                                     .role(Role::Group)
                                     .aria_label("Playtime chart")
+                                    .aria_description(format!("{}; scale 0, {}, {}", chart_note_description(period, narrow), projection.midpoint, projection.peak))
                                     .flex()
                                     .w_full()
                                     .flex_1()
-                                    .min_h(px(24.))
-                                    .h(px(chart_height))
+                                    .min_h(px(40.))
+                                    .when(count > 7, |chart| { chart.child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .flex_shrink_0()
+                                            .pb(px(AXIS_HEIGHT + 8.))
+                                            .pr(px(10.))
+                                            .child(
+                                                div().relative().flex_1().w(px(76.)).children(
+                                                    [
+                                                        (0., projection.peak.clone()),
+                                                        (0.5, projection.midpoint.clone()),
+                                                        (1., "0".into()),
+                                                    ]
+                                                    .map(|(at, text)| {
+                                                        label(text)
+                                                            .absolute()
+                                                            .left(px(0.))
+                                                            .right(px(0.))
+                                                            .text_right()
+                                                            .top(gpui_kit::relative(at))
+                                                            .mt(px(-8.))
+                                                            .line_height(px(16.))
+                                                    }),
+                                                ),
+                                            ),
+                                    )
+                                    })
                                     .child(
                                         div()
                                             .flex()
                                             .flex_col()
-                                            .justify_between()
-                                            .flex_shrink_0()
-                                            .pr(px(8.))
-                                            .child(label(projection.peak.clone()))
-                                            .child(label("0 min".into())),
-                                    )
-                                    .child(
-                                        div()
-                                            .relative()
-                                            .flex()
-                                            .items_end()
                                             .flex_1()
-                                            .h_full()
-                                            .border_b_1()
-                                            .border_color(palette.border)
-                                            .when(projection.empty_period, |plot| {
-                                                plot.child(
-                                                    div()
-                                                        .absolute()
-                                                        .size_full()
-                                                        .flex()
-                                                        .items_center()
-                                                        .text_size(px(12.))
-                                                        .text_color(palette.muted_foreground)
-                                                        .child("No playtime in this period."),
-                                                )
-                                            })
-                                            .children(projection.points.iter().map(|point| {
+                                            .min_w(px(0.))
+                                            .child(
                                                 div()
-                                                    .id(format!("playtime-bar-{}", point.label))
-                                                    .role(Role::Image)
-                                                    .aria_label(point.detail.clone())
-                                                    .flex_1()
-                                                    .h_full()
-                                                    .px(px(6.))
+                                                    .relative()
                                                     .flex()
                                                     .items_end()
-                                                    .justify_center()
-                                                    .child(
-                                                        div()
-                                                            .w_full()
-                                                            .min_w(px(2.))
-                                                            .max_w(px(20.))
-                                                            .h(px(bar_height(
-                                                                point.fraction,
-                                                                chart_height,
-                                                            )))
-                                                            .rounded(px(2.))
-                                                            .bg(if point.fraction > 0. {
-                                                                palette.accent
-                                                            } else {
-                                                                palette.surface_hover
-                                                            }),
-                                                    )
-                                            })),
+                                                    .flex_1()
+                                                    .border_b_1()
+                                                    .border_color(palette.border)
+                                                    .when(projection.empty_period, |plot| {
+                                                        plot.child(
+                                                            div()
+                                                                .absolute()
+                                                                .size_full()
+                                                                .flex()
+                                                                .items_center()
+                                                                .justify_center()
+                                                                .text_size(px(ui::TEXT_CAPTION))
+                                                                .text_color(
+                                                                    palette.muted_foreground,
+                                                                )
+                                                                .child(
+                                                                    "No playtime in this period.",
+                                                                ),
+                                                        )
+                                                    })
+                                                    .children(projection.points.iter().map(
+                                                        |point| {
+                                                            div()
+                                                                .id(format!(
+                                                                    "playtime-bar-{}",
+                                                                    point.label
+                                                                ))
+                                                                .role(Role::Image)
+                                                                .aria_label(point.detail.clone())
+                                                                .flex_1()
+                                                                .min_w(px(0.))
+                                                                .h_full()
+                                                                .px(px(if count > 12 {
+                                                                    2.
+                                                                } else {
+                                                                    5.
+                                                                }))
+                                                                .flex()
+                                                                .flex_col()
+                                                                .items_center()
+                                                                .justify_end()
+                                                                .gap(px(6.))
+                                                                .when(
+                                                                    count <= 7
+                                                                        && !projection.empty_period,
+                                                                    |column| {
+                                                                        column.child(
+                                                                            div()
+                                                                                .text_size(px(
+                                                                                    ui::TEXT_CAPTION,
+                                                                                ))
+                                                                                .text_color(
+                                                                                    palette.foreground,
+                                                                                )
+                                                                                .whitespace_nowrap()
+                                                                                .child(
+                                                                                    point.short.clone(),
+                                                                                ),
+                                                                        )
+                                                                    },
+                                                                )
+                                                                .child(
+                                                                    div()
+                                                                        .w_full()
+                                                                        .min_w(px(2.))
+                                                                        .max_w(px(26.))
+                                                                        .h(relative_bar(
+                                                                            point.fraction,
+                                                                        ))
+                                                                        .rounded_t(px(4.))
+                                                                        .rounded_b(px(1.))
+                                                                        .bg(
+                                                                            if point.fraction > 0. {
+                                                                                palette.accent
+                                                                            } else {
+                                                                                gpui_kit::transparent_black()
+                                                                            },
+                                                                        ),
+                                                                )
+                                                        },
+                                                    )),
+                                            )
+                                            .child(axis.pt(px(8.))),
                                     ),
                             )
-                            .child(
-                                div()
-                                    .id("playtime-chart-note")
-                                    .aria_description(chart_note_description(period, narrow))
-                                    .text_size(px(12.))
-                                    .text_color(palette.muted_foreground)
-                                    .child(chart_note(period, narrow)),
-                            );
+                            .when(period != Period::Week || narrow, |card| {
+                                card.child(
+                                    div()
+                                        .id("playtime-chart-note")
+                                        .aria_description(chart_note_description(period, narrow))
+                                        .text_size(px(ui::TEXT_CAPTION))
+                                        .text_color(palette.subtle_foreground)
+                                        .whitespace_nowrap()
+                                        .overflow_hidden()
+                                        .text_ellipsis()
+                                        .child(
+                                            chart_note(period, narrow).replacen("Chart: ", "", 1),
+                                        ),
+                                )
+                            });
                     }
                 }
             }
             "recent-servers" => {
                 let server_view = self.core.server_view;
-                card = card.child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap(px(4.))
-                        .child(
-                            AuroraButton::new("servers-recent", "Recent")
-                                .variant(ButtonVariant::Ghost)
-                                .selected(server_view == ServerView::Recents)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.set_server_view(ServerView::Recents, cx);
-                                })),
-                        )
-                        .child(
-                            AuroraButton::new("servers-favorites", "Favorites")
-                                .variant(ButtonVariant::Ghost)
-                                .selected(server_view == ServerView::Favorites)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.set_server_view(ServerView::Favorites, cx);
-                                })),
-                        )
-                        .child(
-                            AuroraButton::new("servers-saved", "Saved")
-                                .variant(ButtonVariant::Ghost)
-                                .selected(server_view == ServerView::Saved)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.set_server_view(ServerView::Saved, cx);
-                                })),
-                        )
-                        .child(
-                            AuroraButton::new("servers-refresh", "Refresh status")
-                                .variant(ButtonVariant::Ghost)
-                                .disabled(self.core.refreshing_servers || busy)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.start_status_refresh(cx);
-                                })),
-                        ),
-                );
-                if self.core.refreshing_servers {
-                    card = card.child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(palette.muted_foreground)
-                            .child("Refreshing server status…"),
-                    );
-                }
-                if self.core.server_enriching && !loading {
-                    card = card.child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(palette.muted_foreground)
-                            .child("Loading server details…"),
-                    );
-                }
                 let rows = self.server_rows(now);
                 if rows.is_empty() {
                     let empty = if loading {
@@ -3254,12 +3682,7 @@ impl HomeWidgets {
                             }
                         }
                     };
-                    card = card.child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(palette.muted_foreground)
-                            .child(empty),
-                    );
+                    card = card.child(empty_note(&palette, "dns", empty));
                 } else {
                     let scroll = self.card_scroll("recent-servers");
                     let mut list = div()
@@ -3268,9 +3691,12 @@ impl HomeWidgets {
                         .aria_label("Server list")
                         .flex()
                         .flex_col()
+                        .flex_1()
+                        .min_h(px(0.))
                         .overflow_y_scroll()
                         .track_scroll(&scroll);
-                    for row in rows {
+                    let last_index = rows.len().saturating_sub(1);
+                    for (index, row) in rows.into_iter().enumerate() {
                         let mode = if server_view == ServerView::Saved {
                             "saved-server"
                         } else {
@@ -3280,51 +3706,40 @@ impl HomeWidgets {
                         let name = row.name.clone();
                         let favorite_target = row.id.clone();
                         let play_target = row.id.clone();
+                        let motd = row.motd.replace('\n', " · ");
                         list = list.child(
-                            div()
+                            list_row(&palette, index == last_index)
                                 .id(format!("server-row-{}", row.id))
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .py(px(6.))
-                                .when_some(row.picture.clone(), |this, picture| {
-                                    this.child(img(picture).w(px(28.)).h(px(28.)))
-                                })
+                                .child(avatar(&palette, row.picture.clone(), "dns"))
                                 .child(
                                     div()
                                         .flex()
                                         .flex_col()
-                                        .gap(px(2.))
+                                        .gap(px(1.))
                                         .flex_1()
-                                        .child(div().text_size(px(13.)).child(row.name.clone()))
-                                        .child(
-                                            div()
-                                                .text_size(px(12.))
-                                                .text_color(palette.muted_foreground)
-                                                .child(row.detail.clone()),
-                                        )
-                                        .when(!row.motd.is_empty(), |this| {
+                                        .min_w(px(0.))
+                                        .child(row_title(&palette, row.name.clone()))
+                                        .child(row_detail(&palette, row.detail.clone()))
+                                        .when(!motd.is_empty(), |this| {
                                             this.child(
-                                                div()
-                                                    .text_size(px(12.))
-                                                    .text_color(palette.muted_foreground)
-                                                    .child(row.motd.clone()),
+                                                row_detail(&palette, motd.clone())
+                                                    .text_color(palette.subtle_foreground),
                                             )
                                         }),
                                 )
                                 .child(
-                                    AuroraButton::new(
+                                    star_button(
+                                        &palette,
                                         format!("server-favorite-{}", row.id),
-                                        // Self-describing text: AuroraButton exposes
-                                        // no separate accessible name.
+                                        row.favorite,
+                                        // Self-describing accessible name.
                                         if row.favorite {
-                                            format!("★ Unfavorite {name}")
+                                            format!("Unfavorite {name}")
                                         } else {
-                                            format!("☆ Favorite {name}")
+                                            format!("Favorite {name}")
                                         },
+                                        busy || editing || row.favorite_busy,
                                     )
-                                    .variant(ButtonVariant::Ghost)
-                                    .disabled(busy || editing || row.favorite_busy)
                                     .on_click(cx.listener(
                                         move |this, _, _, cx| {
                                             this.toggle_favorite(&favorite_target, cx);
@@ -3333,6 +3748,13 @@ impl HomeWidgets {
                                 )
                                 .child(
                                     AuroraButton::new(format!("server-play-{}", row.id), "Play")
+                                        .size(ButtonSize::Small)
+                                        .variant(if self.needs_sign_in {
+                                            ButtonVariant::Default
+                                        } else {
+                                            ButtonVariant::Soft
+                                        })
+                                        .icon("play_arrow")
                                         .disabled(!playable)
                                         .on_click(cx.listener(move |this, _, _, cx| {
                                             this.quick_play(mode, &play_target, cx);
@@ -3345,27 +3767,6 @@ impl HomeWidgets {
             }
             "recent-worlds" => {
                 let saved_worlds = self.core.saved_worlds;
-                card = card.child(
-                    div()
-                        .flex()
-                        .gap(px(4.))
-                        .child(
-                            AuroraButton::new("worlds-recent", "Recent")
-                                .variant(ButtonVariant::Ghost)
-                                .selected(!saved_worlds)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.set_saved_worlds(false, cx);
-                                })),
-                        )
-                        .child(
-                            AuroraButton::new("worlds-saved", "Saved")
-                                .variant(ButtonVariant::Ghost)
-                                .selected(saved_worlds)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.set_saved_worlds(true, cx);
-                                })),
-                        ),
-                );
                 let rows = if saved_worlds {
                     self.core.saved_worlds_rows.clone()
                 } else {
@@ -3386,12 +3787,7 @@ impl HomeWidgets {
                         "No worlds yet. Singleplayer worlds you play in this instance appear here."
                             .to_string()
                     };
-                    card = card.child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(palette.muted_foreground)
-                            .child(empty),
-                    );
+                    card = card.child(empty_note(&palette, "landscape", empty));
                 } else {
                     let scroll = self.card_scroll("recent-worlds");
                     let mut list = div()
@@ -3400,9 +3796,12 @@ impl HomeWidgets {
                         .aria_label("World list")
                         .flex()
                         .flex_col()
+                        .flex_1()
+                        .min_h(px(0.))
                         .overflow_y_scroll()
                         .track_scroll(&scroll);
-                    for row in rows {
+                    let last_index = rows.len().saturating_sub(1);
+                    for (index, row) in rows.into_iter().enumerate() {
                         let target = row.id.clone();
                         let mode = if saved_worlds { "saved-world" } else { "world" };
                         let playable = row.playable && !busy && !blocked && !editing;
@@ -3416,40 +3815,34 @@ impl HomeWidgets {
                                 now,
                             )
                         };
+                        let detail = if row.detail.is_empty() {
+                            value
+                        } else {
+                            format!("{value} · {}", row.detail)
+                        };
                         list = list.child(
-                            div()
+                            list_row(&palette, index == last_index)
                                 .id(format!("world-row-{}", row.id))
-                                .flex()
-                                .items_center()
-                                .gap(px(8.))
-                                .py(px(6.))
-                                .when_some(row.picture.clone(), |this, picture| {
-                                    this.child(img(picture).w(px(28.)).h(px(28.)))
-                                })
+                                .child(avatar(&palette, row.picture.clone(), "landscape"))
                                 .child(
                                     div()
                                         .flex()
                                         .flex_col()
-                                        .gap(px(2.))
+                                        .gap(px(1.))
                                         .flex_1()
-                                        .child(div().text_size(px(13.)).child(row.label.clone()))
-                                        .when(!row.detail.is_empty(), |this| {
-                                            this.child(
-                                                div()
-                                                    .text_size(px(12.))
-                                                    .text_color(palette.muted_foreground)
-                                                    .child(row.detail.clone()),
-                                            )
-                                        }),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(px(12.))
-                                        .text_color(palette.muted_foreground)
-                                        .child(value),
+                                        .min_w(px(0.))
+                                        .child(row_title(&palette, row.label.clone()))
+                                        .child(row_detail(&palette, detail)),
                                 )
                                 .child(
                                     AuroraButton::new(format!("world-play-{}", row.id), "Play")
+                                        .size(ButtonSize::Small)
+                                        .variant(if self.needs_sign_in {
+                                            ButtonVariant::Default
+                                        } else {
+                                            ButtonVariant::Soft
+                                        })
+                                        .icon("play_arrow")
                                         .disabled(!playable)
                                         .on_click(cx.listener(move |this, _, _, cx| {
                                             let target = target.clone();
@@ -3468,28 +3861,46 @@ impl HomeWidgets {
                     .map(detail_lines)
                     .unwrap_or_default();
                 if lines.is_empty() {
-                    card = card.child(
-                        div()
-                            .text_size(px(12.))
-                            .text_color(palette.muted_foreground)
-                            .child("Choose an instance to see its details."),
-                    );
+                    card = card.child(empty_note(
+                        &palette,
+                        "info",
+                        "Choose an instance to see its details.",
+                    ));
                 } else {
-                    for (label, value) in lines {
-                        card = card.child(
+                    let last_index = lines.len() - 1;
+                    let mut list = div().flex().flex_col();
+                    for (index, (label, value)) in lines.into_iter().enumerate() {
+                        list = list.child(
                             div()
                                 .flex()
+                                .items_center()
                                 .justify_between()
-                                .gap(px(8.))
+                                .gap(px(12.))
+                                .py(px(8.))
+                                .when(index != last_index, |this| {
+                                    this.border_b_1().border_color(palette.border_subtle)
+                                })
                                 .child(
                                     div()
-                                        .text_size(px(12.))
+                                        .flex_shrink_0()
+                                        .text_size(px(ui::TEXT_BODY))
                                         .text_color(palette.muted_foreground)
                                         .child(label),
                                 )
-                                .child(div().text_size(px(13.)).child(value)),
+                                .child(
+                                    div()
+                                        .min_w(px(0.))
+                                        .overflow_hidden()
+                                        .text_ellipsis()
+                                        .whitespace_nowrap()
+                                        .text_size(px(ui::TEXT_BODY))
+                                        .font_weight(FontWeight::MEDIUM)
+                                        .text_color(palette.foreground)
+                                        .child(value),
+                                ),
                         );
                     }
+                    card = card.child(list);
                 }
             }
             // The entity appears one task after the card is first shown.
@@ -3502,6 +3913,166 @@ impl HomeWidgets {
         }
         card.into_any_element()
     }
+}
+
+// ---------------------------------------------------------------------------
+// Small presentation helpers (private to the widget cards)
+// ---------------------------------------------------------------------------
+
+/// Height of the weekday / range axis under the chart.
+const AXIS_HEIGHT: f32 = 28.;
+
+/// The plot's bar: a fraction of the plot, never under 2 px. The plot's own
+/// height is flexible, so the bar is a percentage of it.
+fn relative_bar(fraction: f32) -> gpui_kit::DefiniteLength {
+    gpui_kit::relative((fraction.clamp(0., 1.) * 0.94).max(0.04))
+}
+
+fn weekday_label(day: u64) -> &'static str {
+    // Day 0 (1970-01-01) was a Thursday.
+    ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"][((day + 4) % 7) as usize]
+}
+
+/// A pill holding segmented Small buttons (range and view tabs).
+fn segmented(t: &theme::AuroraTheme) -> Div {
+    div()
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .gap(px(2.))
+        .p(px(2.))
+        .rounded(t.radius)
+        .bg(t.sunken)
+        .border_1()
+        .border_color(t.border_subtle)
+}
+
+fn segment(
+    id: impl Into<gpui_kit::ElementId>,
+    label: &'static str,
+    selected: bool,
+) -> AuroraButton {
+    AuroraButton::new(id, label)
+        .variant(ButtonVariant::Ghost)
+        .size(ButtonSize::Small)
+        .selected(selected)
+}
+
+/// A centred, quiet message that fills the card body.
+fn empty_note(t: &theme::AuroraTheme, icon: &str, text: impl Into<gpui_kit::SharedString>) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .flex_1()
+        .items_center()
+        .justify_center()
+        .gap(px(8.))
+        .child(crate::symbols::icon(
+            Some(icon),
+            px(22.),
+            t.subtle_foreground,
+        ))
+        .child(
+            div()
+                .max_w(px(300.))
+                .text_size(px(ui::TEXT_CAPTION))
+                .text_color(t.muted_foreground)
+                .text_center()
+                .child(text.into()),
+        )
+}
+
+/// One row of a card's list: hairline between rows, none after the last.
+fn list_row(t: &theme::AuroraTheme, last: bool) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(10.))
+        .py(px(8.))
+        .when(!last, |this| {
+            this.border_b_1().border_color(t.border_subtle)
+        })
+}
+
+fn row_title(t: &theme::AuroraTheme, text: String) -> Div {
+    div()
+        .min_w(px(0.))
+        .overflow_hidden()
+        .text_ellipsis()
+        .whitespace_nowrap()
+        .text_size(px(ui::TEXT_BODY))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(t.foreground)
+        .child(text)
+}
+
+fn row_detail(t: &theme::AuroraTheme, text: String) -> Div {
+    div()
+        .min_w(px(0.))
+        .overflow_hidden()
+        .text_ellipsis()
+        .whitespace_nowrap()
+        .text_size(px(ui::TEXT_CAPTION))
+        .text_color(t.subtle_foreground)
+        .child(text)
+}
+
+/// A server or world picture, or a quiet icon tile when it has none.
+fn avatar(t: &theme::AuroraTheme, picture: Option<Arc<RenderImage>>, icon: &str) -> Div {
+    match picture {
+        Some(picture) => div()
+            .flex_shrink_0()
+            .size(px(32.))
+            .rounded(px(8.))
+            .overflow_hidden()
+            .border_1()
+            .border_color(t.border_subtle)
+            .child(img(picture).size(px(30.))),
+        None => ui::icon_tile(t, Some(icon), 32., false),
+    }
+}
+
+/// An icon-only quiet action. `accent` tints the glyph (set favorites).
+fn icon_button(
+    t: &theme::AuroraTheme,
+    id: String,
+    icon: &'static str,
+    label: String,
+    disabled: bool,
+    accent: bool,
+) -> Button {
+    let hover = t.control;
+    Button::new(id)
+        .aria_label(label)
+        .disabled(disabled)
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .size(px(28.))
+        .rounded(t.radius)
+        .hover(move |style| style.bg(hover))
+        .styles(|styles| styles.disabled(|style| style.opacity(0.42)))
+        .child(crate::symbols::icon(
+            Some(icon),
+            px(18.),
+            if accent {
+                t.warning
+            } else {
+                t.muted_foreground
+            },
+        ))
+}
+
+/// The favorite toggle: an amber star when set, a quiet one when not.
+fn star_button(
+    t: &theme::AuroraTheme,
+    id: String,
+    favorite: bool,
+    label: String,
+    disabled: bool,
+) -> Button {
+    icon_button(t, id, "star", label, disabled, favorite)
 }
 
 // ---------------------------------------------------------------------------
@@ -3763,10 +4334,10 @@ mod tests {
         assert_eq!(responsive_columns(0.), 1);
         assert_eq!(responsive_columns(163.), 1);
         assert_eq!(responsive_columns(164.), 1);
-        assert_eq!(responsive_columns(805.), 4);
-        assert_eq!(responsive_columns(806.), 5);
-        assert_eq!(responsive_columns(969.), 5);
-        assert_eq!(responsive_columns(970.), 6);
+        assert_eq!(responsive_columns(663.), 4);
+        assert_eq!(responsive_columns(664.), 5);
+        assert_eq!(responsive_columns(799.), 5);
+        assert_eq!(responsive_columns(800.), 6);
         assert_eq!(responsive_columns(10_000.), 6);
     }
 
@@ -3826,7 +4397,7 @@ mod tests {
         // Clamped at the viewport edge.
         core.snap_gesture((10_000., 10_000.), (164., 210.));
         let gesture = core.gesture.clone().unwrap();
-        assert_eq!(gesture.preview, (4, 48, 2, 1));
+        assert_eq!(gesture.preview, (3, 48, 3, 1));
         // Escape cancels: the preview never writes.
         core.cancel_gesture();
         assert_eq!(core.commit_gesture(), EditOutcome::Ignored);
@@ -3843,7 +4414,7 @@ mod tests {
             core.commit_gesture(),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((0, 1, 2, 1)));
+        assert_eq!(core.placement("playtime"), Some((0, 1, 3, 1)));
         let submitted = core.begin_save().unwrap();
         assert_eq!(
             core.finish_save(&submitted, &Ok(submitted.clone())),
@@ -3862,12 +4433,12 @@ mod tests {
             core.commit_gesture(),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((0, 0, 4, 2)));
+        assert_eq!(core.placement("playtime"), Some((0, 0, 5, 2)));
         let layout = core.layout.clone().unwrap();
         assert_eq!(
             layout.widgets[0].grid,
             Some(WidgetGrid {
-                columns: 4,
+                columns: 5,
                 rows: 2,
                 position: Some([0, 0])
             })
@@ -3879,7 +4450,7 @@ mod tests {
             core.commit_gesture(),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((1, 0, 4, 2)));
+        assert_eq!(core.placement("playtime"), Some((1, 0, 5, 2)));
     }
 
     #[test]
@@ -3890,7 +4461,7 @@ mod tests {
             core.keyboard_arrange("playtime", "down", false),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((0, 1, 2, 1)));
+        assert_eq!(core.placement("playtime"), Some((0, 1, 3, 1)));
         let first = core.begin_save().unwrap();
         assert_eq!(
             core.finish_save(&first, &Ok(first.clone())),
@@ -3900,13 +4471,13 @@ mod tests {
             core.keyboard_arrange("playtime", "right", false),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((1, 1, 2, 1)));
+        assert_eq!(core.placement("playtime"), Some((1, 1, 3, 1)));
         // Shift on the move handle resizes instead.
         assert_eq!(
             core.keyboard_arrange("playtime", "right", true),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((1, 1, 3, 1)));
+        assert_eq!(core.placement("playtime"), Some((1, 1, 4, 1)));
         // Bounded at the viewport edge and row bound.
         for _ in 0..80 {
             core.keyboard_arrange("playtime", "down", false);
@@ -4040,6 +4611,97 @@ mod tests {
             222
         );
         assert_eq!(data.today, 100);
+    }
+
+    #[test]
+    fn hero_stats_read_cached_history_only_and_stay_honest() {
+        let today = 20_000;
+        let now = today * 86_400 + 40_000;
+        let playtime = |week_ms: u64, all_ms: u64| api::Playtime {
+            last_7_days_ms: week_ms,
+            all_time_ms: all_ms,
+            ..api::Playtime::default()
+        };
+        let stat = |label: &str, value: &str| (label.to_string(), value.to_string());
+        let load = |core: &mut Core, results: HistoryResults| {
+            let read = core.begin_data_refresh().unwrap();
+            // Mid-refresh nothing is trustworthy.
+            assert!(core.hero_stats("instance", now).is_empty());
+            core.receive_history(&read, &results);
+        };
+
+        // Nothing loaded yet.
+        let mut core = core_with_default_layout();
+        core.set_state(
+            Some(launcher_state(Some("instance"), &[("instance", "1.21.11")])),
+            1,
+        );
+        assert!(core.hero_stats("instance", now).is_empty());
+
+        // Instance scope: exact server time, weekly total, world count.
+        let mut results = empty_results();
+        results.playtime = Ok(playtime(8 * 3_600_000 + 10 * 60_000, 99 * 3_600_000));
+        results.daily = Ok(vec![daily(today, 60_000)]);
+        results.servers = Ok(vec![
+            server(1, now - 7_200, false),
+            api::RecentTarget {
+                instance_id: "other".into(),
+                ..server(2, now - 60, false)
+            },
+        ]);
+        results.worlds = Ok(vec![
+            server(10, 5, false),
+            server(11, 6, false),
+            server(12, 7, false),
+        ]);
+        load(&mut core, results);
+        assert_eq!(
+            core.hero_stats("instance", now),
+            [
+                stat("Last played", "2 h ago"),
+                stat("This week", "8 h 10 min"),
+                stat("Worlds", "3")
+            ]
+        );
+        // Another instance's cached data is never shown as this one's.
+        assert!(core.hero_stats("other", now).is_empty());
+
+        // Launcher-wide scope with no worlds: all-time takes the third slot
+        // and the day-level history backs "Last played".
+        let mut wide = core_with_default_layout();
+        let mut results = empty_results();
+        results.playtime = Ok(playtime(0, 3_600_000));
+        results.daily = Ok(vec![daily(today - 1, 60_000), daily(today, 0)]);
+        load(&mut wide, results);
+        assert_eq!(
+            wide.hero_stats("whatever", now),
+            [
+                stat("Last played", "Yesterday"),
+                stat("This week", "0 min"),
+                stat("All time", "1 h")
+            ]
+        );
+
+        // The weekly total falls back to the daily bins without a summary.
+        let mut fallback = core_with_default_layout();
+        let mut results = empty_results();
+        results.playtime = Err(api::ApiError::new("unavailable", "unavailable"));
+        results.daily = Ok(vec![daily(today, 120_000), daily(today - 20, 999_999)]);
+        load(&mut fallback, results);
+        assert_eq!(
+            fallback.hero_stats("", now),
+            [stat("Last played", "Today"), stat("This week", "2 min")]
+        );
+    }
+
+    #[test]
+    fn last_played_text_uses_finer_units_within_a_day() {
+        let now = 1_800_000_000;
+        assert_eq!(last_played_text(now - 5, now), "Just now");
+        assert_eq!(last_played_text(now - 12 * 60, now), "12 min ago");
+        assert_eq!(last_played_text(now - 3 * 3_600 - 5, now), "3 h ago");
+        assert_eq!(last_played_text((now - 3 * 3_600) * 1000, now), "3 h ago");
+        assert_eq!(last_played_text(now - 86_400 - 5, now), "Yesterday");
     }
 
     #[test]
@@ -4359,6 +5021,20 @@ mod tests {
     }
 
     #[test]
+    fn chart_axis_peaks_round_to_readable_values() {
+        const MIN: u64 = 60_000;
+        assert_eq!(nice_peak(5 * MIN), 20 * MIN);
+        assert_eq!(nice_peak(45 * MIN), 60 * MIN);
+        assert_eq!(nice_peak(75 * MIN), 120 * MIN);
+        assert_eq!(nice_peak(136 * MIN), 180 * MIN);
+        assert_eq!(nice_peak(240 * MIN), 240 * MIN);
+        // Peaks never shrink, so no bar can overflow the plot.
+        for ms in [MIN, 61 * MIN, 599 * MIN, 1_000 * MIN] {
+            assert!(nice_peak(ms) >= ms);
+        }
+    }
+
+    #[test]
     fn playtime_missing_zero_and_empty_days_stay_honest() {
         let bins = playtime_bins(&[daily(99, 0), daily(100, 300_000)], 100, 7, 7);
         assert_eq!(bins.len(), 7);
@@ -4375,7 +5051,8 @@ mod tests {
         let view = playtime_view(Some(&data), Period::Week, false, false);
         assert_eq!(view.points.len(), 7);
         assert!(view.points[..6].iter().all(|p| p.fraction == 0.0));
-        assert_eq!(view.points[6].fraction, 1.0);
+        // The axis rounds 5 min up to 20 min, so the bar fills a quarter.
+        assert_eq!(view.points[6].fraction, 0.25);
         assert!(view.points[6].detail.contains("300000 ms"));
         assert!(!view.empty_period);
         // A week with only zero days reports an empty period, never fabricated.
@@ -4387,8 +5064,8 @@ mod tests {
         let view = playtime_view(Some(&quiet), Period::Week, false, false);
         assert!(view.empty_period);
         assert!(view.points.iter().all(|p| p.fraction == 0.0));
-        assert_eq!(axis_duration((4 * 60 + 52) * 60_000), "4 h 52 min");
-        assert_eq!(axis_duration(0), "0 min");
+        assert_eq!(axis_duration((4 * 60 + 52) * 60_000), "4.9h");
+        assert_eq!(axis_duration(0), "0");
         assert!(axis_duration(u64::MAX).len() <= 10);
     }
 
@@ -4456,6 +5133,11 @@ mod tests {
     #[test]
     fn playtime_chart_chrome_follows_the_slint_plot() {
         // An empty day keeps a 2 px stub; a full day leaves 4 px of headroom.
+        assert_eq!(short_duration(0), "");
+        assert_eq!(short_duration(45 * 60_000), "45m");
+        assert_eq!(short_duration(120 * 60_000), "2h");
+        assert_eq!(short_duration(135 * 60_000), "2.3h");
+        assert_eq!(short_duration(177 * 60_000), "3h");
         assert_eq!(bar_height(0., 96.), 2.);
         assert_eq!(bar_height(1., 96.), 92.);
         assert_eq!(bar_height(0.5, 96.), 46.);

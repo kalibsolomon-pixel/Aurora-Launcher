@@ -6,11 +6,22 @@ overhead. The user job is to select an instance, understand whether it can run,
 and launch it; configuration and content tools remain available without
 competing with that primary action.
 
+## Production promotion (owner decision, 2026-11-14)
+
+The owner authorized finishing GPUI, making it the Launcher update path and
+merging the rebuild. Version 2.2.0 builds `native-gpui/` as `aurora-launcher.exe`.
+The existing NSIS package and signed native authority are reused, preserving
+installation, data and credential identities. Settings now downloads the signed
+installer and offers Exit and install through the shared core updater. Debug
+showcase/diagnostic roots are unavailable in release builds. The previous
+side-by-side and no-publication scope below is historical and superseded by this
+decision. Prior performance measurements retain their stated limits.
+
 ## Current architectural direction
 
 - Keep `core/` authoritative for installation, validation, accounts, credentials,
   configuration, content, sync, updates and process supervision.
-- Develop a standalone host in `native-gpui/`, beside the supported Slint host
+- Develop a standalone host in `native-gpui/`, beside the retained Slint host
   in `native/`. Keep existing distribution builds working during the rebuild.
 - Use `gpui-kit = 0.9.1` with default features disabled and `gpui-fast` enabled
   (`gpui-fast 0.1.14`). Use unstyled `gpui-base` behavior with Aurora-owned

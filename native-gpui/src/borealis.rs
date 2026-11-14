@@ -150,11 +150,15 @@ pub fn pose(band: usize, phase: f32, speed: u8) -> Pose {
 /// softly, while raised layers (dialogs, menus) stay nearly opaque so text
 /// never sits on a bright area. The theme owner applies these when the saved
 /// background is [`is_borealis`].
-pub const SIDEBAR_ALPHA: u8 = 0x8c;
-pub const SURFACE_ALPHA: u8 = 0xb4;
-pub const HOVER_ALPHA: u8 = 0xd0;
-pub const SUNKEN_ALPHA: u8 = 0xc8;
-pub const RAISED_ALPHA: u8 = 0xf2;
+pub const SIDEBAR_ALPHA: u8 = 0xe6;
+pub const SURFACE_ALPHA: u8 = 0xe6;
+pub const HOVER_ALPHA: u8 = 0xf0;
+pub const SUNKEN_ALPHA: u8 = 0xec;
+pub const RAISED_ALPHA: u8 = 0xfa;
+pub const CARD_ALPHA: u8 = 0xee;
+/// The bands are ambience, not content: drawn at this opacity over the opaque
+/// theme background so the canvas stays calm behind text.
+pub const BAND_OPACITY: f32 = 0.18;
 
 /// The saved background ids, in the order of the Settings dropdown.
 pub const BACKGROUNDS: [&str; 2] = ["simple", "borealis"];
@@ -728,9 +732,12 @@ impl Render for Borealis {
         }
         let layer = div().absolute().top_0().left_0().size_full();
         match (&self.image, self.motion.enabled()) {
-            (Some(image), true) => {
-                layer.child(img(image.clone()).size_full().object_fit(ObjectFit::Fill))
-            }
+            (Some(image), true) => layer.child(
+                img(image.clone())
+                    .size_full()
+                    .object_fit(ObjectFit::Fill)
+                    .opacity(BAND_OPACITY),
+            ),
             _ => layer,
         }
     }
@@ -1026,7 +1033,7 @@ mod tests {
     }
 
     #[test]
-    fn surface_alphas_and_backgrounds_match_the_slint_host() {
+    fn surface_alphas_and_backgrounds_are_stable() {
         assert_eq!(BACKGROUNDS, ["simple", "borealis"]);
         assert!(is_borealis("borealis") && !is_borealis("simple") && !is_borealis(""));
         assert_eq!(
@@ -1035,9 +1042,10 @@ mod tests {
                 SURFACE_ALPHA,
                 HOVER_ALPHA,
                 SUNKEN_ALPHA,
-                RAISED_ALPHA
+                RAISED_ALPHA,
+                CARD_ALPHA
             ],
-            [0x8c, 0xb4, 0xd0, 0xc8, 0xf2]
+            [0xe6, 0xe6, 0xf0, 0xec, 0xfa, 0xee]
         );
     }
 }

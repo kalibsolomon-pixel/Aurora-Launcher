@@ -1,6 +1,7 @@
-# Current architecture — native Rust/Slint
+# Current architecture — native Rust/GPUI
 
-Aurora Launcher has one UI: `native/`, rendered by Slint. The launcher domains
+Aurora Launcher uses `native-gpui/` for its production GPUI interface.
+The former Slint host in `native/` remains a behavioral reference. The launcher domains
 live in the Rust `core/` library. The former `src-tauri/` directory was renamed
 to `core/`; its Tauri entry point, IPC wrappers, plugins, frontend and WebView
 build configuration have been removed. `Host` supplies the native Tokio runtime,
@@ -12,8 +13,8 @@ and exact-child process supervision remain Rust-owned. Native update discovery,
 minisign verification, staging and NSIS handoff use the established native updater.
 Existing package/data/credential names and native signed schema are unchanged.
 
-Native 2.0.1 is the stable/latest GitHub release. The immutable 2.0.0 installer
-remains available and unchanged.
+Version 2.2.0 promotes GPUI using the existing native package, data, credentials
+and signed updater identities. Historical installers remain immutable.
 Historical WebView releases/data and update authority remain untouched.
 
 The dated engineering sections below are retained historical records. References

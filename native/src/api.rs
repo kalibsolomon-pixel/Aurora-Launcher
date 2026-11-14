@@ -529,6 +529,9 @@ pub struct ModMetadata {
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct Warning {
+    /// Stable machine code; absent from older payloads.
+    #[serde(default)]
+    pub code: String,
     pub message: String,
 }
 

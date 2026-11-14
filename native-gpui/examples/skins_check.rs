@@ -30,8 +30,14 @@ mod player;
 #[path = "../../native/src/preview.rs"]
 mod preview;
 
+#[path = "../src/skin_preview.rs"]
+mod skin_preview;
 #[path = "../src/skins.rs"]
 mod skins;
+#[path = "../src/symbols.rs"]
+mod symbols;
+#[path = "../src/ui.rs"]
+mod ui;
 
 #[path = "../src/borealis.rs"]
 mod borealis;

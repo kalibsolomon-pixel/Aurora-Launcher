@@ -1,7 +1,7 @@
 //! Owner-authorized Aurora Client publication source: public, published GitHub
 //! releases. Artifact identity comes from GitHub's SHA-256 release-asset digest;
 //! compatibility comes only from the digest-verified JAR. No branch/CI artifacts.
-use serde::Deserialize;
+use crate::distribution::github::{GithubAsset as Asset, GithubRelease as Publication};
 
 use super::{client::ClientUpdateError, parse_release_version};
 use crate::{
@@ -13,58 +13,28 @@ use crate::{
     paths::ManagedPaths,
 };
 
-const RELEASES: &str =
-    "https://api.github.com/repos/kalibsolomon-pixel/Aurora-Client/releases?per_page=30";
+const RELEASES: &str = crate::distribution::github::RELEASES_URL;
+#[cfg(test)]
 const DOWNLOAD_ROOT: &str =
     "https://github.com/kalibsolomon-pixel/Aurora-Client/releases/download/";
 
-#[derive(Deserialize)]
-struct Publication {
-    tag_name: String,
-    draft: bool,
-    prerelease: bool,
-    published_at: Option<String>,
-    assets: Vec<Asset>,
-}
-
-#[derive(Deserialize)]
-struct Asset {
-    name: String,
-    browser_download_url: String,
-    digest: Option<String>,
-    size: u64,
-}
-
-fn artifact(publication: &Publication) -> Option<(&str, &Asset, &str)> {
-    if publication.draft || publication.prerelease || publication.published_at.is_none() {
-        return None;
-    }
-    let version = publication.tag_name.strip_prefix('v')?;
-    let parsed = parse_release_version(version)?;
-    if !parsed.pre.is_empty() || !version.bytes().all(|b| b.is_ascii_digit() || b == b'.') {
-        return None;
-    }
-    let matching: Vec<_> = publication
-        .assets
-        .iter()
-        .filter(|a| crate::distribution::github::artifact_minecraft(&a.name, version).is_some())
-        .collect();
-    if matching.len() != 1 {
-        return None;
-    }
-    let asset = matching[0];
-    let name = &asset.name;
-    if asset.size == 0
-        || asset.size > 32 * 1024 * 1024
-        || asset.browser_download_url != format!("{DOWNLOAD_ROOT}{}/{name}", publication.tag_name)
-    {
-        return None;
-    }
-    let digest = asset.digest.as_deref()?.strip_prefix("sha256:")?;
-    if digest.len() != 64 || !digest.bytes().all(|b| b.is_ascii_hexdigit()) {
-        return None;
-    }
-    Some((version, asset, digest))
+fn artifact<'a>(
+    publication: &'a Publication,
+    minecraft: &str,
+) -> Result<Option<(&'a str, &'a Asset, &'a str)>, ClientUpdateError> {
+    let (_, artifacts) = publication.artifacts()?;
+    Ok(artifacts.into_iter().find_map(|(asset, _)| {
+        let version = publication.tag_name.strip_prefix('v')?;
+        let environment = crate::distribution::github::artifact_minecraft(&asset.name, version)?;
+        if environment.is_some_and(|target| target != minecraft) {
+            return None;
+        }
+        Some((
+            version,
+            asset,
+            asset.digest.as_deref()?.strip_prefix("sha256:")?,
+        ))
+    }))
 }
 
 fn normalized_release(
@@ -210,7 +180,10 @@ pub(super) async fn release_manifest(
         if !version.pre.is_empty() || version <= current {
             continue;
         }
-        let (version, asset, digest) = artifact(publication).ok_or_else(|| ClientUpdateError::ManifestInvalid("A newer published Aurora release has no uniquely identified JAR with a SHA-256 digest.".into()))?;
+        let Some((version, asset, digest)) = artifact(publication, template.minecraft_version())?
+        else {
+            continue;
+        };
         let source = ArtifactSource::https(&asset.browser_download_url, digest, Some(asset.size))
             .map_err(|e| ClientUpdateError::ManifestInvalid(e.to_string()))?;
         let verified = ArtifactCache::new(managed.clone())
@@ -287,6 +260,7 @@ mod tests {
             browser_download_url: format!("{DOWNLOAD_ROOT}v3.2.0/aurora-3.2.0.jar"),
             digest: None,
             size: 3211226,
+            state: "uploaded".into(),
         };
         let digest = "fb7a7c0c10c383fd55da13627614099b35501d831b9372cac196bbb73ffaebb8";
         let mut data = metadata();
@@ -332,19 +306,19 @@ mod tests {
     }
     #[test]
     fn only_published_stable_exact_assets_with_sha256_enter_discovery() {
-        let mut release: Publication = serde_json::from_value(serde_json::json!({"tag_name":"v3.2.0","draft":false,"prerelease":false,"published_at":"2026-10-31T03:47:00Z","assets":[{"name":"aurora-3.2.0.jar","browser_download_url":format!("{DOWNLOAD_ROOT}v3.2.0/aurora-3.2.0.jar"),"digest":"sha256:fb7a7c0c10c383fd55da13627614099b35501d831b9372cac196bbb73ffaebb8","size":3211226}]})).unwrap();
-        assert!(artifact(&release).is_some());
+        let mut release: Publication = serde_json::from_value(serde_json::json!({"tag_name":"v3.2.0","html_url":format!("https://github.com/kalibsolomon-pixel/Aurora-Client/releases/tag/v3.2.0"),"draft":false,"prerelease":false,"published_at":"2026-10-31T03:47:00Z","assets":[{"name":"aurora-3.2.0.jar","browser_download_url":format!("{DOWNLOAD_ROOT}v3.2.0/aurora-3.2.0.jar"),"digest":"sha256:fb7a7c0c10c383fd55da13627614099b35501d831b9372cac196bbb73ffaebb8","size":3211226,"state":"uploaded"}]})).unwrap();
+        assert!(artifact(&release, "1.21.11").unwrap().is_some());
         release.draft = true;
-        assert!(artifact(&release).is_none());
+        assert!(artifact(&release, "1.21.11").is_err());
         release.draft = false;
         release.prerelease = true;
-        assert!(artifact(&release).is_none());
+        assert!(artifact(&release, "1.21.11").is_err());
         release.prerelease = false;
         release.assets[0].digest = None;
-        assert!(artifact(&release).is_none());
+        assert!(artifact(&release, "1.21.11").is_err());
         release.assets[0].digest = Some(format!("sha256:{}", "f".repeat(64)));
         release.assets[0].browser_download_url = "https://example.invalid/aurora-3.2.0.jar".into();
-        assert!(artifact(&release).is_none());
+        assert!(artifact(&release, "1.21.11").is_err());
     }
 
     #[test]
@@ -352,8 +326,8 @@ mod tests {
         let profiles = crate::distribution::production_manifest().unwrap();
         for (version, minecraft) in [("3.2.2", "26.1.2"), ("3.2.3", "26.2"), ("3.3.0", "26.3")] {
             let template = profiles.resolve_exact(version, None).unwrap();
-            let mut publication: Publication = serde_json::from_value(serde_json::json!({"tag_name":format!("v{version}"),"draft":false,"prerelease":false,"published_at":"2026-11-11T00:00:00Z","assets":[{"name":format!("aurora-{version}-mc{minecraft}.jar"),"browser_download_url":template.artifact().url(),"digest":format!("sha256:{}",template.artifact().sha256()),"size":template.artifact().size_bytes()}]})).unwrap();
-            let (parsed, asset, digest) = artifact(&publication).unwrap();
+            let mut publication: Publication = serde_json::from_value(serde_json::json!({"tag_name":format!("v{version}"),"html_url":format!("https://github.com/kalibsolomon-pixel/Aurora-Client/releases/tag/v{version}"),"draft":false,"prerelease":false,"published_at":"2026-11-11T00:00:00Z","assets":[{"name":format!("aurora-{version}-mc{minecraft}.jar"),"browser_download_url":template.artifact().url(),"digest":format!("sha256:{}",template.artifact().sha256()),"size":template.artifact().size_bytes(),"state":"uploaded"}]})).unwrap();
+            let (parsed, asset, digest) = artifact(&publication, minecraft).unwrap().unwrap();
             let mut data = metadata();
             data.version = Some(version.into());
             data.depends[0].requirement = format!("~{minecraft}");
@@ -384,7 +358,48 @@ mod tests {
             publication.assets[0].browser_download_url = publication.assets[0]
                 .browser_download_url
                 .replace("-mc", "-wrong");
-            assert!(artifact(&publication).is_none());
+            assert!(artifact(&publication, minecraft).is_err());
         }
+    }
+    #[test]
+    fn bundled_release_selects_each_environment_independent_of_asset_order() {
+        let assets: Vec<_> = ["26.3", "26.1.2", "26.2"].into_iter().map(|mc| {
+            let name = format!("aurora-3.4.0-mc{mc}.jar");
+            serde_json::json!({"name":name,"browser_download_url":format!("{DOWNLOAD_ROOT}v3.4.0/{name}"),"size":3000000,"digest":format!("sha256:{}","a".repeat(64)),"state":"uploaded"})
+        }).collect();
+        let mut publication: Publication = serde_json::from_value(serde_json::json!({"tag_name":"v3.4.0","html_url":"https://github.com/kalibsolomon-pixel/Aurora-Client/releases/tag/v3.4.0","draft":false,"prerelease":false,"published_at":"2026-11-14T00:00:00Z","assets":assets})).unwrap();
+        let profiles = crate::distribution::production_manifest().unwrap();
+        for _ in 0..3 {
+            publication.assets.rotate_left(1);
+            for mc in ["26.1.2", "26.2", "26.3"] {
+                let (version, asset, digest) = artifact(&publication, mc).unwrap().unwrap();
+                assert!(asset.name.ends_with(&format!("-mc{mc}.jar")));
+                let template = profiles.latest_compatible(mc, None).unwrap();
+                let mut data = metadata();
+                data.version = Some(version.into());
+                data.depends[0].requirement = format!("~{mc}");
+                data.depends[2].requirement = ">=25".into();
+                assert_eq!(
+                    normalized_release(template, version, asset, digest, &data)
+                        .unwrap()
+                        .unwrap()
+                        .minecraft_version(),
+                    mc
+                );
+                data.depends[0].requirement = "1.21.11".into();
+                assert!(
+                    normalized_release(template, version, asset, digest, &data)
+                        .unwrap()
+                        .is_none()
+                );
+            }
+            assert!(artifact(&publication, "1.21.11").unwrap().is_none());
+        }
+        // Duplicates cannot silently select whichever asset GitHub happens to return first.
+        let duplicate = serde_json::json!({"name":publication.assets[0].name,"browser_download_url":publication.assets[0].browser_download_url,"digest":publication.assets[0].digest,"size":publication.assets[0].size,"state":"uploaded"});
+        publication
+            .assets
+            .push(serde_json::from_value(duplicate).unwrap());
+        assert!(artifact(&publication, "26.3").is_err());
     }
 }

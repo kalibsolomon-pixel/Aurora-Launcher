@@ -38,8 +38,9 @@ use tokio::runtime::Handle;
 
 use crate::api;
 use crate::backend::guarded;
-use crate::controls::{AuroraButton, AuroraToggle, ButtonVariant};
+use crate::controls::{AuroraButton, AuroraToggle, ButtonSize, ButtonVariant};
 use crate::theme;
+use crate::ui;
 
 /// Emitted after any mutation settles (including failures, which may retain
 /// instance state) so the parent reloads content, and exactly when the
@@ -1574,24 +1575,43 @@ fn text_block(text: &str, color: Hsla, size: Pixels) -> impl IntoElement + use<>
         .fold(block, |block, line| block.child(line.to_owned()))
 }
 
+/// Badge tone for one update entry's core status.
+fn status_tone(entry: &api::UpdateEntry) -> ui::Tone {
+    match entry.status.as_str() {
+        "updateAvailable" if !entry.pinned => ui::Tone::Accent,
+        "updateAvailable" | "pinnedUpdateAvailable" | "blocked" => ui::Tone::Warning,
+        "upToDate" => ui::Tone::Success,
+        "providerUnavailable" => ui::Tone::Danger,
+        _ => ui::Tone::Neutral,
+    }
+}
+
+/// A one-line notice inside the Updates card.
+fn notice_line(icon: &'static str, color: Hsla, text: impl Into<SharedString>) -> gpui::Div {
+    div()
+        .flex()
+        .items_center()
+        .gap(px(8.))
+        .text_size(px(ui::TEXT_BODY))
+        .text_color(color)
+        .child(crate::symbols::icon(Some(icon), px(15.), color))
+        .child(div().flex_1().min_w(px(0.)).child(text.into()))
+}
+
 impl Render for ContentUpdates {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme::theme(cx).clone();
+        let t = &palette;
         let view = cx.entity();
         let busy = self.state.busy() || self.blocked;
-
-        let mut root = div()
-            .flex()
-            .flex_col()
-            .gap(px(8.))
-            .child(div().text_2xl().child("Updates"));
-
         if self.host.is_none() {
-            return root.child(
-                div().text_color(palette.muted_foreground).child(
+            return ui::card(t)
+                .gap(px(8.))
+                .child(ui::section_header(t, "Updates", None))
+                .child(ui::muted(
+                    t,
                     "Update controls are unavailable in diagnostic mode. No provider requests are made from this view.",
-                ),
-            );
+                ));
         }
 
         let Some(target) = self.state.target.clone() else {
@@ -1600,7 +1620,10 @@ impl Render for ContentUpdates {
             } else {
                 "Updates are not supported for this content kind."
             };
-            return root.child(div().text_color(palette.muted_foreground).child(note));
+            return ui::card(t)
+                .gap(px(8.))
+                .child(ui::section_header(t, "Updates", None))
+                .child(ui::muted(t, note));
         };
 
         // ------------------------------------------------------- managed content
@@ -1610,65 +1633,76 @@ impl Render for ContentUpdates {
         );
         let noun = kind_noun(target.kind);
         let eligible_count = self.state.eligible_projects().len();
-        let v = view.clone();
-        root = root
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(8.))
-                    .items_center()
-                    .child(
-                        AuroraButton::new(
-                            "cu-check",
-                            if checking {
-                                "Checking…"
-                            } else {
-                                "Check for updates"
-                            },
-                        )
-                        .disabled(busy)
-                        .on_click(move |_, _, cx| {
-                            v.update(cx, |s, cx| s.start_check(cx));
-                        }),
-                    )
-                    .when(eligible_count > 0, |row| {
-                        let v = view.clone();
-                        row.child(
+        let summary = if self.state.checked {
+            summarize(&self.state.entries, self.state.dependency_managed)
+        } else if checking {
+            "Checking for updates…".to_owned()
+        } else {
+            format!("Check to see if any of this instance's {noun} have updates.")
+        };
+        let check = view.clone();
+        let mut root = ui::card(t).gap(px(16.)).child(
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_between()
+                .gap(px(12.))
+                .child(
+                    ui::section_header(t, "Updates", Some(summary.into()))
+                        .flex_1()
+                        .min_w(px(240.)),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(
                             AuroraButton::new(
-                                "cu-review-all",
-                                format!("Review all ({eligible_count})"),
+                                "cu-check",
+                                if checking {
+                                    "Checking…"
+                                } else {
+                                    "Check for updates"
+                                },
                             )
+                            .size(ButtonSize::Small)
+                            .icon("update")
                             .disabled(busy)
                             .on_click(move |_, _, cx| {
-                                v.update(cx, |s, cx| s.start_review_updates(None, cx));
+                                check.update(cx, |s, cx| s.start_check(cx));
                             }),
                         )
-                    }),
-            )
-            .child(if self.state.checked {
-                summarize(&self.state.entries, self.state.dependency_managed)
-            } else if checking {
-                "Checking for updates…".to_owned()
-            } else {
-                format!("Check to see if any of this instance's {noun} have updates.")
-            });
+                        .when(eligible_count > 0, |row| {
+                            let v = view.clone();
+                            row.child(
+                                AuroraButton::new(
+                                    "cu-review-all",
+                                    format!("Review all ({eligible_count})"),
+                                )
+                                .size(ButtonSize::Small)
+                                .variant(ButtonVariant::Primary)
+                                .disabled(busy)
+                                .on_click(move |_, _, cx| {
+                                    v.update(cx, |s, cx| s.start_review_updates(None, cx));
+                                }),
+                            )
+                        }),
+                ),
+        );
 
-        if self.state.checked {
-            for entry in &self.state.entries {
+        if self.state.checked && !self.state.entries.is_empty() {
+            let mut list = ui::list_card(t).bg(palette.sunken);
+            let last_index = self.state.entries.len() - 1;
+            for (index, entry) in self.state.entries.iter().enumerate() {
                 let project = entry.project_id.clone();
-                let mut row = div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(4.))
-                    .child(format!("{} · {}", entry.project_id, entry.current_version))
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(palette.muted_foreground)
-                            .child(status_label(entry)),
-                    );
-                let mut actions = div().flex().flex_wrap().gap(px(8.));
+                let label = status_label(entry);
+                let (head, tail) = match label.split_once(". ") {
+                    Some((head, tail)) => (head.to_owned(), Some(tail.to_owned())),
+                    None => (label.clone(), None),
+                };
+                let mut actions = div().flex().flex_shrink_0().items_center().gap(px(6.));
                 if eligible(entry) {
                     let v = view.clone();
                     let target_project = project.clone();
@@ -1677,6 +1711,7 @@ impl Render for ContentUpdates {
                             SharedString::from(format!("cu-review-{project}")),
                             "Review update",
                         )
+                        .size(ButtonSize::Small)
                         .disabled(busy)
                         .on_click(move |_, _, cx| {
                             let project = target_project.clone();
@@ -1698,6 +1733,9 @@ impl Render for ContentUpdates {
                     let label: &str = if pinned { "Pin" } else { "Unpin" };
                     actions = actions.child(
                         AuroraButton::new(SharedString::from(format!("cu-pin-{project}")), label)
+                            .size(ButtonSize::Small)
+                            .variant(ButtonVariant::Ghost)
+                            .icon("push_pin")
                             .disabled(busy)
                             .on_click(move |_, _, cx| {
                                 let project = project.clone();
@@ -1705,49 +1743,78 @@ impl Render for ContentUpdates {
                             }),
                     );
                 }
-                row = row.child(actions);
-                root = root.child(row);
+                list = list.child(
+                    ui::row(t, index == last_index)
+                        .child(
+                            ui::title_block(
+                                t,
+                                entry.project_id.clone(),
+                                Some(entry.current_version.clone().into()),
+                            )
+                            .flex_1(),
+                        )
+                        .child(
+                            div()
+                                .flex()
+                                .flex_col()
+                                .items_end()
+                                .gap(px(2.))
+                                .child(ui::badge(t, head, status_tone(entry)))
+                                .when_some(tail, |d, tail| {
+                                    d.child(ui::caption(t, tail).max_w(px(260.)).text_ellipsis())
+                                }),
+                        )
+                        .child(actions),
+                );
             }
+            root = root.child(list);
         }
 
         // ------------------------------------------------------- managed modpack
         if let Some(pack_name) = self.state.pack_name.clone() {
-            root = root.child(format!("Modpack · {pack_name}"));
-            match self.state.pack_status.clone() {
-                Some((status, available)) => {
-                    root = root.child(
-                        div()
-                            .text_sm()
-                            .text_color(palette.muted_foreground)
-                            .child(status),
-                    );
-                    if available {
-                        let v = view.clone();
-                        root = root.child(
-                            AuroraButton::new("cu-pack-review", "Review modpack update")
-                                .disabled(busy)
-                                .on_click(move |_, _, cx| {
-                                    v.update(cx, |s, cx| s.start_pack_review(cx));
-                                }),
-                        );
-                    }
-                }
-                None => {
-                    root = root.child(
-                        div()
-                            .text_sm()
-                            .text_color(palette.muted_foreground)
-                            .child("Check to see if a new modpack version is available."),
-                    );
-                }
+            let (status, available) = match self.state.pack_status.clone() {
+                Some((status, available)) => (status, available),
+                None => (
+                    "Check to see if a new modpack version is available.".to_owned(),
+                    false,
+                ),
+            };
+            let has_status = self.state.pack_status.is_some();
+            let check = view.clone();
+            let mut actions = div().flex().flex_shrink_0().items_center().gap(px(6.));
+            if has_status && available {
+                let v = view.clone();
+                actions = actions.child(
+                    AuroraButton::new("cu-pack-review", "Review modpack update")
+                        .size(ButtonSize::Small)
+                        .disabled(busy)
+                        .on_click(move |_, _, cx| {
+                            v.update(cx, |s, cx| s.start_pack_review(cx));
+                        }),
+                );
             }
-            let v = view.clone();
-            root = root.child(
+            actions = actions.child(
                 AuroraButton::new("cu-pack-check", "Check modpack")
+                    .size(ButtonSize::Small)
                     .disabled(busy)
                     .on_click(move |_, _, cx| {
-                        v.update(cx, |s, cx| s.start_pack_check(cx));
+                        check.update(cx, |s, cx| s.start_pack_check(cx));
                     }),
+            );
+            root = root.child(
+                ui::list_card(t).bg(palette.sunken).child(
+                    ui::row(t, true)
+                        .child(ui::icon_tile(t, Some("inventory_2"), 36., false))
+                        .child(
+                            ui::title_block(
+                                t,
+                                format!("Modpack · {pack_name}"),
+                                Some(status.into()),
+                            )
+                            .flex_1(),
+                        )
+                        .child(actions),
+                ),
             );
         }
 
@@ -1759,43 +1826,59 @@ impl Render for ContentUpdates {
                 div()
                     .flex()
                     .flex_wrap()
-                    .gap(px(8.))
                     .items_center()
+                    .gap(px(10.))
+                    .px(px(14.))
+                    .py(px(10.))
+                    .rounded(palette.radius)
+                    .bg(palette.control)
+                    .border_1()
+                    .border_color(palette.border_subtle)
+                    .child(crate::symbols::icon(Some("sync"), px(15.), palette.ring))
                     .child(
                         div()
-                            .text_sm()
-                            .text_color(palette.muted_foreground)
-                            .child(op_label(op)),
+                            .flex_1()
+                            .min_w(px(0.))
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(
+                                div()
+                                    .text_size(px(ui::TEXT_BODY))
+                                    .text_color(palette.foreground)
+                                    .child(op_label(op)),
+                            )
+                            .child(ui::caption(t, "One update at a time.")),
                     )
                     .when(cancellable, |row| {
                         row.child(
                             AuroraButton::new("cu-cancel", "Cancel")
+                                .size(ButtonSize::Small)
                                 .variant(ButtonVariant::Danger)
                                 .on_click(move |_, _, cx| {
                                     v.update(cx, |s, cx| s.cancel(cx));
                                 }),
                         )
-                    })
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(palette.muted_foreground)
-                            .child("One update at a time."),
-                    ),
+                    }),
             );
         }
         if !self.state.message.is_empty() {
-            root = root.child(self.state.message.clone());
+            root = root.child(notice_line(
+                "info",
+                palette.muted_foreground,
+                self.state.message.clone(),
+            ));
         }
         if let Some(error) = &self.state.error {
-            root = root.child(div().text_color(palette.danger).child(error.clone()));
+            root = root.child(notice_line("error", palette.danger, error.clone()));
         }
 
         // --------------------------------------------------------- review dialog
         let panel = self.review_panel(cx, &palette, busy);
         let veto = view.clone();
         let changed = view.clone();
-        root.child(
+        // The dialog sits beside the card, not inside it, so it adds no card gap.
+        div().flex().flex_col().child(root).child(
             Dialog::new(cx)
                 .open(self.state.review_open)
                 .accessibility_label("Review updates")
@@ -1829,22 +1912,47 @@ impl ContentUpdates {
         palette: &theme::AuroraTheme,
         busy: bool,
     ) -> impl IntoElement + use<> {
+        let t = palette;
         let view = cx.entity();
         let operation_busy = self.state.busy();
+        let heading = |text: String| {
+            div()
+                .text_size(px(ui::TEXT_SECTION))
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(palette.foreground)
+                .child(text)
+        };
+        let well = |text: &str| {
+            div()
+                .p(px(12.))
+                .rounded(palette.radius)
+                .bg(palette.sunken)
+                .border_1()
+                .border_color(palette.border_subtle)
+                .child(text_block(text, palette.foreground, px(12.)))
+        };
         let mut panel = div()
             .id("cu-review")
             .w(px(640.))
             .max_h(px(560.))
             .overflow_y_scroll()
-            .p(px(16.))
+            .p(px(20.))
             .flex()
             .flex_col()
-            .gap(px(10.))
-            .rounded(palette.radius)
-            .bg(palette.surface)
+            .gap(px(12.))
+            .rounded(palette.radius_lg)
+            .bg(palette.raised)
             .border_1()
-            .border_color(palette.border)
+            .border_color(palette.border_subtle)
             .text_color(palette.foreground);
+        let actions = || {
+            div()
+                .flex()
+                .flex_wrap()
+                .justify_end()
+                .gap(px(8.))
+                .pt(px(6.))
+        };
 
         if let Some(review) = self.state.review.clone() {
             let noun = kind_noun(review.target.kind);
@@ -1852,22 +1960,21 @@ impl ContentUpdates {
             let v = view.clone();
             let close = view.clone();
             panel = panel
-                .child(div().text_size(px(16.)).child(format!("Review updates ({count} {noun})")))
-                .child(text_block(&review.text, palette.foreground, px(12.)))
+                .child(heading(format!("Review updates ({count} {noun})")))
+                .child(well(&review.text))
+                .child(ui::caption(
+                    t,
+                    "Applying re-checks this exact review in the launcher core before any file changes.",
+                ))
                 .child(
-                    div()
-                        .text_size(px(12.))
-                        .text_color(palette.muted_foreground)
+                    actions()
                         .child(
-                            "Applying re-checks this exact review in the launcher core before any file changes.",
-                        ),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap(px(8.))
-                        .pt(px(6.))
+                            AuroraButton::new("cu-dismiss", "Close review")
+                                .disabled(operation_busy)
+                                .on_click(move |_, _, cx| {
+                                    close.update(cx, |s, cx| s.dismiss_review(cx));
+                                }),
+                        )
                         .child(
                             AuroraButton::new("cu-apply", format!("Update {count} {noun}"))
                                 .variant(ButtonVariant::Primary)
@@ -1875,13 +1982,6 @@ impl ContentUpdates {
                                 .on_click(move |_, _, cx| {
                                     v.update(cx, |s, cx| s.start_apply(cx));
                                 }),
-                        )
-                        .child(
-                            AuroraButton::new("cu-dismiss", "Close review").disabled(operation_busy).on_click(
-                                move |_, _, cx| {
-                                    close.update(cx, |s, cx| s.dismiss_review(cx));
-                                },
-                            ),
                         ),
                 );
         } else if let Some(review) = self.state.pack_review.clone() {
@@ -1890,40 +1990,40 @@ impl ContentUpdates {
             let v = view.clone();
             let close = view.clone();
             panel = panel
-                .child(div().text_size(px(16.)).child("Review modpack update"))
-                .child(text_block(&review.text, palette.foreground, px(12.)));
+                .child(heading("Review modpack update".to_owned()))
+                .child(well(&review.text));
             if conflicts > 0 {
                 let toggle = view.clone();
                 panel = panel.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .child(
-                            AuroraToggle::new("cu-keep-local")
-                                .label("Keep my changed files")
-                                .checked(keep)
-                                .disabled(busy)
-                                .on_change(move |next, _, _, cx| {
-                                    toggle.update(cx, |s, cx| s.toggle_keep_local(next, cx));
-                                }),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(palette.muted_foreground)
-                                .child(
-                                    "Required: your copies are kept and the pack's new copies are not written over them.",
-                                ),
+                    ui::setting_row(
+                        t,
+                        "Keep my changed files",
+                        Some(
+                            "Required: your copies are kept and the pack's new copies are not written over them."
+                                .into(),
                         ),
+                        true,
+                    )
+                    .child(
+                        AuroraToggle::new("cu-keep-local")
+                            .label("Keep my changed files")
+                            .checked(keep)
+                            .disabled(busy)
+                            .on_change(move |next, _, _, cx| {
+                                toggle.update(cx, |s, cx| s.toggle_keep_local(next, cx));
+                            }),
+                    ),
                 );
             }
             panel = panel.child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .gap(px(8.))
-                    .pt(px(6.))
+                actions()
+                    .child(
+                        AuroraButton::new("cu-pack-dismiss", "Close review")
+                            .disabled(operation_busy)
+                            .on_click(move |_, _, cx| {
+                                close.update(cx, |s, cx| s.dismiss_review(cx));
+                            }),
+                    )
                     .child(
                         AuroraButton::new("cu-pack-apply", "Update modpack")
                             .variant(ButtonVariant::Primary)
@@ -1931,36 +2031,26 @@ impl ContentUpdates {
                             .on_click(move |_, _, cx| {
                                 v.update(cx, |s, cx| s.start_pack_apply(cx));
                             }),
-                    )
-                    .child(
-                        AuroraButton::new("cu-pack-dismiss", "Close review")
-                            .disabled(operation_busy)
-                            .on_click(move |_, _, cx| {
-                                close.update(cx, |s, cx| s.dismiss_review(cx));
-                            }),
                     ),
             );
         } else if let Some(op) = self.state.in_flight.as_ref() {
             panel = panel
-                .child(div().text_size(px(16.)).child("Updating…"))
-                .child(
-                    div()
-                        .text_size(px(12.))
-                        .text_color(palette.muted_foreground)
-                        .child(op_label(op)),
-                );
+                .child(heading("Updating…".to_owned()))
+                .child(ui::muted(t, op_label(op)));
             if op.control.is_some() && !op.cancelling {
                 let v = view.clone();
                 panel = panel.child(
-                    AuroraButton::new("cu-cancel-apply", "Cancel update")
-                        .variant(ButtonVariant::Danger)
-                        .on_click(move |_, _, cx| {
-                            v.update(cx, |s, cx| s.cancel(cx));
-                        }),
+                    actions().child(
+                        AuroraButton::new("cu-cancel-apply", "Cancel update")
+                            .variant(ButtonVariant::Danger)
+                            .on_click(move |_, _, cx| {
+                                v.update(cx, |s, cx| s.cancel(cx));
+                            }),
+                    ),
                 );
             }
         } else {
-            panel = panel.child("Review updates");
+            panel = panel.child(heading("Review updates".to_owned()));
         }
         panel
     }

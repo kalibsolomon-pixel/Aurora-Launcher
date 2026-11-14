@@ -1,6 +1,6 @@
 [package]
 name = "aurora-native-gpui"
-version = "2.1.1"
+version = "2.2.0"
 edition = "2024"
 publish = false
 license = "MIT"
@@ -8,7 +8,7 @@ license = "MIT"
 [workspace]
 
 [[bin]]
-name = "aurora-launcher-gpui"
+name = "aurora-launcher"
 path = "src/main.rs"
 
 [dependencies]
@@ -23,6 +23,9 @@ base64 = "0.22"
 # GPUI's existing image type is also needed for decoded core-owned RGBA.
 image = { version = "=0.25.10", default-features = false }
 raw-window-handle = "0.6"
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = { version = "0.1", default-features = false }
 
 [target.'cfg(windows)'.dependencies]
 # Reuse the supported host's owned native pickers, without a second dialog stack.

@@ -364,7 +364,11 @@ pub fn preview_update(
     let merged = aurora::merged_release_manifest(managed, id, endpoints.release_manifest())
         .map_err(|error| invalid(error.to_string()))?;
     let current_release = merged
-        .resolve_exact(&pin.version, Some(pin.channel))
+        .resolve_environment(
+            &pin.version,
+            Some(pin.channel),
+            &record.installed().minecraft_version,
+        )
         .ok_or_else(|| {
             invalid("the installed release metadata is missing; no update can be planned".into())
         })?;
@@ -582,7 +586,9 @@ pub async fn apply_update(
     let release = approved
         .candidate
         .as_ref()
-        .and_then(|candidate| remote.resolve_exact(&candidate.version, None))
+        .and_then(|candidate| {
+            remote.resolve_environment(&candidate.version, None, &candidate.minecraft_version)
+        })
         .cloned()
         .ok_or_else(|| ClientUpdateError::Stale("The approved candidate vanished".into()))?;
 
@@ -1057,7 +1063,11 @@ pub async fn fetch_update_manifest(
     let manifest = aurora::merged_release_manifest(managed, id, endpoints.release_manifest())
         .map_err(|e| ClientUpdateError::Inapplicable(e.to_string()))?;
     let template = manifest
-        .resolve_exact(&pin.version, Some(pin.channel))
+        .resolve_environment(
+            &pin.version,
+            Some(pin.channel),
+            &record.installed().minecraft_version,
+        )
         .ok_or_else(|| {
             ClientUpdateError::Inapplicable("Installed Aurora release metadata is missing.".into())
         })?;

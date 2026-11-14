@@ -47,6 +47,7 @@ use crate::backend::guarded;
 use crate::controls::AuroraButton;
 use crate::file_picker;
 use crate::theme;
+use crate::ui;
 
 /// Emitted for the integrating parent view.
 #[derive(Debug)]
@@ -383,62 +384,124 @@ impl Render for PackImport {
         let busy = self.is_busy();
         let disabled = busy || self.blocked || self.host.is_none();
 
-        // The row is also a drop target for a `.mrpack`; the outline says
+        // The whole header is a drop target for a `.mrpack`; the wash says
         // whether the dragged file would be accepted.
         let (accept, reject) = (palette.accent, palette.danger);
-        let mut row = div()
-            .id("pack-import")
+        let mut actions = div()
             .flex()
-            .flex_wrap()
+            .flex_shrink_0()
             .items_center()
             .gap(px(8.))
-            .p(px(6.))
-            .border_1()
-            .border_color(gpui_kit::transparent_black())
+            .child(
+                AuroraButton::new("pack-import-open", "Import modpack")
+                    .icon("upload")
+                    .disabled(disabled)
+                    .on_click(cx.listener(|this, _event, window, cx| {
+                        this.import(window, cx);
+                    })),
+            );
+        // "New instance" belongs to the creator; the page header hosts it.
+        if let Some(new_instance) = crate::instance_creator::new_instance_button(cx) {
+            actions = actions.child(new_instance);
+        }
+
+        let hint = if busy {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .child(crate::symbols::icon(Some("sync"), px(14.), palette.ring))
+                .child(
+                    div()
+                        .text_size(px(ui::TEXT_CAPTION))
+                        .text_color(palette.muted_foreground)
+                        .child("Checking the selected file…"),
+                )
+        } else {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .child(crate::symbols::icon(
+                    Some("upload"),
+                    px(14.),
+                    palette.subtle_foreground,
+                ))
+                .child(ui::caption(
+                    &palette,
+                    "Drop a .mrpack file anywhere on this page to import a modpack.",
+                ))
+        };
+
+        let mut root = div()
+            .id("pack-import")
+            .flex()
+            .flex_col()
+            .gap(px(12.))
             .rounded(palette.radius)
             .drag_over::<ExternalPaths>(move |style, paths, _, _| {
-                style.border_color(if classify_modpack_drop(paths.paths()).is_ok() {
-                    accept
-                } else {
-                    reject
+                style.bg(gpui_kit::Hsla {
+                    a: 0.10,
+                    ..if classify_modpack_drop(paths.paths()).is_ok() {
+                        accept
+                    } else {
+                        reject
+                    }
                 })
             })
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _window, cx| {
                 this.import_dropped(paths.paths(), cx);
             }))
             .child(
-                AuroraButton::new("pack-import-open", "Import modpack")
-                    .disabled(disabled)
-                    .on_click(cx.listener(|this, _event, window, cx| {
-                        this.import(window, cx);
-                    })),
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(16.))
+                    .child(ui::page_header(
+                        &palette,
+                        "Instances",
+                        Some(
+                            "Create and manage instances. Import or drop a .mrpack modpack.".into(),
+                        ),
+                    ))
+                    .child(actions),
             )
-            .child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(palette.muted_foreground)
-                    .child("or drop a .mrpack file here"),
-            );
-
-        if busy {
-            row = row.child(
-                div()
-                    .text_size(px(13.))
-                    .text_color(palette.muted_foreground)
-                    .child("Checking the selected file…"),
-            );
-        }
+            .children(busy.then_some(hint));
 
         if let Some(error) = &self.error {
-            row = row.child(
+            root = root.child(
                 div()
-                    .text_size(px(13.))
-                    .text_color(palette.danger)
-                    .child(error.clone()),
+                    .flex()
+                    .items_start()
+                    .gap(px(8.))
+                    .px(px(12.))
+                    .py(px(10.))
+                    .rounded(palette.radius)
+                    .bg(gpui_kit::Hsla {
+                        a: 0.10,
+                        ..palette.danger
+                    })
+                    .border_1()
+                    .border_color(gpui_kit::Hsla {
+                        a: 0.28,
+                        ..palette.danger
+                    })
+                    .child(crate::symbols::icon(Some("error"), px(16.), palette.danger))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .max_w(px(720.))
+                            .text_size(px(ui::TEXT_BODY))
+                            .text_color(palette.danger)
+                            .child(error.clone()),
+                    ),
             );
         }
 
-        row
+        root
     }
 }
 

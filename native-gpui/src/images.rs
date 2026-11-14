@@ -6,6 +6,18 @@ use std::sync::Arc;
 use gpui::RenderImage;
 use image::{Frame, RgbaImage};
 
+/// Keep the original full-color SVG embedded and cached across sidebar renders.
+pub fn aurora_logo() -> Arc<gpui::Image> {
+    static LOGO: std::sync::OnceLock<Arc<gpui::Image>> = std::sync::OnceLock::new();
+    LOGO.get_or_init(|| {
+        Arc::new(gpui::Image::from_bytes(
+            gpui::ImageFormat::Svg,
+            include_bytes!("../../native/assets/aurora.svg").to_vec(),
+        ))
+    })
+    .clone()
+}
+
 /// GPUI consumes BGRA frames. Reject malformed or oversized decoded artwork
 /// before transferring ownership; this does not decode untrusted image files.
 pub fn rgba_image(width: u32, height: u32, mut rgba: Vec<u8>) -> Option<Arc<RenderImage>> {

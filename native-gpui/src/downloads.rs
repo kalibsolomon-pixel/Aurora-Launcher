@@ -33,13 +33,13 @@ use aurora_launcher_lib::host::Host;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
     Context, EventEmitter, InteractiveElement as _, IntoElement, ParentElement as _, Render,
-    StatefulInteractiveElement as _, Styled, Window, div, px,
+    Styled, Window, div, px,
 };
 use serde_json::Value;
 
 use crate::backend::guarded;
-use crate::controls::{AuroraButton, ButtonVariant};
-use crate::{api, theme};
+use crate::controls::{AuroraButton, ButtonSize, ButtonVariant};
+use crate::{api, theme, ui};
 
 /// Another short operation (such as the post-install inventory refresh)
 /// briefly holds the instance's content lock. Such a refusal changed nothing,
@@ -56,7 +56,11 @@ const MAX_FINISHED: usize = 30;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DownloadsEvent {
     Changed,
-    Settled { ok: bool },
+    Settled {
+        ok: bool,
+    },
+    /// The empty state's "Browse Discover" action; the parent opens Discover.
+    OpenDiscover,
 }
 
 /// One typed prepared install request. Built only from a completed review
@@ -255,7 +259,47 @@ fn settle_notice(result: &api::ApiResult<Value>) -> String {
     }
 }
 
+/// Relative finish time for a history row, read at render.
+fn finished_ago(elapsed: Duration) -> String {
+    match elapsed.as_secs() / 60 {
+        0 => "Just now".to_owned(),
+        minutes @ 1..=59 => format!("{minutes} min ago"),
+        minutes if minutes < 24 * 60 => format!("{} h ago", minutes / 60),
+        _ => "Earlier".to_owned(),
+    }
+}
+
 /// Shown instead of the rows while the queue is empty.
+/// An unframed empty state, with a bounded reading measure.
+fn empty_queue(t: &crate::theme::AuroraTheme, title: String, body: &'static str) -> gpui::Div {
+    div()
+        .flex()
+        .flex_col()
+        .items_center()
+        .gap(px(10.))
+        .py(px(36.))
+        .px(px(24.))
+        .w(px(480.))
+        .max_w_full()
+        .text_center()
+        .child(ui::icon_tile(t, Some("download"), 48., true))
+        .child(
+            div()
+                .pt(px(4.))
+                .text_size(px(ui::TEXT_SECTION))
+                .font_weight(gpui::FontWeight::SEMIBOLD)
+                .text_color(t.foreground)
+                .child(title),
+        )
+        .child(
+            div()
+                .max_w(px(400.))
+                .text_size(px(ui::TEXT_BODY))
+                .text_color(t.muted_foreground)
+                .child(body),
+        )
+}
+
 const EMPTY_TEXT: &str = "Installs you start from Discover appear here. Several can run at once; installs into the same instance take turns.";
 
 fn phase_label(phase: Phase) -> &'static str {
@@ -330,6 +374,8 @@ struct Task {
     resume: Option<String>,
     /// Cancel was requested for the current run.
     cancelling: bool,
+    /// When the latest run settled; shown as a relative time.
+    finished_at: Option<std::time::Instant>,
 }
 
 impl Task {
@@ -465,6 +511,7 @@ impl DownloadsState {
             control: Control::default(),
             resume: None,
             cancelling: false,
+            finished_at: None,
         });
         self.trim_history();
         id
@@ -531,6 +578,7 @@ impl DownloadsState {
         task.control.cancel();
         if task.phase == Phase::Pending {
             task.phase = Phase::Cancelled;
+            task.finished_at = Some(std::time::Instant::now());
             task.message = "Cancelled before it started.".into();
         } else if !task.cancelling {
             task.cancelling = true;
@@ -625,6 +673,7 @@ impl DownloadsState {
             }
         };
         if matches!(settled, Some(Settled::Terminal { .. })) {
+            task.finished_at = Some(std::time::Instant::now());
             self.notice = Some(settle_notice(&result));
             self.trim_history();
         }
@@ -881,20 +930,138 @@ impl Downloads {
     }
 }
 
+/// How far through its pipeline a running job is, from its named stage only.
+/// The core reports no total byte count, so this is a stage indicator, never a
+/// transfer percentage.
+fn stage_fraction(stage: &str) -> f32 {
+    match stage {
+        "Downloading" => 0.34,
+        "Verifying" => 0.67,
+        "Installing" => 0.9,
+        _ => 0.12,
+    }
+}
+
+/// Everything one row presents, so the row is a pure function of plain data.
+struct RowData {
+    title: String,
+    detail: String,
+    phase: Phase,
+    stage: &'static str,
+    message: String,
+    streamed: Option<u64>,
+}
+
+fn phase_tone(phase: Phase) -> ui::Tone {
+    match phase {
+        Phase::Pending => ui::Tone::Neutral,
+        Phase::Running => ui::Tone::Accent,
+        Phase::Completed => ui::Tone::Success,
+        Phase::Failed => ui::Tone::Danger,
+        Phase::Cancelled => ui::Tone::Warning,
+    }
+}
+
+fn phase_icon(phase: Phase) -> &'static str {
+    match phase {
+        Phase::Pending => "schedule",
+        Phase::Running => "download",
+        Phase::Completed => "check_circle",
+        Phase::Failed => "error",
+        Phase::Cancelled => "block",
+    }
+}
+
+/// One download row: icon, title and progress, status badge, trailing action.
+fn download_row(
+    t: &theme::AuroraTheme,
+    data: &RowData,
+    action: Option<gpui_kit::AnyElement>,
+    last: bool,
+) -> gpui_kit::Div {
+    let running = data.phase == Phase::Running;
+    let note = match data.streamed {
+        // This job's own core-accounted bytes, read at this event-driven
+        // render only; not a live counter.
+        Some(bytes) => format!(
+            "{} · {:.1} MB received",
+            data.message,
+            bytes as f64 / (1024.0 * 1024.0)
+        ),
+        None => data.message.clone(),
+    };
+    let badge_label = if running || data.phase == Phase::Pending {
+        data.stage
+    } else {
+        phase_label(data.phase)
+    };
+    let mut body =
+        ui::title_block(t, data.title.clone(), Some(data.detail.clone().into())).flex_1();
+    if running {
+        body = body.child(
+            div()
+                .mt(px(6.))
+                .h(px(6.))
+                .w_full()
+                .rounded_full()
+                .bg(t.surface_hover)
+                .overflow_hidden()
+                .child(
+                    div()
+                        .h_full()
+                        .w(gpui_kit::relative(stage_fraction(data.stage)))
+                        .rounded_full()
+                        .bg(t.accent),
+                ),
+        );
+    }
+    if !note.is_empty() {
+        body = body.child(
+            div()
+                .when(running, |d| d.pt(px(2.)))
+                .text_size(px(ui::TEXT_CAPTION))
+                .text_color(if data.phase == Phase::Failed {
+                    t.danger
+                } else {
+                    t.subtle_foreground
+                })
+                .text_ellipsis()
+                .child(note),
+        );
+    }
+    ui::row(t, last)
+        .gap(px(14.))
+        .py(px(14.))
+        .child(ui::icon_tile(t, Some(phase_icon(data.phase)), 38., running))
+        .child(body)
+        .child(ui::status_badge(t, badge_label, phase_tone(data.phase)))
+        .when_some(action, |row, action| {
+            row.child(div().flex().flex_shrink_0().child(action))
+        })
+}
+
 impl Render for Downloads {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme::theme(cx).clone();
+        let t = &palette;
         if self.host.is_none() {
             return div()
                 .size_full()
                 .flex()
                 .flex_col()
-                .p_6()
-                .gap_3()
-                .child(div().text_2xl().child("Downloads"))
-                .child(div().text_color(palette.muted_foreground).child(
+                .gap(px(ui::PAGE_GAP))
+                .child(ui::page_header(
+                    t,
+                    "Downloads",
+                    Some("Installs you start appear here.".into()),
+                ))
+                .child(ui::empty_state(
+                    t,
+                    "download",
+                    "Downloads are unavailable",
                     "Downloads is disabled in diagnostic mode. No installs are queued or run.",
-                ));
+                ))
+                .into_any_element();
         }
 
         let s = &self.state;
@@ -908,126 +1075,205 @@ impl Render for Downloads {
             .iter()
             .any(|t| !matches!(t.phase, Phase::Pending | Phase::Running));
 
-        let rows = s.tasks.iter().rev().map(|t| {
-            let (stage, message, streamed) = if t.phase == Phase::Running {
+        let mut active_rows = Vec::new();
+        let mut finished_rows = Vec::new();
+        for task in s.tasks.iter().rev() {
+            let (stage, message, streamed) = if task.phase == Phase::Running {
                 let (stage, message) =
-                    running_status(t.control.phase(), t.control.stage(), &t.message);
-                let bytes = t.control.streamed_bytes();
+                    running_status(task.control.phase(), task.control.stage(), &task.message);
+                let bytes = task.control.streamed_bytes();
                 (stage, message, (bytes > 0).then_some(bytes))
             } else {
-                (phase_label(t.phase), t.message.clone(), None)
+                (phase_label(task.phase), task.message.clone(), None)
             };
-            let cancelling = t.cancelling || t.control.phase() == JobPhase::Cancelling;
-            let can_cancel = matches!(t.phase, Phase::Pending | Phase::Running) && !cancelling;
-            let can_retry = matches!(t.phase, Phase::Failed | Phase::Cancelled);
-            let danger = t.phase == Phase::Failed;
-            let mut detail = div()
-                .flex()
-                .items_center()
-                .gap_3()
-                .py_2()
-                .border_b_1()
-                .border_color(palette.border)
-                .child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .flex_1()
-                        .gap_1()
-                        .child(
-                            div()
-                                .text_size(px(13.))
-                                .child(format!("{} · {}", t.title, t.detail)),
-                        )
-                        .child(
-                            div()
-                                .text_size(px(12.))
-                                .text_color(if danger {
-                                    palette.danger
-                                } else {
-                                    palette.muted_foreground
-                                })
-                                .child(match streamed {
-                                    // This job's own core-accounted bytes, read
-                                    // at this event-driven render only; not a
-                                    // live counter.
-                                    Some(bytes) => format!(
-                                        "{stage} · {message} · {:.1} MB received",
-                                        bytes as f64 / (1024.0 * 1024.0)
-                                    ),
-                                    None => format!("{stage} · {message}"),
-                                }),
-                        ),
-                );
-            if can_cancel {
-                detail = detail.child({
-                    let id = t.id;
-                    AuroraButton::new(("cancel-download", id as usize), "Cancel").on_click(
-                        cx.listener(move |this, _, _, cx| {
+            let cancelling = task.cancelling || task.control.phase() == JobPhase::Cancelling;
+            let can_cancel = matches!(task.phase, Phase::Pending | Phase::Running) && !cancelling;
+            let can_retry = matches!(task.phase, Phase::Failed | Phase::Cancelled);
+            let action = if can_cancel {
+                let id = task.id;
+                Some(
+                    AuroraButton::new(("cancel-download", id as usize), "Cancel")
+                        .size(ButtonSize::Small)
+                        .on_click(cx.listener(move |this, _, _, cx| {
                             this.cancel(id, cx);
-                        }),
-                    )
-                });
+                        }))
+                        .into_any_element(),
+                )
             } else if can_retry {
-                detail = detail.child({
-                    let id = t.id;
-                    // Slint labels both cases "Retry"; the row message already
-                    // says when the retry resumes a kept instance.
+                let id = task.id;
+                // Slint labels both cases "Retry"; the row message already
+                // says when the retry resumes a kept instance.
+                Some(
                     AuroraButton::new(("retry-download", id as usize), "Retry")
-                        .variant(ButtonVariant::Ghost)
+                        .size(ButtonSize::Small)
+                        .icon("refresh")
                         .disabled(self.blocked)
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.retry(id, cx);
                         }))
-                });
+                        .into_any_element(),
+                )
+            } else {
+                None
+            };
+            let data = RowData {
+                title: task.title.clone(),
+                detail: match task.finished_at {
+                    Some(at) if !matches!(task.phase, Phase::Pending | Phase::Running) => {
+                        format!("{} · {}", task.detail, finished_ago(at.elapsed()))
+                    }
+                    _ => task.detail.clone(),
+                },
+                phase: task.phase,
+                stage,
+                message,
+                streamed,
+            };
+            if matches!(task.phase, Phase::Pending | Phase::Running) {
+                active_rows.push((data, action));
+            } else {
+                finished_rows.push((data, action));
             }
-            detail
-        });
+        }
+        let list = |rows: Vec<(RowData, Option<gpui_kit::AnyElement>)>| {
+            let count = rows.len();
+            let mut card = ui::list_card(t);
+            for (index, (data, action)) in rows.into_iter().enumerate() {
+                card = card.child(download_row(t, &data, action, index + 1 == count));
+            }
+            card
+        };
 
-        div()
+        let mut page = div()
+            .id("downloads-rows")
             .size_full()
             .flex()
             .flex_col()
-            .gap_3()
-            .child(
+            .gap(px(ui::PAGE_GAP))
+            .child(ui::page_header(
+                t,
+                "Downloads",
+                Some("Track installation progress and recent results.".into()),
+            ));
+        if active_rows.is_empty() && finished_rows.is_empty() {
+            page = page.child(
                 div()
+                    .w_full()
+                    .min_h((_window.viewport_size().height - px(164.)).max(px(280.)))
                     .flex()
                     .items_center()
-                    .gap_2()
-                    .child(div().text_2xl().child("Downloads"))
-                    .when(any_finished, |header| {
-                        header.child(
-                            AuroraButton::new("clear-finished", "Clear finished")
-                                .variant(ButtonVariant::Ghost)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.clear_finished(cx);
-                                })),
-                        )
-                    }),
-            )
-            .child(
+                    .justify_center()
+                    .child(
+                        empty_queue(t, summary.clone(), EMPTY_TEXT)
+                            .justify_center()
+                            .child(
+                                div().pt(px(8.)).child(
+                                    AuroraButton::new(
+                                        "downloads-browse-discover",
+                                        "Browse Discover",
+                                    )
+                                    .variant(ButtonVariant::Primary)
+                                    .size(ButtonSize::Medium)
+                                    .icon("explore")
+                                    .on_click(cx.listener(
+                                        |_, _, _, cx| {
+                                            cx.emit(DownloadsEvent::OpenDiscover);
+                                        },
+                                    )),
+                                ),
+                            ),
+                    ),
+            );
+        }
+        if active_rows.is_empty() && !finished_rows.is_empty() {
+            page = page.child(
                 div()
-                    .text_size(px(12.))
-                    .text_color(palette.muted_foreground)
-                    .child(summary),
-            )
-            .child(
-                div()
-                    .id("downloads-rows")
                     .flex()
                     .flex_col()
-                    .flex_1()
-                    .overflow_y_scroll()
-                    .when(s.tasks.is_empty(), |list| {
-                        list.child(
+                    .gap(px(12.))
+                    .child(ui::section_header(t, "Active", None))
+                    .child(
+                        ui::card(t).child(
                             div()
-                                .text_size(px(12.))
-                                .text_color(palette.muted_foreground)
-                                .child(EMPTY_TEXT),
-                        )
-                    })
-                    .children(rows),
-            )
+                                .flex()
+                                .items_center()
+                                .gap(px(14.))
+                                .child(ui::icon_tile(t, Some("download"), 40., false))
+                                .child(
+                                    ui::title_block(
+                                        t,
+                                        "Nothing downloading",
+                                        Some(
+                                            "Mods, packs and shaders you install from Discover show their progress here."
+                                                .into(),
+                                        ),
+                                    )
+                                    .flex_1()
+                                    .min_w(px(0.)),
+                                )
+                                .child(
+                                    AuroraButton::new("downloads-idle-discover", "Browse Discover")
+                                        .icon("explore")
+                                        .on_click(cx.listener(|_, _, _, cx| {
+                                            cx.emit(DownloadsEvent::OpenDiscover);
+                                        })),
+                                ),
+                        ),
+                    ),
+            );
+        }
+        if !active_rows.is_empty() {
+            page = page.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(12.))
+                    .child(ui::section_header(
+                        t,
+                        "Active",
+                        Some(summary.clone().into()),
+                    ))
+                    .child(list(active_rows)),
+            );
+        }
+        if !finished_rows.is_empty() || any_finished {
+            page = page.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(12.))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(12.))
+                            .child(ui::section_header(
+                                t,
+                                "Finished",
+                                Some(
+                                    format!(
+                                        "Your last {MAX_FINISHED} finished installs are kept here."
+                                    )
+                                    .into(),
+                                ),
+                            ))
+                            .when(any_finished, |header| {
+                                header.child(
+                                    AuroraButton::new("clear-finished", "Clear finished")
+                                        .size(ButtonSize::Small)
+                                        .variant(ButtonVariant::Ghost)
+                                        .icon("delete")
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.clear_finished(cx);
+                                        })),
+                                )
+                            }),
+                    )
+                    .child(list(finished_rows)),
+            );
+        }
+        page.into_any_element()
     }
 }
 
@@ -1676,6 +1922,10 @@ mod tests {
         assert_eq!(state.active_count(), 0);
         assert_eq!(nav_label(state.active_count()), "Downloads");
         assert_eq!(queue_summary(0, 0), "Nothing downloading.");
+        assert_eq!(finished_ago(Duration::from_secs(20)), "Just now");
+        assert_eq!(finished_ago(Duration::from_secs(150)), "2 min ago");
+        assert_eq!(finished_ago(Duration::from_secs(7_300)), "2 h ago");
+        assert_eq!(finished_ago(Duration::from_secs(90_000)), "Earlier");
         let a = state.submit(job(Some("i1"), "A"));
         let b = state.submit(job(Some("i1"), "B"));
         let c = state.submit(job(None, "C"));
@@ -1735,5 +1985,12 @@ mod tests {
             EMPTY_TEXT,
             "Installs you start from Discover appear here. Several can run at once; installs into the same instance take turns."
         );
+    }
+
+    #[test]
+    fn the_stage_bar_only_reflects_the_named_stage() {
+        assert!(stage_fraction("Downloading") < stage_fraction("Verifying"));
+        assert!(stage_fraction("Verifying") < stage_fraction("Installing"));
+        assert!(stage_fraction("Installing") < 1.0);
     }
 }

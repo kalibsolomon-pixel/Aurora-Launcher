@@ -26,6 +26,7 @@ mod skins;
 mod symbols;
 mod syncing;
 mod theme;
+mod ui;
 
 #[allow(dead_code)]
 #[path = "../../native/src/api.rs"]
@@ -44,7 +45,7 @@ use aurora_launcher_lib::host::{APPLICATION_IDENTIFIER, Host, platform_local_dat
 use borealis::Borealis;
 use client_updates::{ClientUpdates, ClientUpdatesEvent};
 use content::{Content, ContentEvent};
-use controls::{AuroraButton, ButtonVariant};
+use controls::{AuroraButton, ButtonSize, ButtonVariant};
 use discover::{Discover, DiscoverEvent};
 use downloads::{Downloads, DownloadsEvent};
 use gpui::{
@@ -96,6 +97,29 @@ enum Message {
 /// decision that still says running/starting is re-read a bounded number of
 /// times (same limit and delay as the Slint host).
 const READINESS_RECHECK_LIMIT: u8 = 5;
+
+/// Design-review mode: a disposable seeded data root, no update check, sync,
+/// server status or readiness network work. Set once before the window opens.
+static SHOWCASE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub(crate) fn showcase() -> bool {
+    SHOWCASE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// `--showcase <dir>`: the directory must carry the disposable marker so the
+/// owner's managed data can never be opened this way.
+#[cfg(debug_assertions)]
+fn showcase_root() -> Option<PathBuf> {
+    let mut args = std::env::args().skip_while(|a| a != "--showcase").skip(1);
+    let root = PathBuf::from(args.next()?);
+    root.join("AURORA_DISPOSABLE_DIAGNOSTIC")
+        .is_file()
+        .then_some(root)
+}
+#[cfg(not(debug_assertions))]
+fn showcase_root() -> Option<PathBuf> {
+    None
+}
 const READINESS_RECHECK_DELAY: std::time::Duration = std::time::Duration::from_millis(750);
 
 /// A readiness decision that claims a live process while the supervised
@@ -242,7 +266,7 @@ fn instance_icon(
     palette: &theme::AuroraTheme,
 ) -> impl IntoElement {
     let ink = if active {
-        palette.accent
+        palette.ring
     } else {
         palette.muted_foreground
     };
@@ -253,9 +277,37 @@ fn instance_icon(
         .justify_center()
         .w(px(size))
         .h(px(size))
-        .rounded(px(size * 0.26))
-        .bg(palette.surface_hover)
-        .child(symbols::icon(name, px(size * 0.58), ink))
+        .rounded(px((size * 0.24).min(28.)))
+        .when(active, |tile| {
+            tile.bg(gpui::linear_gradient(
+                145.,
+                gpui::linear_color_stop(
+                    gpui::Hsla {
+                        a: 0.30,
+                        ..palette.ring
+                    },
+                    0.,
+                ),
+                gpui::linear_color_stop(
+                    gpui::Hsla {
+                        a: 0.08,
+                        ..palette.ring
+                    },
+                    1.,
+                ),
+            ))
+        })
+        .when(!active, |tile| tile.bg(palette.control))
+        .border_1()
+        .border_color(if active {
+            gpui::Hsla {
+                a: 0.35,
+                ..palette.ring
+            }
+        } else {
+            palette.border_subtle
+        })
+        .child(symbols::icon(name, px(size * 0.54), ink))
 }
 
 /// How a load request was scheduled.
@@ -290,6 +342,7 @@ struct Launcher {
     rt: tokio::runtime::Handle,
     tx: async_channel::Sender<Message>,
     page: u8,
+    reset_discover_scroll: bool,
     serial: u64,
     busy: bool,
     account_busy: bool,
@@ -467,6 +520,32 @@ impl Launcher {
                 updates.set_blocked(blocked, cx);
             });
         }
+        if let Some(settings) = &self.settings {
+            let blocked = self.busy
+                || account_busy
+                || skin_busy
+                || client_update_busy
+                || home_busy
+                || self.load_in_flight
+                || self.readiness_in_flight
+                || self.sync_running
+                || self.downloads_running(cx)
+                || self.pack_import_busy
+                || self
+                    .processes
+                    .values()
+                    .any(|p| matches!(p.status.as_str(), "starting" | "running"))
+                || self
+                    .pack_import
+                    .as_ref()
+                    .is_some_and(|v| v.read(cx).is_busy())
+                || self.discover.as_ref().is_some_and(|v| v.read(cx).is_busy())
+                || self
+                    .content
+                    .as_ref()
+                    .is_some_and(|v| v.read(cx).is_busy(cx));
+            settings.update(cx, |settings, cx| settings.set_install_blocked(blocked, cx));
+        }
         if let Some(home) = &self.home_widgets {
             let blocked = self.busy
                 || account_busy
@@ -480,11 +559,17 @@ impl Launcher {
                     .pack_import
                     .as_ref()
                     .is_some_and(|view| view.read(cx).is_busy());
+            let needs_sign_in = self.selected_id().is_some_and(|id| {
+                self.visible_blockers(id)
+                    .iter()
+                    .any(|blocker| blocker.code == "launch_authentication_required")
+            });
             home.update(cx, |home, cx| {
                 if self.page != 0 {
                     home.set_active(false, cx);
                 }
                 home.set_blocked(blocked, cx);
+                home.set_needs_sign_in(needs_sign_in, cx);
                 if self.page == 0 {
                     home.set_active(true, cx);
                 }
@@ -493,7 +578,7 @@ impl Launcher {
     }
 
     fn initialize_sync(&self) {
-        let Some(host) = self.host.clone() else {
+        let Some(host) = self.host.clone().filter(|_| !showcase()) else {
             return;
         };
         let tx = self.tx.clone();
@@ -590,7 +675,7 @@ impl Launcher {
     /// check and no message is ever sent. The core runs this check once per
     /// process, so it is requested once here as well.
     fn start_update_check(&mut self) {
-        if self.update_check_started {
+        if self.update_check_started || showcase() {
             return;
         }
         let Some(host) = self.host.clone() else {
@@ -655,6 +740,51 @@ impl Launcher {
         let serial = self.serial;
         let process_serial = self.process_serial;
         let tx = self.tx.clone();
+        if showcase() {
+            let signed_in = self.accounts.accounts.iter().any(|saved| {
+                Some(&saved.account_id) == account.as_ref() && saved.status == "signedIn"
+            });
+            let decision = api::PlayReadiness {
+                ready: signed_in,
+                can_prepare: false,
+                instance_id: id,
+                account_name: self.accounts.selected_account_id.as_ref().and_then(|_| {
+                    self.accounts
+                        .accounts
+                        .first()
+                        .map(|a| a.minecraft_name.clone())
+                }),
+                account_id: account,
+                instance_status: "ready".into(),
+                runtime_status: "ready".into(),
+                account_status: if signed_in {
+                    "ready"
+                } else {
+                    "reauthenticationRequired"
+                }
+                .into(),
+                process_status: "idle".into(),
+                blockers: if signed_in {
+                    Vec::new()
+                } else {
+                    vec![api::PlayBlocker {
+                        code: "launch_authentication_required".into(),
+                        message: "Sign in to your Minecraft account before playing.".into(),
+                    }]
+                },
+            };
+            self.rt.spawn(async move {
+                let _ = tx
+                    .send(Message::Readiness(
+                        serial,
+                        process_serial,
+                        Ok(decision),
+                        None,
+                    ))
+                    .await;
+            });
+            return;
+        }
         self.rt.spawn(async move {
             let result = guarded(api::play_readiness(host, id.clone(), account)).await;
             let process = guarded(api::launch_state(id)).await.ok();
@@ -987,7 +1117,7 @@ impl Launcher {
             discover.update(cx, |discover, cx| discover.open_for(instance, kind, cx));
         }
     }
-    /// Discover's "Back to instance": Content with that instance and kind.
+    /// Open Content for an explicit instance and kind from another page.
     fn return_to_content(
         &mut self,
         instance: String,
@@ -1015,9 +1145,13 @@ impl Launcher {
         if page == 7 && self.skins.is_none() {
             let preview = cx.new(|cx| SkinPreview::new(self.rt.clone(), window, cx));
             let skins = cx.new(|cx| Skins::new(self.host.clone(), self.rt.clone(), window, cx));
-            self._subscriptions
-                .push(cx.subscribe(&skins, |this, _, event: &SkinsEvent, cx| {
+            skins.update(cx, |skins, _| skins.set_preview(preview.clone()));
+            self._subscriptions.push(cx.subscribe_in(
+                &skins,
+                window,
+                |this, _, event: &SkinsEvent, window, cx| {
                     match event {
+                        SkinsEvent::OpenAccounts => this.open_page(1, window, cx),
                         SkinsEvent::Changed => {
                             this.reload_guarded(cx);
                             if let Some(accounts) = &this.accounts_page {
@@ -1029,7 +1163,8 @@ impl Launcher {
                     }
                     this.sync_mutation_guards(cx);
                     cx.notify();
-                }));
+                },
+            ));
             self.skin_preview = Some(preview);
             self.skins = Some(skins);
             if !self.load_in_flight && !self.account_busy {
@@ -1114,14 +1249,31 @@ impl Launcher {
                 let discover =
                     cx.new(|cx| Discover::new(self.host.clone(), self.rt.clone(), window, cx));
                 let downloads = discover.read(cx).downloads();
-                self._subscriptions.push(cx.subscribe(
+                self._subscriptions.push(cx.subscribe_in(
                     &downloads,
-                    |this, downloads, event: &DownloadsEvent, cx| {
+                    window,
+                    |this, downloads, event: &DownloadsEvent, window, cx| {
+                        if matches!(event, DownloadsEvent::OpenDiscover) {
+                            this.open_page(5, window, cx);
+                        }
                         // The Slint host toasts a settled install wherever the
                         // user is; the status line is this host's equivalent.
                         if matches!(event, DownloadsEvent::Settled { .. }) {
                             if let Some(notice) = downloads.read(cx).notice() {
-                                this.status = notice.to_owned();
+                                let notice = notice.to_owned();
+                                this.status = notice.clone();
+                                cx.spawn(async move |this, cx| {
+                                    cx.background_executor()
+                                        .timer(std::time::Duration::from_secs(8))
+                                        .await;
+                                    let _ = this.update(cx, |this, cx| {
+                                        if this.status == notice {
+                                            this.status.clear();
+                                            cx.notify();
+                                        }
+                                    });
+                                })
+                                .detach();
                             }
                         }
                         this.downloads_busy = downloads.read(cx).is_busy();
@@ -1135,6 +1287,10 @@ impl Launcher {
                     window,
                     |this, _, event: &DiscoverEvent, window, cx| {
                         match event {
+                            DiscoverEvent::BrowsePageChanged => {
+                                this.reset_discover_scroll = true;
+                                cx.notify();
+                            }
                             DiscoverEvent::Changed => {
                                 this.reload_guarded(cx);
                                 if let Some(editor) = &this.instance_editor {
@@ -1194,6 +1350,12 @@ impl Launcher {
             self._subscriptions.push(cx.subscribe(
                 &settings,
                 |this, settings, event: &SettingsEvent, cx| {
+                    if let SettingsEvent::Installing(busy) = event {
+                        this.busy = *busy;
+                        this.sync_mutation_guards(cx);
+                        cx.notify();
+                        return;
+                    }
                     // The acknowledged state plus any live accent preview, so
                     // the root's `theme::apply` never overwrites a preview.
                     this.appearance = settings.read(cx).display_appearance();
@@ -1204,6 +1366,7 @@ impl Launcher {
                                 layer.set_background(background, cx)
                             }
                             SettingsEvent::Motion(speed) => layer.set_motion(*speed, cx),
+                            SettingsEvent::Installing(_) => {}
                         });
                     }
                     // Invalidate older root snapshots before they can restore an old theme.
@@ -1464,36 +1627,127 @@ impl Launcher {
         let instance = selected
             .as_deref()
             .and_then(|id| launcher.instances.iter().find(|i| i.id == id));
-        let mut card = div()
+        let t = palette;
+        let mut details = div()
             .flex()
             .flex_col()
-            .gap_2()
-            .child(div().text_2xl().child(instance.map_or_else(
-                || "Choose an instance".to_owned(),
-                |i| i.display_name.clone(),
-            )));
+            .gap(px(12.))
+            .flex_1()
+            .min_w(px(0.))
+            .child(
+                div().flex().flex_col().gap(px(4.)).child(
+                    div()
+                        .text_size(px(ui::TEXT_DISPLAY))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(t.foreground)
+                        .text_ellipsis()
+                        .child(instance.map_or_else(
+                            || "Choose an instance".to_owned(),
+                            |i| i.display_name.clone(),
+                        )),
+                ),
+            );
         if let Some(instance) = instance {
-            card = card.child(div().text_sm().text_color(muted).child(instance.subtitle()));
+            let mut badges = div()
+                .flex()
+                .flex_wrap()
+                .gap(px(6.))
+                .child(ui::badge(
+                    t,
+                    format!("Minecraft {}", instance.minecraft_version),
+                    ui::Tone::Neutral,
+                ))
+                .child(ui::badge(t, instance.platform_label(), ui::Tone::Neutral));
+            if let Some(aurora) = &instance.aurora {
+                badges = badges.child(ui::badge(
+                    t,
+                    format!("Aurora {}", aurora.version),
+                    ui::Tone::Accent,
+                ));
+            }
+            if let Some(pack) = &instance.pack {
+                badges = badges.child(ui::badge(
+                    t,
+                    format!("{} {}", pack.name, pack.pack_version),
+                    ui::Tone::Neutral,
+                ));
+            }
+            if let Some((label, tone)) = self.readiness_badge(&instance.id) {
+                if label != "Sign in needed" {
+                    badges = badges.child(ui::status_badge(t, label, tone));
+                }
+            }
+            details = details.child(badges);
         }
+        let hero_icon = instance.map(|instance| {
+            instance_icon(
+                stored_icon(&launcher.icons, &instance.id),
+                48.,
+                true,
+                palette,
+            )
+        });
+        let mut details = div()
+            .flex()
+            .flex_col()
+            .gap(px(20.))
+            .flex_1()
+            .min_w(px(0.))
+            .child(
+                div()
+                    .flex()
+                    .items_start()
+                    .gap(px(16.))
+                    .children(hero_icon)
+                    .child(details),
+            );
         if let Some(id) = selected.clone() {
             let play_id = id.clone();
-            card = card.child(
+            let needs_sign_in = self
+                .visible_blockers(&id)
+                .iter()
+                .any(|blocker| blocker.code == "launch_authentication_required");
+            details = details.child(
                 div()
                     .flex()
                     .items_center()
-                    .gap_3()
+                    .gap(px(10.))
+                    .pt(px(4.))
                     .child(
-                        self.button("play", self.play_label(&id))
+                        div().child(
+                            self.button(
+                                "play",
+                                if needs_sign_in {
+                                    "Sign in to play"
+                                } else {
+                                    self.play_label(&id)
+                                },
+                            )
                             .variant(ButtonVariant::Primary)
-                            .disabled(!self.can_play(&id))
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.action("play", play_id.clone(), cx);
-                                cx.notify();
-                            })),
+                            .size(ButtonSize::Large)
+                            .icon(if needs_sign_in { "login" } else { "play_arrow" })
+                            .disabled(if needs_sign_in {
+                                self.controls_blocked()
+                            } else {
+                                !self.can_play(&id)
+                            })
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| {
+                                    if needs_sign_in {
+                                        this.open_page(1, window, cx);
+                                    } else {
+                                        this.action("play", play_id.clone(), cx);
+                                    }
+                                    cx.notify();
+                                },
+                            )),
+                        ),
                     )
                     .child(
-                        self.button("instance-settings", "Instance settings")
-                            .variant(ButtonVariant::Ghost)
+                        self.button("instance-settings", "Edit instance")
+                            .variant(ButtonVariant::Default)
+                            .size(ButtonSize::Large)
+                            .icon("tune")
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.open_page(3, window, cx);
                                 cx.notify();
@@ -1501,21 +1755,43 @@ impl Launcher {
                     ),
             );
         }
-        let card_icon = instance.map(|instance| {
-            instance_icon(
-                stored_icon(&launcher.icons, &instance.id),
-                112.,
-                true,
-                palette,
-            )
+        // Secondary activity stays together below the launch controls.
+        let stats = match (&self.home_widgets, instance) {
+            (Some(home), Some(instance)) => home.read(cx).hero_stats(&instance.id),
+            _ => Vec::new(),
+        };
+        let stats = (!stats.is_empty()).then(|| {
+            div()
+                .flex()
+                .flex_shrink_0()
+                .gap(px(16.))
+                .pt(px(8.))
+                .border_t_1()
+                .border_color(t.border_subtle)
+                .children(
+                    stats
+                        .into_iter()
+                        .map(|(label, value)| ui::stat(t, label, value).flex_1()),
+                )
         });
+        let hero_index = out.len();
         out.push(
             div()
                 .flex()
-                .items_center()
-                .gap_4()
-                .children(card_icon)
-                .child(card.flex_1())
+                .flex_col()
+                .gap(px(12.))
+                .p(px(16.))
+                .h_full()
+                .rounded(px(16.))
+                .bg(gpui::linear_gradient(
+                    100.,
+                    gpui::linear_color_stop(t.raised, 0.),
+                    gpui::linear_color_stop(t.card, 1.),
+                ))
+                .border_1()
+                .border_color(t.border_subtle)
+                .child(details)
+                .children(stats)
                 .into_any_element(),
         );
         if let Some(id) = selected.clone() {
@@ -1540,7 +1816,7 @@ impl Launcher {
                     _ => String::new(),
                 };
                 if !label.is_empty() {
-                    out.push(div().child(label).into_any_element());
+                    out.push(ui::muted(t, label).into_any_element());
                 }
             }
             if self.readiness.is_none()
@@ -1555,7 +1831,12 @@ impl Launcher {
                         .into_any_element(),
                 );
             }
-            for (i, blocker) in self.visible_blockers(&id).iter().enumerate() {
+            for (i, blocker) in self
+                .visible_blockers(&id)
+                .iter()
+                .filter(|blocker| blocker.code != "launch_authentication_required")
+                .enumerate()
+            {
                 let action_button = BlockerAction::for_code(&blocker.code).map(|action| {
                     let target = id.clone();
                     self.button(("blocker", i), action.label())
@@ -1568,12 +1849,25 @@ impl Launcher {
                     div()
                         .flex()
                         .items_center()
-                        .gap_3()
+                        .gap(px(12.))
+                        .px(px(16.))
+                        .py(px(12.))
+                        .rounded(t.radius_lg)
+                        .bg(gpui::Hsla {
+                            a: 0.08,
+                            ..t.warning
+                        })
+                        .border_1()
+                        .border_color(gpui::Hsla {
+                            a: 0.25,
+                            ..t.warning
+                        })
+                        .child(symbols::icon(Some("warning"), px(18.), t.warning))
                         .child(
                             div()
                                 .flex_1()
-                                .text_sm()
-                                .text_color(muted)
+                                .text_size(px(ui::TEXT_BODY))
+                                .text_color(t.foreground)
                                 .child(blocker.message.clone()),
                         )
                         .children(action_button)
@@ -1603,50 +1897,120 @@ impl Launcher {
             }
         }
         if launcher.instances.len() > 1 || selected.is_none() {
-            let mut tiles = div().flex().flex_wrap().gap_2();
-            for (i, item) in launcher.instances.iter().enumerate() {
+            let mut tiles = div().flex().flex_col().gap(px(2.));
+            for (i, item) in launcher
+                .instances
+                .iter()
+                .filter(|item| selected.as_deref() != Some(item.id.as_str()))
+                .take(3)
+                .enumerate()
+            {
                 let id = item.id.clone();
                 let chosen = selected.as_deref() == Some(item.id.as_str());
                 tiles = tiles.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap_2()
+                    ui::list_button(t, ("instance", i), chosen)
+                        .aria_label(item.display_name.clone())
+                        .disabled(self.controls_blocked())
                         .child(instance_icon(
                             stored_icon(&launcher.icons, &item.id),
-                            36.,
+                            30.,
                             chosen,
                             palette,
                         ))
                         .child(
-                            self.button(
-                                ("instance", i),
-                                format!(
-                                    "{} · Minecraft {}",
-                                    item.display_name, item.minecraft_version
+                            ui::title_block(
+                                t,
+                                item.display_name.clone(),
+                                Some(
+                                    format!(
+                                        "{} · {}",
+                                        item.minecraft_version,
+                                        item.platform_label()
+                                    )
+                                    .into(),
                                 ),
                             )
-                            .selected(chosen)
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    this.action("select", id.clone(), cx);
-                                    cx.notify();
-                                },
-                            )),
-                        ),
+                            .flex_1(),
+                        )
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.action("select", id.clone(), cx);
+                            cx.notify();
+                        })),
                 );
             }
-            out.push(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap_2()
-                    .child(div().text_sm().text_color(muted).child("Instances"))
-                    .child(tiles)
-                    .into_any_element(),
-            );
+            let switcher = div()
+                .flex()
+                .flex_col()
+                .flex_shrink_0()
+                .w(px(248.))
+                .gap(px(8.))
+                .p(px(10.))
+                .rounded(px(16.))
+                .bg(t.card)
+                .border_1()
+                .border_color(t.border_subtle)
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .px(px(8.))
+                        .pt(px(6.))
+                        .child(
+                            div()
+                                .text_size(px(ui::TEXT_BODY))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(t.foreground)
+                                .child("Other instances"),
+                        )
+                        .child(ui::caption(
+                            t,
+                            format!(
+                                "{} available",
+                                launcher.instances.len() - usize::from(selected.is_some())
+                            ),
+                        )),
+                )
+                .child(tiles)
+                .when(launcher.instances.len() > 3, |switcher| {
+                    switcher.child(
+                        AuroraButton::new("home-all-instances", "View all instances")
+                            .variant(ButtonVariant::Ghost)
+                            .size(ButtonSize::Small)
+                            .full_width()
+                            .icon("arrow_forward")
+                            .on_click(cx.listener(|this, _, window, cx| {
+                                this.open_page(3, window, cx);
+                                cx.notify();
+                            })),
+                    )
+                });
+            if hero_index < out.len() {
+                let hero = out.remove(hero_index);
+                out.insert(
+                    hero_index,
+                    div()
+                        .flex()
+                        .gap(px(16.))
+                        .child(div().flex_1().min_w(px(0.)).child(hero))
+                        .child(switcher)
+                        .into_any_element(),
+                );
+            } else {
+                out.push(switcher.into_any_element());
+            }
         }
         out
+    }
+
+    fn controls_blocked(&self) -> bool {
+        self.busy
+            || self.account_busy
+            || self.skin_busy
+            || self.client_update_busy
+            || self.downloads_busy
+            || self.home_busy
+            || self.host.is_none()
     }
 
     fn button(
@@ -1654,15 +2018,39 @@ impl Launcher {
         id: impl Into<gpui::ElementId>,
         label: impl Into<gpui::SharedString>,
     ) -> AuroraButton {
-        AuroraButton::new(id, label).disabled(
-            self.busy
-                || self.account_busy
-                || self.skin_busy
-                || self.client_update_busy
-                || self.downloads_busy
-                || self.home_busy
-                || self.host.is_none(),
-        )
+        AuroraButton::new(id, label).disabled(self.controls_blocked())
+    }
+
+    /// The hero's one-word readiness summary for the selected instance.
+    fn readiness_badge(&self, id: &str) -> Option<(&'static str, ui::Tone)> {
+        match self.game_phase(id) {
+            GamePhase::Running => return Some(("Running", ui::Tone::Success)),
+            GamePhase::Starting => return Some(("Starting", ui::Tone::Accent)),
+            GamePhase::Idle => {}
+        }
+        let decision = self
+            .readiness
+            .as_ref()
+            .filter(|decision| decision.instance_id == id);
+        match decision {
+            Some(decision) if decision.ready => Some(("Ready to play", ui::Tone::Success)),
+            Some(decision) if decision.can_prepare => {
+                Some(("Needs preparation", ui::Tone::Warning))
+            }
+            Some(decision)
+                if decision
+                    .blockers
+                    .iter()
+                    .any(|blocker| blocker.code == "launch_authentication_required") =>
+            {
+                Some(("Sign in needed", ui::Tone::Warning))
+            }
+            Some(_) => Some(("Action needed", ui::Tone::Warning)),
+            None if self.readiness_in_flight || self.load_in_flight => {
+                Some(("Checking", ui::Tone::Neutral))
+            }
+            None => None,
+        }
     }
 }
 impl Render for Launcher {
@@ -1674,26 +2062,27 @@ impl Render for Launcher {
             .as_ref()
             .map_or(0, |downloads| downloads.read(cx).active_count());
         let nav = [
-            ("Home", 0),
-            ("Instances", 3),
-            ("Discover", 5),
-            ("Downloads", 8),
-            ("Content", 4),
-            ("Sync", 6),
-            ("Skins", 7),
-            ("Accounts", 1),
-            ("Settings", 2),
+            ("Home", 0, "home"),
+            ("Instances", 3, "grid_view"),
+            ("Discover", 5, "explore"),
+            ("Content", 4, "extension"),
+            ("Downloads", 8, "download"),
+            ("Skins", 7, "checkroom"),
+            ("Accounts", 1, "account_circle"),
+            ("Sync", 6, "sync"),
+            ("Settings", 2, "settings"),
         ]
         .into_iter()
-        .map(|(label, page)| {
+        .map(|(label, page, icon)| {
             // The Downloads item doubles as the activity indicator (Slint's
             // downloads-nav): lit while work is queued or running, with a
             // count badge. It only reads the shared queue's count.
             let active = if page == 8 { downloads_active } else { 0 };
             let button = self
                 .button(label, label)
-                .variant(ButtonVariant::Ghost)
-                .selected(self.page == page || active > 0)
+                .variant(ButtonVariant::Nav)
+                .icon(icon)
+                .selected(self.page == page)
                 .disabled(self.client_update_running(cx) && self.page != page)
                 .on_click(cx.listener(move |this, _, window, cx| {
                     this.open_page(page, window, cx);
@@ -1714,11 +2103,11 @@ impl Render for Launcher {
                     item.child(
                         div()
                             .absolute()
-                            .top(px(-4.))
-                            .right(px(-4.))
-                            .min_w(px(16.))
-                            .h(px(16.))
-                            .px(px(4.))
+                            .top(px(8.))
+                            .right(px(10.))
+                            .min_w(px(18.))
+                            .h(px(18.))
+                            .px(px(5.))
                             .rounded_full()
                             .flex()
                             .items_center()
@@ -1732,14 +2121,85 @@ impl Render for Launcher {
                 .into_any_element()
         })
         .collect::<Vec<_>>();
+        let mut nav = nav.into_iter();
+        let mut nav_group = |title: Option<&'static str>, count: usize| {
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(2.))
+                .when_some(title, |group, title| {
+                    group.child(
+                        ui::eyebrow(&palette, title)
+                            .px(px(10.))
+                            .pt(px(if window.viewport_size().height < px(600.) {
+                                8.
+                            } else {
+                                16.
+                            }))
+                            .pb(px(6.)),
+                    )
+                })
+                .children(nav.by_ref().take(count).collect::<Vec<_>>())
+        };
+        let play_group = nav_group(Some("PLAY"), 2);
+        let library_group = nav_group(Some("LIBRARY"), 3);
+        let profile_group = nav_group(Some("PROFILE"), 2);
+        let system_group = nav_group(None, 2);
+        let brand = div()
+            .flex()
+            .items_center()
+            .gap(px(10.))
+            .h(px(52.))
+            .px(px(6.))
+            .child(
+                gpui::img(images::aurora_logo())
+                    .w(px(44.))
+                    .h(px(35.2))
+                    .flex_shrink_0(),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .child(
+                        div()
+                            .text_size(px(14.))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child("Aurora"),
+                    )
+                    .child(ui::caption(&palette, "Launcher")),
+            );
+        let page_scroll = window
+            .use_keyed_state(("page-scroll", self.page as usize), cx, |_, _| {
+                gpui::ScrollHandle::new()
+            })
+            .read(cx)
+            .clone();
+        if self.page == 5 && std::mem::take(&mut self.reset_discover_scroll) {
+            page_scroll.set_offset(gpui::point(px(0.), px(0.)));
+        }
         let mut content = div()
             .flex()
             .flex_col()
-            .gap_3()
-            .p_6()
+            .gap(px(ui::PAGE_GAP))
+            .px(px(32.))
+            .pt(px(4.))
+            .pb(px(40.))
             .flex_1()
             .id("content")
+            .min_w(px(0.))
+            .min_h(px(0.))
+            .track_scroll(&page_scroll)
             .overflow_y_scroll();
+        if showcase() {
+            // Design screenshots can start part-way down a long page.
+            if let Some(y) = std::env::var("AURORA_SHOWCASE_SCROLL")
+                .ok()
+                .and_then(|y| y.parse::<f32>().ok())
+            {
+                page_scroll.set_offset(gpui::point(px(0.), px(-y)));
+            }
+        }
         match self.page {
             // The startup load failed: nothing else is trustworthy until it succeeds.
             _ if self.fatal_error.is_some() => {
@@ -1768,9 +2228,27 @@ impl Render for Launcher {
                     );
             }
             0 => {
-                content = content.children(self.home_children(&palette, cx));
+                content = content
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(16.))
+                            .child(ui::page_header(
+                                &palette,
+                                "Home",
+                                Some("Pick up where you left off.".into()),
+                            ))
+                            .when_some(self.home_widgets.as_ref(), |header, home| {
+                                header.child(home.read(cx).customize_button(home.clone()))
+                            }),
+                    )
+                    .children(self.home_children(&palette, cx));
                 if let Some(updates) = &self.client_updates {
-                    content = content.child(updates.clone());
+                    if updates.read(cx).is_visible() {
+                        content = content.child(updates.clone());
+                    }
                 }
                 if let Some(home) = &self.home_widgets {
                     content = content.child(home.clone());
@@ -1782,15 +2260,14 @@ impl Render for Launcher {
                 }
             }
             7 => {
-                let mut appearance = div().flex().flex_wrap().gap_6();
-                if let Some(preview) = &self.skin_preview {
-                    appearance = appearance.child(preview.clone());
-                }
+                content = content.child(ui::page_header(
+                    &palette,
+                    "Skins",
+                    Some("Preview, import and wear skins and capes.".into()),
+                ));
                 if let Some(skins) = &self.skins {
-                    appearance =
-                        appearance.child(div().flex_1().min_w(px(320.)).child(skins.clone()));
+                    content = content.child(skins.clone());
                 }
-                content = content.child(appearance);
             }
             3 => {
                 if let Some(import) = &self.pack_import {
@@ -1868,18 +2345,36 @@ impl Render for Launcher {
             .children(self.borealis.clone())
             .child(
                 div()
-                    .w(px(150.))
+                    .w(px(212.))
+                    .flex_shrink_0()
                     .h_full()
-                    .p_3()
+                    .px(px(12.))
+                    .pt(px(6.))
+                    .pb(px(12.))
                     .bg(palette.sidebar)
+                    .border_r_1()
+                    .border_color(palette.border_subtle)
                     .flex()
                     .flex_col()
-                    .gap_2()
                     // The header also moves the window (the Slint logo area).
-                    .child(chrome::drag_region(div().child("Aurora Launcher")))
-                    .children(nav)
+                    .child(chrome::drag_region(brand.id("brand")))
+                    .child(play_group)
+                    .child(library_group)
+                    .child(profile_group)
+                    .child(div().flex_1())
+                    .child(system_group)
                     .child(
-                        self.button("refresh", "Refresh")
+                        div()
+                            .h(px(1.))
+                            .my(px(8.))
+                            .mx(px(10.))
+                            .bg(palette.border_subtle),
+                    )
+                    .child(
+                        self.button("refresh", "Refresh launcher")
+                            .variant(ButtonVariant::Subtle)
+                            .size(ButtonSize::Small)
+                            .icon("refresh")
                             .disabled(
                                 self.busy
                                     || self.account_busy
@@ -1931,34 +2426,62 @@ impl Render for Launcher {
             .child(
                 div()
                     .flex_1()
+                    .min_w(px(0.))
                     .flex()
                     .flex_col()
                     .when(chrome::custom(), |column| {
                         column.child(chrome::title_bar(window, cx, &palette))
                     })
-                    .child(content)
                     .child(
                         div()
-                            .p_4()
-                            .text_sm()
-                            .text_color(palette.muted_foreground)
-                            .child(
-                                self.load_error
-                                    .as_ref()
-                                    .or(self.sync_error.as_ref())
-                                    .unwrap_or(&self.status)
-                                    .clone(),
-                            ),
+                            .relative()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .min_h(px(0.))
+                            .flex()
+                            .flex_col()
+                            .child(content)
+                            .child(ui::scrollbar(&palette, "page-scrollbar", &page_scroll)),
+                    )
+                    .when_some(
+                        self.load_error
+                            .as_ref()
+                            .or(self.sync_error.as_ref())
+                            .or(Some(&self.status))
+                            .filter(|status| !status.is_empty())
+                            .cloned(),
+                        |column, status| {
+                            column.child(
+                                div()
+                                    .px(px(32.))
+                                    .py(px(10.))
+                                    .border_t_1()
+                                    .border_color(palette.border_subtle)
+                                    .text_size(px(ui::TEXT_CAPTION))
+                                    .text_color(palette.muted_foreground)
+                                    .child(status),
+                            )
+                        },
                     ),
             )
     }
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
-    let diagnostic = std::env::args().any(|a| a == "--diagnostic");
+    let showcase_root = showcase_root();
+    #[cfg(debug_assertions)]
+    if std::env::args().any(|a| a == "--showcase") && showcase_root.is_none() {
+        return Err("--showcase needs a directory containing AURORA_DISPOSABLE_DIAGNOSTIC".into());
+    }
+    SHOWCASE.store(
+        showcase_root.is_some(),
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    let diagnostic = cfg!(debug_assertions)
+        && (std::env::args().any(|a| a == "--diagnostic") || showcase_root.is_some());
     if !diagnostic && aurora_launcher_lib::run_artwork_decoder_if_requested() {
         return Ok(());
     }
-    if diagnostic {
+    if diagnostic && showcase_root.is_none() {
         let root = std::env::temp_dir().join(format!(
             "aurora-gpui-diagnostic-{}-{}",
             std::process::id(),
@@ -1981,12 +2504,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let (tx, rx) = async_channel::unbounded();
     let failed = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let failed_window = failed.clone();
-    let host = if diagnostic {
+    let host = if diagnostic && showcase_root.is_none() {
         None
     } else {
         let events = tx.clone();
         Some(Host::native(
-            platform_local_data_dir(APPLICATION_IDENTIFIER),
+            showcase_root
+                .map(Ok)
+                .unwrap_or_else(|| platform_local_data_dir(APPLICATION_IDENTIFIER)),
             env!("CARGO_PKG_VERSION"),
             rt.clone(),
             move |name, payload| {
@@ -2016,6 +2541,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         };
         let window_size = display
             .as_ref()
+            .filter(|_| !showcase())
             .map(|d| size(d.bounds().size.width * 0.8, d.bounds().size.height * 0.8))
             .unwrap_or_else(chrome::default_size);
         let display_id = display.as_ref().map(|d| d.id());
@@ -2070,13 +2596,21 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             this.sync_mutation_guards(cx);
                             cx.notify();
                         }),
-                        cx.subscribe(
+                        cx.subscribe_in(
                             &editor,
-                            |this: &mut Launcher, _, _: &InstanceEditorEvent, cx| {
-                                this.reload_guarded(cx);
-                                this.refresh_content_views(cx);
-                                if let Some(syncing) = &this.syncing {
-                                    syncing.update(cx, |syncing, cx| syncing.refresh(cx));
+                            window,
+                            |this: &mut Launcher, _, event: &InstanceEditorEvent, window, cx| {
+                                match event {
+                                    InstanceEditorEvent::Changed => {
+                                        this.reload_guarded(cx);
+                                        this.refresh_content_views(cx);
+                                        if let Some(syncing) = &this.syncing {
+                                            syncing.update(cx, |syncing, cx| syncing.refresh(cx));
+                                        }
+                                    }
+                                    InstanceEditorEvent::OpenContent { instance } => {
+                                        this.return_to_content(instance.clone(), 0, window, cx);
+                                    }
                                 }
                                 cx.notify();
                             },
@@ -2137,6 +2671,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         rt,
                         tx,
                         page: 0,
+                        reset_discover_scroll: false,
                         serial: 0,
                         busy: false,
                         account_busy: false,
@@ -2165,7 +2700,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         load_error: None,
                         sync_error: None,
                         sync_running: false,
-                        status: if diagnostic {
+                        status: if diagnostic && !showcase() {
                             "Disposable diagnostic mode · production data and integrations disabled"
                                 .into()
                         } else {
@@ -2173,6 +2708,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         },
                     };
                     view.start_load();
+                    if let Some(page) = showcase()
+                        .then(|| std::env::var("AURORA_SHOWCASE_PAGE").ok()?.parse().ok())
+                        .flatten()
+                    {
+                        view.open_page(page, window, cx);
+                    }
                     view.sync_mutation_guards(cx);
                     view.initialize_sync();
                     cx.spawn(async move |weak, cx| {
@@ -2351,6 +2892,7 @@ mod tests {
             },
             tx,
             page: 0,
+            reset_discover_scroll: false,
             serial: 2,
             busy: false,
             account_busy: false,
@@ -2384,6 +2926,32 @@ mod tests {
     }
     fn readiness() -> api::PlayReadiness {
         serde_json::from_value(serde_json::json!({"ready": true, "instanceId":"old", "accountId":null, "accountName":null, "instanceStatus":"ready", "runtimeStatus":"ready", "accountStatus":"ready", "processStatus":"idle", "blockers":[]})).unwrap()
+    }
+
+    #[test]
+    fn authentication_blocker_has_a_recovery_status_without_claiming_readiness() {
+        let mut state = view();
+        state.readiness_in_flight = false;
+        state.load_in_flight = false;
+        state.readiness = Some(decision(
+            "old",
+            "idle",
+            serde_json::json!([{
+                "code": "launch_authentication_required", "message": "Sign in first."
+            }]),
+        ));
+        assert_eq!(
+            state.readiness_badge("old").map(|badge| badge.0),
+            Some("Sign in needed")
+        );
+        assert!(!state.can_play("old"));
+        assert!(state.readiness_badge("unrelated").is_none());
+        // A running process keeps its own status when a saved session expires.
+        state.readiness.as_mut().unwrap().process_status = "running".into();
+        assert_eq!(
+            state.readiness_badge("old").map(|badge| badge.0),
+            Some("Running")
+        );
     }
     fn instance_json(id: &str) -> serde_json::Value {
         serde_json::json!({

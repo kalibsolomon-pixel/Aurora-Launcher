@@ -3,11 +3,13 @@ use crate::{
     api,
     backend::guarded,
     controls::{AuroraButton, AuroraInput, AuroraSelect, AuroraToggle, ButtonVariant},
+    theme::AuroraTheme,
+    ui,
 };
 use aurora_launcher_lib::host::Host;
 use gpui::{
-    Bounds, Context, Entity, EventEmitter, FocusHandle, Pixels, Render, SharedString, Subscription,
-    Window, div, prelude::*, px,
+    Bounds, Context, Div, Entity, EventEmitter, FocusHandle, Global, Pixels, Render, SharedString,
+    Subscription, WeakEntity, Window, div, prelude::*, px,
 };
 use gpui_kit::base::{
     Dialog,
@@ -19,6 +21,10 @@ pub enum InstanceCreatorEvent {
     Changed,
 }
 impl EventEmitter<InstanceCreatorEvent> for InstanceCreator {}
+
+/// Lets the page header open the creator without owning its state.
+struct CreatorHandle(WeakEntity<InstanceCreator>);
+impl Global for CreatorHandle {}
 
 struct SelectState {
     trigger: FocusHandle,
@@ -136,6 +142,8 @@ pub struct InstanceCreator {
     message: String,
     note: String,
     selects: [SelectState; 3],
+    /// Design screenshots only: the dialog was opened once.
+    showcase_seeded: bool,
 }
 impl InstanceCreator {
     pub fn new(
@@ -145,6 +153,7 @@ impl InstanceCreator {
         cx: &mut Context<Self>,
     ) -> Self {
         let (tx, rx) = async_channel::unbounded();
+        cx.set_global(CreatorHandle(cx.weak_entity()));
         let name = cx.new(|cx| InputState::new(window, cx).placeholder("Instance name"));
         let subscription = cx.subscribe(&name, |this: &mut Self, _, _: &InputEvent, cx| {
             if !this.message.is_empty() {
@@ -195,7 +204,16 @@ impl InstanceCreator {
                 SelectState::new(cx),
                 SelectState::new(cx),
             ],
+            showcase_seeded: false,
         }
+    }
+    /// Opens the creation dialog, loading the catalogs on first use.
+    fn open_dialog(&mut self, cx: &mut Context<Self>) {
+        self.open = true;
+        if !self.catalog_ready {
+            self.refresh(cx);
+        }
+        cx.notify();
     }
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         if self.busy {
@@ -494,61 +512,189 @@ impl InstanceCreator {
         cx.notify();
     }
 }
+/// The page header's "New instance" action. The creator owns the dialog and
+/// its state; the Instances header (rendered by the import view) hosts the
+/// button so the page has a single action row.
+pub fn new_instance_button(cx: &gpui::App) -> Option<AuroraButton> {
+    let creator = cx.try_global::<CreatorHandle>()?.0.upgrade()?;
+    let (no_host, busy) = {
+        let state = creator.read(cx);
+        (state.host.is_none(), state.busy)
+    };
+    Some(
+        AuroraButton::new("new-instance", "New instance")
+            .variant(ButtonVariant::Primary)
+            .icon("add")
+            .disabled(no_host || busy)
+            .on_click(move |_, _, cx| {
+                creator.update(cx, |v, cx| v.open_dialog(cx));
+            }),
+    )
+}
+
+/// Reader-facing platform name for a creatable loader kind.
+fn kind_label(kind: &str) -> String {
+    match kind {
+        "vanilla" => "Vanilla".into(),
+        "fabric" => "Fabric".into(),
+        "forge" => "Forge".into(),
+        "neoForge" => "NeoForge".into(),
+        "quilt" => "Quilt".into(),
+        other => other.to_owned(),
+    }
+}
+
+/// A settings row whose text wraps instead of widening the page (the shared
+/// `ui::setting_row` keeps long descriptions on one line, so a long hint would
+/// push the whole page past the window).
+fn setting(
+    t: &AuroraTheme,
+    title: impl Into<SharedString>,
+    description: Option<SharedString>,
+    last: bool,
+) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .justify_between()
+        .gap(px(24.))
+        .py(px(14.))
+        .when(!last, |this| {
+            this.border_b_1().border_color(t.border_subtle)
+        })
+        .child(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(3.))
+                .flex_1()
+                .min_w(px(0.))
+                .child(
+                    div()
+                        .text_size(px(ui::TEXT_BODY + 1.))
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(t.foreground)
+                        .child(title.into()),
+                )
+                .when_some(description, |this, text| {
+                    this.child(
+                        div()
+                            .text_size(px(ui::TEXT_CAPTION))
+                            .text_color(t.muted_foreground)
+                            .child(text),
+                    )
+                }),
+        )
+}
+
+/// A form field: visible label above its control.
+fn field(t: &AuroraTheme, label: &'static str, control: impl IntoElement) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .gap(px(6.))
+        .min_w(px(0.))
+        .child(
+            div()
+                .text_size(px(ui::TEXT_CAPTION))
+                .font_weight(gpui::FontWeight::MEDIUM)
+                .text_color(t.muted_foreground)
+                .child(label),
+        )
+        .child(control)
+}
+
+/// A control-shaped placeholder shown while a catalog loads.
+fn placeholder(t: &AuroraTheme, text: &'static str) -> Div {
+    div()
+        .flex()
+        .items_center()
+        .w_full()
+        .h(px(34.))
+        .px(px(12.))
+        .rounded(t.radius)
+        .bg(t.sunken)
+        .border_1()
+        .border_color(t.border_subtle)
+        .text_size(px(ui::TEXT_BODY))
+        .text_color(t.subtle_foreground)
+        .child(text)
+}
+
 impl Render for InstanceCreator {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.entity();
+        // Design screenshots: `AURORA_SHOWCASE_CREATOR=1` opens the dialog.
+        if crate::showcase()
+            && !self.showcase_seeded
+            && std::env::var("AURORA_SHOWCASE_CREATOR").is_ok_and(|v| v == "1")
+        {
+            self.showcase_seeded = true;
+            self.open_dialog(cx);
+        }
         let busy = self.busy;
-        let no_host = self.host.is_none();
         self.name
             .update(cx, |state, cx| state.set_disabled(busy, cx));
-        let opener = view.clone();
-        let mut root = div().flex().flex_col().gap(px(8.)).child(
-            AuroraButton::new("new-instance", "New instance")
-                .disabled(no_host || busy)
-                .on_click(move |_, _, cx| {
-                    opener.update(cx, |v, cx| {
-                        v.open = true;
-                        if !v.catalog_ready {
-                            v.refresh(cx);
-                        }
-                        cx.notify();
-                    });
-                }),
-        );
-        if !self.open {
-            return root.child(self.message.clone()).into_any_element();
-        }
         let t = crate::theme::theme(cx).clone();
+        // Out of flow: the closed creator takes no space on the page. Only a
+        // result message (created, failed) shows as a banner.
+        let mut root = if self.open || self.message.is_empty() {
+            div().absolute().size_0()
+        } else {
+            div()
+                .flex()
+                .items_start()
+                .gap(px(8.))
+                .px(px(12.))
+                .py(px(10.))
+                .rounded(t.radius)
+                .bg(t.card)
+                .border_1()
+                .border_color(t.border_subtle)
+                .child(crate::symbols::icon(Some("info"), px(16.), t.ring))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .max_w(px(720.))
+                        .text_size(px(ui::TEXT_BODY))
+                        .text_color(t.foreground)
+                        .child(self.message.clone()),
+                )
+        };
+        if !self.open {
+            return root.into_any_element();
+        }
         let snapshots_view = view.clone();
         let mut panel = div()
-            .w(px(480.))
+            .w(px(520.))
             .p(px(24.))
-            .rounded(t.radius)
-            .bg(t.surface)
+            .rounded(t.radius_lg)
+            .bg(t.raised)
+            .border_1()
+            .border_color(t.border_subtle)
             .text_color(t.foreground)
             .flex()
             .flex_col()
-            .gap(px(10.))
+            .gap(px(20.))
             .tab_group()
-            .child("New instance")
-            .child(AuroraInput::new(&self.name).label("Instance name"))
             .child(
-                div().flex().gap(px(8.)).child("Include snapshots").child(
-                    AuroraToggle::new("creator-snapshots")
-                        .label("Include snapshots")
-                        .checked(self.snapshots)
-                        .disabled(busy)
-                        .on_change(move |checked, _, _, cx| {
-                            snapshots_view.update(cx, |v, cx| {
-                                if v.snapshots != checked {
-                                    v.snapshots = checked;
-                                    v.message.clear();
-                                    v.refresh(cx);
-                                }
-                            });
-                        }),
-                ),
-            );
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(14.))
+                    .child(ui::icon_tile(&t, Some("add"), 40., true))
+                    .child(ui::section_header(
+                        &t,
+                        "New instance",
+                        Some("Pick a name, a game version and a platform.".into()),
+                    )),
+            )
+            .child(field(
+                &t,
+                "Instance name",
+                AuroraInput::new(&self.name).label("Instance name"),
+            ));
         let options: [Vec<SharedString>; 3] = [
             self.versions
                 .iter()
@@ -560,7 +706,7 @@ impl Render for InstanceCreator {
                     }
                 })
                 .collect(),
-            self.kinds.iter().map(|k| k.clone().into()).collect(),
+            self.kinds.iter().map(|k| kind_label(k).into()).collect(),
             std::iter::once(SharedString::from("Automatic compatible version"))
                 .chain(self.loaders.iter().flatten().map(|v| {
                     if v.stable {
@@ -587,6 +733,7 @@ impl Render for InstanceCreator {
                     .map(|i| i + 1)
             },
         ];
+        let mut controls: Vec<Option<gpui::AnyElement>> = vec![None, None, None];
         for (ix, label, id) in [
             (0, "Minecraft version", "creator-minecraft"),
             (1, "Platform", "creator-platform"),
@@ -595,20 +742,25 @@ impl Render for InstanceCreator {
             if ix == 2 && self.kind.as_deref() == Some("vanilla") {
                 continue;
             }
-            panel = panel.child(div().child(label));
             if busy || !self.catalog_ready || (ix == 2 && self.loaders.is_none()) {
-                panel = panel.child(div().child(if busy {
-                    "Unavailable while creating"
-                } else {
-                    "Loading…"
-                }));
+                controls[ix] = Some(
+                    placeholder(
+                        &t,
+                        if busy {
+                            "Unavailable while creating"
+                        } else {
+                            "Loading…"
+                        },
+                    )
+                    .into_any_element(),
+                );
                 continue;
             }
             let s = &self.selects[ix];
             let open_view = view.clone();
             let highlight_view = view.clone();
             let confirm_view = view.clone();
-            panel = panel.child(
+            controls[ix] = Some(
                 AuroraSelect::new(
                     id,
                     label,
@@ -634,74 +786,148 @@ impl Render for InstanceCreator {
                 })
                 .on_confirm(move |selected, _, cx| {
                     confirm_view.update(cx, |v, cx| v.select(ix, selected, cx));
-                }),
+                })
+                .into_any_element(),
             );
         }
+        let loader_control = controls.pop().flatten();
+        let platform_control = controls
+            .pop()
+            .flatten()
+            .unwrap_or_else(|| div().into_any_element());
+        let version_control = controls
+            .pop()
+            .flatten()
+            .unwrap_or_else(|| div().into_any_element());
+        panel = panel
+            .child(
+                div()
+                    .flex()
+                    .gap(px(12.))
+                    .child(field(&t, "Minecraft version", version_control).flex_1())
+                    .child(field(&t, "Platform", platform_control).flex_1()),
+            )
+            .when_some(loader_control, |this, control| {
+                this.child(field(&t, "Loader policy", control))
+            });
         if self.kind.as_deref() != Some("vanilla")
             && self.loaders.as_ref().is_some_and(|v| v.is_empty())
         {
-            panel = panel.child("No supported loader versions for this Minecraft version.");
+            panel = panel.child(
+                div()
+                    .text_size(px(ui::TEXT_CAPTION))
+                    .text_color(t.warning)
+                    .child("No supported loader versions for this Minecraft version."),
+            );
         }
         let aurora_view = view.clone();
-        panel = panel
-            .child(
-                div().flex().gap(px(8.)).child("Install Aurora").child(
-                    AuroraToggle::new("creator-aurora")
-                        .label("Install Aurora")
-                        .checked(self.aurora)
-                        .disabled(
-                            busy || (!self.aurora
-                                && !self.compatibility.as_ref().is_some_and(|c| c.available)),
-                        )
-                        .on_change(move |checked, _, _, cx| {
-                            aurora_view.update(cx, |v, cx| {
-                                v.aurora = checked;
-                                v.message.clear();
-                                cx.notify();
-                            });
-                        }),
-                ),
-            )
-            .child(if self.compatibility.is_none() && self.note.is_empty() {
-                "Checking Aurora compatibility…".to_string()
-            } else {
-                self.note.clone()
-            })
-            .child(self.message.clone());
-        let retry_view = view.clone();
+        let aurora_note = if self.compatibility.is_none() && self.note.is_empty() {
+            "Checking Aurora compatibility…".to_string()
+        } else {
+            self.note.clone()
+        };
         panel = panel.child(
-            AuroraButton::new("creator-refresh", "Refresh catalogs")
-                .disabled(busy)
-                .on_click(move |_, _, cx| {
-                    retry_view.update(cx, |v, cx| v.refresh(cx));
-                }),
+            div()
+                .flex()
+                .flex_col()
+                .px(px(16.))
+                .rounded(t.radius)
+                .bg(t.sunken)
+                .border_1()
+                .border_color(t.border_subtle)
+                .child(
+                    setting(
+                        &t,
+                        "Include snapshots",
+                        Some("Also list snapshot builds of Minecraft.".into()),
+                        false,
+                    )
+                    .child(
+                        AuroraToggle::new("creator-snapshots")
+                            .label("Include snapshots")
+                            .checked(self.snapshots)
+                            .disabled(busy)
+                            .on_change(move |checked, _, _, cx| {
+                                snapshots_view.update(cx, |v, cx| {
+                                    if v.snapshots != checked {
+                                        v.snapshots = checked;
+                                        v.message.clear();
+                                        v.refresh(cx);
+                                    }
+                                });
+                            }),
+                    ),
+                )
+                .child(
+                    setting(&t, "Install Aurora", Some(aurora_note.into()), true).child(
+                        AuroraToggle::new("creator-aurora")
+                            .label("Install Aurora")
+                            .checked(self.aurora)
+                            .disabled(
+                                busy || (!self.aurora
+                                    && !self.compatibility.as_ref().is_some_and(|c| c.available)),
+                            )
+                            .on_change(move |checked, _, _, cx| {
+                                aurora_view.update(cx, |v, cx| {
+                                    v.aurora = checked;
+                                    v.message.clear();
+                                    cx.notify();
+                                });
+                            }),
+                    ),
+                ),
         );
+        if !self.message.is_empty() {
+            panel = panel.child(
+                div()
+                    .text_size(px(ui::TEXT_BODY))
+                    .text_color(t.muted_foreground)
+                    .child(self.message.clone()),
+            );
+        }
+        let retry_view = view.clone();
         let cancel_view = view.clone();
         let create_view = view.clone();
         panel = panel.child(
             div()
                 .flex()
+                .items_center()
+                .justify_between()
                 .gap(px(8.))
                 .child(
-                    AuroraButton::new("creator-back", "Back")
+                    AuroraButton::new("creator-refresh", "Refresh catalogs")
+                        .variant(ButtonVariant::Ghost)
+                        .icon("refresh")
                         .disabled(busy)
                         .on_click(move |_, _, cx| {
-                            cancel_view.update(cx, |v, cx| {
-                                v.open = false;
-                                cx.notify();
-                            });
+                            retry_view.update(cx, |v, cx| v.refresh(cx));
                         }),
                 )
                 .child(
-                    AuroraButton::new("creator-confirm", "Create instance")
-                        .variant(ButtonVariant::Primary)
-                        .disabled(
-                            busy || !self.catalog_ready
-                                || !aurora_ready(self.aurora, self.compatibility.as_ref()),
+                    div()
+                        .flex()
+                        .gap(px(8.))
+                        .child(
+                            AuroraButton::new("creator-back", "Back")
+                                .disabled(busy)
+                                .on_click(move |_, _, cx| {
+                                    cancel_view.update(cx, |v, cx| {
+                                        v.open = false;
+                                        cx.notify();
+                                    });
+                                }),
                         )
-                        .on_click(move |_, _, cx| {
-                            create_view.update(cx, |v, cx| v.create(cx));
-                        }),
+                        .child(
+                            AuroraButton::new("creator-confirm", "Create instance")
+                                .variant(ButtonVariant::Primary)
+                                .disabled(
+                                    busy || !self.catalog_ready
+                                        || !aurora_ready(self.aurora, self.compatibility.as_ref()),
+                                )
+                                .on_click(move |_, _, cx| {
+                                    create_view.update(cx, |v, cx| v.create(cx));
+                                }),
+                        ),
                 ),
         );
         let changed = view.clone();

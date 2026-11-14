@@ -22,9 +22,21 @@ pub struct AuroraTheme {
     #[allow(dead_code)]
     pub sunken: Hsla,
     pub surface_hover: Hsla,
+    /// Content cards and panels: the main reading surface, kept nearly opaque
+    /// over Borealis so body text never sits on a bright band.
+    pub card: Hsla,
+    /// Resting fill of secondary controls (a faint lift over any surface).
+    pub control: Hsla,
+    pub control_hover: Hsla,
     pub border: Hsla,
+    /// Hairline separators and card outlines.
+    pub border_subtle: Hsla,
     pub foreground: Hsla,
     pub muted_foreground: Hsla,
+    /// Tertiary text: captions, timestamps, metadata.
+    pub subtle_foreground: Hsla,
+    /// Accent wash for selected rows, tabs and navigation.
+    pub accent_soft: Hsla,
     pub accent: Hsla,
     pub accent_hover: Hsla,
     pub accent_foreground: Hsla,
@@ -35,7 +47,12 @@ pub struct AuroraTheme {
     pub caret: Hsla,
     pub danger: Hsla,
     pub danger_hover: Hsla,
+    pub success: Hsla,
+    pub warning: Hsla,
+    /// Controls and inputs.
     pub radius: Pixels,
+    /// Cards and panels.
+    pub radius_lg: Pixels,
 }
 
 impl Global for AuroraTheme {}
@@ -49,9 +66,15 @@ impl Default for AuroraTheme {
             raised: rgb(0x1d1f27).into(),
             sunken: rgb(0x0d0e13).into(),
             surface_hover: rgb(0x242631).into(),
+            card: rgb(0x16171d).into(),
+            control: rgba(0xffffff14).into(),
+            control_hover: rgba(0xffffff22).into(),
             border: rgb(0x343743).into(),
+            border_subtle: rgba(0xffffff14).into(),
             foreground: rgb(0xedf1fb).into(),
-            muted_foreground: rgb(0x929db4).into(),
+            muted_foreground: rgb(0xccd3e1).into(),
+            subtle_foreground: rgb(0xb8c0d2).into(),
+            accent_soft: rgba(0x8b80ff26).into(),
             accent: rgb(0x6f5df2).into(),
             accent_hover: rgb(0x6f63e8).into(),
             accent_foreground: rgba(0xFFFFFFFF).into(),
@@ -60,7 +83,10 @@ impl Default for AuroraTheme {
             caret: rgb(0xedf1fb).into(),
             danger: rgb(0xff9a9a).into(),
             danger_hover: rgb(0xff9a9a).into(),
-            radius: px(6.),
+            success: rgb(0x5fd39a).into(),
+            warning: rgb(0xf2c26b).into(),
+            radius: px(8.),
+            radius_lg: px(12.),
         }
     }
 }
@@ -91,11 +117,11 @@ fn resolved(appearance: Option<&crate::api::Appearance>) -> AuroraTheme {
     let surfaces = match appearance.theme.as_str() {
         "midnight" => Some((
             0x0d1017, 0x070910, 0x121621, 0x191e2b, 0x202636, 0x0a0d14, 0x2c3444, 0xe9edf9,
-            0x919db5,
+            0xccd3e1,
         )),
         "oled" => Some((
             0x000000, 0x000000, 0x0b0b0e, 0x141419, 0x1b1b22, 0x000000, 0x2b2d35, 0xf0f3fc,
-            0x939db4,
+            0xccd3e1,
         )),
         _ => None,
     };
@@ -109,6 +135,7 @@ fn resolved(appearance: Option<&crate::api::Appearance>) -> AuroraTheme {
         palette.surface_hover = rgb(hover).into();
         palette.sunken = rgb(sunken).into();
         palette.border = rgb(border).into();
+        palette.card = rgb(surface).into();
         palette.foreground = rgb(foreground).into();
         palette.muted_foreground = rgb(muted).into();
     }
@@ -120,12 +147,17 @@ fn resolved(appearance: Option<&crate::api::Appearance>) -> AuroraTheme {
         palette.surface_hover = translucent(palette.surface_hover, borealis::HOVER_ALPHA);
         palette.sunken = translucent(palette.sunken, borealis::SUNKEN_ALPHA);
         palette.raised = translucent(palette.raised, borealis::RAISED_ALPHA);
+        palette.card = translucent(palette.card, borealis::CARD_ALPHA);
     }
     let accent = &appearance.palette;
     palette.accent = color(&accent.accent_strong, palette.accent);
     palette.accent_hover = color(&accent.accent_hover, palette.accent_hover);
     palette.accent_foreground = color(&accent.accent_contrast, palette.accent_foreground);
     palette.ring = color(&accent.accent, palette.ring);
+    palette.accent_soft = Hsla {
+        a: 0.13,
+        ..palette.ring
+    };
     palette.selection = Hsla {
         a: 0.35,
         ..palette.ring
@@ -205,11 +237,12 @@ mod tests {
             assert_eq!(palette.border.a, 1.0);
             assert_eq!(palette.foreground.a, 1.0);
             assert_eq!(palette.accent.a, 1.0);
-            assert_eq!(byte(palette.sidebar.a), 0x8c);
-            assert_eq!(byte(palette.surface.a), 0xb4);
-            assert_eq!(byte(palette.surface_hover.a), 0xd0);
-            assert_eq!(byte(palette.sunken.a), 0xc8);
-            assert_eq!(byte(palette.raised.a), 0xf2);
+            assert_eq!(byte(palette.sidebar.a), borealis::SIDEBAR_ALPHA);
+            assert_eq!(byte(palette.surface.a), borealis::SURFACE_ALPHA);
+            assert_eq!(byte(palette.surface_hover.a), borealis::HOVER_ALPHA);
+            assert_eq!(byte(palette.sunken.a), borealis::SUNKEN_ALPHA);
+            assert_eq!(byte(palette.raised.a), borealis::RAISED_ALPHA);
+            assert_eq!(byte(palette.card.a), borealis::CARD_ALPHA);
         }
     }
 
