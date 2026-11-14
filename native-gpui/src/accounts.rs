@@ -1355,7 +1355,8 @@ impl Render for Accounts {
                         .items_center()
                         .gap(px(6.))
                         .child(slot)
-                        .child(
+                        .child(div().w(px(128.)).when(!(selected && reauth), |cell| {
+                            cell.child(
                             AuroraButton::new(
                                 gpui_kit::SharedString::from(format!("restore-{id}")),
                                 if reauth {
@@ -1370,16 +1371,15 @@ impl Render for Accounts {
                                 account.minecraft_name
                             ))
                             .size(ButtonSize::Small)
-                            // The selected account's expired session is the
-                            // page's next step, so its Reconnect is accented.
-                            .variant(ButtonVariant::Default)
+                            .full_width()
                             .disabled(busy)
                             .on_click(cx.listener(
                                 move |this, _, _, cx| {
                                     this.refresh_session(restore_id.clone(), cx);
                                 },
                             )),
-                        )
+                            )
+                        }))
                         .child(div().w(px(1.)).h(px(20.)).mx(px(10.)).bg(palette.border_subtle))
                         .child(
                             icon_button(

@@ -1716,7 +1716,10 @@ impl Render for Syncing {
                         .child(error.clone()),
                 );
             }
-            root = root.child(actions);
+            let idle_off = summary_only && self.section == 0 && self.policy.error.is_none();
+            if !idle_off {
+                root = root.child(actions);
+            }
         } else {
             let view = cx.entity();
             let status_strip = div()

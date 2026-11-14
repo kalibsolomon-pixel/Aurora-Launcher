@@ -143,15 +143,22 @@ pub(crate) fn duration(ms: u64) -> String {
     }
 }
 
-/// Milliseconds → "45m", "2h", "2h 15m" for labels above chart bars.
+/// Milliseconds → "45m", "2h", "2.3h": narrow enough that neighbouring bar
+/// labels never touch.
 pub(crate) fn short_duration(ms: u64) -> String {
     let minutes = ms / 60_000;
     match minutes {
         0 if ms > 0 => "<1m".into(),
         0 => String::new(),
         1..=59 => format!("{minutes}m"),
-        _ if minutes % 60 == 0 => format!("{}h", minutes / 60),
-        _ => format!("{}h {}m", minutes / 60, minutes % 60),
+        _ => {
+            let tenths = (minutes * 10 + 30) / 60;
+            if tenths % 10 == 0 {
+                format!("{}h", tenths / 10)
+            } else {
+                format!("{}.{}h", tenths / 10, tenths % 10)
+            }
+        }
     }
 }
 
@@ -3597,7 +3604,7 @@ impl HomeWidgets {
                                                                 .flex_col()
                                                                 .items_center()
                                                                 .justify_end()
-                                                                .gap(px(3.))
+                                                                .gap(px(6.))
                                                                 .when(
                                                                     count <= 7
                                                                         && point.fraction > 0.,
@@ -5130,7 +5137,8 @@ mod tests {
         assert_eq!(short_duration(0), "");
         assert_eq!(short_duration(45 * 60_000), "45m");
         assert_eq!(short_duration(120 * 60_000), "2h");
-        assert_eq!(short_duration(135 * 60_000), "2h 15m");
+        assert_eq!(short_duration(135 * 60_000), "2.3h");
+        assert_eq!(short_duration(177 * 60_000), "3h");
         assert_eq!(bar_height(0., 96.), 2.);
         assert_eq!(bar_height(1., 96.), 92.);
         assert_eq!(bar_height(0.5, 96.), 46.);
