@@ -24,6 +24,9 @@ pub struct WidgetPlacement {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct WidgetGrid {
+    /// Subcells per legacy cell; absent means the original six-column grid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subdivisions: Option<u8>,
     pub columns: u8,
     pub rows: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -122,13 +125,20 @@ impl HomeLayout {
             {
                 return Err("Widget IDs must be unique bounded lowercase identifiers.");
             }
-            if widget.grid.is_some_and(|g| {
-                !(1..=6).contains(&g.columns)
-                    || !(1..=3).contains(&g.rows)
-                    || g.position
-                        .is_some_and(|[c, r]| c as u16 + g.columns as u16 > 6 || r > 63)
-            }) {
-                return Err("Widget grid dimensions must be 1–6 columns and 1–3 rows.");
+            if let Some(g) = widget.grid {
+                let units = g.subdivisions.unwrap_or(1);
+                if ![1, 2, 4].contains(&units)
+                    || !(1..=6 * units).contains(&g.columns)
+                    || !(1..=3 * units).contains(&g.rows)
+                    || g.position.is_some_and(|[c, r]| {
+                        c as u16 + g.columns as u16 > 6 * units as u16
+                            || r as u16 > 63 * units as u16
+                    })
+                {
+                    return Err(
+                        "Widget grid dimensions or positions are outside their precision bounds.",
+                    );
+                }
             }
             if supported_sizes(&widget.id).is_some_and(|sizes| !sizes.contains(&widget.size)) {
                 return Err("The requested widget size is outside its supported bounds.");
@@ -148,6 +158,7 @@ mod tests {
         assert!(layout.widgets[0].grid.is_none());
         assert_eq!(serde_json::to_string(&layout).unwrap(), legacy);
         layout.widgets[0].grid = Some(WidgetGrid {
+            subdivisions: None,
             columns: 6,
             rows: 3,
             position: None,
@@ -159,6 +170,7 @@ mod tests {
         layout.widgets[0].grid.as_mut().unwrap().columns = 7;
         assert!(layout.validate().is_err());
         layout.widgets[0].grid = Some(WidgetGrid {
+            subdivisions: None,
             columns: 1,
             rows: 0,
             position: None,
@@ -169,6 +181,7 @@ mod tests {
     fn snapped_positions_are_bounded_and_optional() {
         let mut layout = HomeLayout::default();
         layout.widgets[0].grid = Some(WidgetGrid {
+            subdivisions: None,
             columns: 2,
             rows: 1,
             position: Some([4, 63]),
@@ -179,6 +192,33 @@ mod tests {
         layout.widgets[0].grid.as_mut().unwrap().position = Some([0, 64]);
         assert!(layout.validate().is_err());
     }
+    #[test]
+    fn fine_grid_precision_preserves_legacy_meaning_and_bounds() {
+        let mut layout = HomeLayout::default();
+        layout.widgets[0].grid = Some(WidgetGrid {
+            subdivisions: Some(4),
+            columns: 13,
+            rows: 5,
+            position: Some([11, 252]),
+        });
+        layout.validate().unwrap();
+        let encoded = serde_json::to_string(&layout).unwrap();
+        let loaded: HomeLayout = serde_json::from_str(&encoded).unwrap();
+        assert_eq!(loaded, layout);
+        for invalid in [0, 3, 5, 255] {
+            layout.widgets[0].grid.as_mut().unwrap().subdivisions = Some(invalid);
+            assert!(layout.validate().is_err());
+        }
+        let grid = layout.widgets[0].grid.as_mut().unwrap();
+        grid.subdivisions = Some(4);
+        grid.position = Some([12, 0]);
+        assert!(layout.validate().is_err());
+        layout.widgets[0].grid.as_mut().unwrap().position = Some([0, 253]);
+        assert!(layout.validate().is_err());
+        layout.widgets[0].grid.as_mut().unwrap().subdivisions = None;
+        assert!(layout.validate().is_err()); // Never reinterpret legacy cells as fine units.
+    }
+
     #[test]
     fn defaults_are_restrained_and_valid() {
         let layout = HomeLayout::default();

@@ -726,6 +726,9 @@ pub async fn set_instance_icon(
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct WidgetGrid {
+    /// Subcells per legacy cell; absent means the original six-column grid.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subdivisions: Option<u8>,
     pub columns: u8,
     pub rows: u8,
     #[serde(default, skip_serializing_if = "Option::is_none")]

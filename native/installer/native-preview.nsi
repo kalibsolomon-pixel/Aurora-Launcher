@@ -8,6 +8,7 @@ Unicode true
 !include Sections.nsh
 !include WordFunc.nsh
 !include Win\COM.nsh
+!include nsDialogs.nsh
 !ifndef VERSION
 !error "VERSION is required"
 !endif
@@ -44,6 +45,7 @@ VIAddVersionKey "ProductVersion" "${VERSION}"
 VIAddVersionKey "LegalCopyright" "Aurora Launcher contributors"
 !insertmacro MUI_PAGE_WELCOME
 !insertmacro MUI_PAGE_LICENSE "..\..\LICENSE"
+Page custom UpgradePage UpgradeLeave
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_INSTFILES
 !insertmacro MUI_PAGE_FINISH
@@ -58,6 +60,35 @@ Var Activated
 Var InstalledExe
 Var LegacyStartSlot
 Var LegacyDesktopSlot
+Var RemovePrevious
+Var UpgradeCheckbox
+Var PriorVersion
+
+Function UpgradePage
+  ${If} $PriorVersion == ""
+    Abort
+  ${EndIf}
+  !insertmacro MUI_HEADER_TEXT "Upgrade Aurora Launcher" "Install ${VERSION} and keep your files and data."
+  nsDialogs::Create 1018
+  Pop $0
+  ${NSD_CreateLabel} 0 0 100% 36u "Aurora Launcher $PriorVersion is installed. This upgrade replaces the launcher program. Your instances, mods, worlds, accounts, settings and other app files are preserved."
+  Pop $0
+  ${NSD_CreateCheckbox} 0 48u 100% 24u "Remove the previous launcher executable (recommended)"
+  Pop $UpgradeCheckbox
+  ${NSD_SetState} $UpgradeCheckbox $RemovePrevious
+  ${NSD_CreateLabel} 0 82u 100% 32u "If unchecked, the previous program is kept as aurora-launcher.previous.exe. It does not create another installed-app entry or change your data."
+  Pop $0
+  nsDialogs::Show
+FunctionEnd
+
+Function UpgradeLeave
+  ${NSD_GetState} $UpgradeCheckbox $RemovePrevious
+  ${If} $RemovePrevious == 0
+  ${AndIf} ${FileExists} "$INSTDIR\aurora-launcher.previous.exe"
+    MessageBox MB_OK|MB_ICONEXCLAMATION "A previous launcher backup already exists. Preserve it elsewhere or select the recommended replacement option."
+    Abort
+  ${EndIf}
+FunctionEnd
 
 !macro SlotOwned SLOT
   StrCpy $9 0
@@ -131,6 +162,9 @@ Var LegacyDesktopSlot
 !macroend
 
 Function .onInit
+  ; The same safe default applies to direct downloads and silent updater installs.
+  StrCpy $RemovePrevious 1
+  StrCpy $PriorVersion ""
   ${IfNot} ${RunningX64}
     Abort "Aurora Launcher requires Windows x64."
   ${EndIf}
@@ -148,7 +182,13 @@ Function .onInit
   !insertmacro CheckAncestors "$INSTDIR\MaterialSymbols-LICENSE.txt"
   !insertmacro CheckAncestors "$INSTDIR\native-package.ini"
   !insertmacro CheckAncestors "$INSTDIR\uninstall.exe"
+  !insertmacro CheckAncestors "$INSTDIR\aurora-launcher.previous.exe"
   ${GetParameters} $Parameters
+  ClearErrors
+  ${GetOptions} $Parameters "/KEEPPREVIOUS" $0
+  ${IfNot} ${Errors}
+    StrCpy $RemovePrevious 0
+  ${EndIf}
   ${GetOptions} $Parameters "/UPDATEPID=" $6
   ${If} $6 != ""
     IntOp $7 $6 + 0
@@ -195,6 +235,7 @@ Function .onInit
     Abort "This directory contains unrecognized launcher package files. No files were changed."
   ${EndIf}
   ReadINIStr $0 "$INSTDIR\native-package.ini" "Package" "Version"
+  StrCpy $PriorVersion $0
   ${VersionCompare} "$0" "${VERSION}" $1
   ${If} $1 == 1
     Abort "A newer Aurora Launcher version is installed. Downgrades require a separately reviewed rollback."
@@ -235,6 +276,11 @@ Function .onInit
     StrCpy $DesktopSlot ""
   ${EndIf}
   done:
+  ${If} $RemovePrevious == 0
+  ${AndIf} $PriorVersion != ""
+  ${AndIf} ${FileExists} "$INSTDIR\aurora-launcher.previous.exe"
+    Abort "A previous launcher backup already exists. Existing files were preserved."
+  ${EndIf}
 FunctionEnd
 
 Section "Aurora Launcher" Main
@@ -292,9 +338,19 @@ Section "Aurora Launcher" Main
     ${EndIf}
     Delete "$LegacyDesktopSlot"
   ${EndIf}
-  ; Only this operation's previous executable is retired after activation.
-  Delete "$INSTDIR\native-previous.exe"
+  ; Retire only this transaction's old program after successful activation.
+  ; The optional backup never changes data or installs a second app identity.
+  ClearErrors
+  ${If} $RemovePrevious == 1
+    Delete "$INSTDIR\native-previous.exe"
+  ${ElseIf} $Previous == 1
+    Rename "$INSTDIR\native-previous.exe" "$INSTDIR\aurora-launcher.previous.exe"
+  ${EndIf}
+  IfErrors retirement_failed
   Goto done
+  retirement_failed:
+  SetErrorLevel 2
+  Abort "The new launcher is installed, but the previous program could not be retired. Existing files and recovery evidence were preserved."
   restore:
   ${If} $Activated == 1
     Delete "$INSTDIR\${EXECUTABLE}"

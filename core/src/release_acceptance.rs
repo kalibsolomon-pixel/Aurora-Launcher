@@ -63,6 +63,7 @@ async fn release_candidate_copy_backup_and_new_preferences_survive_restart() {
         .unwrap();
     let mut widgets = config.home_widgets().clone();
     widgets.widgets[0].grid = Some(crate::home_widgets::WidgetGrid {
+        subdivisions: None,
         columns: 2,
         rows: 2,
         position: Some([0, 1]),

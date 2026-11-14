@@ -30,9 +30,26 @@ $results.installExit=Run-Setup
 if ($results.installExit -ne 0 -or !(Test-Path -LiteralPath $exe)) { throw 'Install failed' }
 $sentinel=Join-Path $installation 'user-sentinel.txt'
 [IO.File]::WriteAllText($sentinel,'NATIVE9 user content must survive')
+$managed = Join-Path $root 'managed\instances\fixture'
+New-Item -ItemType Directory -Path $managed -Force | Out-Null
+$managedSentinel = Join-Path $managed 'world-and-mods-sentinel.txt'
+[IO.File]::WriteAllText($managedSentinel,'Managed application data must survive upgrades')
+# Default upgrades retire the old executable after activation, while preserving
+# both unrelated app files and the separate managed-data tree.
+$oldVersionMarker=[IO.File]::ReadAllText($marker) -replace 'Version=[^\r\n]+','Version=2.2.0'
+[IO.File]::WriteAllText($marker,$oldVersionMarker)
 $results.reinstallExit=Run-Setup
 if ($results.reinstallExit -ne 0) { throw 'Reinstall failed' }
+$backup=Join-Path $installation 'aurora-launcher.previous.exe'
+$results.defaultUpgradeRetiresOld=!(Test-Path -LiteralPath $backup) -and !(Test-Path -LiteralPath (Join-Path $installation 'native-previous.exe'))
+if (!$results.defaultUpgradeRetiresOld -or [IO.File]::ReadAllText($sentinel) -ne 'NATIVE9 user content must survive' -or [IO.File]::ReadAllText($managedSentinel) -ne 'Managed application data must survive upgrades') { throw 'Default upgrade did not retire only the old program' }
 $expectedHash=(Get-FileHash -LiteralPath $exe).Hash
+$results.keepPreviousExit=Run-Setup @('/S','/KEEPPREVIOUS')
+if ($results.keepPreviousExit -ne 0 -or (Get-FileHash -LiteralPath $backup).Hash -ne $expectedHash) { throw 'Explicit previous-program retention failed' }
+$results.existingBackupExit=Run-Setup @('/S','/KEEPPREVIOUS')
+if ($results.existingBackupExit -eq 0 -or (Get-FileHash -LiteralPath $backup).Hash -ne $expectedHash) { throw 'An existing previous-program backup was not preserved' }
+# Remove only this acceptance run's positively identified program backup.
+Remove-Item -LiteralPath $backup
 # Exercise the real filename transition inside this unique acceptance identity.
 $legacyExe=Join-Path $installation 'aurora-native.exe'
 $shell=New-Object -ComObject WScript.Shell
@@ -135,6 +152,8 @@ $results.reinstallAfterUninstallExit=Run-Setup
 if ($results.reinstallAfterUninstallExit -ne 0) { throw 'Reinstall into a sentinel-preserving directory failed' }
 $results.finalUninstallExit=Uninstall-Owned
 $results.sentinelPreserved=[IO.File]::ReadAllText($sentinel) -eq 'NATIVE9 user content must survive'
+$results.managedDataPreserved=[IO.File]::ReadAllText($managedSentinel) -eq 'Managed application data must survive upgrades'
+if (!$results.managedDataPreserved) { throw 'Managed app data changed during installer acceptance' }
 $results.authenticode=(Get-AuthenticodeSignature -LiteralPath $installer).Status.ToString()
 $results | ConvertTo-Json | Set-Content -LiteralPath (Join-Path $root 'results.json')
 Write-Output $root

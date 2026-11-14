@@ -259,12 +259,15 @@ lives in `core/`; it has no Tauri, WebView or frontend runtime dependency.
   or infer compatibility from a release title. Branch/CI artifacts remain excluded.
   Explicit diagnostic manifest overrides retain the deterministic loopback path.
   New-instance discovery and updates share per-environment GitHub asset validation. One stable Client tag may publish one JAR per distinct Minecraft suffix; duplicate suffixes or mixed generic/suffixed JARs are rejected. Release pins resolve by Client version and Minecraft environment. Launcher update authority is unchanged.
-- Home widget placements may carry optional bounded `grid` dimensions (1–6 columns,
-  1–3 rows). Absent geometry preserves legacy size presets. Save through the core's
-  atomic configuration API; unknown widget entries survive. Native writes are
-  serialized/coalesced, and responsive layout clamps only rendered spans, never
-  saved dimensions. Older builds that reject the new optional field cannot read
-  customized geometry; do not strip it or rewrite malformed state for downgrade.
+- Home widget placements may carry optional bounded `grid` dimensions (1?6 columns,
+  1?3 rows in legacy units). Optional `grid.subdivisions` accepts 1, 2 or 4;
+  absence means legacy units. GPUI customization writes four subcells per legacy
+  cell (up to 24 columns, 12 rows). Absent geometry preserves legacy size presets.
+  Save through the core's atomic configuration API; unknown widget entries survive.
+  Native writes are serialized/coalesced, and responsive layout clamps only rendered
+  spans, never saved dimensions. Older builds reject customized fine geometry;
+  reset Home layout in a supporting version before downgrade, never strip fields
+  or rewrite malformed state. See `docs/native-ui/NATIVE_2_2_1_ACCEPTANCE.md`.
 - Playtime graphs consume the existing daily-history API and its UTC day buckets.
   Never invent activity, poll for chart animation, or confuse a zero-day baseline
   with recorded time. See `docs/native-ui/NATIVE_CONTROLS_WIDGETS_ACCEPTANCE.md`.
@@ -272,9 +275,11 @@ lives in `core/`; it has no Tauri, WebView or frontend runtime dependency.
 
 ## Native drag widget layout (2026-11-01)
 
-Home customization uses header dragging and corner resizing with snapped outlines.
+Home customization uses header dragging and corner resizing with a
+collision-resolved preview and fine snapping enabled by default. Fine units have
+four subcells per legacy cell; legacy layouts keep their pixel dimensions.
 The optional grid.position is a bounded [column,row] anchor (column plus span at
-most six; row 0�63). Absent anchors retain automatic placement. Rust resolves
+most six in legacy units; row 0?63, scaled by subdivisions). Absent anchors retain automatic placement. Rust resolves
 collisions and persists one completed gesture through the atomic Home API; pointer
 previews and canceled gestures never write. Responsive display does not rewrite
 saved geometry. Keep stable widget models so keyboard focus and pointer capture

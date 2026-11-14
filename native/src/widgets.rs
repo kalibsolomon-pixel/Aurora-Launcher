@@ -88,6 +88,7 @@ pub fn bind(window: &crate::AppWindow) {
         edit(|layout| {
             if let Some(w) = layout.widgets.iter_mut().find(|w| w.id == id.as_str()) {
                 w.grid = Some(api::WidgetGrid {
+                    subdivisions: None,
                     columns: columns.clamp(1, 6) as u8,
                     rows: rows.clamp(1, 3) as u8,
                     position: None,
@@ -1214,6 +1215,7 @@ fn arrange(
     let width = width.clamp(1, 6);
     let max_column = (columns.clamp(1, 6) - width.min(columns.clamp(1, 6))).min(6 - width);
     layout.widgets[index].grid = Some(api::WidgetGrid {
+        subdivisions: None,
         columns: width as u8,
         rows: height.clamp(1, 3) as u8,
         position: Some([column.clamp(0, max_column) as u8, row.clamp(0, 63) as u8]),
@@ -1235,6 +1237,7 @@ fn arrange(
             .find(|w| w.id == widget.id)
             .unwrap();
         let mut grid = target.grid.clone().unwrap_or(api::WidgetGrid {
+            subdivisions: None,
             columns: w as u8,
             rows: h as u8,
             position: None,
@@ -1655,6 +1658,7 @@ mod tests {
             ],
         });
         layout.widgets[0].grid = Some(api::WidgetGrid {
+            subdivisions: None,
             columns: 5,
             rows: 3,
             position: None,
