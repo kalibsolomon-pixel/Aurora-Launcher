@@ -1309,8 +1309,9 @@ impl Render for Syncing {
                     .iter()
                     .partition(|(id, _)| draft.categories.iter().any(|current| current == id));
                 let chips = div()
-                    .flex()
-                    .flex_wrap()
+                    .grid()
+                    .grid_cols(2)
+                    .max_w(px(420.))
                     .gap_x(px(20.))
                     .gap_y(px(2.))
                     .pt(px(8.))

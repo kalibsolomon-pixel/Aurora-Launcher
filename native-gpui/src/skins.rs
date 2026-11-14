@@ -1706,7 +1706,18 @@ impl Skins {
                     return;
                 }
                 if let Ok(Some(thumbnail)) = result
-                    && let Some(image) = images::rgba_image(8, 8, thumbnail.rgba)
+                    && let Some(pixels) = image::RgbaImage::from_raw(8, 8, thumbnail.rgba)
+                    && let Some(image) = images::rgba_image(
+                        64,
+                        64,
+                        image::imageops::resize(
+                            &pixels,
+                            64,
+                            64,
+                            image::imageops::FilterType::Nearest,
+                        )
+                        .into_raw(),
+                    )
                 {
                     self.thumbnails.insert(id, image);
                     cx.notify();
@@ -2000,7 +2011,10 @@ impl Render for Skins {
                                     .accessibility_label("Manage skin library")
                                     .size(ButtonSize::Small)
                                     .selected(self.library_actions_open)
-                                    .disabled(locked || library_count == 0)
+                                    .disabled(
+                                        locked
+                                            || (library_count == 0 && !self.library_actions_open),
+                                    )
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.library_actions_open = !this.library_actions_open;
                                         cx.notify();
