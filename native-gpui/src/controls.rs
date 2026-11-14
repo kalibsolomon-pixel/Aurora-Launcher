@@ -202,7 +202,7 @@ impl RenderOnce for AuroraButton {
         } else {
             Hsla { a: 0.85, ..fg }
         };
-        let weight = if primary || (nav && self.selected) {
+        let weight = if primary || self.selected {
             gpui_kit::FontWeight::SEMIBOLD
         } else {
             gpui_kit::FontWeight::MEDIUM

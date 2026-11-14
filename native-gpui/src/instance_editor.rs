@@ -2572,7 +2572,7 @@ impl Render for InstanceEditor {
                     vec![
                             (
                                 "Instance name",
-                                Some("Renaming applies immediately.".into()),
+                                Some("Press Rename to save the new name.".into()),
                                 div()
                                     .flex()
                                     .gap(px(8.))

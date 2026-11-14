@@ -1308,16 +1308,13 @@ impl Render for Syncing {
                 let (included, excluded): (Vec<_>, Vec<_>) = CATEGORIES
                     .iter()
                     .partition(|(id, _)| draft.categories.iter().any(|current| current == id));
-                let chips = div().flex().flex_wrap().gap(px(8.)).pt(px(6.)).pb(px(2.)).children(included.iter().map(
+                let chips = div().flex().flex_wrap().gap_x(px(22.)).gap_y(px(4.)).pt(px(6.)).pb(px(2.)).children(included.iter().map(
                     |(_, label)| {
                         div()
                             .flex()
                             .items_center()
                             .gap(px(6.))
-                            .h(px(30.))
-                            .px(px(12.))
-                            .rounded(t.radius)
-                            .bg(t.control)
+                            .h(px(26.))
                             .text_size(px(ui::TEXT_BODY))
                             .text_color(t.foreground)
                             .child(crate::symbols::icon(Some("check"), px(14.), t.muted_foreground))
@@ -1373,16 +1370,13 @@ impl Render for Syncing {
                 let participants = participant_rows(&draft, self.instances.as_ref());
                 let joined: Vec<&ParticipantRow> =
                     participants.iter().filter(|row| row.checked).collect();
-                let names = div().flex().flex_wrap().gap(px(8.)).pt(px(6.)).children(
+                let names = div().flex().flex_wrap().gap_x(px(22.)).gap_y(px(4.)).pt(px(6.)).children(
                     joined.iter().map(|row| {
                         div()
                             .flex()
                             .items_center()
                             .gap(px(6.))
-                            .h(px(30.))
-                            .px(px(12.))
-                            .rounded(t.radius)
-                            .bg(t.control)
+                            .h(px(26.))
                             .text_size(px(ui::TEXT_BODY))
                             .text_color(if row.available {
                                 t.foreground

@@ -535,8 +535,10 @@ fn axis_duration(ms: u64) -> String {
     let hours = ms / 3_600_000;
     if hours >= 1000 {
         format!("{:.1e} h", hours as f64)
+    } else if ms == 0 {
+        "0".into()
     } else {
-        duration(ms)
+        short_duration(ms)
     }
 }
 
@@ -5065,8 +5067,8 @@ mod tests {
         let view = playtime_view(Some(&quiet), Period::Week, false, false);
         assert!(view.empty_period);
         assert!(view.points.iter().all(|p| p.fraction == 0.0));
-        assert_eq!(axis_duration((4 * 60 + 52) * 60_000), "4 h 52 min");
-        assert_eq!(axis_duration(0), "0 min");
+        assert_eq!(axis_duration((4 * 60 + 52) * 60_000), "4.9h");
+        assert_eq!(axis_duration(0), "0");
         assert!(axis_duration(u64::MAX).len() <= 10);
     }
 
