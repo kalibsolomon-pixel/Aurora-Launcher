@@ -1451,7 +1451,8 @@ impl Render for Syncing {
                 ];
                 body =
                     body.child(
-                        section_card(t)
+                        ui::card(t)
+                            .flex_shrink_0()
                             .child(ui::section_header(t, "How Sync works", None))
                             .child(div().grid().grid_cols(3).gap(px(16.)).pt(px(4.)).children(
                                 steps.into_iter().enumerate().map(

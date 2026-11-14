@@ -2258,20 +2258,27 @@ impl Render for Skins {
                                 )
                                 // Destructive removal sits apart from routine actions.
                                 .child(
-                                    AuroraButton::new(
-                                        format!("skins-remove-{}", preset.id),
-                                        "Remove",
-                                    )
-                                    .accessibility_label("Remove skin")
-                                    .icon("delete")
-                                    .size(ButtonSize::Small)
-                                    .variant(ButtonVariant::DangerSubtle)
-                                    .disabled(locked)
-                                    .on_click(cx.listener(
-                                        move |this, _, _, cx| {
-                                            this.open_remove_review(remove_id.clone(), cx);
-                                        },
-                                    )),
+                                    div()
+                                        .ml_auto()
+                                        .pl(px(12.))
+                                        .border_l_1()
+                                        .border_color(palette.border_subtle)
+                                        .child(
+                                            AuroraButton::new(
+                                                format!("skins-remove-{}", preset.id),
+                                                "Remove",
+                                            )
+                                            .accessibility_label("Remove skin")
+                                            .icon("delete")
+                                            .size(ButtonSize::Small)
+                                            .variant(ButtonVariant::DangerSubtle)
+                                            .disabled(locked)
+                                            .on_click(
+                                                cx.listener(move |this, _, _, cx| {
+                                                    this.open_remove_review(remove_id.clone(), cx);
+                                                }),
+                                            ),
+                                        ),
                                 ),
                         ),
                 );

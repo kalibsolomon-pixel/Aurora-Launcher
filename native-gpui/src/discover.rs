@@ -2534,7 +2534,7 @@ impl Render for Discover {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme::theme(cx).clone();
         let compact = window.viewport_size().width < px(1000.);
-        let row_height = if compact { 128. } else { 84. };
+        let row_height = if compact { 128. } else { 100. };
         let reserved = if compact { 392. } else { 326. }
             + if self.state.searching || self.state.results.len() >= MAX_RESULTS {
                 28.
@@ -2829,11 +2829,11 @@ impl Render for Discover {
                 ui::row(&palette, index + 1 == end)
                     .id(("result", index))
                     .gap(px(14.))
-                    .h(px(if compact { 128. } else { 80. }))
-                    .min_h(px(if compact { 128. } else { 80. }))
-                    .max_h(px(if compact { 128. } else { 80. }))
+                    .h(px(row_height))
+                    .min_h(px(row_height))
+                    .max_h(px(row_height))
                     .flex_shrink_0()
-                    .py(px(0.))
+                    .py(px(8.))
                     .hover(move |style| style.bg(hover))
                     .child(art_tile(
                         ("art", index),
@@ -2858,7 +2858,7 @@ impl Render for Discover {
                                         .items_center()
                                         .gap(px(7.))
                                         .min_w(px(0.))
-                                        .h(px(26.))
+                                        .h(px(22.))
                                         .line_height(px(20.))
                                         .rounded(palette.radius)
                                         .border_1()

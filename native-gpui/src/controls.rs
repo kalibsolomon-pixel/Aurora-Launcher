@@ -185,7 +185,7 @@ impl RenderOnce for AuroraButton {
             ButtonVariant::Subtle => (clear, t.muted_foreground, t.control, clear),
             ButtonVariant::DangerSubtle => (
                 clear,
-                t.danger,
+                t.muted_foreground,
                 Hsla {
                     a: 0.10,
                     ..t.danger
