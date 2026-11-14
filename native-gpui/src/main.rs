@@ -2109,22 +2109,10 @@ impl Render for Launcher {
             .h(px(52.))
             .px(px(6.))
             .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .size(px(30.))
-                    .rounded(px(9.))
-                    .bg(gpui::linear_gradient(
-                        135.,
-                        gpui::linear_color_stop(palette.ring, 0.),
-                        gpui::linear_color_stop(palette.accent, 1.),
-                    ))
-                    .child(symbols::icon(
-                        Some("auto_awesome"),
-                        px(17.),
-                        palette.accent_foreground,
-                    )),
+                gpui::img(images::aurora_logo())
+                    .w(px(44.))
+                    .h(px(35.2))
+                    .flex_shrink_0(),
             )
             .child(
                 div()

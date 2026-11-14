@@ -24,6 +24,9 @@ base64 = "0.22"
 image = { version = "=0.25.10", default-features = false }
 raw-window-handle = "0.6"
 
+[target.'cfg(windows)'.build-dependencies]
+winresource = { version = "0.1", default-features = false }
+
 [target.'cfg(windows)'.dependencies]
 # Reuse the supported host's owned native pickers, without a second dialog stack.
 # The Media widget adds the same GSMTC session and thumbnail features as native/.
