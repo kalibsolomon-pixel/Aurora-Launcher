@@ -337,6 +337,7 @@ struct Launcher {
     rt: tokio::runtime::Handle,
     tx: async_channel::Sender<Message>,
     page: u8,
+    reset_discover_scroll: bool,
     serial: u64,
     busy: bool,
     account_busy: bool,
@@ -1255,6 +1256,10 @@ impl Launcher {
                     window,
                     |this, _, event: &DiscoverEvent, window, cx| {
                         match event {
+                            DiscoverEvent::BrowsePageChanged => {
+                                this.reset_discover_scroll = true;
+                                cx.notify();
+                            }
                             DiscoverEvent::Changed => {
                                 this.reload_guarded(cx);
                                 if let Some(editor) = &this.instance_editor {
@@ -2132,10 +2137,9 @@ impl Render for Launcher {
             })
             .read(cx)
             .clone();
-        let browse_viewport = self.page == 5
-            && self.fatal_error.is_none()
-            && window.viewport_size().width >= px(1000.)
-            && window.viewport_size().height >= px(640.);
+        if self.page == 5 && std::mem::take(&mut self.reset_discover_scroll) {
+            page_scroll.set_offset(gpui::point(px(0.), px(0.)));
+        }
         let mut content = div()
             .flex()
             .flex_col()
@@ -2148,8 +2152,7 @@ impl Render for Launcher {
             .min_w(px(0.))
             .min_h(px(0.))
             .track_scroll(&page_scroll)
-            .when(browse_viewport, |page| page.overflow_hidden().pb(px(24.)))
-            .when(!browse_viewport, |page| page.overflow_y_scroll());
+            .overflow_y_scroll();
         if showcase() {
             // Design screenshots can start part-way down a long page.
             if let Some(y) = std::env::var("AURORA_SHOWCASE_SCROLL")
@@ -2400,13 +2403,7 @@ impl Render for Launcher {
                             .flex()
                             .flex_col()
                             .child(content)
-                            .when(!browse_viewport, |region| {
-                                region.child(ui::scrollbar(
-                                    &palette,
-                                    "page-scrollbar",
-                                    &page_scroll,
-                                ))
-                            }),
+                            .child(ui::scrollbar(&palette, "page-scrollbar", &page_scroll)),
                     )
                     .when_some(
                         self.load_error
@@ -2634,6 +2631,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         rt,
                         tx,
                         page: 0,
+                        reset_discover_scroll: false,
                         serial: 0,
                         busy: false,
                         account_busy: false,
@@ -2854,6 +2852,7 @@ mod tests {
             },
             tx,
             page: 0,
+            reset_discover_scroll: false,
             serial: 2,
             busy: false,
             account_busy: false,

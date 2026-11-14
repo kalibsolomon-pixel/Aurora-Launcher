@@ -1270,8 +1270,19 @@ impl Skins {
             for cape in &cosmetics.capes {
                 if let Some(texture) = &cape.preview
                     && !self.cape_images.contains_key(&cape.id)
-                    && let Some(image) =
-                        images::rgba_image(texture.width, texture.height, texture.rgba.clone())
+                    && let Some(pixels) = crate::player::cape_artwork(texture)
+                    && let Some(pixels) = image::RgbaImage::from_raw(10, 16, pixels)
+                    && let Some(image) = images::rgba_image(
+                        120,
+                        192,
+                        image::imageops::resize(
+                            &pixels,
+                            120,
+                            192,
+                            image::imageops::FilterType::Nearest,
+                        )
+                        .into_raw(),
+                    )
                 {
                     self.cape_images.insert(cape.id.clone(), image);
                 }
@@ -2337,7 +2348,7 @@ impl Render for Skins {
                 .id("skins-capes")
                 .overflow_y_scroll()
                 .track_scroll(&self.capes_scroll)
-                .max_h(px(220.))
+                .max_h(px(384.))
                 .flex()
                 .flex_col()
                 .border_t_1()
@@ -2363,46 +2374,77 @@ impl Render for Skins {
                 capes = capes.child(
                     ui::row(&palette, index + 1 == count)
                         .id(format!("skins-cape-row-{}", cape.id))
-                        .gap(px(10.))
-                        .py(px(10.))
+                        .gap(px(16.))
+                        .py(px(16.))
+                        .flex_shrink_0()
                         .when(cape.selected, |row| row.bg(palette.accent_soft))
                         .child(
                             div()
                                 .flex_shrink_0()
-                                .w(px(44.))
-                                .h(px(22.))
-                                .rounded(px(4.))
+                                .w(px(72.))
+                                .h(px(112.))
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .rounded(palette.radius)
                                 .overflow_hidden()
                                 .bg(palette.control)
-                                .border_1()
-                                .border_color(palette.border_subtle)
                                 .when_some(texture, |d, image| {
-                                    d.child(img(image).w(px(44.)).h(px(22.)))
+                                    d.child(img(image).w(px(60.)).h(px(96.)))
+                                })
+                                .when(cape.preview.is_none(), |d| {
+                                    d.child(crate::symbols::icon(
+                                        Some("checkroom"),
+                                        px(28.),
+                                        palette.muted_foreground,
+                                    ))
                                 }),
                         )
-                        .child(ui::title_block(&palette, cape.name.clone(), None).flex_1())
                         .child(
-                            AuroraButton::new(format!("skins-cape-view-{}", cape.id), "View")
-                                .size(ButtonSize::Small)
-                                .selected(inspected)
-                                .disabled(locked)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.inspect_cape(inspect_id.clone(), cx);
-                                })),
-                        )
-                        .child(
-                            AuroraButton::new(
-                                format!("skins-cape-wear-{}", cape.id),
-                                if cape.selected { "Worn" } else { "Wear" },
-                            )
-                            .size(ButtonSize::Small)
-                            .icon(if cape.selected { "check" } else { "checkroom" })
-                            .disabled(locked || cape.selected)
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    this.select_cape(select_id.clone(), cx);
-                                },
-                            )),
+                            div()
+                                .flex()
+                                .flex_col()
+                                .flex_1()
+                                .min_w(px(0.))
+                                .gap(px(12.))
+                                .child(ui::title_block(&palette, cape.name.clone(), None))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_wrap()
+                                        .items_center()
+                                        .gap(px(8.))
+                                        .child(
+                                            AuroraButton::new(
+                                                format!("skins-cape-view-{}", cape.id),
+                                                "View",
+                                            )
+                                            .accessibility_label(format!("View {} cape", cape.name))
+                                            .size(ButtonSize::Small)
+                                            .selected(inspected)
+                                            .disabled(locked)
+                                            .on_click(
+                                                cx.listener(move |this, _, _, cx| {
+                                                    this.inspect_cape(inspect_id.clone(), cx);
+                                                }),
+                                            ),
+                                        )
+                                        .child(
+                                            AuroraButton::new(
+                                                format!("skins-cape-wear-{}", cape.id),
+                                                if cape.selected { "Worn" } else { "Wear" },
+                                            )
+                                            .accessibility_label(format!("Wear {} cape", cape.name))
+                                            .size(ButtonSize::Small)
+                                            .icon(if cape.selected { "check" } else { "checkroom" })
+                                            .disabled(locked || cape.selected)
+                                            .on_click(
+                                                cx.listener(move |this, _, _, cx| {
+                                                    this.select_cape(select_id.clone(), cx);
+                                                }),
+                                            ),
+                                        ),
+                                ),
                         ),
                 );
             }
@@ -2410,6 +2452,7 @@ impl Render for Skins {
                 .child(
                     div()
                         .flex()
+                        .flex_wrap()
                         .items_center()
                         .justify_between()
                         .gap(px(12.))
@@ -2527,7 +2570,8 @@ impl Render for Skins {
         // is not committed. Focus returns to the page on close.
         // Outside the gapped column so closed dialogs add no trailing space.
         div()
-            .size_full()
+            .w_full()
+            .flex_shrink_0()
             .child(content)
             .child(self.rename_dialog(cx, &palette, busy))
             .child(self.apply_dialog(cx, &palette, busy))

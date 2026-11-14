@@ -88,6 +88,7 @@ const ARTWORK_GATE: usize = 4;
 /// from on the content tab (`kind`: 0 mods, 1 resource packs, 2 shaders).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum DiscoverEvent {
+    BrowsePageChanged,
     Changed,
     ReturnToInstance { instance: String, kind: i32 },
 }
@@ -2536,15 +2537,7 @@ impl Render for Discover {
         let palette = theme::theme(cx).clone();
         let compact = window.viewport_size().width < px(1000.);
         let row_height = if compact { 128. } else { 100. };
-        let reserved = if compact { 392. } else { 326. }
-            + if self.state.searching || self.state.results.len() >= MAX_RESULTS {
-                28.
-            } else {
-                0.
-            };
-        let page_size = ((f32::from(window.viewport_size().height) - reserved) / row_height)
-            .floor()
-            .clamp(1., 8.) as usize;
+        let page_size = PAGE_SIZE as usize;
 
         // Built before the immutable state borrow below; a dialog close that
         // slips past the veto (or an imperative close) still resets
@@ -2779,7 +2772,7 @@ impl Render for Discover {
             let id = project.project_id.clone();
             let installed = s.installed.contains(&project.project_id);
             let row_busy = s.busy_project(&project.project_id);
-            let mut meta = div()
+            let meta = div()
                 .flex()
                 .flex_shrink_0()
                 .items_center()
@@ -2801,9 +2794,6 @@ impl Render for Discover {
                                 .child(download_label(project.downloads)),
                         ),
                 );
-            if row_busy {
-                meta = meta.child(ui::status_badge(&palette, "Installing…", ui::Tone::Accent));
-            }
             let mut metadata = Some(
                 div()
                     .flex()
@@ -2915,10 +2905,31 @@ impl Render for Discover {
                             .flex_col()
                             .gap(px(8.))
                             .flex_none()
-                            .w(px(82.))
+                            .w(px(108.))
                             .items_center()
                             .justify_end()
-                            .when(can_quick_install && installed, |actions| {
+                            .when(row_busy, |actions| {
+                                actions.child(
+                                    div()
+                                        .flex()
+                                        .w_full()
+                                        .h(px(30.))
+                                        .items_center()
+                                        .justify_center()
+                                        .gap(px(6.))
+                                        .rounded(palette.radius)
+                                        .bg(palette.control)
+                                        .text_color(palette.foreground)
+                                        .text_size(px(ui::TEXT_CAPTION))
+                                        .child(crate::symbols::icon(
+                                            Some("hourglass_empty"),
+                                            px(14.),
+                                            palette.ring,
+                                        ))
+                                        .child("Installing…"),
+                                )
+                            })
+                            .when(can_quick_install && !row_busy && installed, |actions| {
                                 actions.child(
                                     div()
                                         .flex()
@@ -2940,7 +2951,7 @@ impl Render for Discover {
                                         .child("Installed"),
                                 )
                             })
-                            .when(can_quick_install && !installed, |actions| {
+                            .when(can_quick_install && !row_busy && !installed, |actions| {
                                 actions.child({
                                     let id = id.clone();
                                     AuroraButton::new(("install", index), "Install")
@@ -2949,7 +2960,7 @@ impl Render for Discover {
                                         .size(ButtonSize::Small)
                                         .variant(ButtonVariant::Soft)
                                         .icon("download")
-                                        .disabled(row_busy || s.target.is_none())
+                                        .disabled(s.target.is_none())
                                         .on_click(cx.listener(move |this, _, _, cx| {
                                             this.quick_install(id.clone(), cx);
                                         }))
@@ -2989,28 +3000,23 @@ impl Render for Discover {
                                     .disabled(current_page == 0 || s.searching)
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         this.results_page = current_page.saturating_sub(1);
+                                        cx.emit(DiscoverEvent::BrowsePageChanged);
                                         cx.notify();
                                     })),
                             )
                             .child(
                                 AuroraButton::new("discover-next", "Next")
                                     .size(ButtonSize::Small)
-                                    .disabled(end >= total || s.searching)
+                                    .disabled((end >= total && !s.has_more()) || s.searching)
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         this.results_page = current_page + 1;
+                                        if end >= total {
+                                            this.search(true, cx);
+                                        }
+                                        cx.emit(DiscoverEvent::BrowsePageChanged);
                                         cx.notify();
                                     })),
-                            )
-                            .when(end == total && s.has_more(), |actions| {
-                                actions.child(
-                                    AuroraButton::new("more", "Load more")
-                                        .size(ButtonSize::Small)
-                                        .disabled(s.searching)
-                                        .on_click(
-                                            cx.listener(|this, _, _, cx| this.search(true, cx)),
-                                        ),
-                                )
-                            }),
+                            ),
                     ),
             );
         }
@@ -3092,7 +3098,11 @@ impl Render for Discover {
                     )
                     .child(results),
             );
-        div().w_full().child(page).child(details_panel)
+        div()
+            .w_full()
+            .flex_shrink_0()
+            .child(page)
+            .child(details_panel)
     }
 }
 
