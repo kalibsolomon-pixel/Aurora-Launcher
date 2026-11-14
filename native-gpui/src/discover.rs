@@ -2821,11 +2821,7 @@ impl Render for Discover {
                     )
                 })
                 .child(meta);
-            let (heading_meta, footer_meta) = if compact {
-                (None, Some(metadata))
-            } else {
-                (Some(metadata), None)
-            };
+
             let can_quick_install = !s.is_pack();
             let hover = palette.control;
             let title_hover = palette.ring;
@@ -2853,57 +2849,53 @@ impl Render for Discover {
                             .flex_1()
                             .w(px(0.))
                             .min_w(px(0.))
-                            .gap(px(5.))
+                            .gap(px(2.))
                             .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .gap(px(12.))
-                                    .child(
-                                        gpui_kit::base::Button::new(("details", index))
-                                            .aria_label(format!("Details for {}", project.title))
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(7.))
-                                            .min_w(px(0.))
-                                            .h(px(26.))
-                                            .line_height(px(20.))
-                                            .rounded(palette.radius)
-                                            .border_1()
-                                            .border_color(gpui_kit::transparent_black())
-                                            .focus(move |style| style.border_color(title_hover))
-                                            .text_size(px(ui::TEXT_BODY + 1.))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(palette.foreground)
-                                            .cursor_pointer()
-                                            .hover(|style| style.text_color(title_hover))
-                                            .on_click({
-                                                let id = id.clone();
-                                                cx.listener(move |this, _, window, cx| {
-                                                    this.open_details(id.clone(), window, cx);
-                                                })
+                                div().flex().items_center().gap(px(12.)).child(
+                                    gpui_kit::base::Button::new(("details", index))
+                                        .aria_label(format!("Details for {}", project.title))
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(7.))
+                                        .min_w(px(0.))
+                                        .h(px(26.))
+                                        .line_height(px(20.))
+                                        .rounded(palette.radius)
+                                        .border_1()
+                                        .border_color(gpui_kit::transparent_black())
+                                        .focus(move |style| style.border_color(title_hover))
+                                        .text_size(px(ui::TEXT_BODY + 1.))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(palette.foreground)
+                                        .cursor_pointer()
+                                        .hover(|style| style.text_color(title_hover))
+                                        .on_click({
+                                            let id = id.clone();
+                                            cx.listener(move |this, _, window, cx| {
+                                                this.open_details(id.clone(), window, cx);
                                             })
-                                            .child(div().truncate().child(project.title.clone()))
-                                            .child(crate::symbols::icon(
-                                                Some("open_in_new"),
-                                                px(14.),
-                                                palette.ring,
-                                            )),
-                                    )
-                                    .children(heading_meta),
+                                        })
+                                        .child(div().truncate().child(project.title.clone()))
+                                        .child(crate::symbols::icon(
+                                            Some("open_in_new"),
+                                            px(14.),
+                                            palette.ring,
+                                        )),
+                                ),
                             )
                             .child(
                                 div()
                                     .overflow_hidden()
-                                    .h(px(if compact { 54. } else { 36. }))
-                                    .max_h(px(if compact { 54. } else { 36. }))
-                                    .line_clamp(if compact { 3 } else { 2 })
+                                    .h(px(if compact { 36. } else { 18. }))
+                                    .max_h(px(if compact { 36. } else { 18. }))
+                                    .line_clamp(if compact { 2 } else { 1 })
+                                    .when(!compact, |line| line.truncate())
                                     .text_size(px(ui::TEXT_BODY - 1.))
                                     .line_height(px(18.))
                                     .text_color(palette.foreground.opacity(0.75))
                                     .child(project.summary.clone()),
                             )
-                            .children(footer_meta),
+                            .child(metadata),
                     )
                     .child(
                         div()

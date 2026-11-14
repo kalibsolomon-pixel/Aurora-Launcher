@@ -1855,7 +1855,13 @@ impl Launcher {
         }
         if launcher.instances.len() > 1 || selected.is_none() {
             let mut tiles = div().flex().flex_col().gap(px(2.));
-            for (i, item) in launcher.instances.iter().take(3).enumerate() {
+            for (i, item) in launcher
+                .instances
+                .iter()
+                .filter(|item| selected.as_deref() != Some(item.id.as_str()))
+                .take(3)
+                .enumerate()
+            {
                 let id = item.id.clone();
                 let chosen = selected.as_deref() == Some(item.id.as_str());
                 tiles = tiles.child(
@@ -1912,11 +1918,14 @@ impl Launcher {
                                 .text_size(px(ui::TEXT_BODY))
                                 .font_weight(gpui::FontWeight::SEMIBOLD)
                                 .text_color(t.foreground)
-                                .child("Your instances"),
+                                .child("Other instances"),
                         )
                         .child(ui::caption(
                             t,
-                            format!("{} total", launcher.instances.len()),
+                            format!(
+                                "{} available",
+                                launcher.instances.len() - usize::from(selected.is_some())
+                            ),
                         )),
                 )
                 .child(tiles)

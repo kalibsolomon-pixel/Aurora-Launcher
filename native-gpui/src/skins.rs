@@ -2194,39 +2194,6 @@ impl Render for Skins {
                                         ),
                                     )
                                     .flex_1(),
-                                )
-                                .child(
-                                    AuroraButton::new(format!("skins-favorite-{}", preset.id), "")
-                                        .accessibility_label(if preset.favorite {
-                                            "Unfavorite"
-                                        } else {
-                                            "Favorite"
-                                        })
-                                        .icon("star")
-                                        .size(ButtonSize::Small)
-                                        .variant(ButtonVariant::Subtle)
-                                        .selected(preset.favorite)
-                                        .disabled(locked)
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.favorite(favorite_id.clone(), next_favorite, cx);
-                                        })),
-                                )
-                                // Destructive removal sits apart from routine actions.
-                                .child(
-                                    AuroraButton::new(
-                                        format!("skins-remove-{}", preset.id),
-                                        "Remove",
-                                    )
-                                    .accessibility_label("Remove skin")
-                                    .icon("delete")
-                                    .size(ButtonSize::Small)
-                                    .variant(ButtonVariant::DangerSubtle)
-                                    .disabled(locked)
-                                    .on_click(cx.listener(
-                                        move |this, _, _, cx| {
-                                            this.open_remove_review(remove_id.clone(), cx);
-                                        },
-                                    )),
                                 ),
                         )
                         .child(
@@ -2261,6 +2228,48 @@ impl Render for Skins {
                                     .on_click(cx.listener(
                                         move |this, _, window, cx| {
                                             this.open_rename(rename_id.clone(), window, cx);
+                                        },
+                                    )),
+                                )
+                                .child(
+                                    AuroraButton::new(
+                                        format!("skins-favorite-{}", preset.id),
+                                        if preset.favorite {
+                                            "Unfavorite"
+                                        } else {
+                                            "Favorite"
+                                        },
+                                    )
+                                    .accessibility_label(if preset.favorite {
+                                        "Unfavorite"
+                                    } else {
+                                        "Favorite"
+                                    })
+                                    .icon("star")
+                                    .size(ButtonSize::Small)
+                                    .variant(ButtonVariant::Subtle)
+                                    .selected(preset.favorite)
+                                    .disabled(locked)
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
+                                            this.favorite(favorite_id.clone(), next_favorite, cx);
+                                        },
+                                    )),
+                                )
+                                // Destructive removal sits apart from routine actions.
+                                .child(
+                                    AuroraButton::new(
+                                        format!("skins-remove-{}", preset.id),
+                                        "Remove",
+                                    )
+                                    .accessibility_label("Remove skin")
+                                    .icon("delete")
+                                    .size(ButtonSize::Small)
+                                    .variant(ButtonVariant::DangerSubtle)
+                                    .disabled(locked)
+                                    .on_click(cx.listener(
+                                        move |this, _, _, cx| {
+                                            this.open_remove_review(remove_id.clone(), cx);
                                         },
                                     )),
                                 ),

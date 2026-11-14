@@ -1310,7 +1310,11 @@ impl Render for Syncing {
                     .partition(|(id, _)| draft.categories.iter().any(|current| current == id));
                 let chips = div()
                     .grid()
-                    .grid_cols(5)
+                    .grid_cols(if window.viewport_size().width < px(1000.) {
+                        2
+                    } else {
+                        3
+                    })
                     .gap_x(px(16.))
                     .gap_y(px(2.))
                     .pt(px(2.))
@@ -1346,7 +1350,11 @@ impl Render for Syncing {
                                 .items_start()
                                 .justify_between()
                                 .gap(px(12.))
-                                .child(ui::section_header(t, "Files to sync", None))
+                                .child(ui::section_header(
+                                    t,
+                                    "Saved file choices",
+                                    Some("Used when you turn Sync on.".into()),
+                                ))
                                 .child(
                                     AuroraButton::new("sync-edit-choices", "Edit choices")
                                         .size(ButtonSize::Small)

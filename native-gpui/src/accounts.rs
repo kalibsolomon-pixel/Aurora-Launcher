@@ -1224,13 +1224,14 @@ impl Render for Accounts {
                     selected_id.as_deref() != Some(account.account_id.as_str())
                 });
                 let count = rows.len();
-                if let Some(expired) = rows.iter().find(|account| {
-                    selected_id.as_deref() == Some(account.account_id.as_str())
-                        && account.status == "reauthenticationRequired"
-                }) {
+                let sign_in_count = rows
+                    .iter()
+                    .filter(|account| account.status == "reauthenticationRequired")
+                    .count();
+                if sign_in_count > 0 {
                     content = content.child(
                         ui::card(&palette)
-                            .bg(palette.warning.opacity(0.08))
+                            .bg(palette.card)
                             .border_color(palette.warning.opacity(0.35))
                             .child(
                                 div()
@@ -1245,8 +1246,8 @@ impl Render for Accounts {
                                     .child(
                                         ui::title_block(
                                             &palette,
-                                            format!("{} needs to sign in again", expired.minecraft_name),
-                                            Some("Use Reconnect on the account below to launch the game.".into()),
+                                            if sign_in_count == 1 { "1 account needs sign-in".to_owned() } else { format!("{sign_in_count} accounts need sign-in") },
+                                            Some("Reconnect the account you want to use, or sign in with Microsoft.".into()),
                                         )
                                         .flex_1()
                                         .min_w(px(0.)),
