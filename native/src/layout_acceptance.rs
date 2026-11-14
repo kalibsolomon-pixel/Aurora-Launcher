@@ -454,6 +454,7 @@ fn dashboard(app: &AppWindow, editing: bool, enlarged: bool) {
                 enabled: true,
                 size: "small".into(),
                 grid: Some(crate::api::WidgetGrid {
+                    subdivisions: None,
                     columns: if enlarged { 4 } else { 2 },
                     rows: if enlarged { 2 } else { 1 },
                     position: None,

@@ -96,9 +96,10 @@ const SERVER_READ: usize = 200;
 const WORLD_READ: usize = 32;
 /// The preserved host's Quick Play compatibility rule.
 const QUICK_PLAY_MINECRAFT: &str = "1.21.11";
-const MAX_GRID_COLUMNS: i32 = 6;
-const MAX_GRID_ROWS: i32 = 3;
-const MAX_ANCHOR_ROW: i32 = 63;
+const GRID_UNITS: i32 = 4;
+const MAX_GRID_COLUMNS: i32 = 6 * GRID_UNITS;
+const MAX_GRID_ROWS: i32 = 3 * GRID_UNITS;
+const MAX_ANCHOR_ROW: i32 = 63 * GRID_UNITS;
 
 /// Responsive grid geometry (matches the Slint `WidgetGrid` constants).
 const GRID_GAP: f32 = 16.0;
@@ -110,7 +111,7 @@ const CARD_HEIGHT: f32 = 280.0;
 /// Saved columns for a viewport width; clamping renders, it never writes.
 pub(crate) fn responsive_columns(width_px: f32) -> i32 {
     let columns = ((width_px + GRID_GAP) / (MIN_CARD_WIDTH + GRID_GAP)).floor() as i32;
-    columns.clamp(1, MAX_GRID_COLUMNS)
+    columns.clamp(1, 6) * GRID_UNITS
 }
 
 /// Whether the Media worker may run. It needs a launcher host (the diagnostic
@@ -249,6 +250,7 @@ pub(crate) fn effective(saved: HomeLayout) -> HomeLayout {
                 && widget.grid.is_none()
             {
                 widget.grid = Some(WidgetGrid {
+                    subdivisions: None,
                     columns,
                     rows: 1,
                     position: None,
@@ -343,10 +345,13 @@ pub(crate) fn place_widget(layout: &mut HomeLayout, id: &str, position: i32) {
 /// The saved size request: grid dimensions when present, else the size preset.
 pub(crate) fn requested_dims(widget: &WidgetPlacement) -> (i32, i32) {
     match &widget.grid {
-        Some(grid) => (grid.columns as i32, grid.rows as i32),
+        Some(grid) => {
+            let scale = GRID_UNITS / i32::from(grid.subdivisions.unwrap_or(1)).max(1);
+            (grid.columns as i32 * scale, grid.rows as i32 * scale)
+        }
         None => (
-            if widget.size == "small" { 2 } else { 4 },
-            if widget.size == "large" { 2 } else { 1 },
+            if widget.size == "small" { 2 } else { 4 } * GRID_UNITS,
+            if widget.size == "large" { 2 } else { 1 } * GRID_UNITS,
         ),
     }
 }
@@ -370,11 +375,12 @@ pub(crate) fn arrange(
         return;
     };
     let columns = columns.clamp(1, MAX_GRID_COLUMNS);
-    let width = width.clamp(1, MAX_GRID_COLUMNS);
+    let width = width.clamp(GRID_UNITS, MAX_GRID_COLUMNS);
     let max_column = (columns - width.min(columns)).min(MAX_GRID_COLUMNS - width);
     layout.widgets[index].grid = Some(WidgetGrid {
+        subdivisions: Some(GRID_UNITS as u8),
         columns: width as u8,
-        rows: height.clamp(1, MAX_GRID_ROWS) as u8,
+        rows: height.clamp(3, MAX_GRID_ROWS) as u8,
         position: Some([
             column.clamp(0, max_column.max(0)) as u8,
             row.clamp(0, MAX_ANCHOR_ROW) as u8,
@@ -385,7 +391,7 @@ pub(crate) fn arrange(
     let moved = prioritized.widgets.remove(index);
     prioritized.widgets.insert(0, moved);
     let positions = grid_positions(&prioritized, columns);
-    for (widget, (c, r, w, h)) in prioritized
+    for (widget, (c, r, _, _)) in prioritized
         .widgets
         .iter()
         .filter(|w| w.enabled && is_native(&w.id))
@@ -396,16 +402,14 @@ pub(crate) fn arrange(
             .iter_mut()
             .find(|w| w.id == widget.id)
             .unwrap();
-        let mut grid = target.grid.clone().unwrap_or(WidgetGrid {
-            columns: w as u8,
-            rows: h as u8,
-            position: None,
+        let (saved_width, saved_height) = requested_dims(widget);
+        let saved_width = if target.id == id { width } else { saved_width };
+        target.grid = Some(WidgetGrid {
+            subdivisions: Some(GRID_UNITS as u8),
+            columns: saved_width as u8,
+            rows: saved_height as u8,
+            position: Some([c.min(MAX_GRID_COLUMNS - saved_width).max(0) as u8, r as u8]),
         });
-        grid.position = Some([c as u8, r as u8]);
-        if target.id == id {
-            grid.columns = width as u8;
-        }
-        target.grid = Some(grid);
     }
 }
 
@@ -413,7 +417,8 @@ pub(crate) fn arrange(
 /// narrow widths. Purely presentational: it never mutates the saved layout.
 pub(crate) fn grid_positions(layout: &HomeLayout, columns: i32) -> Vec<(i32, i32, i32, i32)> {
     let columns = columns.clamp(1, MAX_GRID_COLUMNS) as usize;
-    let mut occupied = vec![[false; 6]; 64 * 3];
+    let mut occupied =
+        vec![[false; MAX_GRID_COLUMNS as usize]; (MAX_ANCHOR_ROW + MAX_GRID_ROWS * 8) as usize];
     let widgets: Vec<_> = layout
         .widgets
         .iter()
@@ -425,12 +430,15 @@ pub(crate) fn grid_positions(layout: &HomeLayout, columns: i32) -> Vec<(i32, i32
     for index in order {
         let widget = widgets[index];
         let width = (requested_dims(widget).0.max(1) as usize).clamp(1, columns);
-        let height = (requested_dims(widget).1.max(1) as usize).clamp(1, 3);
-        let anchor = widget
-            .grid
-            .as_ref()
-            .and_then(|g| g.position)
-            .map(|[c, r]| ((c as usize).min(columns.saturating_sub(width)), r as usize));
+        let height = (requested_dims(widget).1.max(1) as usize).clamp(1, MAX_GRID_ROWS as usize);
+        let anchor = widget.grid.as_ref().and_then(|g| g.position).map(|[c, r]| {
+            let scale = GRID_UNITS as usize
+                / usize::from(widget.grid.as_ref().unwrap().subdivisions.unwrap_or(1)).max(1);
+            (
+                (c as usize * scale).min(columns.saturating_sub(width)),
+                r as usize * scale,
+            )
+        });
         let candidates = anchor.into_iter().chain(
             (0..occupied.len() - height + 1)
                 .flat_map(|r| (0..=columns - width).map(move |c| (c, r))),
@@ -925,8 +933,8 @@ impl Gesture {
         let columns = self.columns.clamp(1, MAX_GRID_COLUMNS);
         if self.resize {
             let max_width = (columns - self.base.0).clamp(1, MAX_GRID_COLUMNS);
-            self.preview.2 = (self.base.2 + step_x).clamp(1, max_width);
-            self.preview.3 = (self.base.3 + step_y).clamp(1, MAX_GRID_ROWS);
+            self.preview.2 = (self.base.2 + step_x).clamp(GRID_UNITS.min(max_width), max_width);
+            self.preview.3 = (self.base.3 + step_y).clamp(3, MAX_GRID_ROWS);
         } else {
             self.preview.0 = (self.base.0 + step_x).clamp(0, (columns - self.base.2).max(0));
             self.preview.1 = (self.base.1 + step_y).clamp(0, MAX_ANCHOR_ROW);
@@ -1773,8 +1781,8 @@ impl Core {
             (
                 column,
                 row,
-                (width + dx).clamp(1, max_width),
-                (height + dy).clamp(1, MAX_GRID_ROWS),
+                (width + dx).clamp(GRID_UNITS.min(max_width), max_width),
+                (height + dy).clamp(3, MAX_GRID_ROWS),
             )
         } else {
             (
@@ -2529,7 +2537,10 @@ impl HomeWidgets {
             .unwrap_or(MIN_CARD_WIDTH * MAX_GRID_COLUMNS as f32);
         let columns = responsive_columns(width).max(1);
         let card_width = (width - (columns as f32 - 1.) * GRID_GAP) / columns as f32;
-        (card_width + GRID_GAP, CARD_HEIGHT + GRID_GAP)
+        (
+            card_width + GRID_GAP,
+            (CARD_HEIGHT + GRID_GAP) / GRID_UNITS as f32,
+        )
     }
 
     /// Records the live viewport column count synchronously from the measured
@@ -2786,12 +2797,24 @@ impl Render for HomeWidgets {
                 .child(page.child(ui::muted(&palette, "Loading the saved widget layout…")));
         };
 
-        let placements: Vec<(WidgetPlacement, (i32, i32, i32, i32))> = layout
+        let mut display_layout = layout.clone();
+        if let Some(g) = &self.core.gesture {
+            arrange(
+                &mut display_layout,
+                &g.id,
+                g.preview.0,
+                g.preview.1,
+                if g.resize { g.preview.2 } else { g.requested.0 },
+                if g.resize { g.preview.3 } else { g.requested.1 },
+                columns,
+            );
+        }
+        let placements: Vec<(WidgetPlacement, (i32, i32, i32, i32))> = display_layout
             .widgets
             .iter()
             .filter(|w| w.enabled && is_native(&w.id))
             .cloned()
-            .zip(grid_positions(&layout, columns))
+            .zip(grid_positions(&display_layout, columns))
             .collect();
         let grid_rows = placements
             .iter()
@@ -2799,11 +2822,10 @@ impl Render for HomeWidgets {
             .max()
             .unwrap_or(0);
         let (pitch_x, pitch_y) = self.pitch();
-        let card_width = pitch_x - GRID_GAP;
         let bounds_cell = self.grid_bounds.clone();
         let viewport_view = cx.entity().downgrade();
         let rows = if editing {
-            (grid_rows + 2).max(3)
+            (grid_rows + 2 * GRID_UNITS).max(3 * GRID_UNITS)
         } else {
             grid_rows
         };
@@ -2864,11 +2886,9 @@ impl Render for HomeWidgets {
                             .absolute()
                             .top(px(row as f32 * pitch_y))
                             .left(px(column as f32 * pitch_x))
-                            .w(px(card_width))
-                            .h(px(CARD_HEIGHT))
-                            .rounded(palette.radius_lg)
-                            .border_1()
-                            .border_color(palette.border_subtle),
+                            .size(px(2.))
+                            .rounded_full()
+                            .bg(palette.border),
                     );
                 }
             }
@@ -3087,11 +3107,10 @@ impl Render for HomeWidgets {
             );
         }
 
-        // Snapped transient outlines: accent preview plus danger collisions.
+        // Snapped transient outline over the collision-resolved preview.
         // Cancelled previews and uncommitted gestures never write.
         if editing && let Some(gesture) = active_gesture.as_ref().filter(|g| !g.canceled) {
             let preview = gesture.preview;
-            let base = gesture.base;
             grid = grid.child(
                 div()
                     .absolute()
@@ -3103,28 +3122,23 @@ impl Render for HomeWidgets {
                     .border_2()
                     .border_color(palette.accent),
             );
-            if preview != base {
-                for (_, geometry) in placements.iter() {
-                    let (column, row, width, height) = *geometry;
-                    let overlaps = preview.0 < column + width
-                        && column < preview.0 + preview.2
-                        && preview.1 < row + height
-                        && row < preview.1 + preview.3;
-                    if overlaps {
-                        grid = grid.child(
-                            div()
-                                .absolute()
-                                .top(px(row as f32 * pitch_y))
-                                .left(px(column as f32 * pitch_x))
-                                .w(px(width as f32 * pitch_x - GRID_GAP))
-                                .h(px(height as f32 * pitch_y - GRID_GAP))
-                                .rounded(palette.radius_lg)
-                                .border_2()
-                                .border_color(palette.danger),
-                        );
-                    }
-                }
-            }
+            grid = grid.child(
+                div()
+                    .absolute()
+                    .top(px(preview.1 as f32 * pitch_y + 8.))
+                    .left(px(preview.0 as f32 * pitch_x + 12.))
+                    .px(px(8.))
+                    .py(px(4.))
+                    .rounded(palette.radius)
+                    .bg(palette.card)
+                    .text_color(palette.foreground)
+                    .text_size(px(ui::TEXT_CAPTION))
+                    .child(format!(
+                        "{} x {} px",
+                        (preview.2 as f32 * pitch_x - GRID_GAP).round() as i32,
+                        (preview.3 as f32 * pitch_y - GRID_GAP).round() as i32
+                    )),
+            );
         }
 
         div().w_full().child(page.child(div().w_full().child(grid)))
@@ -3196,7 +3210,11 @@ impl HomeWidgets {
         let view = cx.entity();
         let id = widget.id.clone();
         // Rendered width of this card, used only to pick a header layout.
-        let card_px = requested_dims(widget).0.max(1) as f32 * pitch_x - GRID_GAP;
+        let card_px = requested_dims(widget)
+            .0
+            .clamp(1, self.core.render_columns()) as f32
+            * pitch_x
+            - GRID_GAP;
         let wide = card_px >= 360.;
 
         // Transient work never reads as part of the title: it is a quiet
@@ -4311,13 +4329,14 @@ mod tests {
         core.edit(|layout| set_enabled(layout, "media", true));
         core.edit(|layout| {
             layout.widgets[0].grid = Some(WidgetGrid {
+                subdivisions: None,
                 columns: 5,
                 rows: 3,
                 position: None,
             })
         });
         let saved = core.layout.clone().unwrap();
-        for columns in 1..=6 {
+        for columns in 1..=24 {
             let positions = grid_positions(&saved, columns);
             let mut cells = HashSet::new();
             for (col, row, width, height) in positions {
@@ -4331,24 +4350,24 @@ mod tests {
         }
         // Viewport clamping is presentational only.
         assert_eq!(core.layout.clone().unwrap(), saved);
-        assert_eq!(responsive_columns(0.), 1);
-        assert_eq!(responsive_columns(163.), 1);
-        assert_eq!(responsive_columns(164.), 1);
-        assert_eq!(responsive_columns(663.), 4);
-        assert_eq!(responsive_columns(664.), 5);
-        assert_eq!(responsive_columns(799.), 5);
-        assert_eq!(responsive_columns(800.), 6);
-        assert_eq!(responsive_columns(10_000.), 6);
+        assert_eq!(responsive_columns(0.), 4);
+        assert_eq!(responsive_columns(163.), 4);
+        assert_eq!(responsive_columns(164.), 4);
+        assert_eq!(responsive_columns(663.), 16);
+        assert_eq!(responsive_columns(664.), 20);
+        assert_eq!(responsive_columns(799.), 20);
+        assert_eq!(responsive_columns(800.), 24);
+        assert_eq!(responsive_columns(10_000.), 24);
     }
 
     #[test]
     fn viewport_change_cancels_gesture_without_rewriting_saved_geometry() {
         let mut core = core_with_default_layout();
-        core.set_columns(6);
+        core.set_columns(24);
         let saved = core.layout.clone();
         core.begin_gesture("playtime", true, (0., 0.));
-        core.snap_gesture((164., 210.), (164., 210.));
-        assert!(core.set_columns(2));
+        core.snap_gesture((41., 74.), (41., 74.));
+        assert!(core.set_columns(8));
         assert_eq!(core.commit_gesture(), EditOutcome::Ignored);
         assert_eq!(core.layout, saved);
         assert!(core.begin_save().is_none());
@@ -4364,9 +4383,9 @@ mod tests {
             ],
         });
         let unknown = layout.widgets[2].clone();
-        arrange(&mut layout, "media", 0, 0, 3, 2, 6);
-        let positions = grid_positions(&layout, 6);
-        assert_eq!(positions[1], (0, 0, 3, 2));
+        arrange(&mut layout, "media", 0, 0, 12, 8, 24);
+        let positions = grid_positions(&layout, 24);
+        assert_eq!(positions[1], (0, 0, 12, 8));
         assert_eq!(layout.widgets[2], unknown);
         let mut cells = HashSet::new();
         for (c, r, w, h) in positions {
@@ -4381,40 +4400,40 @@ mod tests {
         assert_eq!(restored, layout);
         validate_for_core(&layout);
         // One atomic commit: extreme input coordinates snap to the bounds.
-        arrange(&mut layout, "media", 99, 99, 99, 99, 6);
-        assert_eq!(grid_positions(&layout, 6)[1], (0, 63, 6, 3));
+        arrange(&mut layout, "media", 999, 999, 999, 999, 24);
+        assert_eq!(grid_positions(&layout, 24)[1], (0, 252, 24, 12));
         validate_for_core(&layout);
     }
 
     #[test]
     fn gesture_snap_clamps_and_cancelled_previews_never_write() {
         let mut core = core_with_default_layout();
-        core.columns = 6;
+        core.columns = 24;
         core.begin_gesture("playtime", false, (0., 0.));
-        core.snap_gesture((328., 0.), (164., 210.));
+        core.snap_gesture((328., 0.), (41., 74.));
         let gesture = core.gesture.clone().unwrap();
-        assert_eq!((gesture.preview.0, gesture.preview.1), (2, 0));
+        assert_eq!((gesture.preview.0, gesture.preview.1), (8, 0));
         // Clamped at the viewport edge.
-        core.snap_gesture((10_000., 10_000.), (164., 210.));
+        core.snap_gesture((100_000., 100_000.), (41., 74.));
         let gesture = core.gesture.clone().unwrap();
-        assert_eq!(gesture.preview, (3, 48, 3, 1));
+        assert_eq!(gesture.preview, (12, 252, 12, 4));
         // Escape cancels: the preview never writes.
         core.cancel_gesture();
         assert_eq!(core.commit_gesture(), EditOutcome::Ignored);
         assert!(core.begin_save().is_none());
         // A drag that returns to its origin commits nothing.
         core.begin_gesture("playtime", false, (0., 0.));
-        core.snap_gesture((0., 0.), (164., 210.));
+        core.snap_gesture((0., 0.), (41., 74.));
         assert_eq!(core.commit_gesture(), EditOutcome::Ignored);
         assert!(core.begin_save().is_none());
         // A real move commits exactly one gesture.
         core.begin_gesture("playtime", false, (0., 0.));
-        core.snap_gesture((0., 210.), (164., 210.));
+        core.snap_gesture((0., 74.), (41., 74.));
         assert_eq!(
             core.commit_gesture(),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((0, 1, 3, 1)));
+        assert_eq!(core.placement("playtime"), Some((0, 1, 12, 4)));
         let submitted = core.begin_save().unwrap();
         assert_eq!(
             core.finish_save(&submitted, &Ok(submitted.clone())),
@@ -4426,42 +4445,43 @@ mod tests {
     #[test]
     fn resize_gestures_keep_requested_dimensions_for_moves() {
         let mut core = core_with_default_layout();
-        core.columns = 6;
+        core.columns = 24;
         core.begin_gesture("playtime", true, (0., 0.));
-        core.snap_gesture((328., 210.), (164., 210.));
+        core.snap_gesture((82., 74.), (41., 74.));
         assert_eq!(
             core.commit_gesture(),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((0, 0, 5, 2)));
+        assert_eq!(core.placement("playtime"), Some((0, 0, 14, 5)));
         let layout = core.layout.clone().unwrap();
         assert_eq!(
             layout.widgets[0].grid,
             Some(WidgetGrid {
-                columns: 5,
-                rows: 2,
+                subdivisions: Some(4),
+                columns: 14,
+                rows: 5,
                 position: Some([0, 0])
             })
         );
         // A later pure move preserves the resized geometry.
         core.begin_gesture("playtime", false, (0., 0.));
-        core.snap_gesture((164., 0.), (164., 210.));
+        core.snap_gesture((41., 0.), (41., 74.));
         assert_eq!(
             core.commit_gesture(),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((1, 0, 5, 2)));
+        assert_eq!(core.placement("playtime"), Some((1, 0, 14, 5)));
     }
 
     #[test]
     fn keyboard_equivalents_apply_exactly_one_completed_gesture_each() {
         let mut core = core_with_default_layout();
-        core.columns = 6;
+        core.columns = 24;
         assert_eq!(
             core.keyboard_arrange("playtime", "down", false),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((0, 1, 3, 1)));
+        assert_eq!(core.placement("playtime"), Some((0, 1, 12, 4)));
         let first = core.begin_save().unwrap();
         assert_eq!(
             core.finish_save(&first, &Ok(first.clone())),
@@ -4471,23 +4491,60 @@ mod tests {
             core.keyboard_arrange("playtime", "right", false),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((1, 1, 3, 1)));
+        assert_eq!(core.placement("playtime"), Some((1, 1, 12, 4)));
         // Shift on the move handle resizes instead.
         assert_eq!(
             core.keyboard_arrange("playtime", "right", true),
             EditOutcome::Applied { reload: false }
         );
-        assert_eq!(core.placement("playtime"), Some((1, 1, 4, 1)));
+        assert_eq!(core.placement("playtime"), Some((1, 1, 13, 4)));
         // Bounded at the viewport edge and row bound.
-        for _ in 0..80 {
+        for _ in 0..300 {
             core.keyboard_arrange("playtime", "down", false);
         }
         let (_, row, _, _) = core.placement("playtime").unwrap();
-        assert_eq!(row, 63);
+        assert_eq!(row, 252);
         assert_eq!(
             core.keyboard_arrange("playtime", "home", false),
             EditOutcome::Ignored
         );
+    }
+
+    #[test]
+    fn legacy_cells_keep_their_size_and_fine_edits_round_trip() {
+        let mut core = core_with_default_layout();
+        core.columns = 24;
+        assert_eq!(core.placement("playtime"), Some((0, 0, 12, 4)));
+        assert!(core.begin_save().is_none());
+        core.keyboard_arrange("playtime", "right", true);
+        core.keyboard_arrange("playtime", "down", true);
+        assert_eq!(core.placement("playtime"), Some((0, 0, 13, 5)));
+        let saved = core.layout.clone().unwrap();
+        validate_for_core(&saved);
+        let restored: HomeLayout =
+            serde_json::from_str(&serde_json::to_string(&saved).unwrap()).unwrap();
+        assert_eq!(grid_positions(&restored, 24), grid_positions(&saved, 24));
+        // Narrow presentation and restoring the viewport never rewrite the request.
+        core.set_columns(8);
+        core.keyboard_arrange("playtime", "down", false);
+        assert_eq!(requested_dims(core.widget("playtime").unwrap()), (13, 5));
+        core.set_columns(24);
+        assert_eq!(core.placement("playtime").unwrap().2, 13);
+        validate_for_core(core.layout.as_ref().unwrap());
+    }
+
+    #[test]
+    fn fine_drag_is_default_and_preview_never_saves() {
+        let mut core = core_with_default_layout();
+        core.columns = 24;
+        core.begin_gesture("playtime", true, (0., 0.));
+        core.snap_gesture((55., 80.), (50., 74.));
+        assert_eq!(core.gesture.as_ref().unwrap().preview, (0, 0, 13, 5));
+        assert!(core.begin_save().is_none());
+        core.cancel_gesture();
+        core.keyboard_arrange("playtime", "right", true);
+        assert_eq!(core.placement("playtime").unwrap().2, 13);
+        validate_for_core(core.layout.as_ref().unwrap());
     }
 
     // -- saves -------------------------------------------------------------------

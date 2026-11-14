@@ -579,7 +579,6 @@ pub struct Content {
     import_open: bool,
     updates_open: bool,
     actions_open: bool,
-    inventory_page: usize,
     updates: Entity<ContentUpdates>,
     _update_events: Subscription,
     instance_open: bool,
@@ -598,8 +597,7 @@ impl Content {
         let (tx, rx) = async_channel::unbounded();
         let filter =
             cx.new(|cx| InputState::new(window, cx).placeholder("Filter installed content…"));
-        let filter_events = cx.subscribe(&filter, |this: &mut Self, _, _: &InputEvent, cx| {
-            this.inventory_page = 0;
+        let filter_events = cx.subscribe(&filter, |_this: &mut Self, _, _: &InputEvent, cx| {
             cx.notify();
         });
         let path =
@@ -693,7 +691,6 @@ impl Content {
             import_open: false,
             updates_open: false,
             actions_open: false,
-            inventory_page: 0,
             updates,
             _update_events: update_events,
             instance_open: false,
@@ -947,7 +944,6 @@ impl Content {
         self.invalidate_review();
         self.revision = self.revision.wrapping_add(1);
         self.selected = Some(id);
-        self.inventory_page = 0;
         self.removing = None;
         self.icons.reset();
         self.load();
@@ -966,7 +962,6 @@ impl Content {
         self.invalidate_review();
         self.revision = self.revision.wrapping_add(1);
         self.selected = Some(instance);
-        self.inventory_page = 0;
         self.kind = Kind::from_index(kind);
         self.removing = None;
         self.icons.reset();
@@ -989,7 +984,6 @@ impl Content {
         self.invalidate_review();
         self.revision = self.revision.wrapping_add(1);
         self.kind = kind;
-        self.inventory_page = 0;
         self.removing = None;
         self.icons.reset();
         self.load();
@@ -1372,28 +1366,6 @@ fn kind_icon(kind: Kind) -> &'static str {
 impl Render for Content {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.entity();
-        let reserved = if window.viewport_size().width < px(1000.) {
-            352.
-        } else {
-            315.
-        };
-        let reserved = reserved
-            + if self.message.is_empty() { 0. } else { 68. }
-            + if self.updates_open { 130. } else { 0. }
-            + if self.actions_open { 50. } else { 0. }
-            + if self.import_open { 210. } else { 0. };
-        // Leave room for every note without clipping rows or the pager.
-        let row_height = self
-            .entries
-            .iter()
-            .map(|entry| {
-                let (_, _, notes) = describe(&entry.details);
-                (84. + notes.len() as f32 * 22.).max(CONTENT_ROW_HEIGHT)
-            })
-            .fold(CONTENT_ROW_HEIGHT, f32::max);
-        let page_size = ((f32::from(window.viewport_size().height) - reserved) / row_height)
-            .floor()
-            .clamp(1., 8.) as usize;
         let busy = self.is_busy(cx);
         let previewing = self.preview_request.is_some();
         let palette = crate::theme::theme(cx).clone();
@@ -1713,11 +1685,8 @@ impl Render for Content {
                 ));
             }
             let total = visible.len();
-            let current_page = self.inventory_page.min(total.saturating_sub(1) / page_size);
-            let start = current_page * page_size;
-            let end = (start + page_size).min(total);
-            let last_index = end.saturating_sub(1);
-            for (index, entry) in visible.into_iter().enumerate().skip(start).take(page_size) {
+            let last_index = total.saturating_sub(1);
+            for (index, entry) in visible.into_iter().enumerate() {
                 let e = entry.clone();
                 let v = view.clone();
                 let target = self.target().unwrap();
@@ -1919,7 +1888,7 @@ impl Render for Content {
                 list = list.child(
                     ui::row(t, index == last_index)
                         .gap(px(14.))
-                        .min_h(px(row_height))
+                        .min_h(px(CONTENT_ROW_HEIGHT))
                         .flex_shrink_0()
                         .py(px(8.))
                         .hover(move |style| style.bg(hover))
@@ -1939,46 +1908,6 @@ impl Render for Content {
                                 .gap(px(16.))
                                 .child(toggle)
                                 .child(div().w(px(88.)).flex().justify_end().child(remove)),
-                        ),
-                );
-            }
-            if total > page_size {
-                list = list.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(12.))
-                        .px(px(16.))
-                        .py(px(10.))
-                        .border_t_1()
-                        .border_color(palette.border_subtle)
-                        .child(ui::caption(
-                            t,
-                            format!("{}–{} of {} items", start + 1, end, total),
-                        ))
-                        .child(
-                            div()
-                                .flex()
-                                .gap(px(8.))
-                                .child(
-                                    AuroraButton::new("content-previous", "Previous")
-                                        .size(ButtonSize::Small)
-                                        .disabled(current_page == 0)
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.inventory_page = current_page.saturating_sub(1);
-                                            cx.notify();
-                                        })),
-                                )
-                                .child(
-                                    AuroraButton::new("content-next", "Next")
-                                        .size(ButtonSize::Small)
-                                        .disabled(end >= total)
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.inventory_page = current_page + 1;
-                                            cx.notify();
-                                        })),
-                                ),
                         ),
                 );
             }
