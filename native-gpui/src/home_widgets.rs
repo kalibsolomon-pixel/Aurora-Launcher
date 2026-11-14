@@ -3521,7 +3521,7 @@ impl HomeWidgets {
                                                     [
                                                         (0., projection.peak.clone()),
                                                         (0.5, projection.midpoint.clone()),
-                                                        (1., "0 min".into()),
+                                                        (1., "0".into()),
                                                     ]
                                                     .map(|(at, text)| {
                                                         label(text)
@@ -3586,6 +3586,7 @@ impl HomeWidgets {
                                                                 .role(Role::Image)
                                                                 .aria_label(point.detail.clone())
                                                                 .flex_1()
+                                                                .min_w(px(0.))
                                                                 .h_full()
                                                                 .px(px(if count > 12 {
                                                                     2.

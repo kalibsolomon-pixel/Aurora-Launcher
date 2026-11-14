@@ -1228,6 +1228,49 @@ impl Render for Accounts {
                     selected_id.as_deref() != Some(account.account_id.as_str())
                 });
                 let count = rows.len();
+                if let Some(expired) = rows.iter().find(|account| {
+                    selected_id.as_deref() == Some(account.account_id.as_str())
+                        && account.status == "reauthenticationRequired"
+                }) {
+                    let reconnect_id = expired.account_id.clone();
+                    content = content.child(
+                        ui::card(&palette)
+                            .bg(palette.warning.opacity(0.08))
+                            .border_color(palette.warning.opacity(0.35))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(14.))
+                                    .child(crate::symbols::icon(
+                                        Some("warning"),
+                                        px(20.),
+                                        palette.warning,
+                                    ))
+                                    .child(
+                                        ui::title_block(
+                                            &palette,
+                                            format!("{} needs to sign in again", expired.minecraft_name),
+                                            Some("Reconnect to launch the game with this account.".into()),
+                                        )
+                                        .flex_1()
+                                        .min_w(px(0.)),
+                                    )
+                                    .child(
+                                        AuroraButton::new("accounts-callout-reconnect", "Reconnect")
+                                            .accessibility_label(format!(
+                                                "Reconnect {}",
+                                                expired.minecraft_name
+                                            ))
+                                            .icon("login")
+                                            .disabled(busy)
+                                            .on_click(cx.listener(move |this, _, _, cx| {
+                                                this.refresh_session(reconnect_id.clone(), cx);
+                                            })),
+                                    ),
+                            ),
+                    );
+                }
                 let mut list = ui::list_card(&palette).child(
                     div()
                         .flex()

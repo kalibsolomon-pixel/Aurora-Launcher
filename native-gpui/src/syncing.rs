@@ -1322,7 +1322,7 @@ impl Render for Syncing {
                     },
                 ));
                 let excluded_note = (!excluded.is_empty()).then(|| {
-                    ui::caption(
+                    ui::muted(
                         t,
                         format!(
                             "Not included: {}.",

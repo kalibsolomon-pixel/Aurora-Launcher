@@ -2194,7 +2194,7 @@ impl Render for Skins {
                                 )
                                 // Destructive removal sits apart from routine actions.
                                 .child(
-                                    AuroraButton::new(format!("skins-remove-{}", preset.id), "")
+                                    AuroraButton::new(format!("skins-remove-{}", preset.id), "Remove")
                                         .accessibility_label("Remove skin")
                                         .icon("delete")
                                         .size(ButtonSize::Small)

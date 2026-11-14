@@ -2900,7 +2900,7 @@ impl Render for Discover {
                                     .line_clamp(if compact { 3 } else { 2 })
                                     .text_size(px(ui::TEXT_BODY - 1.))
                                     .line_height(px(18.))
-                                    .text_color(palette.muted_foreground)
+                                    .text_color(palette.foreground.opacity(0.75))
                                     .child(project.summary.clone()),
                             )
                             .children(footer_meta),
