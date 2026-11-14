@@ -35,12 +35,11 @@ custom accent preview, skin preview controls and the smaller window sizes).
 
 Native debug build; 385 tests passed; Rust formatting and whitespace checks passed. Captures were driven through UI
 Automation against the disposable showcase root only; no content was removed,
-no Sync change applied and no sign-in attempted. Before capture, Entity Culling,
-Cloth Config API and FerriteCore were installed from Discover into the disposable Survival
-Plus instance so Downloads and Content show real results, and the
-disposable root carries a saved (off) Sync policy with two participating
-instances; and the exact
-disposable process was stopped afterwards. `screenshots-sha256.json` records
+no Sync change applied and no sign-in attempted. This run reused the disposable
+root containing the prior real Entity Culling, Cloth Config API and FerriteCore
+installs. Download history is session-local, so its main screenshot shows the
+empty state after restart. The saved off Sync policy includes two instances.
+The exact disposable process was stopped afterwards. `screenshots-sha256.json` records
 every PNG. Earlier frozen screenshot hashes were verified unchanged. Full keyboard/text-editing accessibility, the native file picker and
 performance remain unverified, as in round 22.
 

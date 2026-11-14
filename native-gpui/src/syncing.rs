@@ -1326,7 +1326,7 @@ impl Render for Syncing {
                             .h(px(26.))
                             .text_size(px(ui::TEXT_BODY))
                             .text_color(t.foreground)
-                            .child(crate::symbols::icon(Some("check"), px(14.), t.ring))
+                            .child(div().size(px(4.)).rounded_full().bg(t.muted_foreground))
                             .child(*label)
                     }));
                 let excluded_note = (!excluded.is_empty()).then(|| {

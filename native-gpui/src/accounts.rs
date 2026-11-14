@@ -551,19 +551,20 @@ fn icon_button(
         .gap(px(6.))
         .text_size(px(ui::TEXT_BODY))
         .font_weight(FontWeight::MEDIUM)
-        .text_color(t.danger)
+        .text_color(t.muted_foreground)
         .rounded(t.radius)
-        .bg(Hsla {
-            a: 0.08,
-            ..t.danger
-        })
+        .bg(gpui::transparent_black())
         .border_1()
         .border_color(gpui::transparent_black())
         .hover(move |style| style.bg(hover))
         .active(|style| style.opacity(0.88))
         .focus(move |style| style.border_color(ring))
         .styles(|styles| styles.disabled(|style| style.opacity(0.42)))
-        .child(crate::symbols::icon(Some(icon), px(16.), t.danger))
+        .child(crate::symbols::icon(
+            Some(icon),
+            px(16.),
+            t.muted_foreground,
+        ))
         .child("Remove…")
 }
 

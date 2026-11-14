@@ -1535,6 +1535,7 @@ impl Render for Content {
                         }),
                 );
             }
+            root = root.child(tabs);
             let find = view.clone();
             let open = view.clone();
             let reload = view.clone();
@@ -1548,20 +1549,6 @@ impl Render for Content {
                 .py(px(10.))
                 .border_b_1()
                 .border_color(palette.border_subtle)
-                .child(tabs)
-                .child(
-                    div().flex().items_center().gap(px(6.)).child(
-                        AuroraButton::new("content-actions", "Manage content")
-                            .size(ButtonSize::Small)
-                            .variant(ButtonVariant::Default)
-                            .icon("tune")
-                            .selected(self.actions_open)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.actions_open = !this.actions_open;
-                                cx.notify();
-                            })),
-                    ),
-                )
                 .when(self.actions_open, |toolbar| {
                     toolbar.child(
                         div()
@@ -1611,7 +1598,7 @@ impl Render for Content {
                             ),
                     )
                 });
-            let mut list = ui::list_card(t).child(toolbar);
+            let mut list = ui::list_card(t).when(self.actions_open, |list| list.child(toolbar));
             let query = self.filter.read(cx).value();
             let visible: Vec<_> = self
                 .entries
@@ -1663,7 +1650,7 @@ impl Render for Content {
                                 .child(
                                     AuroraButton::new("content-find-more", "Find more")
                                         .size(ButtonSize::Small)
-                                        .variant(ButtonVariant::Soft)
+                                        .variant(ButtonVariant::Default)
                                         .icon("explore")
                                         .on_click(move |_, _, cx| {
                                             find.update(cx, |s, cx| s.find_more(cx))
@@ -1680,6 +1667,19 @@ impl Render for Content {
                                             cx.notify();
                                         })),
                                 ),
+                        )
+                        .child(
+                            div().flex().items_center().gap(px(6.)).child(
+                                AuroraButton::new("content-actions", "Manage content")
+                                    .size(ButtonSize::Small)
+                                    .variant(ButtonVariant::Default)
+                                    .icon("tune")
+                                    .selected(self.actions_open)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.actions_open = !this.actions_open;
+                                        cx.notify();
+                                    })),
+                            ),
                         ),
                 );
             }

@@ -2886,10 +2886,9 @@ impl Render for Discover {
                             .child(
                                 div()
                                     .overflow_hidden()
-                                    .h(px(if compact { 36. } else { 18. }))
-                                    .max_h(px(if compact { 36. } else { 18. }))
-                                    .line_clamp(if compact { 2 } else { 1 })
-                                    .when(!compact, |line| line.truncate())
+                                    .h(px(36.))
+                                    .max_h(px(36.))
+                                    .line_clamp(2)
                                     .text_size(px(ui::TEXT_BODY - 1.))
                                     .line_height(px(18.))
                                     .text_color(palette.foreground.opacity(0.75))
