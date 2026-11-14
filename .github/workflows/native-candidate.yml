@@ -12,6 +12,9 @@ jobs:
   build:
     runs-on: windows-latest
     environment: launcher-native-preview-build
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
     steps:
       - uses: actions/checkout@v4
         with:

@@ -78,6 +78,8 @@ jobs:
     environment: launcher-production
     env:
       AURORA_DISCORD_APPLICATION_ID: '1553653987545317396'
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
     steps:
       - uses: actions/checkout@v4
         with:
