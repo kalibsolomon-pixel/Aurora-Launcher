@@ -72,8 +72,8 @@ impl Default for AuroraTheme {
             border: rgb(0x343743).into(),
             border_subtle: rgba(0xffffff14).into(),
             foreground: rgb(0xedf1fb).into(),
-            muted_foreground: rgb(0xc4cbda).into(),
-            subtle_foreground: rgb(0xacb5c8).into(),
+            muted_foreground: rgb(0xccd3e1).into(),
+            subtle_foreground: rgb(0xb8c0d2).into(),
             accent_soft: rgba(0x8b80ff26).into(),
             accent: rgb(0x6f5df2).into(),
             accent_hover: rgb(0x6f63e8).into(),
@@ -117,11 +117,11 @@ fn resolved(appearance: Option<&crate::api::Appearance>) -> AuroraTheme {
     let surfaces = match appearance.theme.as_str() {
         "midnight" => Some((
             0x0d1017, 0x070910, 0x121621, 0x191e2b, 0x202636, 0x0a0d14, 0x2c3444, 0xe9edf9,
-            0xc4cbda,
+            0xccd3e1,
         )),
         "oled" => Some((
             0x000000, 0x000000, 0x0b0b0e, 0x141419, 0x1b1b22, 0x000000, 0x2b2d35, 0xf0f3fc,
-            0xc4cbda,
+            0xccd3e1,
         )),
         _ => None,
     };

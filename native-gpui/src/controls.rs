@@ -250,7 +250,7 @@ impl RenderOnce for AuroraButton {
                             .bg(disabled_bg)
                             .text_color(disabled_fg)
                             .border_color(disabled_border)
-                            .opacity(0.5)
+                            .opacity(0.62)
                     })
             })
             .when_some(self.icon, |b, icon| {

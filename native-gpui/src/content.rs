@@ -155,6 +155,8 @@ fn provenance(p: &Option<api::Provenance>) -> String {
         })
         .unwrap_or_else(|| "No provider provenance".into())
 }
+/// Below this window width each row stacks its file name under the name.
+const INLINE_COLUMNS_MIN_WIDTH: f32 = 1000.;
 /// Note prefix for a mod other enabled mods depend on; shown as a badge.
 const REQUIRED_NOTE: &str = "Required by other mods: ";
 /// "Cannot change this mod: A requires x; B requires x." → "Required by A, B".
@@ -1700,7 +1702,7 @@ impl Render for Content {
                     Some("Try a different name or file name, or clear the filter."),
                 ));
             }
-            if window.viewport_size().width >= px(1000.) && !visible.is_empty() {
+            if window.viewport_size().width >= px(INLINE_COLUMNS_MIN_WIDTH) && !visible.is_empty() {
                 list = list.child(
                     div()
                         .flex()
@@ -1753,7 +1755,8 @@ impl Render for Content {
                     .map(required_label);
                 let required = required_by.is_some();
                 notes.retain(|note| !note.starts_with(REQUIRED_NOTE));
-                let inline_meta = window.viewport_size().width >= px(1000.) && notes.is_empty();
+                let inline_meta =
+                    window.viewport_size().width >= px(INLINE_COLUMNS_MIN_WIDTH) && notes.is_empty();
                 let disabled_row = entry.enabled == Some(false);
                 let mut line = vec![entry.file_name.as_str()];
                 line.extend(meta.iter().copied().filter(|m| {
