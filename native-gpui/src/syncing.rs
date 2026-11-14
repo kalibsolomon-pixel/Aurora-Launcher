@@ -1344,7 +1344,7 @@ impl Render for Syncing {
                                 .gap(px(12.))
                                 .child(ui::section_header(
                                     t,
-                                    "Saved choices",
+                                    "Files to sync",
                                     Some("These files start syncing when you turn Sync on.".into()),
                                 ))
                                 .child(
@@ -1397,7 +1397,7 @@ impl Render for Syncing {
                                 .gap(px(12.))
                                 .child(ui::section_header(
                                     t,
-                                    "Participating instances",
+                                    "Instances included",
                                     Some(
                                         format!(
                                             "{} of {} instances share these files when Sync is on.",

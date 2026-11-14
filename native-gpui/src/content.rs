@@ -1803,7 +1803,21 @@ impl Render for Content {
                                 name.child(ui::badge(t, "Disabled", ui::Tone::Neutral))
                             })
                             .when_some(required_by.clone(), |name, label| {
-                                name.child(ui::badge(t, label, ui::Tone::Neutral))
+                                name.child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(5.))
+                                        .h(px(22.))
+                                        .px(px(8.))
+                                        .rounded(t.radius)
+                                        .bg(t.accent_soft)
+                                        .text_size(px(ui::TEXT_CAPTION))
+                                        .font_weight(gpui::FontWeight::MEDIUM)
+                                        .text_color(t.foreground)
+                                        .child(crate::symbols::icon(Some("lock"), px(12.), t.ring))
+                                        .child(label),
+                                )
                             }),
                     )
                     .child(
@@ -1865,8 +1879,8 @@ impl Render for Content {
                                     .checked(true)
                                     .disabled(true),
                                 )
-                                .child(div().absolute().left(px(25.)).top(px(13.)).child(
-                                    crate::symbols::icon(Some("lock"), px(10.), palette.accent),
+                                .child(div().absolute().left(px(24.)).top(px(12.)).child(
+                                    crate::symbols::icon(Some("lock"), px(12.), palette.accent),
                                 )),
                         )
                         .into_any_element(),

@@ -1888,6 +1888,8 @@ pub struct HomeWidgets {
     media_creating: bool,
     /// Media's constructor takes a window, which entity updates do not carry.
     window: AnyWindowHandle,
+    /// Launching needs a sign-in first; quick-play actions are secondary.
+    needs_sign_in: bool,
 }
 
 impl HomeWidgets {
@@ -1939,6 +1941,7 @@ impl HomeWidgets {
             media: None,
             media_creating: false,
             window: window.window_handle(),
+            needs_sign_in: false,
         };
         view.reload(cx);
         view
@@ -1973,6 +1976,14 @@ impl HomeWidgets {
         self.dispatch_pending(cx);
         self.sync_media(cx);
         cx.notify();
+    }
+
+    /// Whether launching currently needs a sign-in first.
+    pub fn set_needs_sign_in(&mut self, needs: bool, cx: &mut Context<Self>) {
+        if self.needs_sign_in != needs {
+            self.needs_sign_in = needs;
+            cx.notify();
+        }
     }
 
     /// The parent's gate on new work; running writes still complete.
@@ -3760,7 +3771,11 @@ impl HomeWidgets {
                                 .child(
                                     AuroraButton::new(format!("server-play-{}", row.id), "Play")
                                         .size(ButtonSize::Small)
-                                        .variant(ButtonVariant::Soft)
+                                        .variant(if self.needs_sign_in {
+                                            ButtonVariant::Default
+                                        } else {
+                                            ButtonVariant::Soft
+                                        })
                                         .icon("play_arrow")
                                         .disabled(!playable)
                                         .on_click(cx.listener(move |this, _, _, cx| {
@@ -3844,7 +3859,11 @@ impl HomeWidgets {
                                 .child(
                                     AuroraButton::new(format!("world-play-{}", row.id), "Play")
                                         .size(ButtonSize::Small)
-                                        .variant(ButtonVariant::Soft)
+                                        .variant(if self.needs_sign_in {
+                                            ButtonVariant::Default
+                                        } else {
+                                            ButtonVariant::Soft
+                                        })
                                         .icon("play_arrow")
                                         .disabled(!playable)
                                         .on_click(cx.listener(move |this, _, _, cx| {

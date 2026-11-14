@@ -527,11 +527,17 @@ impl Launcher {
                     .pack_import
                     .as_ref()
                     .is_some_and(|view| view.read(cx).is_busy());
+            let needs_sign_in = self.selected_id().is_some_and(|id| {
+                self.visible_blockers(id)
+                    .iter()
+                    .any(|blocker| blocker.code == "launch_authentication_required")
+            });
             home.update(cx, |home, cx| {
                 if self.page != 0 {
                     home.set_active(false, cx);
                 }
                 home.set_blocked(blocked, cx);
+                home.set_needs_sign_in(needs_sign_in, cx);
                 if self.page == 0 {
                     home.set_active(true, cx);
                 }
