@@ -1369,6 +1369,70 @@ impl Render for Syncing {
                         .child(chips)
                         .children(excluded_note),
                 );
+                // Which instances the saved choices apply to, read-only too.
+                let participants = participant_rows(&draft, self.instances.as_ref());
+                let joined: Vec<&ParticipantRow> =
+                    participants.iter().filter(|row| row.checked).collect();
+                let names = div().flex().flex_wrap().gap(px(8.)).pt(px(6.)).children(
+                    joined.iter().map(|row| {
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .h(px(30.))
+                            .px(px(12.))
+                            .rounded(t.radius)
+                            .bg(t.control)
+                            .text_size(px(ui::TEXT_BODY))
+                            .text_color(if row.available {
+                                t.foreground
+                            } else {
+                                t.muted_foreground
+                            })
+                            .child(crate::symbols::icon(Some("grid_view"), px(14.), t.muted_foreground))
+                            .child(row.name.clone())
+                    }),
+                );
+                body = body.child(
+                    section_card(t)
+                        .child(
+                            div()
+                                .flex()
+                                .items_start()
+                                .justify_between()
+                                .gap(px(12.))
+                                .child(ui::section_header(
+                                    t,
+                                    "Participating instances",
+                                    Some(
+                                        format!(
+                                            "{} of {} instances share these files when Sync is on.",
+                                            joined.len(),
+                                            participants.len()
+                                        )
+                                        .into(),
+                                    ),
+                                ))
+                                .child(
+                                    AuroraButton::new("sync-edit-instances", "Edit instances")
+                                        .size(ButtonSize::Small)
+                                        .icon("edit")
+                                        .on_click({
+                                            let view = view.clone();
+                                            move |_, _, cx| {
+                                                view.update(cx, |this, cx| {
+                                                    this.section = 1;
+                                                    cx.notify();
+                                                })
+                                            }
+                                        }),
+                                ),
+                        )
+                        .when(!joined.is_empty(), |card| card.child(names))
+                        .when(joined.is_empty(), |card| {
+                            card.child(ui::muted(t, "No instances are selected yet."))
+                        }),
+                );
             } else if self.section == 0 {
                 body = body.child(categories.child(category_grid));
             }
@@ -1433,7 +1497,7 @@ impl Render for Syncing {
                 list = list.child(
                     ui::row(t, index + 1 == total)
                         .px(px(20.))
-                        .child(ui::icon_tile(t, Some("deployed_code"), 36., row.checked))
+                        .child(ui::icon_tile(t, Some("grid_view"), 36., row.checked))
                         .child(
                             ui::title_block(t, row.name.clone(), Some(detail))
                                 .flex_1()
