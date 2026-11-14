@@ -12,6 +12,9 @@ jobs:
   build:
     runs-on: windows-latest
     environment: launcher-native-preview-build
+    env:
+      CARGO_BUILD_JOBS: '2'
+      CARGO_INCREMENTAL: '0'
     steps:
       - uses: actions/checkout@v4
         with:
@@ -29,13 +32,13 @@ jobs:
       - name: Check core and native host
         shell: pwsh
         run: |
-          cargo fmt --manifest-path native/Cargo.toml --all -- --check
+          cargo fmt --manifest-path native-gpui/Cargo.toml --all -- --check
           if ($LASTEXITCODE) { throw 'Native format failed' }
           cargo test --manifest-path core/Cargo.toml --locked --no-default-features --features native-preview
           if ($LASTEXITCODE) { throw 'Core tests failed' }
-          cargo test --manifest-path native/Cargo.toml --locked
+          cargo test --manifest-path native-gpui/Cargo.toml --locked --bin aurora-launcher -j 2
           if ($LASTEXITCODE) { throw 'Native tests failed' }
-          cargo build --manifest-path native/Cargo.toml --locked --release
+          cargo build --manifest-path native-gpui/Cargo.toml --locked --release
           if ($LASTEXITCODE) { throw 'Native release failed' }
       - name: Install packaging compiler
         shell: pwsh

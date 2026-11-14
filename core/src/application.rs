@@ -5701,18 +5701,40 @@ pub fn get_accounts(app: Host) -> Result<AccountsStateDto, CommandError> {
     })
 }
 
+pub use crate::auth::flow::{LoginCancelOutcome, LoginCancellation, LoginRequest};
+
+/// Creates only a process-local cancellation capability; no browser, credentials
+/// or persisted state are accessed. Create before dispatching the async command.
+pub fn prepare_microsoft_login() -> LoginRequest {
+    LoginRequest::default()
+}
+
+pub fn cancel_prepared_microsoft_login(cancellation: &LoginCancellation) -> LoginCancelOutcome {
+    cancellation.cancel()
+}
+
 /// Starts Microsoft sign-in in the system browser and completes the whole
-/// authentication chain. The command stays in flight (bounded by the login
-/// timeout) while the user signs in; `cancel_microsoft_login` aborts it.
+/// authentication chain. The browser wait has the configured login timeout.
+/// Cancellation is accepted until the atomic account-saving boundary.
 ///
 /// Requires Aurora's real Microsoft application registration (the committed
 /// public client ID, optionally overridden through the
 /// `AURORA_MICROSOFT_CLIENT_ID` build-environment variable); without it the
 /// command fails deliberately instead of pretending.
 pub async fn begin_microsoft_login(app: Host) -> Result<AccountSummaryDto, CommandError> {
-    let managed = managed_paths(&app)?;
+    begin_prepared_microsoft_login(app, prepare_microsoft_login()).await
+}
+
+/// Uses a single-use request prepared before dispatch so cancellation cannot
+/// race the login's registration. The request is process-local and has no secrets.
+pub async fn begin_prepared_microsoft_login(
+    app: Host,
+    login: LoginRequest,
+) -> Result<AccountSummaryDto, CommandError> {
+    let managed = managed_paths(&app).map_err(|error| login.finish_error(error))?;
     let registration = crate::auth::flow::production_registration()
-        .ok_or_else(|| CommandError::from(crate::auth::AuthError::ConfigurationMissing))?;
+        .ok_or_else(|| CommandError::from(crate::auth::AuthError::ConfigurationMissing))
+        .map_err(|error| login.finish_error(error))?;
 
     let endpoints = crate::auth::AuthEndpoints::official();
     let store = crate::auth::OsCredentialStore;
@@ -5730,14 +5752,18 @@ pub async fn begin_microsoft_login(app: Host) -> Result<AccountSummaryDto, Comma
         },
     };
 
-    let record = crate::auth::flow::sign_in(&context, &mut |phase| {
-        let _ = app.emit(
-            "auth-progress",
-            AuthProgressEvent {
-                phase: phase.as_str(),
-            },
-        );
-    })
+    let record = crate::auth::flow::sign_in_prepared(
+        &context,
+        &mut |phase| {
+            let _ = app.emit(
+                "auth-progress",
+                AuthProgressEvent {
+                    phase: phase.as_str(),
+                },
+            );
+        },
+        login,
+    )
     .await?;
 
     Ok(AccountSummaryDto {

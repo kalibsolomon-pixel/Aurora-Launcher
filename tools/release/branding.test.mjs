@@ -6,13 +6,18 @@ const text = path => readFile(new URL('../../'+path,import.meta.url),'utf8');
 
 test('distribution entry points use Aurora Launcher and aurora-launcher.exe',async()=>{
   assert.match(await text('native/Cargo.toml'),/\[\[bin\]\]\s*name = "aurora-launcher"/);
-  const resources=await text('native/build.rs');
+  assert.match(await text('native-gpui/Cargo.toml'),/\[\[bin\]\]\s*name = "aurora-launcher"/);
+  const resources=await text('native-gpui/build.rs');
   assert.match(resources,/resource.set\("ProductName", "Aurora Launcher"\)/);
   assert.match(resources,/resource.set\("OriginalFilename", "aurora-launcher.exe"\)/);
   const packaging=await text('native/tools/package-windows.ps1');
+  assert.ok(packaging.includes('native-gpui/Cargo.toml'));
+  assert.ok(packaging.includes('native-gpui\\target\\release\\aurora-launcher.exe'));
+  assert.ok(packaging.includes('AURORA_DISPOSABLE_DIAGNOSTIC'));
   assert.ok(packaging.includes('aurora-launcher.exe'));
   assert.ok(packaging.includes('Aurora.Launcher_${version}_x64-setup.exe'));
   const workflow=await text('.github/workflows/native-release.yml');
+  assert.ok(workflow.includes('cargo build --manifest-path native-gpui/Cargo.toml --locked --release'));
   assert.ok(workflow.includes('Aurora.Launcher_$($env:VERSION)_x64-setup.exe'));
   assert.ok(!workflow.includes('Aurora.Native.Preview_'));
   const installer=await text('native/installer/native-preview.nsi');

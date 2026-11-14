@@ -1,7 +1,7 @@
 # Releasing Aurora Launcher
 
-Aurora Launcher is a native Rust/Slint application. Aurora Launcher 2.1.1 is the current
-stable/latest GitHub release. The Svelte/Tauri application and WebView release
+Aurora Launcher is a native Rust/GPUI application. Version 2.2.0 promotes the
+GPUI host through the existing signed native update channel. The Svelte/Tauri application and WebView release
 workflows are retired; old releases and their authority remain historical records.
 
 ## Build and validate
@@ -11,14 +11,14 @@ npm ci
 npm run verify:version
 npm test
 cargo fmt --manifest-path core/Cargo.toml --all -- --check
-cargo fmt --manifest-path native/Cargo.toml --all -- --check
+cargo fmt --manifest-path native-gpui/Cargo.toml --all -- --check
 cargo check --manifest-path core/Cargo.toml --all-targets --locked
 cargo test --manifest-path core/Cargo.toml --locked
-cargo test --manifest-path native/Cargo.toml --locked
-cargo build --manifest-path native/Cargo.toml --release --locked
+cargo test --manifest-path native-gpui/Cargo.toml --locked --bin aurora-launcher -j 2
+cargo build --manifest-path native-gpui/Cargo.toml --release --locked
 ```
 
-`native/Cargo.toml`, `core/Cargo.toml`, their lockfiles and the release-tool npm
+`native-gpui/Cargo.toml`, retained `native/Cargo.toml`, `core/Cargo.toml`, their lockfiles and the release-tool npm
 metadata share the native version. Never rebuild or replace published immutable
 native artifacts; a future binary release requires a new owner-selected version.
 

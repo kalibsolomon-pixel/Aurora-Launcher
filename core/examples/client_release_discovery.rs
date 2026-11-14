@@ -15,6 +15,33 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .await
         .map_err(|error| std::io::Error::other(error.message()))?;
     println!("{}", serde_json::to_string_pretty(&manifest)?);
+    if existing.is_none() {
+        for mc in ["26.1.2", "26.2", "26.3", "1.21.11"] {
+            let profiles = aurora_launcher_lib::distribution::production_manifest()?;
+            let template = profiles
+                .latest_compatible(mc, None)
+                .ok_or("Missing managed environment")?;
+            let updates = aurora_launcher_lib::updates::client::fetch_github_release_manifest(
+                &managed,
+                &DownloadOptions::default(),
+                template,
+            )
+            .await
+            .map_err(|e| std::io::Error::other(e.message()))?;
+            let candidate = updates
+                .latest_compatible(mc, Some(template.fabric_loader_version()))
+                .ok_or("No compatible published Client update")?;
+            let discovered = manifest
+                .latest_compatible(mc, None)
+                .ok_or("Missing discovered environment")?;
+            assert_eq!(candidate.artifact(), discovered.artifact());
+            println!(
+                "Verified update path: Minecraft {mc}, Client {} -> {}",
+                template.aurora_version(),
+                candidate.aurora_version()
+            );
+        }
+    }
     if existing.is_some() {
         let config = aurora_launcher_lib::config::load(&managed.config_file())?
             .ok_or("No launcher configuration")?;

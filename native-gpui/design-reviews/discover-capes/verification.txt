@@ -1,0 +1,6 @@
+PASS: Mods pages contain 20 entries each: Fabric API through Reese's Sodium Options, then 3D Skin Layers through No Chat Reports.
+PASS: Previous restores the original 20 entries.
+PASS: Resource packs contain 20 entries beginning with Fresh Animations; normal and compact layouts captured.
+PASS: Busy Not Enough Animations row exposes no Install button; screenshot shows one Installing indicator.
+PASS: Not Enough Animations install completed in the disposable fixture.
+PASS: Owned Pan cape artwork and View/rear preview captured at wide and compact widths; Wear not invoked.

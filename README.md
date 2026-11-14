@@ -1,6 +1,6 @@
 # Aurora Launcher
 
-A Windows launcher for Minecraft: Java Edition, built with Rust and Slint.
+A Windows launcher for Minecraft: Java Edition, built with Rust and GPUI.
 Keep separate instances for different Minecraft versions, loaders, and modpacks.
 Sign in with Microsoft, choose an instance, and play.
 
@@ -41,6 +41,8 @@ Modrinth modpacks for Fabric, Forge, and NeoForge are available from version
 modpacks are outside this release's scope. See the
 [2.1.1 release notes](docs/releases/NATIVE_2_1_1_NOTES.md) for loader and update limits.
 
+Aurora Client 3.4.0 supports Minecraft 26.1.2, 26.2 and 26.3. The latest compatible 1.21.11 Client (3.2.1) remains available as legacy. Client releases and update checks come directly from the official Client GitHub releases, with verified artifacts and exact environment matching.
+
 Worlds stay local. Syncing does not automatically merge conflicting server edits.
 The archived WebView application keeps its separate installation and update
 authority. Moving data between the applications requires a backup and an explicit
@@ -53,16 +55,16 @@ not required. Node.js and npm are needed for release tooling; NSIS 3.11 builds
 the Windows installer.
 
 ```sh
-cargo run --manifest-path native/Cargo.toml --bin aurora-launcher
-cargo build --manifest-path native/Cargo.toml --release --locked
+cargo run --manifest-path native-gpui/Cargo.toml --bin aurora-launcher
+cargo build --manifest-path native-gpui/Cargo.toml --release --locked
 ```
 
-The release executable is `native/target/release/aurora-launcher.exe`.
-The Rust application is in `native/`; shared launcher logic is in `core/`.
+The release executable is `native-gpui/target/release/aurora-launcher.exe`.
+The Rust application is in `native-gpui/`; shared launcher logic is in `core/`.
 
 ```sh
 cargo test --manifest-path core/Cargo.toml --locked
-cargo test --manifest-path native/Cargo.toml --locked
+cargo test --manifest-path native-gpui/Cargo.toml --locked --bin aurora-launcher -j 2
 npm ci
 npm test
 ```

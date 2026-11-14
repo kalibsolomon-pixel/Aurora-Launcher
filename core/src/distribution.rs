@@ -71,11 +71,14 @@ impl ReleaseManifest {
                     aurora_version: release.aurora_version.clone(),
                     reason,
                 })?;
-            if !versions.insert(release.aurora_version.as_str()) {
+            if !versions.insert((
+                release.aurora_version.as_str(),
+                release.minecraft_version.as_str(),
+            )) {
                 return Err(ManifestError::InvalidRelease {
                     index,
                     aurora_version: release.aurora_version.clone(),
-                    reason: "duplicate Aurora version".to_owned(),
+                    reason: "duplicate Aurora version for Minecraft environment".to_owned(),
                 });
             }
         }
@@ -116,14 +119,31 @@ impl ReleaseManifest {
     ///
     /// Selection is exact, mirroring the launcher's version-selection
     /// policy everywhere: no "latest", no channel fallback, no
-    /// substitution. Parsing rejects duplicate Aurora versions.
+    /// substitution. Ambiguous versions require `resolve_environment`.
     pub fn resolve_exact(
         &self,
         aurora_version: &str,
         channel: Option<ReleaseChannel>,
     ) -> Option<&AuroraRelease> {
+        let mut matches = self.releases.iter().filter(|release| {
+            release.aurora_version() == aurora_version
+                && channel.is_none_or(|required| release.channel() == required)
+        });
+        let found = matches.next()?;
+        // Version-only callers must never choose an arbitrary environment.
+        matches.next().is_none().then_some(found)
+    }
+
+    /// Resolves an exact version and Minecraft environment, preserving old pins.
+    pub fn resolve_environment(
+        &self,
+        aurora_version: &str,
+        channel: Option<ReleaseChannel>,
+        minecraft: &str,
+    ) -> Option<&AuroraRelease> {
         self.releases.iter().find(|release| {
             release.aurora_version() == aurora_version
+                && release.minecraft_version() == minecraft
                 && channel.is_none_or(|required| release.channel() == required)
         })
     }
@@ -131,13 +151,17 @@ impl ReleaseManifest {
     /// Returns this manifest extended by one additional release entry,
     /// validated like every embedded entry.
     ///
-    /// Used only to make an instance's own persisted release metadata
-    /// resolvable; an entry whose version this manifest already knows is
-    /// ignored (embedded entries win), and the result still rejects
+    /// Used for discovered entries and persisted instance release metadata.
+    /// An entry whose version and Minecraft environment this manifest knows is
+    /// ignored (embedded entries win), and the result still rejects environment
     /// duplicates across channels.
     pub fn with_release(&self, release: AuroraRelease) -> Result<Self, ManifestError> {
         if self
-            .resolve_exact(release.aurora_version(), Some(release.channel()))
+            .resolve_environment(
+                release.aurora_version(),
+                Some(release.channel()),
+                release.minecraft_version(),
+            )
             .is_some()
         {
             return Ok(self.clone());
@@ -638,10 +662,12 @@ mod tests {
     }
 
     #[test]
-    fn rejects_duplicate_release_versions_even_across_channels() {
+    fn rejects_duplicate_release_versions_in_one_environment_even_across_channels() {
         let mut duplicate: serde_json::Value = serde_json::from_str(VALID_MANIFEST).unwrap();
         let version = duplicate["releases"][0]["auroraVersion"].clone();
         duplicate["releases"][1]["auroraVersion"] = version;
+        duplicate["releases"][1]["minecraftVersion"] =
+            duplicate["releases"][0]["minecraftVersion"].clone();
         let error = ReleaseManifest::from_json(&duplicate.to_string()).unwrap_err();
         assert!(matches!(
             error,
@@ -791,7 +817,7 @@ mod tests {
                 .resolve_exact("2.1.2", Some(ReleaseChannel::Stable))
                 .is_some()
         );
-        assert_eq!(production.releases().len(), 4);
+        assert_eq!(production.releases().len(), 7);
         let current = production
             .resolve_exact("3.0.0", Some(ReleaseChannel::Stable))
             .unwrap();
@@ -905,5 +931,30 @@ mod tests {
         let mut mutant = manifest.clone();
         mutant["releases"][index]["java"]["majorVersion"] = serde_json::Value::from(major_version);
         mutant
+    }
+    #[test]
+    fn shared_client_version_requires_environment_and_preserves_all_exact_pins() {
+        let profiles = production_manifest().unwrap();
+        let mut manifest =
+            ReleaseManifest::from_json(r#"{"schemaVersion":1,"releases":[]}"#).unwrap();
+        for mc in ["26.1.2", "26.2", "26.3"] {
+            let mut value =
+                serde_json::to_value(profiles.latest_compatible(mc, None).unwrap()).unwrap();
+            value["auroraVersion"] = "3.4.0".into();
+            let one = ReleaseManifest::from_json(
+                &serde_json::json!({"schemaVersion":1,"releases":[value]}).to_string(),
+            )
+            .unwrap();
+            manifest = manifest.with_release(one.releases()[0].clone()).unwrap();
+        }
+        assert_eq!(manifest.releases().len(), 3);
+        assert!(manifest.resolve_exact("3.4.0", None).is_none());
+        for mc in ["26.1.2", "26.2", "26.3"] {
+            let release = manifest
+                .resolve_environment("3.4.0", Some(ReleaseChannel::Stable), mc)
+                .unwrap();
+            assert_eq!(release.minecraft_version(), mc);
+            assert_eq!(manifest.with_release(release.clone()).unwrap(), manifest);
+        }
     }
 }

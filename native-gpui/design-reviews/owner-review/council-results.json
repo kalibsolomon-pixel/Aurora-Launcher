@@ -1,0 +1,122 @@
+[
+  {
+    "reviewer": "terra",
+    "proof": "Sign in to play; Sync",
+    "scores": {
+      "hierarchy": 8,
+      "layout": 8,
+      "typography": 8,
+      "color": 8,
+      "consistency": 8,
+      "usability": 8,
+      "overall": 8
+    },
+    "top_issues": [
+      "skins.png: The saved skin’s thumbnail is visibly blurred, making it difficult to identify at a glance.",
+      "content.png: Pagination shows only eight of eleven installed items despite substantial horizontal space, adding navigation to a short list.",
+      "sync.png: The saved file choices and exclusions appear as dense inline text, making the scope of synchronization harder to scan."
+    ],
+    "would_approve": true
+  },
+  {
+    "reviewer": "kimi",
+    "proof": "Sign in to play; Sync",
+    "scores": {
+      "hierarchy": 9,
+      "layout": 9,
+      "typography": 8,
+      "color": 8,
+      "consistency": 9,
+      "usability": 8,
+      "overall": 8
+    },
+    "top_issues": [
+      "content.png: Table headers, filenames, and pagination metadata are small and faint, reducing scanability in the densest view.",
+      "discover.png: Result descriptions, bylines, and download counts have weak contrast and undersized text relative to the row titles.",
+      "home.png: Card borders and the playtime chart baseline are overly subtle against the atmospheric background, weakening surface and data separation."
+    ],
+    "would_approve": true
+  },
+  {
+    "reviewer": "glm",
+    "proof": "Sign in to play; Sync",
+    "scores": {
+      "hierarchy": 9,
+      "layout": 9,
+      "typography": 9,
+      "color": 9,
+      "consistency": 10,
+      "usability": 9,
+      "overall": 9
+    },
+    "top_issues": [
+      "downloads.png: lower two-thirds of the page is empty; the Finished card leaves a large dead zone with no filler or density adjustment",
+      "home.png: Sun and Tue chart bars render as nothing (0 playtime) with no zero-value baseline marker, making the axis look like a skipped day",
+      "content.png: the Instance dropdown in the header sits right-aligned and slightly below the title baseline, breaking the header alignment used on other pages",
+      "instances.png: General tab panel rows have generous vertical gaps while the Saved runtime card is much denser, creating uneven rhythm in the two columns"
+    ],
+    "would_approve": true
+  },
+  {
+    "reviewer": "inkling",
+    "proof": "Sign in to play; Sync",
+    "scores": {
+      "hierarchy": 9,
+      "layout": 8,
+      "typography": 9,
+      "color": 9,
+      "consistency": 9,
+      "usability": 9,
+      "overall": 9
+    },
+    "top_issues": [
+      "downloads.png: large dead empty area below the Finished list leaves the page underfilled at full window size",
+      "instances.png: right-hand instance detail card is roughly half empty at the bottom, wasting vertical space",
+      "sync.png: 'Saved file choices' uses an inline middot-separated list with a loose 'Not included' line that reads cluttered rather than structured",
+      "content.png: lock glyph embedded inside the Fabric API toggle is an ambiguous affordance (locked toggle vs required-mod badge)",
+      "discover.png: the 'Installed' state button for Entity Culling is very low-contrast and reads as disabled rather than a completed state"
+    ],
+    "would_approve": true
+  },
+  {
+    "reviewer": "longcat",
+    "proof": "Sign in to play; Sync",
+    "scores": {
+      "hierarchy": 9,
+      "layout": 9,
+      "typography": 9,
+      "color": 9,
+      "consistency": 9,
+      "usability": 9,
+      "overall": 9
+    },
+    "top_issues": [
+      "home.png: The hero card carries a large empty band between the action buttons and the stats row, leaving it visually bottom-heavy.",
+      "instances.png: The 'Saved runtime' card duplicates Memory/Java values already editable in the Runtime and Java tabs, creating redundant controls for the same settings.",
+      "skins.png: The Zoom in/out/reset pill overlays the top of the preview canvas where the model renders, and the preview area is mostly empty around the small character."
+    ],
+    "would_approve": true
+  },
+  {
+    "reviewer": "haiku",
+    "proof": "Sign in to play; Sync",
+    "scores": {
+      "hierarchy": 8,
+      "layout": 8,
+      "typography": 8,
+      "color": 8,
+      "consistency": 7,
+      "usability": 7,
+      "overall": 8
+    },
+    "top_issues": [
+      "instances.png: the lower half of the right pane and the area under the Saved runtime card are empty, so the page feels bottom-light and unbalanced.",
+      "discover.png: the Install buttons use a dim tinted purple with low contrast on the dark card, and they read weaker than the Search control and the Installed chip.",
+      "content.png: the lock icon beside Fabric API is tiny and faint, so the required-by relationship is hard to read.",
+      "skins.png: the saved-skin row mixes a bordered Preview button with a text-style Favorite action, and the Manage button's weight differs from the Import PNG primary.",
+      "accounts.png: the Aurelia row shows a disabled-looking Selected chip while NorthStar_Builds shows Select, so the row action language is inconsistent.",
+      "settings.png: the accent swatch row and the Custom... control use small labels that are dense compared with the generous spacing elsewhere."
+    ],
+    "would_approve": true
+  }
+]

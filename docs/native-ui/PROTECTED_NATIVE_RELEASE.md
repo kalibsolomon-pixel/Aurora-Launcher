@@ -1,5 +1,11 @@
 # Protected Aurora Launcher release
 
+Version 2.2.0 promotes the GPUI executable from `native-gpui/` through this same
+signed native channel. The schema-1 `runtime: "slint"` field remains the legacy
+wire identity required by shipped native clients; it does not select or describe
+the current renderer. Changing it would strand 2.1.1 clients. Product, channel,
+platform, package, source, digest and signatures retain their exact checks.
+
 Owner naming decision, 2026-11-10: releases from 2.1.1 use **Aurora Launcher**, `aurora-launcher.exe` and `Aurora.Launcher_<version>_x64-setup.exe`. Follow the [naming and migration contract](../releases/BRANDING_CONTRACT.md). Published older signed assets and historical records below retain their original names. The superseded 2.1.1 run `42814502513` was canceled before signing; replacement approval must apply to the corrected exact source.
 
 Aurora Launcher 2.1.1 is the current stable release. See its

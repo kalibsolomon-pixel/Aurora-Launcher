@@ -474,7 +474,11 @@ pub fn merged_release_manifest(
         return Ok(embedded.clone());
     };
     if embedded
-        .resolve_exact(persisted.aurora_version(), Some(persisted.channel()))
+        .resolve_environment(
+            persisted.aurora_version(),
+            Some(persisted.channel()),
+            persisted.minecraft_version(),
+        )
         .is_some()
     {
         return Ok(embedded.clone());

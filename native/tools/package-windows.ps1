@@ -8,9 +8,9 @@ param(
 )
 $ErrorActionPreference = 'Stop'
 $repo = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
-$version = [regex]::Match([IO.File]::ReadAllText((Join-Path $repo 'native/Cargo.toml')), '(?ms)^\[package\]\s*\n.*?^version\s*=\s*"([^"]+)"').Groups[1].Value
+$version = [regex]::Match([IO.File]::ReadAllText((Join-Path $repo 'native-gpui/Cargo.toml')), '(?ms)^\[package\]\s*\n.*?^version\s*=\s*"([^"]+)"').Groups[1].Value
 if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'A numeric release version is required' }
-if (!$Binary) { $Binary = Join-Path $repo 'native\target\release\aurora-launcher.exe' }
+if (!$Binary) { $Binary = Join-Path $repo 'native-gpui\target\release\aurora-launcher.exe' }
 $Binary = (Resolve-Path -LiteralPath $Binary).Path
 $image=[IO.File]::ReadAllBytes($Binary)
 if ($image.Length -lt 64 -or $image[0] -ne 0x4d -or $image[1] -ne 0x5a) { throw 'Native package requires a Windows PE executable' }
@@ -34,7 +34,7 @@ if ($AcceptanceRoot) {
     if ($AcceptanceVersion) { throw 'Version overrides are acceptance-only' }
     $binaryText = [Text.Encoding]::ASCII.GetString($image)
     if (!$binaryText.Contains('com.aurora.launcher.native-preview')) { throw 'The native preview identity is required; do not package a shared-production-data executable' }
-    if ($binaryText.Contains('AURORA_DIAGNOSTIC_DATA_ROOT') -or $binaryText.Contains('--preview-probe=')) { throw 'Distribution cannot contain acceptance features' }
+    if ($binaryText.Contains('AURORA_DIAGNOSTIC_DATA_ROOT') -or $binaryText.Contains('--preview-probe=') -or $binaryText.Contains('AURORA_DISPOSABLE_DIAGNOSTIC')) { throw 'Distribution cannot contain acceptance features' }
     $metadata = (Get-Item -LiteralPath $Binary).VersionInfo
     if ([IO.Path]::GetFileName($Binary) -ne 'aurora-launcher.exe' -or $metadata.ProductName -ne 'Aurora Launcher' -or $metadata.ProductVersion -ne $version -or $metadata.FileDescription -ne 'Aurora Launcher' -or $metadata.OriginalFilename -ne 'aurora-launcher.exe') { throw 'Aurora Launcher executable name or metadata does not match the package identity/version' }
 }

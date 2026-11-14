@@ -138,6 +138,8 @@ impl Offer {
         if self.schema_version != 1
             || self.product != PRODUCT
             || self.channel != CHANNEL
+            // Legacy native-channel wire identity, retained so shipped 2.1.1
+            // clients can receive GPUI builds without a trust/schema migration.
             || self.runtime != "slint"
             || self.platform != "windows"
             || self.architecture != "x86_64"
