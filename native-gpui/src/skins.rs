@@ -2191,6 +2191,18 @@ impl Render for Skins {
                                         ),
                                     )
                                     .flex_1(),
+                                )
+                                // Destructive removal sits apart from routine actions.
+                                .child(
+                                    AuroraButton::new(format!("skins-remove-{}", preset.id), "")
+                                        .accessibility_label("Remove skin")
+                                        .icon("delete")
+                                        .size(ButtonSize::Small)
+                                        .variant(ButtonVariant::DangerSubtle)
+                                        .disabled(locked)
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.open_remove_review(remove_id.clone(), cx);
+                                        })),
                                 ),
                         )
                         .child(
@@ -2247,23 +2259,7 @@ impl Render for Skins {
                                         },
                                     )),
                                 )
-                                // Destructive removal sits apart from routine actions.
-                                .child(div().flex_1().min_w(px(12.)))
-                                .child(
-                                    AuroraButton::new(
-                                        format!("skins-remove-{}", preset.id),
-                                        "Remove",
-                                    )
-                                    .icon("delete")
-                                    .size(ButtonSize::Small)
-                                    .variant(ButtonVariant::DangerSubtle)
-                                    .disabled(locked)
-                                    .on_click(cx.listener(
-                                        move |this, _, _, cx| {
-                                            this.open_remove_review(remove_id.clone(), cx);
-                                        },
-                                    )),
-                                ),
+,
                         ),
                 );
             }

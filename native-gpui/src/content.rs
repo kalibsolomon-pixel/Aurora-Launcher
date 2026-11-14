@@ -157,6 +157,22 @@ fn provenance(p: &Option<api::Provenance>) -> String {
 }
 /// Note prefix for a mod other enabled mods depend on; shown as a badge.
 const REQUIRED_NOTE: &str = "Required by other mods: ";
+/// "Cannot change this mod: A requires x; B requires x." → "Required by A, B".
+fn required_label(reason: &str) -> String {
+    let names: Vec<&str> = reason
+        .trim_start_matches("Cannot change this mod: ")
+        .trim_end_matches('.')
+        .split("; ")
+        .filter_map(|part| part.split(" requires ").next())
+        .map(str::trim)
+        .filter(|name| !name.is_empty())
+        .collect();
+    if names.is_empty() {
+        "Required".to_owned()
+    } else {
+        format!("Required by {}", names.join(", "))
+    }
+}
 fn provider_label(provider: &str) -> &str {
     match provider {
         "modrinth" => "Modrinth",
@@ -1731,7 +1747,11 @@ impl Render for Content {
                     .as_ref()
                     .and_then(|icon| self.icons.cache.image(&icon.key()));
                 let (meta, status_word, mut notes) = describe(&entry.details);
-                let required = notes.iter().any(|note| note.starts_with(REQUIRED_NOTE));
+                let required_by = notes
+                    .iter()
+                    .find_map(|note| note.strip_prefix(REQUIRED_NOTE))
+                    .map(required_label);
+                let required = required_by.is_some();
                 notes.retain(|note| !note.starts_with(REQUIRED_NOTE));
                 let inline_meta = window.viewport_size().width >= px(1000.) && notes.is_empty();
                 let disabled_row = entry.enabled == Some(false);
@@ -1782,8 +1802,8 @@ impl Render for Content {
                             .when(disabled_row, |name| {
                                 name.child(ui::badge(t, "Disabled", ui::Tone::Neutral))
                             })
-                            .when(required, |name| {
-                                name.child(ui::badge(t, "Required", ui::Tone::Neutral))
+                            .when_some(required_by.clone(), |name, label| {
+                                name.child(ui::badge(t, label, ui::Tone::Neutral))
                             }),
                     )
                     .child(
@@ -1823,6 +1843,17 @@ impl Render for Content {
                     );
                 }
                 let toggle = match entry.enabled {
+                    // Locked on: other enabled mods depend on this one.
+                    Some(true) if required => div()
+                        .flex()
+                        .w(px(48.))
+                        .h(px(36.))
+                        .items_center()
+                        .justify_center()
+                        .id(gpui::SharedString::from(format!("locked-{}", entry.id)))
+                        .aria_label(format!("{} is required and stays enabled", entry.name))
+                        .child(crate::symbols::icon(Some("lock"), px(18.), palette.muted_foreground))
+                        .into_any_element(),
                     Some(enabled) => div()
                         .flex()
                         .w(px(48.))
@@ -2203,6 +2234,18 @@ fn ownership_label(ownership: &str) -> &str {
 mod tests {
     use super::*;
     use std::sync::Arc;
+    #[test]
+    fn required_label_names_the_dependent_mods() {
+        assert_eq!(
+            required_label("Cannot change this mod: EntityCulling requires fabric-api."),
+            "Required by EntityCulling"
+        );
+        assert_eq!(
+            required_label("Cannot change this mod: A requires x; B requires x."),
+            "Required by A, B"
+        );
+        assert_eq!(required_label(""), "Required");
+    }
     #[test]
     fn inventory_filter_matches_display_and_file_names_without_case_or_outer_spaces() {
         assert!(matches_filter(

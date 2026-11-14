@@ -143,6 +143,18 @@ pub(crate) fn duration(ms: u64) -> String {
     }
 }
 
+/// Milliseconds → "45m", "2h", "2h 15m" for labels above chart bars.
+pub(crate) fn short_duration(ms: u64) -> String {
+    let minutes = ms / 60_000;
+    match minutes {
+        0 if ms > 0 => "<1m".into(),
+        0 => String::new(),
+        1..=59 => format!("{minutes}m"),
+        _ if minutes % 60 == 0 => format!("{}h", minutes / 60),
+        _ => format!("{}h {}m", minutes / 60, minutes % 60),
+    }
+}
+
 /// Seconds (or milliseconds) since epoch → "Today", "Yesterday", "3 days ago".
 pub(crate) fn relative(at: u64, now: u64) -> String {
     let at = if at > 100_000_000_000 { at / 1000 } else { at };
@@ -614,6 +626,8 @@ impl Period {
 pub(crate) struct PointView {
     pub label: String,
     pub value: String,
+    /// Compact value shown above the bar.
+    pub short: String,
     pub detail: String,
     pub fraction: f32,
 }
@@ -632,6 +646,7 @@ fn points_from_bins(bins: &[PlaytimeBin], today: u64) -> Vec<PointView> {
                 ),
                 fraction: bin.duration_ms as f32 / peak as f32,
                 value: duration(bin.duration_ms),
+                short: short_duration(bin.duration_ms),
             }
         })
         .collect()
@@ -3578,8 +3593,29 @@ impl HomeWidgets {
                                                                     5.
                                                                 }))
                                                                 .flex()
-                                                                .items_end()
-                                                                .justify_center()
+                                                                .flex_col()
+                                                                .items_center()
+                                                                .justify_end()
+                                                                .gap(px(3.))
+                                                                .when(
+                                                                    count <= 7
+                                                                        && point.fraction > 0.,
+                                                                    |column| {
+                                                                        column.child(
+                                                                            div()
+                                                                                .text_size(px(
+                                                                                    ui::TEXT_CAPTION,
+                                                                                ))
+                                                                                .text_color(
+                                                                                    palette.foreground,
+                                                                                )
+                                                                                .whitespace_nowrap()
+                                                                                .child(
+                                                                                    point.short.clone(),
+                                                                                ),
+                                                                        )
+                                                                    },
+                                                                )
                                                                 .child(
                                                                     div()
                                                                         .w_full()
@@ -5090,6 +5126,10 @@ mod tests {
     #[test]
     fn playtime_chart_chrome_follows_the_slint_plot() {
         // An empty day keeps a 2 px stub; a full day leaves 4 px of headroom.
+        assert_eq!(short_duration(0), "");
+        assert_eq!(short_duration(45 * 60_000), "45m");
+        assert_eq!(short_duration(120 * 60_000), "2h");
+        assert_eq!(short_duration(135 * 60_000), "2h 15m");
         assert_eq!(bar_height(0., 96.), 2.);
         assert_eq!(bar_height(1., 96.), 92.);
         assert_eq!(bar_height(0.5, 96.), 46.);

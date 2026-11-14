@@ -1329,11 +1329,7 @@ impl Render for Accounts {
                             .size(ButtonSize::Small)
                             // The selected account's expired session is the
                             // page's next step, so its Reconnect is accented.
-                            .variant(if selected && reauth {
-                                ButtonVariant::Soft
-                            } else {
-                                ButtonVariant::Default
-                            })
+                            .variant(ButtonVariant::Default)
                             .disabled(busy)
                             .on_click(cx.listener(
                                 move |this, _, _, cx| {

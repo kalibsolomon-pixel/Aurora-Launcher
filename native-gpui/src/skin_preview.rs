@@ -343,7 +343,7 @@ impl Render for SkinPreview {
                 180.,
                 gpui::linear_color_stop(
                     gpui::Hsla {
-                        l: (t.sunken.l + 0.06).min(1.),
+                        l: (t.sunken.l + 0.13).min(1.),
                         s: t.accent.s * 0.35,
                         a: 1.0,
                         ..t.accent
@@ -352,7 +352,7 @@ impl Render for SkinPreview {
                 ),
                 gpui::linear_color_stop(
                     gpui::Hsla {
-                        l: (t.sunken.l + 0.03).min(1.),
+                        l: (t.sunken.l + 0.08).min(1.),
                         a: 1.0,
                         ..t.sunken
                     },
