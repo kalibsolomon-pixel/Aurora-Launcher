@@ -1843,21 +1843,32 @@ impl Render for Content {
                     );
                 }
                 let toggle = match entry.enabled {
-                    // Locked on: other enabled mods depend on this one.
+                    // Locked on: other enabled mods depend on this one. The
+                    // switch keeps the column's rhythm; the lock on its thumb
+                    // says it cannot be turned off.
                     Some(true) if required => div()
                         .flex()
                         .w(px(48.))
-                        .h(px(36.))
                         .items_center()
                         .justify_center()
-                        .id(gpui::SharedString::from(format!("locked-{}", entry.id)))
-                        .aria_label(format!("{} is required and stays enabled", entry.name))
-                        .gap(px(4.))
-                        .text_size(px(ui::TEXT_CAPTION))
-                        .font_weight(gpui::FontWeight::MEDIUM)
-                        .text_color(palette.muted_foreground)
-                        .child(crate::symbols::icon(Some("lock"), px(14.), palette.muted_foreground))
-                        .child("On")
+                        .child(
+                            div()
+                                .relative()
+                                .w(px(44.))
+                                .h(px(36.))
+                                .child(
+                                    AuroraToggle::new(gpui::SharedString::from(format!(
+                                        "toggle-{}",
+                                        entry.id
+                                    )))
+                                    .label(format!("{} is required and stays enabled", entry.name))
+                                    .checked(true)
+                                    .disabled(true),
+                                )
+                                .child(div().absolute().left(px(25.)).top(px(13.)).child(
+                                    crate::symbols::icon(Some("lock"), px(10.), palette.accent),
+                                )),
+                        )
                         .into_any_element(),
                     Some(enabled) => div()
                         .flex()
