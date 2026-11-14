@@ -1852,7 +1852,12 @@ impl Render for Content {
                         .justify_center()
                         .id(gpui::SharedString::from(format!("locked-{}", entry.id)))
                         .aria_label(format!("{} is required and stays enabled", entry.name))
-                        .child(crate::symbols::icon(Some("lock"), px(18.), palette.muted_foreground))
+                        .gap(px(4.))
+                        .text_size(px(ui::TEXT_CAPTION))
+                        .font_weight(gpui::FontWeight::MEDIUM)
+                        .text_color(palette.muted_foreground)
+                        .child(crate::symbols::icon(Some("lock"), px(14.), palette.muted_foreground))
+                        .child("On")
                         .into_any_element(),
                     Some(enabled) => div()
                         .flex()

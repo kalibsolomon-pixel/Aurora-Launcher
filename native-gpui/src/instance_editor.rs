@@ -2528,9 +2528,12 @@ impl Render for InstanceEditor {
             let mut tabs = div()
                 .flex()
                 .flex_wrap()
-                .gap(px(4.))
-                .pb(px(8.))
-                .border_b_1()
+                .items_center()
+                .gap(px(2.))
+                .p(px(2.))
+                .rounded(t.radius)
+                .bg(t.sunken)
+                .border_1()
                 .border_color(t.border_subtle);
             for (index, label) in ["General", "Game version", "Runtime", "Java", "Maintenance"]
                 .into_iter()
@@ -2547,7 +2550,7 @@ impl Render for InstanceEditor {
                         })),
                 );
             }
-            detail = detail.child(tabs);
+            detail = detail.child(div().flex().child(tabs));
             if self.section == 0 {
                 // General settings and the reviewed Client transition.
                 // Aurora is a reviewed transition, never a direct configuration toggle.

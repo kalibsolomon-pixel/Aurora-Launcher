@@ -1232,7 +1232,6 @@ impl Render for Accounts {
                     selected_id.as_deref() == Some(account.account_id.as_str())
                         && account.status == "reauthenticationRequired"
                 }) {
-                    let reconnect_id = expired.account_id.clone();
                     content = content.child(
                         ui::card(&palette)
                             .bg(palette.warning.opacity(0.08))
@@ -1251,22 +1250,10 @@ impl Render for Accounts {
                                         ui::title_block(
                                             &palette,
                                             format!("{} needs to sign in again", expired.minecraft_name),
-                                            Some("Reconnect to launch the game with this account.".into()),
+                                            Some("Use Reconnect on the account below to launch the game.".into()),
                                         )
                                         .flex_1()
                                         .min_w(px(0.)),
-                                    )
-                                    .child(
-                                        AuroraButton::new("accounts-callout-reconnect", "Reconnect")
-                                            .accessibility_label(format!(
-                                                "Reconnect {}",
-                                                expired.minecraft_name
-                                            ))
-                                            .icon("login")
-                                            .disabled(busy)
-                                            .on_click(cx.listener(move |this, _, _, cx| {
-                                                this.refresh_session(reconnect_id.clone(), cx);
-                                            })),
                                     ),
                             ),
                     );
@@ -1355,31 +1342,25 @@ impl Render for Accounts {
                         .items_center()
                         .gap(px(6.))
                         .child(slot)
-                        .child(div().w(px(128.)).when(!(selected && reauth), |cell| {
-                            cell.child(
-                            AuroraButton::new(
-                                gpui_kit::SharedString::from(format!("restore-{id}")),
-                                if reauth {
-                                    "Reconnect"
-                                } else {
-                                    "Refresh session"
-                                },
-                            )
-                            .accessibility_label(format!(
-                                "{} session for {}",
-                                if reauth { "Reconnect" } else { "Refresh" },
-                                account.minecraft_name
-                            ))
-                            .size(ButtonSize::Small)
-                            .full_width()
-                            .disabled(busy)
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
+                        .child(
+                            div().w(px(128.)).child(
+                                AuroraButton::new(
+                                    gpui_kit::SharedString::from(format!("restore-{id}")),
+                                    if reauth { "Reconnect" } else { "Refresh session" },
+                                )
+                                .accessibility_label(format!(
+                                    "{} session for {}",
+                                    if reauth { "Reconnect" } else { "Refresh" },
+                                    account.minecraft_name
+                                ))
+                                .size(ButtonSize::Small)
+                                .full_width()
+                                .disabled(busy)
+                                .on_click(cx.listener(move |this, _, _, cx| {
                                     this.refresh_session(restore_id.clone(), cx);
-                                },
-                            )),
-                            )
-                        }))
+                                })),
+                            ),
+                        )
                         .child(div().w(px(1.)).h(px(20.)).mx(px(10.)).bg(palette.border_subtle))
                         .child(
                             icon_button(

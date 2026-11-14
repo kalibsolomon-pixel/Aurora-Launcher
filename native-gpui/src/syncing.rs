@@ -1223,9 +1223,12 @@ impl Render for Syncing {
             let mut tabs = div()
                 .flex()
                 .flex_wrap()
-                .gap(px(4.))
-                .pb(px(8.))
-                .border_b_1()
+                .items_center()
+                .gap(px(2.))
+                .p(px(2.))
+                .rounded(t.radius)
+                .bg(t.sunken)
+                .border_1()
                 .border_color(t.border_subtle);
             for (index, label) in [
                 "Shared files".to_owned(),
@@ -1250,7 +1253,7 @@ impl Render for Syncing {
                         }),
                 );
             }
-            root = root.child(tabs);
+            root = root.child(div().flex().child(tabs));
 
             // What to sync.
             let categories = section_card(t).child(

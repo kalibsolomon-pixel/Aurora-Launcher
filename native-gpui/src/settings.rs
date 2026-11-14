@@ -1956,9 +1956,12 @@ impl Render for Settings {
         let mut tabs = div()
             .flex()
             .flex_wrap()
-            .gap(px(4.))
-            .pb(px(8.))
-            .border_b_1()
+            .items_center()
+            .gap(px(2.))
+            .p(px(2.))
+            .rounded(t.radius)
+            .bg(t.sunken)
+            .border_1()
             .border_color(t.border_subtle);
         for (index, label) in ["Appearance", "Discord", "Desktop", "Updates & about"]
             .into_iter()
@@ -1975,7 +1978,7 @@ impl Render for Settings {
                     })),
             );
         }
-        page = page.child(tabs);
+        page = page.child(div().flex().child(tabs));
         if self.section == 0 {
             // --- Appearance ----------------------------------------------------
             {
