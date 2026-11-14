@@ -14,9 +14,8 @@ pub struct AuroraTheme {
     pub background: Hsla,
     pub sidebar: Hsla,
     pub surface: Hsla,
-    /// Dialogs and menus; nearly opaque over Borealis so text never sits on a
-    /// bright band. Not drawn by any view yet.
-    #[allow(dead_code)]
+    /// Dialogs, menus and tooltips; nearly opaque over Borealis so text never
+    /// sits on a bright band.
     pub raised: Hsla,
     /// Recessed wells (inputs, code blocks); not drawn by any view yet.
     #[allow(dead_code)]
