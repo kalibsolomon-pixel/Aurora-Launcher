@@ -175,10 +175,10 @@ impl RenderOnce for AuroraButton {
             ButtonVariant::Ghost => (clear, t.foreground, t.control, clear),
             ButtonVariant::Nav => (clear, t.muted_foreground, t.control, clear),
             ButtonVariant::Soft => (
-                Hsla { a: 0.20, ..t.ring },
+                Hsla { a: 0.28, ..t.ring },
                 t.foreground,
-                Hsla { a: 0.30, ..t.ring },
-                clear,
+                Hsla { a: 0.38, ..t.ring },
+                Hsla { a: 0.36, ..t.ring },
             ),
             ButtonVariant::Subtle => (clear, t.muted_foreground, t.control, clear),
         };
@@ -422,14 +422,18 @@ impl AuroraToggle {
 impl RenderOnce for AuroraToggle {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = theme(cx);
-        let track_on: Hsla = if self.disabled { t.border } else { t.accent };
+        let track_on: Hsla = if self.disabled {
+            t.accent.opacity(0.45)
+        } else {
+            t.accent
+        };
         let track_off: Hsla = if self.disabled {
             t.sunken
         } else {
             t.surface_hover
         };
         let thumb_on: Hsla = if self.disabled {
-            t.subtle_foreground
+            t.accent_foreground.opacity(0.75)
         } else {
             t.accent_foreground
         };

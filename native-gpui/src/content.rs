@@ -1791,7 +1791,7 @@ impl Render for Content {
                             .flex_1()
                             .min_w(px(0.))
                             .text_size(px(ui::TEXT_BODY))
-                            .text_color(palette.foreground.opacity(0.88))
+                            .text_color(palette.foreground)
                             .text_ellipsis()
                             .child(if inline_meta {
                                 gpui::SharedString::from(entry.file_name.clone())

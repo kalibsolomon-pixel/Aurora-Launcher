@@ -2029,6 +2029,7 @@ impl Render for Skins {
                 div()
                     .flex()
                     .flex_wrap()
+                    .w_full()
                     .items_end()
                     .justify_between()
                     .gap(px(12.))
@@ -2224,7 +2225,6 @@ impl Render for Skins {
                                     )
                                     .icon("star")
                                     .size(ButtonSize::Small)
-                                    .variant(ButtonVariant::Subtle)
                                     .selected(preset.favorite)
                                     .disabled(locked)
                                     .on_click(cx.listener(
@@ -2240,7 +2240,6 @@ impl Render for Skins {
                                     )
                                     .icon("edit")
                                     .size(ButtonSize::Small)
-                                    .variant(ButtonVariant::Subtle)
                                     .disabled(locked)
                                     .on_click(cx.listener(
                                         move |this, _, window, cx| {

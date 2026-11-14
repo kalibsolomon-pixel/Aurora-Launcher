@@ -1341,7 +1341,7 @@ impl Render for Accounts {
                                 },
                             )),
                         )
-                        .child(div().w(px(1.)).h(px(20.)).mx(px(6.)).bg(palette.border_subtle))
+                        .child(div().w(px(1.)).h(px(20.)).mx(px(10.)).bg(palette.border_subtle))
                         .child(
                             icon_button(
                                 &palette,
