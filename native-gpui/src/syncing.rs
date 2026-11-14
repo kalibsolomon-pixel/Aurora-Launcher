@@ -1308,7 +1308,7 @@ impl Render for Syncing {
                 let (included, excluded): (Vec<_>, Vec<_>) = CATEGORIES
                     .iter()
                     .partition(|(id, _)| draft.categories.iter().any(|current| current == id));
-                let chips = div().flex().flex_wrap().gap_x(px(22.)).gap_y(px(4.)).pt(px(6.)).pb(px(2.)).children(included.iter().map(
+                let chips = div().grid().grid_cols(3).gap_x(px(16.)).gap_y(px(2.)).pt(px(6.)).pb(px(2.)).children(included.iter().map(
                     |(_, label)| {
                         div()
                             .flex()
@@ -1317,7 +1317,7 @@ impl Render for Syncing {
                             .h(px(26.))
                             .text_size(px(ui::TEXT_BODY))
                             .text_color(t.foreground)
-                            .child(crate::symbols::icon(Some("check"), px(14.), t.muted_foreground))
+                            .child(crate::symbols::icon(Some("check"), px(14.), t.ring))
                             .child(*label)
                     },
                 ));
@@ -1426,6 +1426,45 @@ impl Render for Syncing {
                         .when(joined.is_empty(), |card| {
                             card.child(ui::muted(t, "No instances are selected yet."))
                         }),
+                );
+                let steps = [
+                    ("tune", "Choose files", "Settings, packs and screenshots."),
+                    ("grid_view", "Include instances", "Only these share the files."),
+                    ("sync", "Turn Sync on", "Changes copy automatically."),
+                ];
+                body = body.child(
+                    section_card(t)
+                        .child(ui::section_header(t, "How Sync works", None))
+                        .child(
+                            div().grid().grid_cols(3).gap(px(16.)).pt(px(4.)).children(
+                                steps.into_iter().enumerate().map(|(index, (icon, title, detail))| {
+                                    div()
+                                        .flex()
+                                        .items_start()
+                                        .gap(px(12.))
+                                        .child(
+                                            div()
+                                                .flex()
+                                                .flex_shrink_0()
+                                                .items_center()
+                                                .justify_center()
+                                                .size(px(32.))
+                                                .rounded(t.radius)
+                                                .bg(t.accent_soft)
+                                                .child(crate::symbols::icon(Some(icon), px(16.), t.ring)),
+                                        )
+                                        .child(
+                                            ui::title_block(
+                                                t,
+                                                format!("{}. {title}", index + 1),
+                                                Some(detail.into()),
+                                            )
+                                            .flex_1()
+                                            .min_w(px(0.)),
+                                        )
+                                }),
+                            ),
+                        ),
                 );
             } else if self.section == 0 {
                 body = body.child(categories.child(category_grid));

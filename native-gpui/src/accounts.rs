@@ -1367,12 +1367,6 @@ impl Render for Accounts {
                                     account.minecraft_name
                                 ))
                                 .size(ButtonSize::Small)
-                                // The notice above points here.
-                                .variant(if selected && reauth {
-                                    ButtonVariant::Soft
-                                } else {
-                                    ButtonVariant::Default
-                                })
                                 .full_width()
                                 .disabled(busy)
                                 .on_click(cx.listener(move |this, _, _, cx| {

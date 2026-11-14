@@ -2078,13 +2078,16 @@ impl Render for Skins {
                         ),
                     )
                     .child(
-                        AuroraButton::new("skins-import", "Import PNG…")
-                            .variant(ButtonVariant::Primary)
-                            .icon("upload")
-                            .disabled(locked)
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.start_import(window, cx);
-                            })),
+                        div().flex_1().min_w(px(160.)).child(
+                            AuroraButton::new("skins-import", "Import PNG…")
+                                .variant(ButtonVariant::Primary)
+                                .icon("upload")
+                                .full_width()
+                                .disabled(locked)
+                                .on_click(cx.listener(move |this, _, window, cx| {
+                                    this.start_import(window, cx);
+                                })),
+                        ),
                     ),
             );
 
