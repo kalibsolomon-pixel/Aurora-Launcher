@@ -46,7 +46,9 @@ and no pager. `aurora-221-widgets.png` and `aurora-221-widgets-narrow.png` captu
 an intermediate manual-control implementation, since removed at the owner
 request. That implementation persisted a width change from 12 to 13 fine columns
 and `subdivisions: 4` in the disposable configuration; narrowing retained the
-saved width. Final screenshots capture the simplified drag-only controls.
+saved width. `aurora-221-widgets-final.png` captures the final drag-only
+customize mode; its accessibility tree exposes Move, Resize and Remove per
+widget plus Reset layout and Done, with no sizing fields or snap selectors.
 
 Evidence logs are in `C:/Dev/aurora-221-*-tests.log`. Baseline screenshots supplied
 by the owner show oversized mod rows and two-item pagination. No unexpected
