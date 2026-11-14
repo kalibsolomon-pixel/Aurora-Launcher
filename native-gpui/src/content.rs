@@ -1812,12 +1812,9 @@ impl Render for Content {
                                         .items_center()
                                         .gap(px(5.))
                                         .h(px(22.))
-                                        .px(px(8.))
-                                        .rounded(t.radius)
-                                        .bg(t.accent_soft)
                                         .text_size(px(ui::TEXT_CAPTION))
                                         .font_weight(gpui::FontWeight::MEDIUM)
-                                        .text_color(t.foreground)
+                                        .text_color(t.muted_foreground)
                                         .child(crate::symbols::icon(Some("lock"), px(12.), t.ring))
                                         .child(label),
                                 )
@@ -1828,7 +1825,7 @@ impl Render for Content {
                             .flex_1()
                             .min_w(px(0.))
                             .text_size(px(ui::TEXT_BODY))
-                            .text_color(palette.foreground)
+                            .text_color(palette.muted_foreground)
                             .text_ellipsis()
                             .child(if inline_meta {
                                 gpui::SharedString::from(entry.file_name.clone())

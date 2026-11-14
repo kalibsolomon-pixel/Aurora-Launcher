@@ -1309,15 +1309,11 @@ impl Render for Syncing {
                     .iter()
                     .partition(|(id, _)| draft.categories.iter().any(|current| current == id));
                 let chips = div()
-                    .grid()
-                    .grid_cols(if window.viewport_size().width < px(1000.) {
-                        2
-                    } else {
-                        3
-                    })
-                    .gap_x(px(16.))
+                    .flex()
+                    .flex_wrap()
+                    .gap_x(px(20.))
                     .gap_y(px(2.))
-                    .pt(px(2.))
+                    .pt(px(8.))
                     .children(included.iter().map(|(_, label)| {
                         div()
                             .flex()

@@ -2224,6 +2224,7 @@ impl Render for Skins {
                                     )
                                     .icon("edit")
                                     .size(ButtonSize::Small)
+                                    .variant(ButtonVariant::Ghost)
                                     .disabled(locked)
                                     .on_click(cx.listener(
                                         move |this, _, window, cx| {
@@ -2247,7 +2248,7 @@ impl Render for Skins {
                                     })
                                     .icon("star")
                                     .size(ButtonSize::Small)
-                                    .variant(ButtonVariant::Subtle)
+                                    .variant(ButtonVariant::Ghost)
                                     .selected(preset.favorite)
                                     .disabled(locked)
                                     .on_click(cx.listener(

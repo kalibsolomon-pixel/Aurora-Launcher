@@ -2803,24 +2803,26 @@ impl Render for Discover {
             if row_busy {
                 meta = meta.child(ui::status_badge(&palette, "Installing…", ui::Tone::Accent));
             }
-            let metadata = div()
-                .flex()
-                .flex_shrink_0()
-                .items_center()
-                .gap(px(12.))
-                .when(!project.author.is_empty(), |line| {
-                    line.child(
-                        div()
-                            .min_w(px(0.))
-                            .overflow_hidden()
-                            .whitespace_nowrap()
-                            .text_ellipsis()
-                            .text_size(px(ui::TEXT_CAPTION))
-                            .text_color(palette.foreground.opacity(0.75))
-                            .child(format!("by {}", project.author)),
-                    )
-                })
-                .child(meta);
+            let mut metadata = Some(
+                div()
+                    .flex()
+                    .flex_shrink_0()
+                    .items_center()
+                    .gap(px(12.))
+                    .when(!project.author.is_empty(), |line| {
+                        line.child(
+                            div()
+                                .min_w(px(0.))
+                                .overflow_hidden()
+                                .whitespace_nowrap()
+                                .text_ellipsis()
+                                .text_size(px(ui::TEXT_CAPTION))
+                                .text_color(palette.foreground.opacity(0.75))
+                                .child(format!("by {}", project.author)),
+                        )
+                    })
+                    .child(meta),
+            );
 
             let can_quick_install = !s.is_pack();
             let hover = palette.control;
@@ -2851,37 +2853,43 @@ impl Render for Discover {
                             .min_w(px(0.))
                             .gap(px(2.))
                             .child(
-                                div().flex().items_center().gap(px(12.)).child(
-                                    gpui_kit::base::Button::new(("details", index))
-                                        .aria_label(format!("Details for {}", project.title))
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(7.))
-                                        .min_w(px(0.))
-                                        .h(px(22.))
-                                        .line_height(px(20.))
-                                        .rounded(palette.radius)
-                                        .border_1()
-                                        .border_color(gpui_kit::transparent_black())
-                                        .focus(move |style| style.border_color(title_hover))
-                                        .text_size(px(ui::TEXT_BODY + 1.))
-                                        .font_weight(FontWeight::SEMIBOLD)
-                                        .text_color(palette.foreground)
-                                        .cursor_pointer()
-                                        .hover(|style| style.text_color(title_hover))
-                                        .on_click({
-                                            let id = id.clone();
-                                            cx.listener(move |this, _, window, cx| {
-                                                this.open_details(id.clone(), window, cx);
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .gap(px(12.))
+                                    .child(
+                                        gpui_kit::base::Button::new(("details", index))
+                                            .aria_label(format!("Details for {}", project.title))
+                                            .flex()
+                                            .items_center()
+                                            .gap(px(7.))
+                                            .min_w(px(0.))
+                                            .h(px(22.))
+                                            .line_height(px(20.))
+                                            .rounded(palette.radius)
+                                            .border_1()
+                                            .border_color(gpui_kit::transparent_black())
+                                            .focus(move |style| style.border_color(title_hover))
+                                            .text_size(px(ui::TEXT_BODY + 1.))
+                                            .font_weight(FontWeight::SEMIBOLD)
+                                            .text_color(palette.foreground)
+                                            .cursor_pointer()
+                                            .hover(|style| style.text_color(title_hover))
+                                            .on_click({
+                                                let id = id.clone();
+                                                cx.listener(move |this, _, window, cx| {
+                                                    this.open_details(id.clone(), window, cx);
+                                                })
                                             })
-                                        })
-                                        .child(div().truncate().child(project.title.clone()))
-                                        .child(crate::symbols::icon(
-                                            Some("open_in_new"),
-                                            px(14.),
-                                            palette.ring,
-                                        )),
-                                ),
+                                            .child(div().truncate().child(project.title.clone()))
+                                            .child(crate::symbols::icon(
+                                                Some("open_in_new"),
+                                                px(14.),
+                                                palette.ring,
+                                            )),
+                                    )
+                                    .when(!compact, |line| line.children(metadata.take())),
                             )
                             .child(
                                 div()
@@ -2894,7 +2902,7 @@ impl Render for Discover {
                                     .text_color(palette.foreground.opacity(0.75))
                                     .child(project.summary.clone()),
                             )
-                            .child(metadata),
+                            .when(compact, |body| body.children(metadata.take())),
                     )
                     .child(
                         div()

@@ -3440,7 +3440,7 @@ impl HomeWidgets {
                 let projection = playtime_view(playtime_data, period, narrow, loading);
                 let total = div()
                     .id("playtime-total")
-                    .text_size(px(ui::TEXT_DISPLAY))
+                    .text_size(px(ui::TEXT_TITLE))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(palette.foreground)
                     .child(if loading {
@@ -3453,19 +3453,7 @@ impl HomeWidgets {
                 } else {
                     total.aria_description(projection.total_detail.clone())
                 };
-                card = card.child(
-                    div()
-                        .flex()
-                        .items_baseline()
-                        .gap(px(8.))
-                        .child(total)
-                        .child(
-                            div()
-                                .text_size(px(ui::TEXT_CAPTION))
-                                .text_color(palette.subtle_foreground)
-                                .child(period.caption()),
-                        ),
-                );
+                card = card.child(total);
                 match &projection.status {
                     Some(status) => {
                         card = card.child(empty_note(&palette, "bar_chart", status.clone()));
