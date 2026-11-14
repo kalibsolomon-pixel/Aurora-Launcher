@@ -1140,21 +1140,9 @@ impl Render for Accounts {
             if self.core.cancel.is_some() {
                 notices.push(("Finishing sign-in cancellation…".into(), ui::Tone::Neutral));
             }
-            // While the selected account must reconnect, that is the page's
-            // next step; adding another account steps back.
-            let selected_expired = self.core.accounts.as_ref().is_some_and(|state| {
-                state.accounts.iter().any(|account| {
-                    state.selected_account_id.as_deref() == Some(account.account_id.as_str())
-                        && account.status == "reauthenticationRequired"
-                })
-            });
             Some(
                 AuroraButton::new("sign-in", "Sign in with Microsoft")
-                    .variant(if selected_expired {
-                        ButtonVariant::Default
-                    } else {
-                        ButtonVariant::Primary
-                    })
+                    .variant(ButtonVariant::Primary)
                     .icon("person_add")
                     .disabled(busy || self.core.accounts.is_none() || self.core.cancel.is_some())
                     .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx)))
@@ -1367,6 +1355,12 @@ impl Render for Accounts {
                                     account.minecraft_name
                                 ))
                                 .size(ButtonSize::Small)
+                                // The notice above points to this button.
+                                .variant(if selected && reauth {
+                                    ButtonVariant::Soft
+                                } else {
+                                    ButtonVariant::Default
+                                })
                                 .full_width()
                                 .disabled(busy)
                                 .on_click(cx.listener(move |this, _, _, cx| {

@@ -1308,7 +1308,7 @@ impl Render for Syncing {
                 let (included, excluded): (Vec<_>, Vec<_>) = CATEGORIES
                     .iter()
                     .partition(|(id, _)| draft.categories.iter().any(|current| current == id));
-                let chips = div().grid().grid_cols(3).gap_x(px(16.)).gap_y(px(2.)).pt(px(6.)).pb(px(2.)).children(included.iter().map(
+                let chips = div().grid().grid_cols(5).gap_x(px(16.)).gap_y(px(2.)).pt(px(2.)).children(included.iter().map(
                     |(_, label)| {
                         div()
                             .flex()
@@ -1342,11 +1342,7 @@ impl Render for Syncing {
                                 .items_start()
                                 .justify_between()
                                 .gap(px(12.))
-                                .child(ui::section_header(
-                                    t,
-                                    "Files to sync",
-                                    Some("These files start syncing when you turn Sync on.".into()),
-                                ))
+                                .child(ui::section_header(t, "Files to sync", None))
                                 .child(
                                     AuroraButton::new("sync-edit-choices", "Edit choices")
                                         .size(ButtonSize::Small)
@@ -1370,7 +1366,7 @@ impl Render for Syncing {
                 let participants = participant_rows(&draft, self.instances.as_ref());
                 let joined: Vec<&ParticipantRow> =
                     participants.iter().filter(|row| row.checked).collect();
-                let names = div().flex().flex_wrap().gap_x(px(22.)).gap_y(px(4.)).pt(px(6.)).children(
+                let names = div().flex().flex_wrap().gap_x(px(22.)).gap_y(px(4.)).pt(px(2.)).children(
                     joined.iter().map(|row| {
                         div()
                             .flex()
@@ -1397,15 +1393,12 @@ impl Render for Syncing {
                                 .gap(px(12.))
                                 .child(ui::section_header(
                                     t,
-                                    "Instances included",
-                                    Some(
-                                        format!(
-                                            "{} of {} instances share these files when Sync is on.",
-                                            joined.len(),
-                                            participants.len()
-                                        )
-                                        .into(),
+                                    format!(
+                                        "Instances included ({} of {})",
+                                        joined.len(),
+                                        participants.len()
                                     ),
+                                    None,
                                 ))
                                 .child(
                                     AuroraButton::new("sync-edit-instances", "Edit instances")
