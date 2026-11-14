@@ -579,9 +579,26 @@ mod tests {
             "launch::process::tests::fake_child_survives_launcher_shutdown",
             root.clone(),
         );
-        runtime.block_on(async {
-            spawn_supervised(spec, &root.join("logs"), Arc::new(|_| {})).unwrap();
+        let running = runtime.block_on(async {
+            spawn_supervised(spec, &root.join("logs"), Arc::new(|_| {})).unwrap()
         });
+        // Retain the exact child handle before shutting down supervision.
+        // Its success marker can appear before Windows releases its working
+        // directory, so observing that file alone is insufficient for cleanup.
+        #[cfg(windows)]
+        let child_handle = {
+            use std::os::windows::io::{FromRawHandle, OwnedHandle};
+            use windows_sys::Win32::System::Threading::{OpenProcess, PROCESS_SYNCHRONIZE};
+            let handle =
+                unsafe { OpenProcess(PROCESS_SYNCHRONIZE, 0, running.process_id.unwrap()) };
+            assert!(
+                !handle.is_null(),
+                "could not retain the fixture child handle"
+            );
+            unsafe { OwnedHandle::from_raw_handle(handle) }
+        };
+        #[cfg(not(windows))]
+        let _ = running;
         for _ in 0..100 {
             if root.join("child-started").is_file() {
                 break;
@@ -600,6 +617,18 @@ mod tests {
             std::thread::sleep(Duration::from_millis(10));
         }
         let survived = root.join("child-survived").is_file();
+        #[cfg(windows)]
+        {
+            use std::os::windows::io::AsRawHandle;
+            use windows_sys::Win32::{
+                Foundation::WAIT_OBJECT_0, System::Threading::WaitForSingleObject,
+            };
+            assert_eq!(
+                unsafe { WaitForSingleObject(child_handle.as_raw_handle(), 5_000) },
+                WAIT_OBJECT_0,
+                "fixture child did not exit after launcher shutdown"
+            );
+        }
         std::fs::remove_dir_all(&root).unwrap();
         assert!(
             survived,
