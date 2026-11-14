@@ -161,7 +161,7 @@ const CONTENT_ROW_HEIGHT: f32 = 100.;
 const REQUIRED_NOTE: &str = "Required by other mods: ";
 /// "Cannot change this mod: A requires x; B requires x." → "Required by A, B".
 fn required_label(reason: &str) -> String {
-    let names: Vec<&str> = reason
+    let mut names: Vec<&str> = reason
         .trim_start_matches("Cannot change this mod: ")
         .trim_end_matches('.')
         .split("; ")
@@ -169,6 +169,9 @@ fn required_label(reason: &str) -> String {
         .map(str::trim)
         .filter(|name| !name.is_empty())
         .collect();
+    // One dependent can require several of this mod's IDs; name it once.
+    let mut seen = HashSet::new();
+    names.retain(|name| seen.insert(*name));
     if names.is_empty() {
         "Required".to_owned()
     } else {
@@ -1363,6 +1366,87 @@ fn kind_icon(kind: Kind) -> &'static str {
     }
 }
 
+/// Warning icon beside a row's name; hovering shows every warning in full.
+fn warning_marker(
+    t: &crate::theme::AuroraTheme,
+    id: &str,
+    name: &str,
+    warnings: &[&str],
+) -> impl IntoElement {
+    let lines: Vec<String> = warnings
+        .iter()
+        .map(|w| w.trim_start_matches("Warning:").trim().to_owned())
+        .collect();
+    let count = lines.len();
+    let label = format!(
+        "{name}: {count} warning{}. {}",
+        if count == 1 { "" } else { "s" },
+        lines.join(" ")
+    );
+    let theme = t.clone();
+    div()
+        .id(gpui::SharedString::from(format!("warnings-{id}")))
+        .aria_label(label)
+        .flex()
+        .flex_none()
+        .items_center()
+        .gap(px(3.))
+        .px(px(5.))
+        .h(px(20.))
+        .rounded(t.radius)
+        .bg(t.warning.opacity(0.12))
+        .hover(|d| d.bg(t.warning.opacity(0.22)))
+        .text_size(px(ui::TEXT_CAPTION))
+        .text_color(t.warning)
+        .child(crate::symbols::icon(Some("warning"), px(13.), t.warning))
+        .when(count > 1, |d| d.child(count.to_string()))
+        .tooltip(move |_, cx| {
+            let theme = theme.clone();
+            let lines = lines.clone();
+            cx.new(|_| WarningTooltip { theme, lines }).into()
+        })
+}
+
+struct WarningTooltip {
+    theme: crate::theme::AuroraTheme,
+    lines: Vec<String>,
+}
+
+impl Render for WarningTooltip {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        let t = &self.theme;
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(6.))
+            // Fixed width: GPUI sizes tooltips before wrapping, so a max
+            // width alone lets wrapped lines spill past the background.
+            .w(px(360.))
+            .p(px(10.))
+            .rounded(t.radius)
+            .bg(t.raised)
+            .border_1()
+            .border_color(t.border)
+            .shadow_md()
+            .text_size(px(ui::TEXT_CAPTION))
+            .line_height(px(17.))
+            .text_color(t.foreground)
+            .children(self.lines.iter().map(|line| {
+                div()
+                    .flex()
+                    .items_start()
+                    .gap(px(6.))
+                    .child(
+                        div()
+                            .flex_none()
+                            .pt(px(2.))
+                            .child(crate::symbols::icon(Some("warning"), px(12.), t.warning)),
+                    )
+                    .child(div().min_w(px(0.)).child(line.clone()))
+            }))
+    }
+}
+
 impl Render for Content {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let view = cx.entity();
@@ -1702,6 +1786,10 @@ impl Render for Content {
                 let required = required_by.is_some();
                 notes.retain(|note| !note.starts_with(REQUIRED_NOTE));
                 let disabled_row = entry.enabled == Some(false);
+                // Warnings collapse to one icon beside the name; the full text
+                // stays one hover away so rows keep a single rhythm.
+                let (warnings, notes): (Vec<&str>, Vec<&str>) =
+                    notes.into_iter().partition(|note| note.starts_with("Warning:"));
                 let mut line = vec![entry.file_name.as_str()];
                 line.extend(meta.iter().copied().filter(|m| {
                     *m != "No provider provenance"
@@ -1737,6 +1825,9 @@ impl Render for Content {
                             )
                             .when(disabled_row, |name| {
                                 name.child(ui::badge(t, "Disabled", ui::Tone::Neutral))
+                            })
+                            .when(!warnings.is_empty(), |name| {
+                                name.child(warning_marker(t, &entry.id, &entry.name, &warnings))
                             }),
                     )
                     .child(
@@ -1760,27 +1851,12 @@ impl Render for Content {
                         )
                     });
                 for note in notes {
-                    let warn = note.starts_with("Warning:");
                     text = text.child(
                         div()
-                            .flex()
-                            .items_center()
-                            .gap(px(5.))
-                            .text_size(px(ui::TEXT_CAPTION))
-                            .text_color(if warn {
-                                palette.warning
-                            } else {
-                                palette.subtle_foreground
-                            })
-                            .when(warn, |d| {
-                                d.child(crate::symbols::icon(
-                                    Some("warning"),
-                                    px(13.),
-                                    palette.warning,
-                                ))
-                            })
                             .min_w(px(0.))
-                            .child(div().min_w(px(0.)).child(note.to_owned())),
+                            .text_size(px(ui::TEXT_CAPTION))
+                            .text_color(palette.subtle_foreground)
+                            .child(note.to_owned()),
                     );
                 }
                 let toggle = match entry.enabled {
@@ -2188,6 +2264,10 @@ mod tests {
         assert_eq!(
             required_label("Cannot change this mod: A requires x; B requires x."),
             "Required by A, B"
+        );
+        assert_eq!(
+            required_label("Cannot change this mod: A requires x; A requires y."),
+            "Required by A"
         );
         assert_eq!(required_label(""), "Required");
     }
