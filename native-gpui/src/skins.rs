@@ -1029,6 +1029,7 @@ pub struct Skins {
     core: Core,
     focus: FocusHandle,
     active: bool,
+    library_actions_open: bool,
     blocked: bool,
     import_name: Entity<InputState>,
     import_model: SelectState,
@@ -1058,6 +1059,7 @@ impl Skins {
             core: Core::default(),
             focus: cx.focus_handle(),
             active: true,
+            library_actions_open: false,
             blocked: false,
             import_name,
             import_model: SelectState::new(cx),
@@ -1980,8 +1982,8 @@ impl Render for Skins {
                                 Some(
                                     match library_count {
                                         0 => "Skins saved on this device.".to_owned(),
-                                        1 => "1 skin saved on this device.".to_owned(),
-                                        n => format!("{n} skins saved on this device."),
+                                        1 => "1 saved skin".to_owned(),
+                                        n => format!("{n} saved skins"),
                                     }
                                     .into(),
                                 ),
@@ -1993,6 +1995,17 @@ impl Render for Skins {
                             .flex_shrink_0()
                             .items_center()
                             .gap(px(8.))
+                            .child(
+                                AuroraButton::new("skins-manage-library", "Manage")
+                                    .accessibility_label("Manage skin library")
+                                    .size(ButtonSize::Small)
+                                    .selected(self.library_actions_open)
+                                    .disabled(locked || library_count == 0)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.library_actions_open = !this.library_actions_open;
+                                        cx.notify();
+                                    })),
+                            )
                             .child(
                                 div()
                                     .text_size(px(ui::TEXT_CAPTION))
@@ -2217,21 +2230,23 @@ impl Render for Skins {
                                         },
                                     )),
                                 )
-                                .child(
-                                    AuroraButton::new(
-                                        format!("skins-rename-{}", preset.id),
-                                        "Rename",
+                                .when(self.library_actions_open, |actions| {
+                                    actions.child(
+                                        AuroraButton::new(
+                                            format!("skins-rename-{}", preset.id),
+                                            "Rename",
+                                        )
+                                        .icon("edit")
+                                        .size(ButtonSize::Small)
+                                        .variant(ButtonVariant::Ghost)
+                                        .disabled(locked)
+                                        .on_click(
+                                            cx.listener(move |this, _, window, cx| {
+                                                this.open_rename(rename_id.clone(), window, cx);
+                                            }),
+                                        ),
                                     )
-                                    .icon("edit")
-                                    .size(ButtonSize::Small)
-                                    .variant(ButtonVariant::Ghost)
-                                    .disabled(locked)
-                                    .on_click(cx.listener(
-                                        move |this, _, window, cx| {
-                                            this.open_rename(rename_id.clone(), window, cx);
-                                        },
-                                    )),
-                                )
+                                })
                                 .child(
                                     AuroraButton::new(
                                         format!("skins-favorite-{}", preset.id),
@@ -2258,29 +2273,29 @@ impl Render for Skins {
                                     )),
                                 )
                                 // Destructive removal sits apart from routine actions.
-                                .child(
-                                    div()
-                                        .ml_auto()
-                                        .pl(px(12.))
-                                        .border_l_1()
-                                        .border_color(palette.border_subtle)
-                                        .child(
-                                            AuroraButton::new(
-                                                format!("skins-remove-{}", preset.id),
-                                                "Remove",
-                                            )
-                                            .accessibility_label("Remove skin")
-                                            .icon("delete")
-                                            .size(ButtonSize::Small)
-                                            .variant(ButtonVariant::DangerSubtle)
-                                            .disabled(locked)
-                                            .on_click(
-                                                cx.listener(move |this, _, _, cx| {
+                                .when(self.library_actions_open, |actions| {
+                                    actions.child(
+                                        div()
+                                            .ml_auto()
+                                            .pl(px(12.))
+                                            .border_l_1()
+                                            .border_color(palette.border_subtle)
+                                            .child(
+                                                AuroraButton::new(
+                                                    format!("skins-remove-{}", preset.id),
+                                                    "Remove",
+                                                )
+                                                .accessibility_label("Remove skin")
+                                                .icon("delete")
+                                                .size(ButtonSize::Small)
+                                                .variant(ButtonVariant::DangerSubtle)
+                                                .disabled(locked)
+                                                .on_click(cx.listener(move |this, _, _, cx| {
                                                     this.open_remove_review(remove_id.clone(), cx);
-                                                }),
+                                                })),
                                             ),
-                                        ),
-                                ),
+                                    )
+                                }),
                         ),
                 );
             }

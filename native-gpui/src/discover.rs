@@ -2809,10 +2809,14 @@ impl Render for Discover {
                     .flex_shrink_0()
                     .items_center()
                     .gap(px(12.))
+                    .when(!compact, |meta| {
+                        meta.flex_col().items_start().w(px(155.)).gap(px(4.))
+                    })
                     .when(!project.author.is_empty(), |line| {
                         line.child(
                             div()
                                 .min_w(px(0.))
+                                .max_w(px(155.))
                                 .overflow_hidden()
                                 .whitespace_nowrap()
                                 .text_ellipsis()
@@ -2851,7 +2855,7 @@ impl Render for Discover {
                             .flex_1()
                             .w(px(0.))
                             .min_w(px(0.))
-                            .gap(px(2.))
+                            .gap(px(6.))
                             .child(
                                 div()
                                     .flex()
@@ -2888,8 +2892,7 @@ impl Render for Discover {
                                                 px(14.),
                                                 palette.ring,
                                             )),
-                                    )
-                                    .when(!compact, |line| line.children(metadata.take())),
+                                    ),
                             )
                             .child(
                                 div()
@@ -2904,6 +2907,7 @@ impl Render for Discover {
                             )
                             .when(compact, |body| body.children(metadata.take())),
                     )
+                    .when(!compact, |row| row.children(metadata.take()))
                     .child(
                         div()
                             .flex()

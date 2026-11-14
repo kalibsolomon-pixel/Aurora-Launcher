@@ -3510,12 +3510,12 @@ impl HomeWidgets {
                                     .id("playtime-chart")
                                     .role(Role::Group)
                                     .aria_label("Playtime chart")
-                                    .aria_description(chart_note_description(period, narrow))
+                                    .aria_description(format!("{}; scale 0, {}, {}", chart_note_description(period, narrow), projection.midpoint, projection.peak))
                                     .flex()
                                     .w_full()
                                     .flex_1()
                                     .min_h(px(40.))
-                                    .child(
+                                    .when(count > 7, |chart| { chart.child(
                                         div()
                                             .flex()
                                             .flex_col()
@@ -3542,6 +3542,7 @@ impl HomeWidgets {
                                                 ),
                                             ),
                                     )
+                                    })
                                     .child(
                                         div()
                                             .flex()
@@ -3556,15 +3557,6 @@ impl HomeWidgets {
                                                     .flex_1()
                                                     .border_b_1()
                                                     .border_color(palette.border)
-                                                    .children([0., 0.5].map(|at| {
-                                                        div()
-                                                            .absolute()
-                                                            .top(gpui_kit::relative(at))
-                                                            .left(px(0.))
-                                                            .right(px(0.))
-                                                            .h(px(1.))
-                                                            .bg(palette.subtle_foreground.opacity(0.28))
-                                                    }))
                                                     .when(projection.empty_period, |plot| {
                                                         plot.child(
                                                             div()
@@ -3606,7 +3598,7 @@ impl HomeWidgets {
                                                                 .gap(px(6.))
                                                                 .when(
                                                                     count <= 7
-                                                                        && point.fraction > 0.,
+                                                                        && !projection.empty_period,
                                                                     |column| {
                                                                         column.child(
                                                                             div()
