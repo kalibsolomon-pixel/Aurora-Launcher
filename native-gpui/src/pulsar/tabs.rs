@@ -308,10 +308,7 @@ pub(super) fn chart(view: &ChartView) -> Chart {
                 Shape::Hollow
             } else if p.category.contains("SHIELD") || p.category == "trade" {
                 Shape::Diamond
-            } else if p.category.contains("MISS")
-                || p.category.contains("UNRESOLVED")
-                || p.category == "hollow"
-            {
+            } else if p.category.contains("MISS") || p.category == "hollow" {
                 Shape::Hollow
             } else if p.y.is_none() || p.category.contains("OPENER") {
                 Shape::Reset
@@ -517,8 +514,6 @@ impl Pulsar {
                     | "deduplicatedAttacks"
                     | "excludedSwings"
                     | "eligibleMisses"
-                    | "unresolved"
-                    | "uncertainShield"
             )
         };
         let summary = index == 0 && self.detail_request.is_some();
@@ -668,7 +663,7 @@ impl Pulsar {
                         ui::caption(
                             t,
                             format!(
-                                "Eligible attempts: {observed:.0} recorded \u{2212} {:.0} confirmed shield blocks = {eligible:.0}. Blocked attacks do not count against your accuracy.",
+                                "Eligible attempts: {observed:.0} recorded \u{2212} {:.0} Blocked or Disabled = {eligible:.0}. Blocked attacks do not count against your accuracy.",
                                 (observed - eligible).max(0.)
                             ),
                         )
@@ -707,7 +702,7 @@ impl Pulsar {
                 } else {
                     "How this is counted"
                 },
-                div().flex().flex_col().gap(px(8.)).when(index == 1 && matches!(self.sections[1], 0 | 1), |d| d.child(ui::caption(t, "Accuracy counts confirmed hits out of eligible attempts. Attacks a shield confirmed it blocked are left out; attacks without a confirmed result still count. Outcomes with zero attacks stay in the key."))).child(self.metrics_panel(t, "Counting details", &diagnostics, cx)),
+                div().flex().flex_col().gap(px(8.)).when(index == 1 && matches!(self.sections[1], 0 | 1), |d| d.child(ui::caption(t, "Accuracy is Hits divided by Hits plus Misses. Blocked and Disabled are excluded. Outcomes with zero attacks stay in the key."))).child(self.metrics_panel(t, "Counting details", &diagnostics, cx)),
                 cx,
             );
             if summary {

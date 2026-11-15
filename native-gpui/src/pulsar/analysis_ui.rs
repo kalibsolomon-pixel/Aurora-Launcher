@@ -34,8 +34,8 @@ fn denominator(m: &BTreeMap<String, MetricValue>, n: &str, d: &str) -> String {
 pub(super) struct Outcomes {
     pub hit: f64,
     pub blocked: f64,
-    /// No confirmed result, including estimated blocks.
-    pub uncertain: f64,
+    /// Shield disables, excluded from accuracy.
+    pub disabled: f64,
     pub miss: f64,
 }
 
@@ -46,9 +46,10 @@ pub(super) fn outcome_counts(tab: &TabView) -> Option<Outcomes> {
         let n = p.y.filter(|v| v.is_finite()).unwrap_or(0.);
         match p.category.as_str() {
             "HIT" => o.hit += n,
-            "SHIELD_BLOCK" => o.blocked += n,
+            "BLOCKED" => o.blocked += n,
+            "DISABLED" => o.disabled += n,
             "MISS" => o.miss += n,
-            _ => o.uncertain += n,
+            _ => {}
         }
     }
     Some(o)
@@ -56,34 +57,19 @@ pub(super) fn outcome_counts(tab: &TabView) -> Option<Outcomes> {
 
 /// One evidence-qualified sentence above the accuracy breakdown.
 pub(super) fn accuracy_insight(m: &BTreeMap<String, MetricValue>, o: Outcomes) -> String {
-    let eligible = o.hit + o.uncertain + o.miss;
-    let mut line = format!(
-        "{} of your eligible attacks were confirmed hits ({:.0} of {eligible:.0}).",
+    let eligible = o.hit + o.miss;
+    format!(
+        "{} accuracy: {:.0} Hits of {eligible:.0} Hits and Misses. {:.0} Blocked and {:.0} Disabled are excluded.",
         value(m, "accuracy"),
-        o.hit
-    );
-    let misses = match o.miss {
-        0. => String::new(),
-        1. => " and 1 was a likely miss".into(),
-        n => format!(" and {n:.0} were likely misses"),
-    };
-    if o.uncertain > 0. {
-        line.push_str(&format!(
-            " {:.0} had no confirmed result{misses}, so your real accuracy may be higher.",
-            o.uncertain
-        ));
-    } else if o.miss > 0. {
-        line.push_str(&format!(
-            " Every other attack was a likely miss ({:.0}).",
-            o.miss
-        ));
-    }
-    line
+        o.hit,
+        o.blocked,
+        o.disabled
+    )
 }
 
 /// Compact Summary version of the outcome breakdown, linking to Offense.
 fn outcome_strip(t: &AuroraTheme, o: Outcomes, cx: &mut Context<Pulsar>) -> Div {
-    let total = (o.hit + o.blocked + o.uncertain + o.miss).max(1.);
+    let total = (o.hit + o.blocked + o.disabled + o.miss).max(1.);
     let mut bar = div()
         .flex()
         .w_full()
@@ -94,7 +80,7 @@ fn outcome_strip(t: &AuroraTheme, o: Outcomes, cx: &mut Context<Pulsar>) -> Div 
     for (n, color) in [
         (o.hit, t.ring),
         (o.blocked, t.success.opacity(0.8)),
-        (o.uncertain, t.muted_foreground.opacity(0.55)),
+        (o.disabled, t.danger.opacity(0.75)),
         (o.miss, t.warning.opacity(0.85)),
     ] {
         if n > 0. {
@@ -132,11 +118,11 @@ fn outcome_strip(t: &AuroraTheme, o: Outcomes, cx: &mut Context<Pulsar>) -> Div 
         .child(ui::caption(
             t,
             format!(
-                "{:.0} confirmed {} \u{b7} {:.0} blocked by a shield \u{b7} {:.0} without a confirmed result \u{b7} {:.0} likely {}",
+                "{:.0} {} \u{b7} {:.0} Blocked \u{b7} {:.0} Disabled \u{b7} {:.0} {}",
                 o.hit,
                 if o.hit == 1. { "hit" } else { "hits" },
                 o.blocked,
-                o.uncertain,
+                o.disabled,
                 o.miss,
                 if o.miss == 1. { "miss" } else { "misses" }
             ),
@@ -250,15 +236,15 @@ impl Pulsar {
                 let outcomes = outcome_counts(&a.offense);
                 evidence = outcomes.map(|o| {
                     format!(
-                        "{}: {:.0} likely {}, {:.0} unconfirmed",
-                        if o.uncertain > o.miss.max(1.) * 2. || a.previous_recordings < 5 {
-                            "Limited evidence"
-                        } else {
-                            "Good evidence"
-                        },
+                        "{:.0} Hits and {:.0} Misses; {:.0} shield outcomes excluded{}",
+                        o.hit,
                         o.miss,
-                        if o.miss == 1. { "miss" } else { "misses" },
-                        o.uncertain,
+                        o.blocked + o.disabled,
+                        if a.previous_recordings < 5 {
+                            " (small baseline)"
+                        } else {
+                            ""
+                        }
                     )
                 });
                 if let (Some(now), Some(before)) = (
@@ -270,11 +256,6 @@ impl Pulsar {
                         .map(|d| super::presentation::delta_display(d))
                         .unwrap_or_default();
                     insight = match (now.partial_cmp(&before), outcomes) {
-                        (Some(std::cmp::Ordering::Less), Some(o)) if o.uncertain > o.miss => {
-                            format!(
-                                "Accuracy {change}, mostly from attacks with no recorded result, not clear misses."
-                            )
-                        }
                         (Some(std::cmp::Ordering::Less), _) => {
                             format!("Accuracy {change}. Review the misses in your weakest fight.")
                         }
@@ -502,7 +483,7 @@ impl Pulsar {
                                         "incomingCritical" | "criticalOnLocal"
                                         | "opponentCrits" => "Incoming crits".into(),
                                         "thirdPartyIncoming" => "Other attackers".into(),
-                                        "unattributedIncoming" => "Unknown source".into(),
+                                        "nonMeleeDamage" => "Other damage".into(),
                                         "unexplainedHealthDrops" => "Unexplained damage".into(),
                                         "emptyMisses" => "Aimed swings without a hit".into(),
                                         "eligibleMisses" => "Counted misses".into(),
@@ -987,13 +968,12 @@ impl Pulsar {
             body = body.child(stack(
                 t,
                 "incoming-attribution",
-                "Who hit you",
+                "Hits taken and other damage",
                 vec![
                     ("Your opponent", get("incoming")),
-                    ("Unknown source", get("unattributedIncoming")),
-                    ("Other attackers", get("thirdPartyIncoming")),
+                    ("Other damage", get("nonMeleeDamage")),
                 ],
-                "Hits on you, by who the server said caused them.",
+                "Hits taken count only your opponent's direct melee. Other damage is listed by cause below.",
             ));
         }
 
@@ -1001,29 +981,35 @@ impl Pulsar {
             let block_only = get("shieldBlocks")
                 .zip(get("shieldDisables"))
                 .map(|(b, d)| (b - d).max(0.));
-            body=body.child(stack(t,"shield-offense","Attack outcomes and shield interactions",vec![
-                ("Confirmed hit",get("hits")),("Block only",block_only),("Shield disable",get("shieldDisables")),
-                ("Estimated block",get("estimatedShieldBlocks")),("Unknown result",get("uncertain").zip(get("estimatedShieldBlocks")).map(|(u,e)|(u-e).max(0.))),
-                ("Empty swing",get("emptyMisses"))],"A disable is counted once, not also as a block. Estimated blocks are still uncertain."));
+            body = body.child(stack(
+                t,
+                "shield-offense",
+                "Attack outcomes",
+                vec![
+                    ("Hit", get("hits")),
+                    ("Blocked", block_only),
+                    ("Disabled", get("shieldDisables")),
+                    ("Miss", get("emptyMisses")),
+                ],
+                "Blocked and Disabled are excluded from accuracy.",
+            ));
             body = body.child(stack(
                 t,
                 "shield-block-disable",
-                "Confirmed shield interactions",
-                vec![
-                    ("Block only", block_only),
-                    ("Disable", get("shieldDisables")),
-                ],
-                "Block only means a confirmed block that did not disable the shield. Estimated blocks are not included.",
+                "Opponent shield",
+                vec![("Blocked", block_only), ("Disabled", get("shieldDisables"))],
+                "Blocked and Disabled are separate outcomes; a disable is counted once.",
             ));
             body = body.child(stack(
                 t,
                 "local-shield-outcomes",
                 "Your shield",
                 vec![
-                    ("Confirmed blocks", get("localShieldBlocks")),
+                    ("Blocked", get("localShieldBlocks")),
+                    ("Not blocked", get("localShieldNotBlocked")),
                     ("Disabled", get("localShieldDisabled")),
                 ],
-                "Blocks made with your shield. Damage prevented is not estimated.",
+                "Opponent melee attacks into your raised shield. Damage prevented is not measured.",
             ));
         }
 
@@ -1179,23 +1165,21 @@ mod tests {
     use super::*;
 
     #[test]
-    fn accuracy_insight_qualifies_unconfirmed_attacks() {
+    fn accuracy_insight_excludes_shield_outcomes() {
         let mut accuracy = MetricValue::default();
-        accuracy.value = Some(77.5);
+        accuracy.value = Some(80.);
         accuracy.definition.unit = "%".into();
         let m = [("accuracy".to_owned(), accuracy)].into_iter().collect();
-        let o = Outcomes {
-            hit: 317.,
-            blocked: 8.,
-            uncertain: 90.,
-            miss: 2.,
-        };
-        let line = accuracy_insight(&m, o);
-        assert!(
-            line.starts_with("77.5% of your eligible attacks were confirmed hits (317 of 409).")
+        let line = accuracy_insight(
+            &m,
+            Outcomes {
+                hit: 8.,
+                miss: 2.,
+                blocked: 3.,
+                disabled: 1.,
+            },
         );
-        assert!(line.contains("90 had no confirmed result and 2 were likely misses"));
-        let line = accuracy_insight(&m, Outcomes { miss: 0., ..o });
-        assert!(line.contains("90 had no confirmed result, so"), "{line}");
+        assert!(line.contains("8 Hits of 10 Hits and Misses"));
+        assert!(line.contains("3 Blocked and 1 Disabled are excluded"));
     }
 }

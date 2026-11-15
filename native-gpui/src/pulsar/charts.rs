@@ -367,26 +367,17 @@ fn stack_color(t: &AuroraTheme, label: &str, index: usize) -> Hsla {
     if label.contains("DISABLE") {
         return t.danger.opacity(0.75);
     }
-    if label.contains("ESTIMATED") && label.contains("BLOCK") {
-        return t.success.opacity(0.4);
-    }
-    if label.contains("UNKNOWN") || label.contains("UNATTRIBUTED") {
-        return t.muted_foreground.opacity(0.55);
-    }
-    if label.contains("THIRD PARTY") {
-        return t.warning.opacity(0.85);
-    }
     if label.contains("HIT") && !label.contains("NO_HIT") {
         return t.ring;
+    }
+    if label.contains("NOT BLOCKED") || label.contains("NOT_BLOCKED") {
+        return t.warning.opacity(0.85);
     }
     if label.contains("BLOCK") {
         return t.success.opacity(0.8);
     }
     if label.contains("MISS") || label.contains("EMPTY") {
         return t.warning.opacity(0.85);
-    }
-    if label.contains("UNRESOLVED") || label.contains("UNCERTAIN") {
-        return t.muted_foreground.opacity(0.55);
     }
     [
         t.ring,
@@ -515,7 +506,7 @@ impl Chart {
                 .when(self.id == "incoming-attribution", |d| {
                     d.child(ui::caption(
                         t,
-                        "Only hits from your opponent end your combos. Damage from other attackers or unknown sources does not.",
+                        "Only hits from your opponent end your combos. Other damage does not.",
                     ))
                 })
                 .child(bar)

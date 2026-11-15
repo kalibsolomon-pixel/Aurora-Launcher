@@ -479,16 +479,17 @@ impl Pulsar {
 
 /// The observation that settled the result, its time, and why it decides it.
 fn decisive_evidence(detail: &FightDetailView) -> (String, String) {
-    let confirmed = detail
-        .summary
-        .resolution
-        .confidence
-        .eq_ignore_ascii_case("confirmed");
-    let settled = if confirmed {
-        "so the result is confirmed"
-    } else {
-        "so the result is inferred rather than confirmed"
-    };
+    let resolution = &detail.summary.resolution;
+    if resolution.classification == "NO_RESULT" {
+        return (
+            resolution
+                .reason
+                .clone()
+                .unwrap_or_else(|| "Ended without a death".into()),
+            "Win, Loss or Draw requires a recorded death or a confirmed server result.".into(),
+        );
+    }
+    let settled = "so the result is proven";
     let Some(row) = detail
         .evidence
         .rows
@@ -497,7 +498,7 @@ fn decisive_evidence(detail: &FightDetailView) -> (String, String) {
     else {
         return (
             "No single server message settled this result.".into(),
-            format!("It was worked out from the fight as a whole, {settled}."),
+            super::presentation::result_source(&resolution.source).into(),
         );
     };
     let time = row

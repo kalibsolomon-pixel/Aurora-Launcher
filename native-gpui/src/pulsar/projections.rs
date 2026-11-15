@@ -221,15 +221,12 @@ impl Pulsar {
                             Some(sample(
                                 num(h, "t")?,
                                 num(h, "estimatedReach"),
-                                format!(
-                                    "{:.2} s · estimated distance of a swing that did not hit",
-                                    num(h, "t")?
-                                ),
+                                format!("{:.2} s · distance of a Miss", num(h, "t")?),
                                 Shape::Hollow,
                             ))
                         }))
                         .collect();
-                    body=body.child(plot("detail-reach-strip","Individual contacts","Recording time (s)","Distance (m)",Kind::Scatter,points,(0.,self.analysis_duration().max(1.)),(0.,nice_peak(reaches.iter().copied().fold(4.,f64::max))),"■ Confirmed hit · ○ Estimated distance of a swing that did not hit. Measured by your game, not the server.").render_options(t,None,super::charts::Options{preferences:self.preferences,..Default::default()}));
+                    body=body.child(plot("detail-reach-strip","Individual contacts","Recording time (s)","Distance (m)",Kind::Scatter,points,(0.,self.analysis_duration().max(1.)),(0.,nice_peak(reaches.iter().copied().fold(4.,f64::max))),"■ Confirmed hit · ○ Miss contact distance. Measured by your game, not the server.").render_options(t,None,super::charts::Options{preferences:self.preferences,..Default::default()}));
                 }
                 if section == 0 || section == 3 {
                     body = body.child(self.aim_view(t, d, cx));
@@ -471,7 +468,7 @@ impl Pulsar {
                 }
                 if section == 0 || section == 1 || section == 4 {
                     let incoming = rows(d, "incomingDetail");
-                    let mut list=ui::list_card(t).child(ui::row(t,false).child(ui::section_header(t,"Incoming evidence",Some("Health loss and knockback may not have been recorded for every hit. Damage from other attackers is shown separately and does not count as your opponent hitting back.".into()))));
+                    let mut list=ui::list_card(t).child(ui::row(t,false).child(ui::section_header(t,"Incoming evidence",Some("Health loss and knockback may not have been recorded for every hit. Other damage is listed by cause and does not count as your opponent hitting back.".into()))));
                     for (i, r) in incoming.iter().enumerate() {
                         list = list.child(
                             ui::row(t, i + 1 == incoming.len()).child(ui::title_block(
@@ -480,7 +477,7 @@ impl Pulsar {
                                     "{:.2} s · {} · {}",
                                     num(r, "time").unwrap_or(0.),
                                     text(r, "attribution"),
-                                    text(r, "damageType")
+                                    text(r, "cause")
                                 ),
                                 Some(
                                     format!(
@@ -826,7 +823,7 @@ impl Pulsar {
                             },
                         ))
                         .children(notes.take());
-                    body=body.child(super::analysis_ui::explanation(t,"How dominance is measured",Some("Each confirmed hit counts for you or your opponent, and older hits fade over about 3 seconds. Hits within a combo, blocks and shield disables add a little extra. A side holds the advantage once the balance passes 0.2. When too few hits were recorded, or some damage came from an unknown source, that stretch is left out of the shares. Dominance describes who was landing hits; it is not damage dealt, skill or a server result.".into())));
+                    body=body.child(super::analysis_ui::explanation(t,"How dominance is measured",Some("Each confirmed hit counts for you or your opponent, and older hits fade over about 3 seconds. Hits within a combo, blocks and shield disables add a little extra. A side holds the advantage once the balance passes 0.2. When too little melee or shield evidence was recorded, that stretch is left out of the shares. Other damage does not enter dominance. Dominance describes who was landing hits; it is not damage dealt, skill or a server result.".into())));
                 }
             }
             _ => {}

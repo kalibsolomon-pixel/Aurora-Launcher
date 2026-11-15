@@ -4,11 +4,11 @@ use aurora_launcher_lib::pulsar::view::{FightSummary, MetricValue, ResolutionVie
 /// Core copy that names capture mechanics, rewritten for players. Core strings
 /// stay unchanged because interpretations are part of the analytics oracles.
 const PLAIN: &[(&str, &str)] = &[
-    // Metric definitions.
     (
-        "Confirmed hits / (attempts minus confirmed shield blocks). Uncertain attempts stay in the denominator.",
-        "Confirmed hits out of your attacks, leaving out attacks that a shield confirmed it blocked. Attacks without a confirmed result still count.",
+        "Hits / (hits + misses). Blocked and Disabled attacks are excluded.",
+        "Hits divided by hits plus misses. Blocked and Disabled do not count against accuracy.",
     ),
+    // Metric definitions.
     (
         "Server melee damage events from the local player, matched to an attack.",
         "Hits the server confirmed as damage from your attacks.",
@@ -16,10 +16,6 @@ const PLAIN: &[(&str, &str)] = &[
     (
         "Unique eligible combat attempts. Noncombat inputs and duplicates are excluded; older recordings keep their original policy.",
         "Attacks aimed at an opponent. Clicks outside combat and repeated clicks are left out.",
-    ),
-    (
-        "Aimed empty swings with opponent geometry and no server confirmation in the confirmation window. Inferred misses, not proof of server rejection. Historical empty-swing counts retain their older policy.",
-        "Swings aimed at the opponent that the server never confirmed. Likely misses, not proof that the server rejected them.",
     ),
     (
         "Entity attacks with no matching server report. Not proven misses.",
@@ -62,20 +58,12 @@ const PLAIN: &[(&str, &str)] = &[
         "Hits on you that the server credited to your opponent. Only these end your combos or change dominance.",
     ),
     (
-        "Damage whose cause the server did not report (fall, fire, environment). Third-party damage is shown separately. Neither counts as opponent retaliation.",
-        "Damage with no known source, such as falls or fire. Damage from other attackers is counted separately; neither counts as your opponent hitting back.",
-    ),
-    (
         "Attacks made while the target's client-visible state showed an active shield.",
         "Attacks made while your opponent was holding up a shield.",
     ),
     (
         "Attack into a blocking target followed by the server's shield sound at the target and no damage event. Removed from the accuracy denominator.",
         "Your attack met a raised shield, the server played the block sound and no damage followed. These do not count against your accuracy.",
-    ),
-    (
-        "Attack into a raised, facing shield with no damage event and no shield sound. Stays uncertain and in the accuracy denominator.",
-        "Your attack met a raised shield but no block sound was recorded. Still uncertain, so it counts as an attempt.",
     ),
     (
         "Your attack followed by the shield-disable sound at the opponent.",
@@ -90,16 +78,8 @@ const PLAIN: &[(&str, &str)] = &[
         "Confirmed hits where the server showed the critical-hit animation. Extra damage is not recorded.",
     ),
     (
-        "Same rule using attributed incoming hits. Estimated or unavailable when some incoming damage is unattributed.",
-        "The opponent's longest run of hits on you. Unavailable when some damage came from an unknown source.",
-    ),
-    (
         "Most consecutive confirmed hits before an attributed return hit, ignoring disengagement gaps.",
         "Most hits in a row before the opponent hit back, even across pauses.",
-    ),
-    (
-        "Decayed share of confirmed evidence: (P - N) / (P + N + 1), 3 s time constant. Neutral or not drawn when evidence is thin or incoming damage is unattributed.",
-        "Who was landing more of the recent hits, from -1 (opponent) to +1 (you). Not drawn when there is too little evidence.",
     ),
     (
         "Share of observed active combat time with dominance above +0.2 (you) or below -0.2 (opponent). Inactive and incomplete periods are excluded.",
@@ -141,20 +121,12 @@ const PLAIN: &[(&str, &str)] = &[
         "Fights and manual sessions in local history.",
         "Fights and manual sessions in your library.",
     ),
-    (
-        "Confirmed source / inferred match",
-        "Confirmed by the server",
-    ),
     ("Confirmed source", "Confirmed by the server"),
     ("Observed geometry", "Measured position"),
     // Projection captions, chart notes and notices.
     (
         "Recorded analytical value; availability and evidence follow the selected scope.",
         "Recorded measurement for the fights in view.",
-    ),
-    (
-        "Uncertain attacks stay in the accuracy denominator. Critical conditions do not establish damage, and sprint state does not establish knockback.",
-        "Attacks without a confirmed result still count as attempts. A critical or sprint hit does not prove extra damage or knockback.",
     ),
     (
         "Confirmed, comparable ray-contact hits only.",
@@ -181,10 +153,6 @@ const PLAIN: &[(&str, &str)] = &[
         "Counted with the rules saved in each recording.",
     ),
     ("Canonical miss classifications", "Counted misses"),
-    (
-        "Accuracy is confirmed hits out of eligible attempts. Confirmed shield blocks are excluded; uncertain results remain in the denominator.",
-        "Accuracy is confirmed hits out of eligible attempts. Confirmed shield blocks are left out; attempts without a confirmed result still count.",
-    ),
     (
         "Distances use frozen geometry. Creative reach is unavailable for survival comparison.",
         "Distances come from the recorded hit positions. Creative-mode reach is not compared with survival.",
@@ -291,10 +259,6 @@ const PLAIN: &[(&str, &str)] = &[
         "Which recordings have a full timeline.",
     ),
     (
-        "Incoming-hit attribution was incomplete, so encounter dominance could not be established confidently.",
-        "Some hits on you came from an unknown source, so dominance could not be measured reliably.",
-    ),
-    (
         "Confirmed blocks are excluded from the accuracy denominator.",
         "Confirmed blocks do not count against your accuracy.",
     ),
@@ -320,10 +284,6 @@ const PLAIN: &[(&str, &str)] = &[
         "Hits inside the reach window",
     ),
     ("Local advantage time", "Your advantage time"),
-    (
-        "Some incoming evidence could not be attributed.",
-        "Some hits on you came from an unknown source.",
-    ),
     (
         "Insufficient tracked-opponent evidence.",
         "Too little evidence about the opponent.",
@@ -406,26 +366,10 @@ const PLAIN: &[(&str, &str)] = &[
         "Needs a recording from a newer Aurora Client.",
     ),
     (
-        "No tracked opponent or incomplete incoming attribution.",
-        "No single opponent, or some hits on you came from an unknown source.",
-    ),
-    (
-        "Some incoming damage could not be attributed.",
-        "Some damage you took came from an unknown source.",
-    ),
-    (
         "Too few confirmed exchanges were observed to estimate encounter dominance.",
         "Too few confirmed exchanges were recorded to measure dominance.",
     ),
     ("Stored reason: ", "Reason: "),
-    (
-        "Damage dealt, prevented damage and successful jump resets are not measured. Third-party damage is not opponent retaliation.",
-        "Damage dealt, damage prevented and whether jump resets worked are not measured. Damage from other attackers does not count as your opponent hitting back.",
-    ),
-    (
-        "Some incoming damage could not be attributed to the opponent, so opponent combos are",
-        "Some damage you took came from an unknown source, so opponent combos are",
-    ),
     (
         " attributed incoming hits had an observed jump",
         " hits from your opponent had a jump",
@@ -460,9 +404,16 @@ const PLAIN: &[(&str, &str)] = &[
 fn word(value: &str) -> Option<&'static str> {
     Some(match value {
         "LOCAL" => "You",
-        "OPPONENT_DIRECT" | "TRACKED_OPPONENT" => "Opponent",
-        "UNATTRIBUTED" => "Unknown source",
-        "THIRD_PARTY" => "Other attacker",
+        "OPPONENT_DIRECT" | "TRACKED_OPPONENT" => "Opponent melee",
+        "OPPONENT_INDIRECT" | "OTHER_ENTITY" => "Other damage",
+        "UNATTRIBUTED" | "UNKNOWN_CAUSE" => "Unknown cause",
+        "OPPONENT_MELEE" => "Opponent melee",
+        "NON_MELEE" | "ENTITY" | "ENVIRONMENT" => "Other damage",
+        "UNRESOLVED" | "UNCERTAIN" | "EMPTY" => "Miss",
+        "UNCERTAIN_SHIELD" | "ESTIMATED_BLOCK" | "SHIELD_BLOCK" | "BLOCK" => "Blocked",
+        "SHIELD_DISABLE" | "DISABLE" => "Disabled",
+        "NO_RESULT" | "UNKNOWN" | "INTERRUPTED" => "No result",
+        "INFERRED" => "Recorded",
         "IDEAL_CANDIDATE" => "Same tick",
         "ATTEMPT_CANDIDATE" => "Near the hit",
         "NO_CANDIDATE" => "No jump nearby",
@@ -471,7 +422,10 @@ fn word(value: &str) -> Option<&'static str> {
 }
 
 pub fn text(input: &str) -> String {
-    let mut plain = input.to_owned();
+    let mut plain = input
+        .replace("Stored reason: inferred", "No death was proven")
+        .replace("Inferred win", "No result \u{b7} Not proven by a death")
+        .replace("Inferred loss", "No result \u{b7} Not proven by a death");
     for (from, to) in PLAIN {
         if plain.contains(from) {
             plain = plain.replace(from, to);
@@ -565,15 +519,22 @@ pub fn outcome(s: &FightSummary) -> Tone {
         _ => Tone::Neutral,
     }
 }
-pub fn resolution(r: &ResolutionView) -> (&str, Tone) {
+pub fn resolution(r: &ResolutionView) -> (String, Tone) {
     match r.classification.as_str() {
         "CONFIRMED_WIN" if r.confidence.eq_ignore_ascii_case("confirmed") => {
-            ("Win (confirmed)", Tone::Success)
+            ("Win".into(), Tone::Success)
         }
         "CONFIRMED_LOSS" if r.confidence.eq_ignore_ascii_case("confirmed") => {
-            ("Loss (confirmed)", Tone::Danger)
+            ("Loss".into(), Tone::Danger)
         }
-        _ => (r.label.as_str(), Tone::Neutral),
+        "DRAW" => ("Draw".into(), Tone::Neutral),
+        _ => (
+            format!(
+                "No result \u{b7} {}",
+                r.reason.as_deref().unwrap_or("Ended without a death")
+            ),
+            Tone::Neutral,
+        ),
     }
 }
 pub fn count(n: usize, noun: &str) -> String {
@@ -687,7 +648,21 @@ pub mod ui {
         crate::ui::stat(t, clean(label), clean(value))
     }
     pub fn badge(t: &AuroraTheme, label: impl Into<SharedString>, tone: Tone) -> Div {
-        crate::ui::badge(t, clean(label), tone)
+        crate::ui::badge(t, "", tone)
+            .gap(gpui::px(0.))
+            .h_auto()
+            .min_h(gpui::px(22.))
+            .min_w(gpui::px(0.))
+            .flex_shrink_1()
+            .max_w(gpui::relative(1.))
+            .py(gpui::px(3.))
+            .line_height(gpui::px(16.))
+            .child(
+                gpui::div()
+                    .min_w(gpui::px(0.))
+                    .whitespace_normal()
+                    .child(clean(label)),
+            )
     }
     pub fn section_header(
         t: &AuroraTheme,
@@ -727,7 +702,7 @@ mod tests {
     fn player_language_keeps_units_and_distinguishes_counts() {
         assert_eq!(
             text("OPPONENT_DIRECT | SHIELD_BLOCK / minecraft:diamond_sword"),
-            "Opponent · Shield block · Diamond sword"
+            "Opponent melee \u{b7} Blocked \u{b7} Diamond sword"
         );
         assert_eq!(
             text("Observed health loss. Stored reason: LOCAL"),
@@ -762,6 +737,23 @@ mod tests {
         assert_eq!(short_stamp("Unavailable"), "Unavailable");
         assert_eq!(count(1, "fight"), "1 fight");
         assert_eq!(count(2, "fight"), "2 fights");
+    }
+    #[test]
+    fn legacy_sensor_words_never_become_ambiguous_outcomes() {
+        assert_eq!(
+            text("UNRESOLVED UNCERTAIN EMPTY UNCERTAIN_SHIELD ESTIMATED_BLOCK SHIELD_DISABLE"),
+            "Miss Miss Miss Blocked Blocked Disabled"
+        );
+        assert_eq!(
+            text("OPPONENT_MELEE NON_MELEE UNKNOWN_CAUSE"),
+            "Opponent melee Other damage Unknown cause"
+        );
+        let r = ResolutionView {
+            classification: "NO_RESULT".into(),
+            reason: Some("Opponent left".into()),
+            ..Default::default()
+        };
+        assert_eq!(resolution(&r).0, "No result \u{b7} Opponent left");
     }
     #[test]
     fn event_source_identifiers_have_player_facing_descriptions() {

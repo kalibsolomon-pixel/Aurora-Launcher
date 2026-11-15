@@ -427,8 +427,7 @@ impl Pulsar {
             OutcomeFilter::Win,
             OutcomeFilter::Loss,
             OutcomeFilter::Draw,
-            OutcomeFilter::Unknown,
-            OutcomeFilter::Interrupted,
+            OutcomeFilter::NoResult,
         ];
         let outcome_index = values
             .iter()
@@ -438,7 +437,7 @@ impl Pulsar {
             "history-outcome-filter",
             format!(
                 "Result: {}",
-                ["All", "Win", "Loss", "Draw", "Unknown", "Interrupted"][outcome_index]
+                ["All", "Win", "Loss", "Draw", "No result"][outcome_index]
             ),
         )
         .variant(ButtonVariant::Default)
@@ -633,7 +632,7 @@ impl Pulsar {
                 .gap(px(8.))
                 .child(ui::caption(t, "Opponent").flex_1().min_w(px(98.)))
                 .child(numeric_header("Record (W\u{2013}L\u{2013}D)", OPP_RECORD_W))
-                .child(numeric_header("Other", OPP_OTHER_W))
+                .child(numeric_header("No result", OPP_OTHER_W))
                 .child(numeric_header("Accuracy", OPP_METRIC_W))
                 .child(numeric_header("Reach", OPP_METRIC_W))
                 .child(
@@ -690,7 +689,7 @@ impl Pulsar {
                             )),
                         )
                         .child(
-                            ui::numeric(ui::muted(t, o.unknown.to_string()))
+                            ui::numeric(ui::muted(t, o.no_result.to_string()))
                                 .text_color(t.foreground)
                                 .w(px(OPP_OTHER_W))
                                 .flex_shrink_0()
@@ -780,7 +779,7 @@ impl Pulsar {
             .flex()
             .flex_col()
             .gap(px(12.))
-            .child(ui::caption(t, "Sorted by fights. Record is wins\u{2013}losses\u{2013}draws; Other counts unknown results, interrupted fights and sessions without a result."))
+            .child(ui::caption(t, "Sorted by fights. Record is wins\u{2013}losses\u{2013}draws; No result counts endings without a proven Win, Loss or Draw."))
             .when(self.width < 1100., |d| {
                 d.child(ui::caption(
                     t,
