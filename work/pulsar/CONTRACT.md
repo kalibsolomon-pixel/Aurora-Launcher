@@ -1,0 +1,36 @@
+# Pulsar view contract
+
+Core owns `core/src/pulsar/view.rs`; native re-exports these same serde camelCase types. Application operations are async and own `spawn_blocking`; callers use `api::pulsar_*` and discard responses whose query/instance/selection revision changed.
+
+- `pulsar_library` lists launcher-owned snapshots; `pulsar_refresh` imports finalized instance-root `phenomena/fights` and legacy `kwamster/fights`, then returns the same bounded view. `LibraryQuery` includes instance/all scope, opponent/server search, reference outcome/hits/sort filters, offset and limit (0 means default).
+- `pulsar_analysis(AnalysisRequest)` returns Overview/Offense/Defense/Flow for Last10/Last25/All. `Coverage` distinguishes totals from loaded timelines and structured context. `TabView` uses metrics, accessible chart series/bands and tables. IDs are stable semantic names. Missing chart values are gaps.
+- `pulsar_detail(DetailRequest)` selects a fight by `(instanceId,fightId)`. Manual participant selection chooses its first exchange unless an explicit matching exchange is selected. Entire parent scope has no tracked opponent. All tabs, evidence and timeline use the selected scope's origin. `derived` is the complete format-6 analytical dictionary computed from raw data; it supplies geometry, distributions, frozen measurements and advanced selectors without parsing reports.
+- `pulsar_playback` provides canonical lanes, bounded event table at the playhead and cumulative metrics. Playback timing is UI state; core does not start timers.
+- Every `MetricValue` carries its exact MetricDefs definition and availability. `value:null` means unavailable; numeric zero is observed zero. Extra supported measurements use explicit definitions. Do not assign skill grades to descriptive data.
+- `pulsar_settings` is a read-only persisted/default inspector. Runtime fields/actions are labelled Change in game. `pulsar_opponents`, `pulsar_records`, `pulsar_compare` supply the beyond-parity views.
+- `pulsar_open_folder`, `pulsar_view_report`, `pulsar_export`, `pulsar_delete` are explicit actions. Export/delete require `confirmed:true`. Delete writes a tombstone. Optional instance deletion is refused while launching/running. Existing reports are copied unchanged; no report generation or config writes.
+
+Rust request defaults: Last25, newest history, all outcomes, no hits filter, all instances. String enum names follow the annotations in view.rs (history uses SCREAMING_SNAKE_CASE; analysis window camelCase). Results and errors are bounded. Structured error codes use `pulsar_*`. Source roots, retained/deleted-instance identity, conflict notices, stale snapshots and per-file errors remain visible.
+
+Contract milestone: operation bodies may initially return `pulsar_not_ready`; later implementation is additive. Breaking names/shapes must be recorded in CONTRACT_CHANGES.md before use.
+
+
+Additive playback clarification: `EventView.attributedIncoming` separates opponent damage from third-party/unattributed observations; `eligibleAttempt` is true only for canonical eligible outgoing attacks. `PlaybackView.checkpoints` contains core-calculated counts/streak and dominance at event/mark/sample times, so a cached snapshot can seek without new I/O or deriving attribution. Entire manual parent has no opponent streak/dominance. All canonical events, including MOTION, are retained within the explicit playback budget.
+
+Chart kinds: `line`, `histogram`, `bar`, `stackedBar`, `scatter`, `timing`, `dominance`, `combo`, `timeline`, `lanes`, `heatmap`. Points use x in xUnit and y in yDefinition.unit; null y is a gap. Categories carry frozen grade/result/state, never an implicit quality score. Bands are closed presentation extents `[start,end]` on the x axis with semantic lane and label; active interval analytical membership remains half-open. Reach histogram bands show frozen target +/- tolerance; timing tolerance is a y-axis band (`lane: yTolerance`). Combo/round/exchange bands have seconds along x and side/kind in lane. A band with `lane: yTolerance` uses y units instead. Chart descriptions retain coverage and method caveats.
+
+## Selected detail analysis
+
+`pulsar_detail_analysis(DetailAnalysisRequest)` returns `FightDetailView` after selecting `detail.participant` / `detail.exchangeId`, then computing weapon-filtered reach/aim cards and weapon/result-filtered timing cards and tables in core. `weapon` is a registry ID or null. `timingResult` accepts `ALL`, `HITS`, `NO_HIT` or null. Overall accuracy/hit/critical/sprint cards, summary, evidence, and `derived` retain the entire selected recording/exchange. Only timing samples use the result filter. Use `offense.metrics` for selected subset cards. An unknown weapon yields unavailable sample means and zero sample counts. This additive operation preserves the original `DetailRequest` and cached playback contracts. It runs behind the application blocking worker with the same scope and analysis budgets.
+
+## Card denominators, geometry and evidence tables
+
+`latest.metrics` and detail summary metrics add `accuracyDenominator`, `reachEligible`, `reachWithinCount`, `comboCount`, `duration`, `criticalConditions`, `criticalDenominator`, `intervalCount`, `dominanceActiveSeconds`, `dominanceLocalSeconds`, `dominanceOpponentSeconds` and `dominanceNeutralSeconds`. Read the `dominanceShare` metric availability/reason for complete/incomplete/insufficient evidence. Timeline-dependent denominators remain unavailable on summary-only reads.
+
+`overview.metrics` adds the same pooled numerator/denominator keys plus `opponentDominanceShare`, `neutralDominanceShare`, `recordings`, `timelineRecordings` and `contextRecordings`. Frozen totals cover all chosen recordings; reach counts and complete observed dominance seconds cover loaded timelines. Percentages remain ratios of sums, and dominance shares use pooled seconds.
+
+`FightDetailView.aimRegions` is an additive sequence-keyed map. Each entry contains the frozen `idealRegion`, `box`, `face` and event `confidence`, including measured non-hit contacts. It provides the same normalized ideal/nearest points, physical radii and bounding-box dimensions without adding fields to the canonical format-6 `derived` payload. Absent geometry stays absent; callers must not invent a backdrop.
+
+`summaryTab.tables` includes `round_history` (round/start/end/outcome/evidence/confidence) and, for an entire manual parent, `manual_announcements` (time/kind/rule/evidence/accepted/origin). Times use the selected recording's origin. Null round end/outcome remains unavailable.
+
+Focused `flow.metrics` adds `longestAdvantageStart`, `longestAdvantageEnd`, `longestAdvantageDuration`, `largestSwingFrom`, `largestSwingTo`, `largestSwingFromValue`, `largestSwingToValue`, `largestSwingDifference`. They carry separate labels/units/help/confidence and refer to the focused recording, never pooled maxima. `dominance_longest` gives its textual side; `dominance_swing` gives its endpoints and absolute difference. Both are TableViews; a side is text, not a fabricated numeric metric.

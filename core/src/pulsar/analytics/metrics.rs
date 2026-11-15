@@ -1,0 +1,206 @@
+use super::super::view::*;
+use super::{num, ratio};
+use serde_json::Value;
+use std::{collections::BTreeMap, sync::OnceLock};
+pub(crate) fn definitions() -> &'static [MetricDef] {
+    static DEFS: OnceLock<Vec<MetricDef>> = OnceLock::new();
+    DEFS.get_or_init(|| serde_json::from_str(include_str!("metric-defs.json")).unwrap())
+}
+pub(crate) fn definition(key: &str) -> MetricDef {
+    definitions()
+        .iter()
+        .find(|d| d.key == key)
+        .cloned()
+        .unwrap_or_else(|| MetricDef {
+            key: key.into(),
+            label: key.into(),
+            unit: String::new(),
+            confidence: "Observed".into(),
+            help: "Recorded observation; see the selected recording's evidence and coverage."
+                .into(),
+        })
+}
+pub(crate) fn metric(key: &str, value: Option<f64>) -> MetricValue {
+    let value = value.filter(|v| v.is_finite());
+    MetricValue {
+        definition: definition(key),
+        value,
+        availability: if value.is_some() {
+            Availability::Available
+        } else {
+            Availability::Unavailable
+        },
+        reason: value
+            .is_none()
+            .then(|| "No eligible recorded samples.".into()),
+    }
+}
+pub(crate) fn values(derived: &Value) -> BTreeMap<String, MetricValue> {
+    let s = &derived["summary"];
+    let reach = &derived["reach"];
+    let aim = &derived["aim"];
+    let shields = &derived["shields"];
+    let timing = derived["timingSamples"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or(&[]);
+    let graded = timing
+        .iter()
+        .filter(|t| {
+            matches!(
+                t["grade"].as_str(),
+                Some("PERFECT" | "TOO_FAST" | "TOO_SLOW")
+            )
+        })
+        .count();
+    let grades = aim["grades"].as_array().map(Vec::as_slice).unwrap_or(&[]);
+    let sum: f64 = grades.iter().filter_map(Value::as_f64).sum();
+    let central: f64 = grades.iter().take(2).filter_map(Value::as_f64).sum();
+    let mut result: BTreeMap<_, _> = definitions()
+        .iter()
+        .map(|d| {
+            let v = match d.key.as_str() {
+                "fights" => Some(1.0),
+                "dominance" => None,
+                "dominanceShare" => derived["dominance"]["localShare"].as_f64(),
+                "reachWithin" => reach["withinPercent"].as_f64(),
+                "reachDeviation" => reach["deviation"].as_f64(),
+                "reachError" => reach["meanAbsoluteError"].as_f64(),
+                "aimCentral" => ratio(100.0 * central, sum),
+                "aimDistance" => aim["meanDistance"].as_f64(),
+                "timingPerfect" => ratio(
+                    100.0 * timing.iter().filter(|t| t["grade"] == "PERFECT").count() as f64,
+                    graded as f64,
+                ),
+                "knockback" => derived["incomingDetail"].as_array().map(|rows| {
+                    rows.iter()
+                        .filter(|r| r["attributed"] == true && r["knockback"].as_f64().is_some())
+                        .count() as f64
+                }),
+                "attacksIntoShield" => shields["attacksIntoShield"].as_f64(),
+                "shieldBlocks" => shields["confirmedBlocks"].as_f64(),
+                "localShieldNotBlocked" => shields["localNotBlocked"].as_f64(),
+                "localShieldDisabled" => shields["localDisabled"].as_f64(),
+                "shieldDisables" => shields["disables"].as_f64(),
+                "hitsAfterDisable" => shields["hitsAfterDisable"].as_f64(),
+                "localShieldBlocks" => shields["localBlocks"].as_f64(),
+                "momentum" => None,
+                _ => s[&d.key].as_f64(),
+            };
+            let mut m = metric(&d.key, v);
+            if matches!(d.key.as_str(), "serverCrits" | "damageTaken" | "knockback")
+                && s["contextAvailable"] != true
+            {
+                m.value = None;
+                m.availability = Availability::Unavailable;
+                m.reason = Some(
+                    "Structured context requires schema 3 or newer with loaded evidence.".into(),
+                );
+            }
+            if d.key == "longestOpponentCombo" {
+                match s["opponentComboAvailability"].as_str() {
+                    Some("Unavailable") => {
+                        m.value = None;
+                        m.availability = Availability::Unavailable;
+                        m.reason = Some("No single tracked opponent.".into());
+                    }
+                    _ => {}
+                }
+            }
+            if matches!(
+                d.key.as_str(),
+                "attacksIntoShield"
+                    | "shieldBlocks"
+                    | "localShieldNotBlocked"
+                    | "localShieldDisabled"
+                    | "shieldDisables"
+                    | "hitsAfterDisable"
+                    | "localShieldBlocks"
+            ) && shields["available"] != true
+            {
+                m.value = None;
+                m.availability = Availability::Unavailable;
+                m.reason = Some("Structured shield context requires schema 3 or newer.".into());
+            }
+            (d.key.clone(), m)
+        })
+        .collect();
+    for (key, label, value) in [
+        (
+            "nonMeleeDamage",
+            "Other damage",
+            s["nonMeleeDamage"].as_f64(),
+        ),
+        (
+            "localShieldNotBlocked",
+            "Your shield not blocked",
+            shields["localNotBlocked"].as_f64(),
+        ),
+        (
+            "localShieldDisabled",
+            "Your shield disabled",
+            shields["localDisabled"].as_f64(),
+        ),
+    ] {
+        result.insert(key.into(),extra(key,label,"count","Other damage never enters melee combos or dominance. Shield outcomes count once per observed attack.",value));
+    }
+    for (key, label, help) in [
+        (
+            "stuns",
+            "Stuns",
+            "A subset of Disabled: one follow-up within 150 ms and 3 ticks is absorbed. It adds no attempt, hit or miss.",
+        ),
+        (
+            "localStuns",
+            "Stuns against you",
+            "A subset of your shield being Disabled, with a damage-proven follow-up within 150 ms and 3 ticks.",
+        ),
+        (
+            "spamClicks",
+            "Not counted: spam clicks",
+            "No-response packets below 50% cooldown or within 10 ticks after your confirmed hit. Diagnostic only.",
+        ),
+        (
+            "notCountedIncomingSwings",
+            "Not counted: opponent swings",
+            "Opponent swings without damage or a shield response. Diagnostic only.",
+        ),
+    ] {
+        result.insert(
+            key.into(),
+            extra(key, label, "count", help, s[key].as_f64()),
+        );
+    }
+    result
+}
+pub(crate) fn summary_values(summary: &Value) -> BTreeMap<String, MetricValue> {
+    let mut result: BTreeMap<_, _> = definitions()
+        .iter()
+        .map(|d| (d.key.clone(), metric(&d.key, summary[&d.key].as_f64())))
+        .collect();
+    for (key, label) in [
+        ("nonMeleeDamage", "Other damage"),
+        ("localShieldNotBlocked", "Your shield not blocked"),
+    ] {
+        result.insert(key.into(),extra(key,label,"count","Other damage does not count as a melee hit. Each observed shield attack has one outcome.",summary[key].as_f64()));
+    }
+    result
+}
+
+pub(crate) fn extra(
+    key: &str,
+    label: &str,
+    unit: &str,
+    help: &str,
+    value: Option<f64>,
+) -> MetricValue {
+    let mut m = metric(key, value);
+    m.definition.label = label.into();
+    m.definition.unit = unit.into();
+    m.definition.help = help.into();
+    m
+}
+#[allow(dead_code)]
+fn _assert_num(v: &Value) -> f64 {
+    num(v, "")
+}

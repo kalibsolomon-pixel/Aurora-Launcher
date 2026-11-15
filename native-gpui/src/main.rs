@@ -20,6 +20,7 @@ mod instance_creator;
 mod instance_editor;
 mod media;
 mod pack_import;
+mod pulsar;
 mod settings;
 mod skin_preview;
 mod skins;
@@ -56,6 +57,7 @@ use home_widgets::{HomeWidgets, HomeWidgetsEvent};
 use instance_creator::{InstanceCreator, InstanceCreatorEvent};
 use instance_editor::{InstanceEditor, InstanceEditorEvent};
 use pack_import::{PackImport, PackImportEvent};
+use pulsar::Pulsar;
 use settings::{Settings, SettingsEvent};
 use skin_preview::SkinPreview;
 use skins::{Skins, SkinsEvent};
@@ -330,6 +332,7 @@ struct Launcher {
     instance_creator: Option<gpui::Entity<InstanceCreator>>,
     settings: Option<gpui::Entity<Settings>>,
     content: Option<gpui::Entity<Content>>,
+    pulsar: Option<gpui::Entity<Pulsar>>,
     discover: Option<gpui::Entity<Discover>>,
     downloads: Option<gpui::Entity<Downloads>>,
     syncing: Option<gpui::Entity<Syncing>>,
@@ -1133,6 +1136,14 @@ impl Launcher {
             content.update(cx, |content, cx| content.show(instance, kind, cx));
         }
     }
+    fn open_pulsar_for(&mut self, instance: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_page(9, window, cx);
+        if self.page == 9 {
+            if let Some(pulsar) = &self.pulsar {
+                pulsar.update(cx, |pulsar, cx| pulsar.show(instance, cx));
+            }
+        }
+    }
     fn open_page(&mut self, page: u8, window: &mut Window, cx: &mut Context<Self>) {
         if !navigation_accepted(self.page, page, self.client_update_running(cx)) {
             return;
@@ -1141,6 +1152,28 @@ impl Launcher {
         // navigation, including the one that leaves Settings.
         if let Some(settings) = &self.settings {
             settings.update(cx, |settings, cx| settings.cancel_previews(cx));
+        }
+        if page == 9 {
+            if let Some(pulsar) = &self.pulsar {
+                if self.page != 9 {
+                    pulsar.update(cx, |pulsar, cx| pulsar.refresh(cx));
+                }
+            } else {
+                self.pulsar =
+                    Some(cx.new(|cx| Pulsar::new(self.host.clone(), self.rt.clone(), window, cx)));
+                self._subscriptions.push(cx.subscribe_in(
+                    self.pulsar.as_ref().unwrap(),
+                    window,
+                    |this, _, event: &pulsar::PulsarEvent, window, cx| match event {
+                        pulsar::PulsarEvent::OpenInstances => this.open_page(3, window, cx),
+                    },
+                ));
+            }
+        }
+        if (self.page == 9) != (page == 9) {
+            if let Some(pulsar) = &self.pulsar {
+                pulsar.update(cx, |pulsar, cx| pulsar.set_active(page == 9, cx));
+            }
         }
         if page == 7 && self.skins.is_none() {
             let preview = cx.new(|cx| SkinPreview::new(self.rt.clone(), window, cx));
@@ -2061,12 +2094,14 @@ impl Render for Launcher {
             .downloads
             .as_ref()
             .map_or(0, |downloads| downloads.read(cx).active_count());
+        let compact_pulsar = self.page == 9 && window.viewport_size().width < px(950.);
         let nav = [
             ("Home", 0, "home"),
             ("Instances", 3, "grid_view"),
             ("Discover", 5, "explore"),
             ("Content", 4, "extension"),
             ("Downloads", 8, "download"),
+            ("Pulsar", 9, "swords"),
             ("Skins", 7, "checkroom"),
             ("Accounts", 1, "account_circle"),
             ("Sync", 6, "sync"),
@@ -2079,7 +2114,8 @@ impl Render for Launcher {
             // count badge. It only reads the shared queue's count.
             let active = if page == 8 { downloads_active } else { 0 };
             let button = self
-                .button(label, label)
+                .button(label, if compact_pulsar { "" } else { label })
+                .accessibility_label(label)
                 .variant(ButtonVariant::Nav)
                 .icon(icon)
                 .selected(self.page == page)
@@ -2089,7 +2125,14 @@ impl Render for Launcher {
                     cx.notify();
                 }));
             if page != 8 {
-                return button.into_any_element();
+                if !compact_pulsar {
+                    return button.into_any_element();
+                }
+                return div()
+                    .id(("launcher-nav-tip", page as usize))
+                    .child(button)
+                    .tooltip(move |_, cx| cx.new(|_| NavHint(label.into())).into())
+                    .into_any_element();
             }
             div()
                 .id("downloads-nav")
@@ -2099,6 +2142,9 @@ impl Render for Launcher {
                 .flex()
                 .flex_col()
                 .child(button)
+                .when(compact_pulsar, |d| {
+                    d.tooltip(|_, cx| cx.new(|_| NavHint("Downloads".into())).into())
+                })
                 .when(active > 0, |item| {
                     item.child(
                         div()
@@ -2127,7 +2173,7 @@ impl Render for Launcher {
                 .flex()
                 .flex_col()
                 .gap(px(2.))
-                .when_some(title, |group, title| {
+                .when_some(title.filter(|_| !compact_pulsar), |group, title| {
                     group.child(
                         ui::eyebrow(&palette, title)
                             .px(px(10.))
@@ -2142,7 +2188,7 @@ impl Render for Launcher {
                 .children(nav.by_ref().take(count).collect::<Vec<_>>())
         };
         let play_group = nav_group(Some("PLAY"), 2);
-        let library_group = nav_group(Some("LIBRARY"), 3);
+        let library_group = nav_group(Some("LIBRARY"), 4);
         let profile_group = nav_group(Some("PROFILE"), 2);
         let system_group = nav_group(None, 2);
         let brand = div()
@@ -2150,25 +2196,27 @@ impl Render for Launcher {
             .items_center()
             .gap(px(10.))
             .h(px(52.))
-            .px(px(6.))
+            .px(px(if compact_pulsar { 0. } else { 6. }))
             .child(
                 gpui::img(images::aurora_logo())
-                    .w(px(44.))
-                    .h(px(35.2))
+                    .w(px(if compact_pulsar { 32. } else { 44. }))
+                    .h(px(if compact_pulsar { 25.6 } else { 35.2 }))
                     .flex_shrink_0(),
             )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .child(
-                        div()
-                            .text_size(px(14.))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .child("Aurora"),
-                    )
-                    .child(ui::caption(&palette, "Launcher")),
-            );
+            .when(!compact_pulsar, |brand| {
+                brand.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .text_size(px(14.))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .child("Aurora"),
+                        )
+                        .child(ui::caption(&palette, "Launcher")),
+                )
+            });
         let page_scroll = window
             .use_keyed_state(("page-scroll", self.page as usize), cx, |_, _| {
                 gpui::ScrollHandle::new()
@@ -2182,7 +2230,7 @@ impl Render for Launcher {
             .flex()
             .flex_col()
             .gap(px(ui::PAGE_GAP))
-            .px(px(32.))
+            .px(px(if compact_pulsar { 20. } else { 32. }))
             .pt(px(4.))
             .pb(px(40.))
             .flex_1()
@@ -2290,6 +2338,15 @@ impl Render for Launcher {
                     content = content.child(page.clone());
                 }
             }
+            9 => {
+                if let Some(pulsar) = &self.pulsar {
+                    // Pulsar's PageUp/PageDown/Home/End drive this page's scroll.
+                    pulsar.update(cx, |pulsar, _| {
+                        pulsar.page_scroll = Some(page_scroll.clone())
+                    });
+                    content = content.child(pulsar.clone());
+                }
+            }
             8 => {
                 if let Some(downloads) = &self.downloads {
                     content = content.child(downloads.clone());
@@ -2345,10 +2402,10 @@ impl Render for Launcher {
             .children(self.borealis.clone())
             .child(
                 div()
-                    .w(px(212.))
+                    .w(px(if compact_pulsar { 60. } else { 212. }))
                     .flex_shrink_0()
                     .h_full()
-                    .px(px(12.))
+                    .px(px(if compact_pulsar { 6. } else { 12. }))
                     .pt(px(6.))
                     .pb(px(12.))
                     .bg(palette.sidebar)
@@ -2371,56 +2428,69 @@ impl Render for Launcher {
                             .bg(palette.border_subtle),
                     )
                     .child(
-                        self.button("refresh", "Refresh launcher")
-                            .variant(ButtonVariant::Subtle)
-                            .size(ButtonSize::Small)
-                            .icon("refresh")
-                            .disabled(
-                                self.busy
-                                    || self.account_busy
-                                    || self.skin_busy
-                                    || self.client_update_running(cx)
-                                    || self.load_in_flight
-                                    || self.host.is_none(),
-                            )
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.reload_guarded(cx);
-                                if this.page == 0 {
-                                    if let Some(home) = &this.home_widgets {
-                                        home.update(cx, |home, cx| home.refresh(cx));
-                                    }
+                        self.button(
+                            "refresh",
+                            if compact_pulsar {
+                                ""
+                            } else {
+                                "Refresh launcher"
+                            },
+                        )
+                        .accessibility_label("Refresh launcher")
+                        .variant(ButtonVariant::Subtle)
+                        .size(ButtonSize::Small)
+                        .icon("refresh")
+                        .disabled(
+                            self.busy
+                                || self.account_busy
+                                || self.skin_busy
+                                || self.client_update_running(cx)
+                                || self.load_in_flight
+                                || self.host.is_none(),
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.reload_guarded(cx);
+                            if this.page == 0 {
+                                if let Some(home) = &this.home_widgets {
+                                    home.update(cx, |home, cx| home.refresh(cx));
                                 }
-                                if let Some(updates) = &this.client_updates {
-                                    updates.update(cx, |updates, cx| updates.refresh(cx));
+                            }
+                            if let Some(updates) = &this.client_updates {
+                                updates.update(cx, |updates, cx| updates.refresh(cx));
+                            }
+                            if this.page == 2 {
+                                if let Some(settings) = &this.settings {
+                                    settings.update(cx, |settings, cx| settings.refresh(cx));
                                 }
-                                if this.page == 2 {
-                                    if let Some(settings) = &this.settings {
-                                        settings.update(cx, |settings, cx| settings.refresh(cx));
-                                    }
+                            }
+                            if this.page == 4 {
+                                if let Some(content) = &this.content {
+                                    content.update(cx, |content, cx| content.refresh(cx));
                                 }
-                                if this.page == 4 {
-                                    if let Some(content) = &this.content {
-                                        content.update(cx, |content, cx| content.refresh(cx));
-                                    }
+                            }
+                            if this.page == 9 {
+                                if let Some(pulsar) = &this.pulsar {
+                                    pulsar.update(cx, |pulsar, cx| pulsar.refresh(cx));
                                 }
-                                if this.page == 5 {
-                                    if let Some(discover) = &this.discover {
-                                        discover.update(cx, |discover, cx| discover.refresh(cx));
-                                    }
+                            }
+                            if this.page == 5 {
+                                if let Some(discover) = &this.discover {
+                                    discover.update(cx, |discover, cx| discover.refresh(cx));
                                 }
-                                if this.page == 6 {
-                                    if let Some(syncing) = &this.syncing {
-                                        syncing.update(cx, |syncing, cx| syncing.refresh(cx));
-                                    }
+                            }
+                            if this.page == 6 {
+                                if let Some(syncing) = &this.syncing {
+                                    syncing.update(cx, |syncing, cx| syncing.refresh(cx));
                                 }
-                                if this.page == 7 {
-                                    if let Some(skins) = &this.skins {
-                                        skins.update(cx, |skins, cx| skins.refresh(cx));
-                                    }
+                            }
+                            if this.page == 7 {
+                                if let Some(skins) = &this.skins {
+                                    skins.update(cx, |skins, cx| skins.refresh(cx));
                                 }
-                                this.sync_mutation_guards(cx);
-                                cx.notify();
-                            })),
+                            }
+                            this.sync_mutation_guards(cx);
+                            cx.notify();
+                        })),
                     ),
             )
             .child(
@@ -2608,6 +2678,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             syncing.update(cx, |syncing, cx| syncing.refresh(cx));
                                         }
                                     }
+                                    InstanceEditorEvent::OpenPulsar { instance } => {
+                                        this.open_pulsar_for(instance.clone(), window, cx);
+                                    }
                                     InstanceEditorEvent::OpenContent { instance } => {
                                         this.return_to_content(instance.clone(), 0, window, cx);
                                     }
@@ -2659,6 +2732,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         instance_creator: Some(creator),
                         settings: None,
                         content: None,
+                        pulsar: None,
                         discover: None,
                         downloads: None,
                         syncing: None,
@@ -2750,6 +2824,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             settings.update(cx, |settings, cx| {
                                                 settings.on_host_event(name, payload, cx)
                                             });
+                                        }
+                                        if let Some(pulsar) = &view.pulsar {
+                                            pulsar.update(cx, |pulsar, cx| pulsar.on_host_event(name, payload, cx));
                                         }
                                         if let Some(content) = &view.content {
                                             content.update(cx, |content, cx| {
@@ -2873,6 +2950,7 @@ mod tests {
             instance_creator: None,
             settings: None,
             content: None,
+            pulsar: None,
             discover: None,
             downloads: None,
             syncing: None,
@@ -3549,5 +3627,20 @@ mod tests {
         assert!(!navigation_accepted(2, 0, true));
         assert!(!navigation_accepted(0, 2, true));
         assert!(navigation_accepted(2, 2, true));
+    }
+}
+
+struct NavHint(gpui::SharedString);
+impl Render for NavHint {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = theme::theme(cx);
+        div()
+            .px(px(10.))
+            .py(px(6.))
+            .rounded(t.radius)
+            .bg(t.card)
+            .text_color(t.foreground)
+            .text_size(px(ui::TEXT_BODY))
+            .child(self.0.clone())
     }
 }

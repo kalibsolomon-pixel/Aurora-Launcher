@@ -21,8 +21,14 @@ use std::{cell::Cell, collections::BTreeMap, ops::Range, rc::Rc};
 pub enum InstanceEditorEvent {
     Changed,
     OpenContent { instance: String },
+    OpenPulsar { instance: String },
 }
 impl EventEmitter<InstanceEditorEvent> for InstanceEditor {}
+fn pulsar_shortcut(instance: Option<&api::InstanceSummary>) -> Option<InstanceEditorEvent> {
+    instance.map(|instance| InstanceEditorEvent::OpenPulsar {
+        instance: instance.id.clone(),
+    })
+}
 
 struct SelectState {
     trigger: FocusHandle,
@@ -2550,6 +2556,20 @@ impl Render for InstanceEditor {
                 );
                 if index == 0 {
                     tabs = tabs.child(
+                        AuroraButton::new("instance-pulsar", "Pulsar")
+                            .accessibility_label("Open Pulsar for selected instance")
+                            .variant(ButtonVariant::Ghost)
+                            .size(ButtonSize::Small)
+                            .disabled(busy || instance.is_none())
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if !this.busy {
+                                    if let Some(event) = pulsar_shortcut(this.selected_instance()) {
+                                        cx.emit(event);
+                                    }
+                                }
+                            })),
+                    );
+                    tabs = tabs.child(
                         AuroraButton::new("instance-content", "Content")
                             .accessibility_label("Open content for selected instance")
                             .variant(ButtonVariant::Ghost)
@@ -3615,6 +3635,19 @@ mod tests {
         .unwrap()
     }
 
+    #[test]
+    fn pulsar_shortcut_uses_editor_instance() {
+        let mut editor = instance(configuration(serde_json::json!({"kind":"vanilla"})));
+        editor.id = "editor-instance".into();
+        let active_play_instance = "different-play-instance";
+        let Some(InstanceEditorEvent::OpenPulsar { instance }) = pulsar_shortcut(Some(&editor))
+        else {
+            panic!("missing shortcut")
+        };
+        assert_eq!(instance, "editor-instance");
+        assert_ne!(instance, active_play_instance);
+        assert!(pulsar_shortcut(None).is_none());
+    }
     #[test]
     fn configuration_preserves_unknown_fields_and_loader() {
         let c = configuration(

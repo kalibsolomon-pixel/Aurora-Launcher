@@ -53,6 +53,7 @@ pub mod pack_state;
 pub mod pack_update;
 pub mod paths;
 mod performance;
+pub mod pulsar;
 pub mod runtime;
 pub mod server_enrichment;
 pub mod shortcuts;
