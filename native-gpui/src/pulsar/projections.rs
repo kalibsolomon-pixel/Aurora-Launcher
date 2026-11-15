@@ -89,12 +89,17 @@ impl Pulsar {
         cx: &mut Context<Self>,
     ) -> Div {
         let mut body = div().flex().flex_col().gap(px(24.)).min_w(px(0.));
-        let Some(detail) = &self.detail else {
+        let Some(detail) = self.active_detail() else {
             return body;
         };
         let d = &detail.derived;
-        let section = self.sections[self.detail_tab];
-        match self.detail_tab {
+        let tab = if self.detail_request.is_some() {
+            self.detail_tab
+        } else {
+            self.top_tab
+        };
+        let section = self.sections[tab];
+        match tab {
             1 => {
                 let weapons: Vec<_> = d["reach"]["byWeapon"]
                     .as_object()
@@ -106,8 +111,8 @@ impl Pulsar {
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.weapon = None;
                             this.aim_selection = None;
-                            if let Some(request) = this.detail_request.clone() {
-                                this.request_detail(request, cx);
+                            if let Some(request) = this.scope_request() {
+                                this.select_scope(request, cx);
                             }
                         })),
                 );
@@ -122,8 +127,8 @@ impl Pulsar {
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.weapon = Some(w.clone());
                             this.aim_selection = None;
-                            if let Some(request) = this.detail_request.clone() {
-                                this.request_detail(request, cx);
+                            if let Some(request) = this.scope_request() {
+                                this.select_scope(request, cx);
                             }
                         })),
                     );
@@ -186,7 +191,14 @@ impl Pulsar {
                     );
                     histogram.band = target.zip(tolerance).map(|(a, b)| (a - b, a + b));
                     histogram.target = target;
-                    body = body.child(histogram.render(t));
+                    body = body.child(histogram.render_options(
+                        t,
+                        None,
+                        super::charts::Options {
+                            preferences: self.preferences,
+                            ..Default::default()
+                        },
+                    ));
                     let points = hits
                         .iter()
                         .filter_map(|h| {
@@ -214,7 +226,7 @@ impl Pulsar {
                             ))
                         }))
                         .collect();
-                    body=body.child(plot("detail-reach-strip","Individual contacts","Recording time (s)","Distance (m)",Kind::Scatter,points,(0.,self.duration().max(1.)),(0.,nice_peak(reaches.iter().copied().fold(4.,f64::max))),"■ Confirmed hit · ◇ outline Estimated no-hit contact. Geometry is observed, not a server verdict.").render(t));
+                    body=body.child(plot("detail-reach-strip","Individual contacts","Recording time (s)","Distance (m)",Kind::Scatter,points,(0.,self.analysis_duration().max(1.)),(0.,nice_peak(reaches.iter().copied().fold(4.,f64::max))),"■ Confirmed hit · ◇ outline Estimated no-hit contact. Geometry is observed, not a server verdict.").render_options(t,None,super::charts::Options{preferences:self.preferences,..Default::default()}));
                 }
                 if section == 0 || section == 3 {
                     body = body.child(self.aim_view(t, d, cx));
@@ -247,8 +259,8 @@ impl Pulsar {
                                 .selected(self.timing_result.as_deref() == result)
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.timing_result = result.map(str::to_owned);
-                                    if let Some(request) = this.detail_request.clone() {
-                                        this.request_detail(request, cx);
+                                    if let Some(request) = this.scope_request() {
+                                        this.select_scope(request, cx);
                                     }
                                 })),
                         );
@@ -309,7 +321,18 @@ impl Pulsar {
                         .get("timingTolerance")
                         .and_then(|m| m.value)
                         .map(|v| (-v, v));
-                    body = body.child(timing.render(t));
+                    body = body.child(grade_legend(
+                        t,
+                        &["PERFECT", "TOO_FAST", "TOO_SLOW", "OPENER / RESET"],
+                    ));
+                    body = body.child(timing.render_options(
+                        t,
+                        None,
+                        super::charts::Options {
+                            preferences: self.preferences,
+                            ..Default::default()
+                        },
+                    ));
                     let mut list=ui::list_card(t).child(ui::row(t,false).child(ui::section_header(t,"Latest timing samples",Some("Newest 50 · values are frozen per weapon; opener intervals remain unavailable.".into()))));
                     for (i, s) in samples
                         .iter()
@@ -323,6 +346,10 @@ impl Pulsar {
             }
             2 => {
                 if section == 0 || section == 3 {
+                    let total = self.analysis_duration().max(1.);
+                    let span = (self.jump_span / 100. * total).clamp(1., total);
+                    let start = self.jump_start / 100. * (total - span).max(0.);
+                    body = body.child(self.jump_controls(t, total, cx));
                     let incoming = rows(d, "incomingDetail");
                     let points = incoming
                         .iter()
@@ -353,13 +380,21 @@ impl Pulsar {
                         "Jump − incoming (client ticks)",
                         Kind::Scatter,
                         points,
-                        (0., self.duration().max(1.)),
+                        (start, start + span),
                         (-10., 10.),
                         "◆ Same tick · ■ Other measured offset. Candidate timing does not establish knockback reduction. Display clamps to ±10 ticks; hover gives the exact offset.",
                     );
+                    jump.samples.retain(|s| s.x >= start && s.x <= start + span);
                     jump.target = Some(0.);
                     jump.band = num(d, "jumpWindowTicks").map(|w| (-w, w));
-                    body = body.child(jump.render(t));
+                    body = body.child(jump.render_options(
+                        t,
+                        None,
+                        super::charts::Options {
+                            preferences: self.preferences,
+                            ..Default::default()
+                        },
+                    ));
                     let lanes = rows(d, "incoming")
                         .iter()
                         .filter_map(|r| r.as_f64())
@@ -386,7 +421,28 @@ impl Pulsar {
                             })
                         }))
                         .collect();
-                    body=body.child(plot("detail-jump-lanes","Incoming hits & actual jumps","Recording time (s)","Bottom: incoming · top: actual jump",Kind::Lanes,lanes,(0.,self.duration().max(1.)),(-0.5,1.5),"■ Incoming hit · ◇ outline Actual observed jump. Client tick timing is affected by network delay; this is not a world replay.").render(t));
+                    let mut timeline = plot(
+                        "detail-jump-lanes",
+                        "Incoming hits & actual jumps",
+                        "Recording time (s)",
+                        "Bottom: incoming · top: actual jump",
+                        Kind::Lanes,
+                        lanes,
+                        (start, start + span),
+                        (-0.5, 1.5),
+                        "■ Incoming hit · ◇ outline Actual observed jump. Client tick timing is affected by network delay; this is not a world replay.",
+                    );
+                    timeline
+                        .samples
+                        .retain(|s| s.x >= start && s.x <= start + span);
+                    body = body.child(timeline.render_options(
+                        t,
+                        None,
+                        super::charts::Options {
+                            preferences: self.preferences,
+                            ..Default::default()
+                        },
+                    ));
                 }
                 if section == 0 || section == 1 || section == 4 {
                     let incoming = rows(d, "incomingDetail");
@@ -458,7 +514,7 @@ impl Pulsar {
                         "Bottom: opponent · top: you",
                         Kind::Timeline,
                         points,
-                        (0., self.duration().max(1.)),
+                        (0., self.analysis_duration().max(1.)),
                         (-0.5, 1.5),
                         "■ Confirmed hit · ◆ Same-tick trade, extends neither streak. Combo bands use server-evidence time.",
                     );
@@ -480,14 +536,60 @@ impl Pulsar {
                             })
                         })
                         .collect();
-                    body = body.child(combo.render(t));
+                    let streak_count = combo.bands.len();
+                    for b in rows(d, "boundaries") {
+                        if let Some(time) = num(b, "t").or_else(|| num(b, "time")) {
+                            combo.bands.push(super::charts::Band {
+                                start: time,
+                                end: time + 0.02,
+                                lane: None,
+                                label: format!("Boundary | {}", text(b, "label")),
+                                selected: false,
+                            });
+                        }
+                    }
+                    let mark_seqs: Vec<_> = marks.iter().map(|m| m["seq"].clone()).collect();
+                    let combo_seqs: Vec<Vec<Value>> =
+                        streaks.iter().map(|s| rows(s, "seqs").to_vec()).collect();
+                    let entity = cx.entity().downgrade();
+                    let activate = std::rc::Rc::new(
+                        move |target, _: &mut gpui::Window, cx: &mut gpui::App| {
+                            let _ = entity.update(cx, |this, cx| {
+                                match target {
+                                    super::charts::Target::Band(i) if i < streak_count => {
+                                        this.combo_selection = i
+                                    }
+                                    super::charts::Target::Sample(i) => {
+                                        if let Some(seq) = mark_seqs.get(i) {
+                                            if let Some(index) =
+                                                combo_seqs.iter().position(|s| s.contains(seq))
+                                            {
+                                                this.combo_selection = index;
+                                            }
+                                        }
+                                    }
+                                    _ => {}
+                                }
+                                cx.notify();
+                            });
+                        },
+                    );
+                    body = body.child(combo.render_options(
+                        t,
+                        None,
+                        super::charts::Options {
+                            preferences: self.preferences,
+                            activate: Some(activate),
+                            ..Default::default()
+                        },
+                    ));
                     let mut selectors = div().flex().flex_wrap().gap(px(4.));
                     selectors = selectors
                         .child(
                             button("combo-previous", "Previous combo")
                                 .disabled(streaks.is_empty())
                                 .on_click(cx.listener(|this, _, _, cx| {
-                                    if let Some(d) = &this.detail {
+                                    if let Some(d) = this.active_detail() {
                                         let n = rows(&d.derived["combos"], "streaks").len();
                                         if n > 0 {
                                             this.combo_selection =
@@ -501,7 +603,7 @@ impl Pulsar {
                             button("combo-next", "Next combo")
                                 .disabled(streaks.is_empty())
                                 .on_click(cx.listener(|this, _, _, cx| {
-                                    if let Some(d) = &this.detail {
+                                    if let Some(d) = this.active_detail() {
                                         let n = rows(&d.derived["combos"], "streaks").len();
                                         if n > 0 {
                                             this.combo_selection = (this.combo_selection + 1) % n;
@@ -553,6 +655,19 @@ impl Pulsar {
                                         h["critical"].as_bool().unwrap_or(false)
                                     ),
                                 ));
+                            } else {
+                                let incoming = rows(d, "incomingDetail")
+                                    .iter()
+                                    .find(|h| h["sequence"] == *seq || h["seq"] == *seq);
+                                let event = detail
+                                    .timeline
+                                    .iter()
+                                    .find(|e| Some(e.sequence) == seq.as_i64());
+                                card=card.child(ui::caption(t,format!("Opponent hit {} | evidence {} | attribution {} | damage {} | knockback {} | critical {}",seq,
+                                    incoming.map(|h|format(num(h,"time"),"s")).or_else(||event.map(|e|format!("{:.2} s",e.time))).unwrap_or_else(||"Unavailable".into()),
+                                    incoming.map(|h|text(h,"attribution")).unwrap_or("Tracked opponent evidence"),
+                                    format(incoming.and_then(|h|num(h,"damage")),"HP"),format(incoming.and_then(|h|num(h,"knockback")),"blocks/tick"),
+                                    incoming.and_then(|h|h["crit"].as_bool()).map(|v|v.to_string()).unwrap_or_else(||"Unavailable".into()))));
                             }
                         }
                         body = body.child(card);
@@ -590,7 +705,7 @@ impl Pulsar {
                         "Signed evidence balance (−1 to +1)",
                         Kind::Area,
                         points,
-                        (0., self.duration().max(1.)),
+                        (0., self.analysis_duration().max(1.)),
                         (-1., 1.),
                         "Above zero: you · below: opponent · ±0.2 neutral band · gaps: inactive / insufficient. Incomplete periods are excluded from shares. Decay τ = 3 s; no accuracy, aim or reach input.",
                     );
@@ -608,7 +723,72 @@ impl Pulsar {
                             }
                         }
                     }
-                    body = body.child(chart.render(t));
+                    let longest = &dom["longest"];
+                    let swing = &dom["swing"];
+                    body = body.child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .gap(px(24.))
+                            .child(
+                                ui::card(t)
+                                    .flex_1()
+                                    .min_w(px(210.))
+                                    .child(ui::section_header(t, "Longest advantage", None))
+                                    .child(ui::muted(
+                                        t,
+                                        format!(
+                                            "{} | {}",
+                                            text(longest, "side"),
+                                            format(
+                                                num(longest, "end")
+                                                    .zip(num(longest, "start"))
+                                                    .map(|(e, s)| e - s),
+                                                "s"
+                                            )
+                                        ),
+                                    ))
+                                    .child(ui::caption(
+                                        t,
+                                        format!(
+                                            "{} | {}",
+                                            format(num(longest, "start"), "s"),
+                                            format(num(longest, "end"), "s")
+                                        ),
+                                    )),
+                            )
+                            .child(
+                                ui::card(t)
+                                    .flex_1()
+                                    .min_w(px(210.))
+                                    .child(ui::section_header(t, "Largest <=3 s swing", None))
+                                    .child(ui::muted(
+                                        t,
+                                        format!(
+                                            "{} | {}",
+                                            format(num(swing, "fromValue"), "balance"),
+                                            format(num(swing, "toValue"), "balance")
+                                        ),
+                                    ))
+                                    .child(ui::caption(
+                                        t,
+                                        format!(
+                                            "{} | {}",
+                                            format(num(swing, "from"), "s"),
+                                            format(num(swing, "to"), "s")
+                                        ),
+                                    )),
+                            ),
+                    );
+                    body = body.child(chart.render_options(
+                        t,
+                        None,
+                        super::charts::Options {
+                            preferences: self.preferences,
+                            ..Default::default()
+                        },
+                    ));
+                    body=body.child(ui::title_block(t,"How dominance is measured",Some("D = (P - Q) / (P + Q + 1). Confirmed hits weigh 1; subsequent streak hits add 0.25. Blocking an opponent attack adds 0.25; an opponent shield block subtracts 0.25. Shield disables weigh +/-0.5. Evidence decays exponentially with | = 3 s. Advantage starts at +/-0.2; mass below 0.35 is insufficient, unattributed mass at 0.5 is incomplete. Shares exclude inactive and incomplete time and pool by observed active duration. Current exchange boundaries reset the model. This heuristic measures observed evidence, not damage, skill or a server verdict; aim, reach and accuracy do not enter the model.".into())));
                 }
             }
             _ => {}
@@ -618,7 +798,7 @@ impl Pulsar {
     }
     fn aim_view(&self, t: &AuroraTheme, d: &Value, cx: &mut Context<Self>) -> Div {
         let all = rows(&d["aim"], "samples");
-        let duration = self.duration();
+        let duration = self.analysis_duration();
         let samples: Vec<_> = all
             .iter()
             .filter(|s| self.weapon.as_ref().is_none_or(|w| text(s, "weapon") == w))
@@ -748,7 +928,48 @@ impl Pulsar {
                     ))
                 })
                 .collect();
-            card=card.child(plot("aim-face","Measured face contacts","Normalized horizontal face axis (0–1)","Normalized vertical face axis (0–1)",Kind::Grid,points,(0.,1.),(0.,1.),"■ Confirmed hit · ◇ outline Other contact. The selected hit determines the face. No swing path or missed impact is reconstructed.").render(t));
+            let mut contact = plot(
+                "aim-face",
+                "Measured face contacts",
+                "Normalized horizontal face axis (0-1)",
+                "Normalized vertical face axis (0-1)",
+                Kind::Grid,
+                points,
+                (0., 1.),
+                (0., 1.),
+                "Square: confirmed hit | Circle: other contact. Select a mark or use Tab and Enter. Background uses the selected contact's frozen ideal point and physical radii; it does not reconstruct occlusion.",
+            );
+            let regions = selected
+                .map(|pick| frozen_regions(d, pick, face))
+                .unwrap_or_default();
+            if regions.is_empty() {
+                contact
+                    .note
+                    .push_str(" Frozen region unavailable for this sample.");
+            }
+            let seqs: Vec<_> = contacts.iter().filter_map(|s| s["seq"].as_i64()).collect();
+            let entity = cx.entity().downgrade();
+            let activate =
+                std::rc::Rc::new(move |target, _: &mut gpui::Window, cx: &mut gpui::App| {
+                    if let super::charts::Target::Sample(i) = target {
+                        if let Some(seq) = seqs.get(i) {
+                            let _ = entity.update(cx, |this, cx| {
+                                this.aim_selection = Some(*seq);
+                                cx.notify();
+                            });
+                        }
+                    }
+                });
+            card = card.child(contact.render_options(
+                t,
+                None,
+                super::charts::Options {
+                    preferences: self.preferences,
+                    regions,
+                    activate: Some(activate),
+                },
+            ));
+            card = card.child(grade_legend(t, &["IDEAL", "GOOD", "PERIPHERAL", "POOR"]));
         }
         let mut choose = div().flex().flex_wrap().gap(px(4.));
         for (i, s) in samples.iter().enumerate() {
@@ -796,5 +1017,81 @@ mod tests {
     fn face_axes_follow_selected_hit_face() {
         assert_eq!(face_axes("TOP", 0.1, 0.2, 0.3), (0.1, 0.3));
         assert_eq!(face_axes("WEST", 0.1, 0.2, 0.3), (0.3, 0.2));
+    }
+}
+
+fn grade_legend(t: &AuroraTheme, grades: &[&str]) -> Div {
+    div()
+        .flex()
+        .flex_wrap()
+        .gap(px(16.))
+        .children(grades.iter().map(|g| {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .child(div().size(px(8.)).bg(super::charts::grade_color(t, g)))
+                .child(ui::caption(t, (*g).to_owned()))
+        }))
+}
+/// Plane/sphere intersection in the selected normalized face. Uses frozen physical geometry.
+fn frozen_regions(d: &Value, pick: &Value, face: &str) -> Vec<(f64, f64, f64, f64, usize)> {
+    let measurement = pick.get("measurement").or_else(|| {
+        rows(d, "hits")
+            .iter()
+            .find(|h| h["seq"] == pick["seq"])
+            .and_then(|h| h.get("measurement"))
+    });
+    let Some(m) = measurement else {
+        return vec![];
+    };
+    let r = pick.get("idealRegion").unwrap_or(&m["idealRegion"]);
+    if r["reachable"] == false {
+        return vec![(0.5, 0.5, 2., 2., 3)];
+    }
+    let axes = match face {
+        "TOP" | "BOTTOM" => (0, 2, 1),
+        "EAST" | "WEST" => (2, 1, 0),
+        _ => (0, 1, 2),
+    };
+    let coord = ["x", "y", "z"];
+    let mins = ["minX", "minY", "minZ"];
+    let maxs = ["maxX", "maxY", "maxZ"];
+    let sizes: Option<Vec<_>> = (0..3)
+        .map(|i| Some(num(&m["box"], maxs[i])? - num(&m["box"], mins[i])?))
+        .collect();
+    let Some(size) = sizes.filter(|s| s.iter().all(|v| *v > 0.)) else {
+        return vec![];
+    };
+    let Some((cx, cy)) = num(&r["ideal"], coord[axes.0]).zip(num(&r["ideal"], coord[axes.1]))
+    else {
+        return vec![];
+    };
+    let Some(fixed) = num(pick, coord[axes.2])
+        .zip(num(&r["ideal"], coord[axes.2]))
+        .map(|(p, i)| (p - i) * size[axes.2])
+    else {
+        return vec![];
+    };
+    let mut out = vec![(0.5, 0.5, 2., 2., 3)];
+    for (key, grade) in [
+        ("peripheralRadius", 2),
+        ("goodRadius", 1),
+        ("idealRadius", 0),
+    ] {
+        if let Some(radius) = num(r, key).filter(|r| *r >= fixed.abs()) {
+            let plane = (radius * radius - fixed * fixed).sqrt();
+            out.push((cx, cy, plane / size[axes.0], plane / size[axes.1], grade));
+        }
+    }
+    out
+}
+impl Pulsar {
+    fn jump_controls(&self, t: &AuroraTheme, total: f64, _cx: &mut Context<Self>) -> Div {
+        let span = (self.jump_span / 100. * total).clamp(1., total);
+        let start = self.jump_start / 100. * (total - span).max(0.);
+        ui::card(t).child(ui::section_header(t,"Jump timeline window",Some(format!("{start:.2}-{:.2} s | {span:.2} s span | sliders use percent of the recording",start+span).into())))
+   .child(crate::controls::AuroraSlider::new(&self.jump_span_slider,"Span (%)"))
+   .child(crate::controls::AuroraSlider::new(&self.jump_start_slider,"Start (%)"))
     }
 }

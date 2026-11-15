@@ -127,11 +127,13 @@ fn cell(row: &TableRow, column: &str) -> String {
         .unwrap_or_else(|| "Unavailable".into())
 }
 pub(super) fn table(t: &AuroraTheme, data: &TableView, narrow: bool) -> Div {
-    let count = if narrow { 3 } else { data.columns.len().min(7) };
+    let _ = narrow;
+    let count = data.columns.len();
     let order = table_columns(&data.columns);
     let columns: Vec<_> = order.into_iter().take(count).collect();
+    let width = (count.max(1) as f32 * 144.).max(420.);
     let mut list = ui::list_card(t)
-        .min_w(px(0.))
+        .w(px(width))
         .child(ui::row(t, false).child(ui::section_header(t, data.title.clone(), None)))
         .child(ui::row(t, false).children(columns.iter().map(|c| {
             ui::caption(t, (*c).clone())
@@ -141,7 +143,7 @@ pub(super) fn table(t: &AuroraTheme, data: &TableView, narrow: bool) -> Div {
                 .text_ellipsis()
                 .whitespace_nowrap()
         })));
-    for (i, row) in data.rows.iter().take(50).enumerate() {
+    for (i, row) in data.rows.iter().enumerate() {
         let full = data
             .columns
             .iter()
@@ -150,9 +152,13 @@ pub(super) fn table(t: &AuroraTheme, data: &TableView, narrow: bool) -> Div {
             .join(". ");
         let theme = t.clone();
         list = list.child(
-            ui::row(t, i + 1 == data.rows.len().min(50))
+            ui::row(t, i + 1 == data.rows.len())
                 .id(format!("{}-row-{i}", data.id))
                 .role(Role::Group)
+                .when(
+                    row.cells.get("Establishing").is_some_and(|v| v == "true"),
+                    |d| d.bg(t.accent_soft).border_l_2().border_color(t.ring),
+                )
                 .aria_label(full.clone())
                 .tooltip(move |_, cx| {
                     cx.new(|_| super::charts::Readout {
@@ -175,17 +181,16 @@ pub(super) fn table(t: &AuroraTheme, data: &TableView, narrow: bool) -> Div {
         list =
             list.child(ui::row(t, true).child(ui::muted(t, "No measured samples in this scope.")));
     }
-    if data.rows.len() > 50 {
-        list = list.child(ui::row(t, true).child(ui::caption(
-            t,
-            format!(
-                "Showing 50 of {} rows. Full values are available in the existing report.",
-                data.rows.len()
-            ),
-        )));
-    }
-    list
+    div().min_w(px(0.)).w_full().child(
+        div()
+            .id(format!("{}-horizontal", data.id))
+            .min_w(px(0.))
+            .w_full()
+            .overflow_x_scroll()
+            .child(list),
+    )
 }
+
 fn heatmap(t: &AuroraTheme, view: &ChartView) -> Div {
     let peak = view
         .series
@@ -268,12 +273,12 @@ pub(super) fn chart(view: &ChartView) -> Chart {
                 p.y
             },
             label: format!(
-                    "{}: {} - {} {}",
+                    "{}: {} - {} {} {}",
                     s.label,
                     p.label,
                     p.y.map(|y| format!("{y:.2}"))
                         .unwrap_or_else(|| "Unavailable".into()),
-                    view.y_definition.unit
+                    view.y_definition.unit, p.category
                 ),
             shape: if p.category.contains("SHIELD") || p.category == "trade" {
                 Shape::Diamond
@@ -449,8 +454,11 @@ impl Pulsar {
             filtered = super::sections::filter(tab, sections, selected);
             &filtered
         };
-        if !tab.metrics.is_empty() {
-            body = body.child(metric_card(
+        if index == 0 && self.detail_request.is_none() {
+            body = body.child(self.overview_groups(t, &tab.metrics));
+        }
+        if !tab.metrics.is_empty() && !(index == 0 && self.detail_request.is_none()) {
+            body = body.child(self.metrics_panel(
                 t,
                 if self.detail_request.is_some() && index == 1 {
                     "Selected measurements"
@@ -458,7 +466,7 @@ impl Pulsar {
                     "Recorded measurements"
                 },
                 &tab.metrics,
-                &[],
+                cx,
             ));
         }
         for notice in &tab.notices {
@@ -469,9 +477,16 @@ impl Pulsar {
                 body = body.child(ui::muted(t, line.clone()));
             }
         }
-        if self.detail_request.is_some() && (1..=3).contains(&index) {
+        if (self.detail_request.is_some() && (1..=3).contains(&index))
+            || (self.detail_request.is_none()
+                && (index == 3 || (index == 1 && self.sections[1] == 3)))
+        {
+            if self.detail_request.is_none() {
+                body = body.child(self.focus_scopes(t, cx));
+            }
             body = body.child(self.advanced_body(t, narrow, cx));
         }
+        body = body.child(self.compositions(t, tab, index));
         if self.detail_request.is_none() && self.top_tab == 0 {
             let mut selectors = div().flex().flex_wrap().gap(px(4.));
             for (i, label) in [
@@ -498,7 +513,9 @@ impl Pulsar {
         }
         for view in &tab.charts {
             // The detailed controls below replace these static projections.
-            if self.detail_request.is_some()
+            if (self.detail_request.is_some()
+                || (index == 3 && self.focus_detail.is_some())
+                || (index == 1 && self.sections[1] == 3 && self.focus_detail.is_some()))
                 && matches!(
                     view.id.as_str(),
                     "reach_histogram"
@@ -522,7 +539,14 @@ impl Pulsar {
             if self.detail_request.is_none() && self.top_tab == 0 && trend && !id.contains(key) {
                 continue;
             }
-            body = body.child(chart(view).render(t));
+            body = body.child(chart(view).render_options(
+                t,
+                None,
+                super::charts::Options {
+                    preferences: self.preferences,
+                    ..Default::default()
+                },
+            ));
         }
         for data in &tab.tables {
             if self.detail_request.is_some()
@@ -530,7 +554,7 @@ impl Pulsar {
             {
                 continue;
             }
-            body = body.child(table(t, data, narrow));
+            body = body.child(self.table_view(t, data, narrow, cx));
         }
         body = body.child(
             div()

@@ -1,7 +1,9 @@
 //! Pulsar presentation. All storage, analytics and OS actions cross the shared API.
+mod analysis_ui;
 mod charts;
 mod compare;
 mod detail;
+mod navigation;
 mod page;
 mod playback;
 mod projections;
@@ -48,6 +50,7 @@ enum Reply {
     Opponents(u64, api::ApiResult<Vec<OpponentView>>),
     Records(u64, api::ApiResult<Vec<RecordView>>),
     Settings(u64, api::ApiResult<SettingsView>),
+    Focus(ReadToken, api::ApiResult<FightDetailView>),
     Detail(
         ReadToken,
         api::ApiResult<FightDetailView>,
@@ -63,6 +66,7 @@ pub struct Pulsar {
     tx: async_channel::Sender<Reply>,
     revision: u64,
     detail_revision: u64,
+    focus_revision: u64,
     analysis_revision: u64,
     compare_revision: u64,
     active: bool,
@@ -74,6 +78,7 @@ pub struct Pulsar {
     history_scroll: gpui::UniformListScrollHandle,
     /// The launcher's scroll container for this page, handed over on each render.
     pub page_scroll: Option<gpui::ScrollHandle>,
+    scroll_memory: navigation::ScrollMemory,
     seek_bounds: std::rc::Rc<std::cell::Cell<Option<gpui::Bounds<gpui::Pixels>>>>,
     /// Last rendered viewport width; drives FightList column dropping.
     width: f32,
@@ -98,6 +103,15 @@ pub struct Pulsar {
     settings: Option<SettingsView>,
     detail_request: Option<DetailRequest>,
     detail: Option<FightDetailView>,
+    focus_request: Option<DetailRequest>,
+    focus_detail: Option<FightDetailView>,
+    preferences: charts::Preferences,
+    jump_span: f64,
+    jump_span_slider: Entity<gpui_kit::base::slider::SliderState>,
+    jump_start_slider: Entity<gpui_kit::base::slider::SliderState>,
+    jump_start: f64,
+    metric_info: Option<String>,
+    table_expanded: std::collections::BTreeSet<String>,
     playback: Option<PlaybackView>,
     selected: Option<FightKey>,
     compare_keys: Vec<FightKey>,
@@ -174,12 +188,45 @@ impl Pulsar {
                 }
                 cx.notify();
             });
+        let jump_span_slider = cx.new(|_| {
+            gpui_kit::base::slider::SliderState::new()
+                .min(1.)
+                .max(100.)
+                .step(1.)
+                .default_value(100.)
+        });
+        let jump_start_slider = cx.new(|_| {
+            gpui_kit::base::slider::SliderState::new()
+                .min(0.)
+                .max(100.)
+                .step(1.)
+                .default_value(0.)
+        });
+        let jump_span_sub = cx.subscribe(
+            &jump_span_slider,
+            |this: &mut Self, _, e: &gpui_kit::base::slider::SliderEvent, cx| {
+                let (gpui_kit::base::slider::SliderEvent::Change(v)
+                | gpui_kit::base::slider::SliderEvent::Release(v)) = e;
+                this.jump_span = v.end() as f64;
+                cx.notify();
+            },
+        );
+        let jump_start_sub = cx.subscribe(
+            &jump_start_slider,
+            |this: &mut Self, _, e: &gpui_kit::base::slider::SliderEvent, cx| {
+                let (gpui_kit::base::slider::SliderEvent::Change(v)
+                | gpui_kit::base::slider::SliderEvent::Release(v)) = e;
+                this.jump_start = v.end() as f64;
+                cx.notify();
+            },
+        );
         let mut this = Self {
             host,
             runtime,
             tx,
             revision: 0,
             detail_revision: 0,
+            focus_revision: 0,
             analysis_revision: 0,
             compare_revision: 0,
             active: true,
@@ -190,6 +237,7 @@ impl Pulsar {
             history_focus: cx.focus_handle(),
             history_scroll: gpui::UniformListScrollHandle::new(),
             page_scroll: None,
+            scroll_memory: Default::default(),
             seek_bounds: Default::default(),
             width: window.viewport_size().width.as_f32(),
             dirty: false,
@@ -215,6 +263,15 @@ impl Pulsar {
             settings: None,
             detail_request: None,
             detail: None,
+            focus_request: None,
+            focus_detail: None,
+            preferences: Default::default(),
+            jump_span: 100.,
+            jump_span_slider,
+            jump_start_slider,
+            jump_start: 0.,
+            metric_info: None,
+            table_expanded: Default::default(),
             playback: None,
             selected: None,
             compare_keys: vec![],
@@ -238,7 +295,7 @@ impl Pulsar {
             busy: false,
             search,
             export_path,
-            _subscriptions: vec![sub, visibility],
+            _subscriptions: vec![sub, visibility, jump_span_sub, jump_start_sub],
             #[cfg(debug_assertions)]
             showcase_state: if crate::showcase() {
                 std::env::var("AURORA_SHOWCASE_PULSAR").ok()
@@ -370,6 +427,9 @@ impl Pulsar {
         self.error = None;
         self.analysis = None;
         self.settings = None;
+        self.focus_revision = self.focus_revision.wrapping_add(1);
+        self.focus_request = None;
+        self.focus_detail = None;
         self.opponents.clear();
         self.records.clear();
         #[cfg(debug_assertions)]
@@ -441,7 +501,7 @@ impl Pulsar {
                 let _ = tx.send(Reply::Records(rev, r)).await;
             });
         }
-        if self.top_tab == 7 {
+        {
             if let Some(instance_id) = query.instance_id.or_else(|| {
                 self.library
                     .instances
@@ -488,7 +548,23 @@ impl Pulsar {
                 }
             }
             Reply::Analysis(rev, r) if rev == self.analysis_revision => match r {
-                Ok(v) => self.analysis = Some(v),
+                Ok(v) => {
+                    let focus = v.focus.clone();
+                    self.analysis = Some(v);
+                    if matches!(self.top_tab, 1 | 3) {
+                        if let Some(key) = focus {
+                            let request = self
+                                .focus_request
+                                .clone()
+                                .filter(|r| r.key == key)
+                                .unwrap_or(DetailRequest {
+                                    key,
+                                    ..Default::default()
+                                });
+                            self.request_focus(request, cx);
+                        }
+                    }
+                }
                 Err(e) => self.error = Some(e.message),
             },
             Reply::Opponents(rev, r) if rev == self.analysis_revision => match r {
@@ -500,9 +576,23 @@ impl Pulsar {
                 Err(e) => self.error = Some(e.message),
             },
             Reply::Settings(rev, r) if rev == self.analysis_revision => match r {
-                Ok(v) => self.settings = Some(v),
+                Ok(v) => {
+                    self.preferences = charts::Preferences::from_settings(&v);
+                    if self.preferences.reduced_motion {
+                        self.pause();
+                    }
+                    self.settings = Some(v);
+                }
                 Err(e) => self.error = Some(e.message),
             },
+            Reply::Focus(token, r)
+                if current(&token, self.focus_revision, self.focus_request.as_ref()) =>
+            {
+                match r {
+                    Ok(v) => self.focus_detail = Some(v),
+                    Err(e) => self.error = Some(e.message),
+                }
+            }
             Reply::Detail(token, r, p)
                 if current(&token, self.detail_revision, self.detail_request.as_ref()) =>
             {
@@ -599,6 +689,43 @@ impl Pulsar {
         }
         cx.notify();
     }
+    fn request_focus(&mut self, request: DetailRequest, cx: &mut Context<Self>) {
+        self.focus_revision = self.focus_revision.wrapping_add(1);
+        self.combo_selection = 0;
+        self.focus_detail = None;
+        self.focus_request = Some(request.clone());
+        let token = ReadToken {
+            revision: self.focus_revision,
+            key: Some(request.key.clone()),
+        };
+        if let Some(host) = self.host.clone() {
+            let tx = self.tx.clone();
+            let filters = DetailAnalysisRequest {
+                detail: request,
+                weapon: self.weapon.clone(),
+                timing_result: self.timing_result.clone(),
+            };
+            self.runtime.spawn(async move {
+                let result = guarded(api::pulsar_detail_analysis(host, filters)).await;
+                let _ = tx.send(Reply::Focus(token, result)).await;
+            });
+        }
+        cx.notify();
+    }
+    fn active_detail(&self) -> Option<&FightDetailView> {
+        if self.detail_request.is_some() {
+            self.detail.as_ref()
+        } else {
+            self.focus_detail.as_ref()
+        }
+    }
+    fn select_scope(&mut self, request: DetailRequest, cx: &mut Context<Self>) {
+        if self.detail_request.is_some() {
+            self.request_detail(request, cx);
+        } else {
+            self.request_focus(request, cx);
+        }
+    }
     fn close_detail(&mut self) {
         self.pause();
         self.detail_revision = self.detail_revision.wrapping_add(1);
@@ -616,6 +743,10 @@ impl Pulsar {
         self.ticker = None;
     }
     fn toggle_play(&mut self, cx: &mut Context<Self>) {
+        if self.preferences.reduced_motion {
+            self.step(true, cx);
+            return;
+        }
         if self.playing {
             self.pause();
             return;
@@ -657,6 +788,11 @@ impl Pulsar {
             }
         }));
         cx.notify();
+    }
+    fn analysis_duration(&self) -> f64 {
+        self.active_detail()
+            .map(|d| d.summary.duration_nanos as f64 / 1e9)
+            .unwrap_or(0.)
     }
     fn duration(&self) -> f64 {
         self.playback

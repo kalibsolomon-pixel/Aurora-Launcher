@@ -489,6 +489,7 @@ impl Pulsar {
                 "Select an instance to inspect its saved Pulsar settings.",
             ));
         };
+        body = body.child(self.shortcut_guide(t));
         body = body.child(ui::caption(
             t,
             s.source_path
@@ -550,6 +551,7 @@ pub(super) fn scroll_target(key: &str, offset: f32, max: f32, page: f32) -> Opti
 
 impl gpui::Render for Pulsar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.remember_scroll();
         let body = self.page_body(window, cx);
         div()
             .id("pulsar-page")
@@ -847,17 +849,7 @@ impl Pulsar {
                                                     )),
                                             ),
                                     )
-                                    .child(tabs::stats(
-                                        &t,
-                                        &latest.metrics,
-                                        &[
-                                            "accuracy",
-                                            "hits",
-                                            "averageReach",
-                                            "longestCombo",
-                                            "dominanceShare",
-                                        ],
-                                    )),
+                                    .child(self.latest_denominators(&t, latest)),
                             );
                         }
                     }

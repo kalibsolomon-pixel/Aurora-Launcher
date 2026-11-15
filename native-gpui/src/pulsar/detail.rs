@@ -234,82 +234,7 @@ impl Pulsar {
             return page;
         };
         if detail.summary.manual || !detail.exchanges.is_empty() {
-            let mut scopes=div().flex().flex_col().gap(px(8.)).child(ui::section_header(t,"Manual session scope",Some("Select one exchange for opponent analytics. The entire session has no tracked opponent.".into())));
-            let mut participants = div().flex().flex_wrap().gap(px(4.)).child(
-                button("manual-all", "All participants")
-                    .selected(
-                        self.detail_request
-                            .as_ref()
-                            .is_some_and(|r| r.participant.is_none()),
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        if let Some(mut r) = this.detail_request.clone() {
-                            r.participant = None;
-                            r.exchange_id = None;
-                            this.request_detail(r, cx);
-                        }
-                    })),
-            );
-            for (i, p) in detail.participants.iter().enumerate() {
-                let id = p.id.clone();
-                participants = participants.child(
-                    button(("manual-participant", i), p.label.clone())
-                        .selected(
-                            self.detail_request
-                                .as_ref()
-                                .and_then(|r| r.participant.as_ref())
-                                == Some(&id),
-                        )
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if let Some(mut r) = this.detail_request.clone() {
-                                r.participant = Some(id.clone());
-                                r.exchange_id = None;
-                                this.request_detail(r, cx);
-                            }
-                        })),
-                );
-            }
-            scopes = scopes.child(participants);
-            let participant = self
-                .detail_request
-                .as_ref()
-                .and_then(|r| r.participant.as_deref());
-            let mut exchanges = div().flex().flex_wrap().gap(px(4.));
-            if participant.is_none() {
-                exchanges = exchanges.child(
-                    button("manual-entire", "Entire manual session")
-                        .selected(detail.selected_exchange.is_none())
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            if let Some(mut r) = this.detail_request.clone() {
-                                r.participant = None;
-                                r.exchange_id = None;
-                                this.request_detail(r, cx);
-                            }
-                        })),
-                );
-            }
-            for (i, e) in detail
-                .exchanges
-                .iter()
-                .filter(|e| participant.is_none() || e.participant_id.as_deref() == participant)
-                .enumerate()
-            {
-                let id = e.id.clone();
-                exchanges = exchanges.child(
-                    button(
-                        ("manual-exchange", i),
-                        format!("{} · {:.1} s", e.opponent, e.duration_nanos as f64 / 1e9),
-                    )
-                    .selected(detail.selected_exchange.as_ref() == Some(&id))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(mut r) = this.detail_request.clone() {
-                            r.exchange_id = Some(id.clone());
-                            this.request_detail(r, cx);
-                        }
-                    })),
-                );
-            }
-            page = page.child(scopes.child(exchanges));
+            page = page.child(self.focus_scopes(t, cx));
             if detail.exchanges.is_empty() {
                 page = page.child(ui::empty_state(
                     t,
@@ -349,6 +274,49 @@ impl Pulsar {
                 }
                 page = page.child(list);
             }
+        }
+        if detail.summary.manual
+            && self.detail_tab == 0
+            && !detail
+                .summary_tab
+                .tables
+                .iter()
+                .any(|t| t.id == "manual_announcements")
+        {
+            let rows = detail
+                .timeline
+                .iter()
+                .filter(|e| {
+                    e.kind.contains("ANNOUNC")
+                        || e.kind.contains("RESULT")
+                        || e.kind.contains("ROUND")
+                })
+                .map(|e| TableRow {
+                    cells: [
+                        ("Time (s)".into(), format!("{:.2}", e.time)),
+                        ("Kind".into(), e.kind.clone()),
+                        (
+                            "Rule".into(),
+                            e.outcome.clone().unwrap_or_else(|| "Unavailable".into()),
+                        ),
+                        (
+                            "Evidence".into(),
+                            format!("{} ? {}", e.confidence, e.detail),
+                        ),
+                    ]
+                    .into(),
+                    ..Default::default()
+                })
+                .collect();
+            let table = TableView {
+                id: "manual_announcements".into(),
+                title: "Manual announcements".into(),
+                columns: ["Time (s)", "Kind", "Rule", "Evidence"]
+                    .map(String::from)
+                    .to_vec(),
+                rows,
+            };
+            page = page.child(self.table_view(t, &table, narrow, cx));
         }
         match self.detail_tab {
             4 => page = page.child(self.playback_body(t, cx)),
@@ -402,7 +370,7 @@ impl Pulsar {
                         ),
                     )
                     .when(self.show_evidence, |d| {
-                        d.child(tabs::table(t, &detail.evidence, narrow))
+                        d.child(self.table_view(t, &detail.evidence, narrow,cx))
                     })
                     .children(detail.summary.provenance.conflicts.iter().map(|c| {
                         ui::caption(t, format!("Conflicting snapshot · {c}"))

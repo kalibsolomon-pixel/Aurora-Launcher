@@ -11,6 +11,69 @@ pub enum Shape {
     Diamond,
     Hollow,
     Reset,
+    Triangle,
+    Cross,
+    Plus,
+    Tick,
+}
+
+/// Saved report preferences also govern native charts. No animation is scheduled here.
+#[derive(Clone, Copy, Debug)]
+pub(super) struct Preferences {
+    pub grid: bool,
+    pub points: bool,
+    pub reduced_motion: bool,
+}
+impl Default for Preferences {
+    fn default() -> Self {
+        Self {
+            grid: true,
+            points: true,
+            reduced_motion: false,
+        }
+    }
+}
+impl Preferences {
+    pub fn from_settings(v: &aurora_launcher_lib::pulsar::view::SettingsView) -> Self {
+        let flag = |key: &str, default| {
+            v.settings
+                .iter()
+                .find(|s| s.key == key)
+                .and_then(|s| s.value.as_bool())
+                .unwrap_or(default)
+        };
+        Self {
+            grid: flag("chartGrid", true),
+            points: flag("chartPoints", true),
+            reduced_motion: flag("reducedMotion", false),
+        }
+    }
+}
+#[derive(Clone, Copy)]
+pub(super) enum Target {
+    Sample(usize),
+    Band(usize),
+}
+type Activate = std::rc::Rc<dyn Fn(Target, &mut Window, &mut gpui::App)>;
+#[derive(Default)]
+pub(super) struct Options {
+    pub preferences: Preferences,
+    pub activate: Option<Activate>,
+    /// Frozen region ellipses: center x/y, radii x/y, grade index; largest first.
+    pub regions: Vec<(f64, f64, f64, f64, usize)>,
+}
+pub(super) fn grade_color(t: &AuroraTheme, label: &str) -> Hsla {
+    if label.contains("PERIPHERAL") || label.contains("TOO_FAST") {
+        t.warning
+    } else if label.contains("POOR") || label.contains("TOO_SLOW") {
+        t.danger
+    } else if label.contains("IDEAL") || label.contains("PERFECT") {
+        t.success
+    } else if label.contains("GOOD") {
+        t.ring
+    } else {
+        t.muted_foreground
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -169,6 +232,14 @@ impl Chart {
         t: &AuroraTheme,
         plot_bounds: Option<std::rc::Rc<std::cell::Cell<Option<gpui::Bounds<gpui::Pixels>>>>>,
     ) -> Div {
+        self.render_options(t, plot_bounds, Options::default())
+    }
+    pub(super) fn render_options(
+        &self,
+        t: &AuroraTheme,
+        plot_bounds: Option<std::rc::Rc<std::cell::Cell<Option<gpui::Bounds<gpui::Pixels>>>>>,
+        options: Options,
+    ) -> Div {
         if self.kind == Kind::Stacked {
             let total = self
                 .samples
@@ -197,11 +268,13 @@ impl Chart {
                             .id(format!("{}-stack-{i}", self.id))
                             .h_full()
                             .w(relative((n / total.max(1.)) as f32))
-                            .bg(if i == 0 {
+                            .bg(if self.id.contains("aim-grade") {
+                                grade_color(t, &s.label)
+                            } else if i == 0 {
                                 t.ring
                             } else {
                                 t.muted_foreground
-                                    .opacity((0.85 - i as f32 * 0.1).max(0.35))
+                                    .opacity((0.85 - i as f32 * 0.13).max(0.3))
                             })
                             .role(Role::Image)
                             .aria_label(format!("{}: {n:.0}", s.label))
@@ -229,6 +302,8 @@ impl Chart {
                 .child(ui::caption(t, self.note.clone()));
         }
         let chart = self.clone();
+        let preferences = options.preferences;
+        let regions = options.regions;
         let palette = t.clone();
         let available =
             !self.bands.is_empty() || self.samples.iter().any(|p| p.y.is_some_and(f64::is_finite));
@@ -253,6 +328,7 @@ impl Chart {
             .role(Role::Image)
             .aria_label(description.clone())
             .relative()
+            .overflow_hidden()
             .w_full()
             .h(px(if self.kind == Kind::Grid { 240. } else { 164. }))
             .child(
@@ -269,7 +345,7 @@ impl Chart {
                         let height = bounds.size.height;
                         let x = |v| left + width * fraction(v, chart.domain);
                         let y = |v| top + height * (1. - fraction(v, chart.range));
-                        for n in 0..=4 {
+                        for n in 0..=if preferences.grid { 4 } else { 0 } {
                             let yy = top + height * (n as f32 / 4.);
                             stroke(
                                 window,
@@ -277,6 +353,20 @@ impl Chart {
                                 palette.border_subtle,
                                 1.,
                             );
+                        }
+                        for &(cx, cy, rx, ry, grade) in &regions {
+                            let coords = (0..=64)
+                                .map(|i| {
+                                    let a = i as f64 * std::f64::consts::TAU / 64.;
+                                    (x(cx + rx * a.cos()), y(cy + ry * a.sin()))
+                                })
+                                .collect::<Vec<_>>();
+                            let color = grade_color(
+                                &palette,
+                                ["IDEAL", "GOOD", "PERIPHERAL", "POOR"][grade.min(3)],
+                            );
+                            polygon(window, &coords, color.opacity(0.12));
+                            stroke(window, &coords, color.opacity(0.55), 1.);
                         }
                         for band in &chart.bands {
                             let (a, b) = if let Some(lane) = band.lane {
@@ -428,10 +518,13 @@ impl Chart {
                                 | Kind::Lanes
                                 | Kind::Grid
                                 | Kind::Line => {
-                                    if chart.kind == Kind::Line && chart.samples.len() > 120 {
+                                    if chart.kind == Kind::Line
+                                        && (!preferences.points || chart.samples.len() > 120)
+                                    {
                                         continue;
                                     }
                                     let r = px(3.5);
+                                    let ink = grade_color(&palette, &s.label);
                                     match s.shape {
                                         Shape::Square => polygon(
                                             window,
@@ -441,7 +534,7 @@ impl Chart {
                                                 (xx + r, yy + r),
                                                 (xx - r, yy + r),
                                             ],
-                                            palette.ring,
+                                            ink,
                                         ),
                                         Shape::Diamond => polygon(
                                             window,
@@ -451,7 +544,7 @@ impl Chart {
                                                 (xx, yy + r + px(1.)),
                                                 (xx - r - px(1.), yy),
                                             ],
-                                            palette.foreground,
+                                            ink,
                                         ),
                                         Shape::Hollow => {
                                             let circle = (0..=16)
@@ -461,8 +554,41 @@ impl Chart {
                                                     (xx + r * angle.cos(), yy + r * angle.sin())
                                                 })
                                                 .collect::<Vec<_>>();
-                                            stroke(window, &circle, palette.muted_foreground, 1.5);
+                                            stroke(window, &circle, ink, 1.5);
                                         }
+                                        Shape::Triangle => polygon(
+                                            window,
+                                            &[
+                                                (xx, yy - r - px(1.)),
+                                                (xx + r + px(1.), yy + r),
+                                                (xx - r - px(1.), yy + r),
+                                            ],
+                                            ink,
+                                        ),
+                                        Shape::Cross => {
+                                            stroke(
+                                                window,
+                                                &[(xx - r, yy - r), (xx + r, yy + r)],
+                                                ink,
+                                                1.5,
+                                            );
+                                            stroke(
+                                                window,
+                                                &[(xx - r, yy + r), (xx + r, yy - r)],
+                                                ink,
+                                                1.5,
+                                            );
+                                        }
+                                        Shape::Plus => {
+                                            stroke(window, &[(xx - r, yy), (xx + r, yy)], ink, 1.5);
+                                            stroke(window, &[(xx, yy - r), (xx, yy + r)], ink, 1.5);
+                                        }
+                                        Shape::Tick => stroke(
+                                            window,
+                                            &[(xx, yy - r - px(2.)), (xx, yy + r + px(2.))],
+                                            ink,
+                                            2.,
+                                        ),
                                         Shape::Reset => stroke(
                                             window,
                                             &[
@@ -519,8 +645,25 @@ impl Chart {
                     .h(px(12.))
                     .mt(px(-6.))
                     .ml(px(-6.))
-                    .role(Role::Image)
+                    .role(if options.activate.is_some() {
+                        Role::Button
+                    } else {
+                        Role::Image
+                    })
                     .aria_label(label)
+                    .tab_index(0)
+                    .focus_visible(|s| s.border_1().border_color(t.ring))
+                    .when_some(options.activate.clone(), |d, a| {
+                        let k = a.clone();
+                        d.cursor_pointer()
+                            .on_click(move |_, w, cx| a(Target::Sample(i), w, cx))
+                            .on_key_down(move |e, w, cx| {
+                                if matches!(e.keystroke.key.as_str(), "enter" | "space" | " ") {
+                                    k(Target::Sample(i), w, cx);
+                                    cx.stop_propagation();
+                                }
+                            })
+                    })
                     .tooltip(move |_, cx| {
                         cx.new(|_| Readout {
                             text: tip.clone(),
@@ -548,6 +691,19 @@ impl Chart {
                     .mt(px(-10.))
                     .role(Role::Image)
                     .aria_label(label.clone())
+                    .tab_index(0)
+                    .focus_visible(|s| s.border_1().border_color(t.ring))
+                    .when_some(options.activate.clone(), |d, a| {
+                        let k = a.clone();
+                        d.cursor_pointer()
+                            .on_click(move |_, w, cx| a(Target::Band(i), w, cx))
+                            .on_key_down(move |e, w, cx| {
+                                if matches!(e.keystroke.key.as_str(), "enter" | "space" | " ") {
+                                    k(Target::Band(i), w, cx);
+                                    cx.stop_propagation();
+                                }
+                            })
+                    })
                     .tooltip(move |_, cx| {
                         cx.new(|_| Readout {
                             text: label.clone(),
@@ -597,6 +753,27 @@ impl Chart {
                     .child(ui::caption(t, self.x_label.clone()))
                     .child(ui::caption(t, format!("{:.1}", self.domain.1))),
             )
+            .when(self.id.contains("trend"), |d| {
+                d.child(
+                    div().flex().justify_between().pl(px(48.)).children(
+                        [
+                            self.samples.first(),
+                            self.samples.get(self.samples.len() / 2),
+                            self.samples.last(),
+                        ]
+                        .into_iter()
+                        .flatten()
+                        .map(|s| {
+                            let date = s
+                                .label
+                                .split(|c: char| !c.is_ascii_digit() && c != '-')
+                                .find(|s| s.len() == 10 && s.as_bytes().get(4) == Some(&b'-'))
+                                .unwrap_or("Date unavailable");
+                            ui::caption(t, date.to_owned())
+                        }),
+                    ),
+                )
+            })
             .child(ui::caption(t, self.note.clone()))
     }
 }

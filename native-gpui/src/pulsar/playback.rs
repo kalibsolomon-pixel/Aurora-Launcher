@@ -143,11 +143,20 @@ impl Pulsar {
             .items_center()
             .gap(px(8.))
             .child(
-                AuroraButton::new("playback-play", if self.playing { "Pause" } else { "Play" })
-                    .variant(ButtonVariant::Primary)
-                    .icon(if self.playing { "pause" } else { "play_arrow" })
-                    .disabled(duration <= 0.)
-                    .on_click(cx.listener(|this, _, _, cx| this.toggle_play(cx))),
+                AuroraButton::new(
+                    "playback-play",
+                    if self.preferences.reduced_motion {
+                        "Step event"
+                    } else if self.playing {
+                        "Pause"
+                    } else {
+                        "Play"
+                    },
+                )
+                .variant(ButtonVariant::Primary)
+                .icon(if self.playing { "pause" } else { "play_arrow" })
+                .disabled(duration <= 0.)
+                .on_click(cx.listener(|this, _, _, cx| this.toggle_play(cx))),
             )
             .child(
                 button("playback-previous", "Previous event")
@@ -204,11 +213,7 @@ impl Pulsar {
                 x: e.time,
                 y: Some(lanes.iter().position(|l| l == &e.lane).unwrap_or(0) as f64),
                 label: format!("{:.2} s · {} · {} · {}", e.time, e.lane, e.kind, e.detail),
-                shape: match e.kind.as_str() {
-                    "SHIELD" => Shape::Diamond,
-                    "JUMP" => Shape::Hollow,
-                    _ => Shape::Square,
-                },
+                shape: event_shape(e),
             })
             .collect();
         let lane_bounds = std::rc::Rc::new(std::cell::Cell::new(None));
@@ -223,11 +228,18 @@ impl Pulsar {
             bands: p.boundaries.iter().map(|b| super::charts::Band {
                 start: b.start, end: b.end, lane: None, label: b.label.clone(), selected: false,
             }).collect(), incomplete: vec![],
-            note: "? Attack / damage ? ? Shield ? ? Actual jump. Select a time to seek. Observations only; no world reconstruction.".into(),
+            note: "Square: attack | Diamond: shield / trade | Circle: jump | Triangle: incoming | Plus: critical | Cross: death | Tick: sprint / boundary. Select a time to seek. Observations only; no world reconstruction.".into(),
         };
         page = page.child(
             lane_chart
-                .render_with_bounds(t, Some(measured))
+                .render_options(
+                    t,
+                    Some(measured),
+                    super::charts::Options {
+                        preferences: self.preferences,
+                        ..Default::default()
+                    },
+                )
                 .on_mouse_down(
                     MouseButton::Left,
                     cx.listener(move |this, e: &gpui::MouseDownEvent, _, cx| {
@@ -392,5 +404,20 @@ mod tests {
         ];
         assert_eq!(visible(&e, 0.2, None).len(), 1);
         assert_eq!(visible(&e, 0.2, Some("MOTION"))[0].kind, "MOTION");
+    }
+}
+
+fn event_shape(e: &EventView) -> Shape {
+    if e.detail.to_lowercase().contains("trade") {
+        return Shape::Diamond;
+    }
+    match e.kind.as_str() {
+        "SHIELD" => Shape::Diamond,
+        "JUMP" => Shape::Hollow,
+        "DAMAGE_IN" | "HURT" => Shape::Triangle,
+        "CRIT" => Shape::Plus,
+        "DEATH" => Shape::Cross,
+        "SPRINT" | "ROUND" | "COMBAT_EXCHANGE" => Shape::Tick,
+        _ => Shape::Square,
     }
 }
