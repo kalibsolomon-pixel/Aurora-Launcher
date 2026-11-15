@@ -14,6 +14,7 @@ mod controls;
 mod discover;
 mod downloads;
 mod file_picker;
+mod game_log;
 mod home_widgets;
 mod images;
 mod instance_creator;
@@ -75,6 +76,8 @@ struct Snapshot {
     appearance: api::ApiResult<api::Appearance>,
 }
 enum Message {
+    MaybeOpenLog(String, bool),
+    StopResult(api::ApiResult<()>),
     Loaded(u64, Snapshot),
     Readiness(
         u64,
@@ -372,6 +375,11 @@ struct Launcher {
     readiness: Option<api::PlayReadiness>,
     processes: HashMap<String, api::LaunchProcess>,
     process_serial: u64,
+    game_showcase_applied: bool,
+    launching: Option<String>,
+    pending_stop: Option<String>,
+    kill_confirmation: Option<(String, u32)>,
+    log_windows: HashMap<String, gpui::WindowHandle<game_log::GameLog>>,
     recovery: Option<api::RecoveryPreview>,
     load_error: Option<String>,
     sync_error: Option<String>,
@@ -741,9 +749,12 @@ impl Launcher {
         let process_serial = self.process_serial;
         let tx = self.tx.clone();
         if showcase() {
-            let signed_in = self.accounts.accounts.iter().any(|saved| {
-                Some(&saved.account_id) == account.as_ref() && saved.status == "signedIn"
-            });
+            // This explicit capture state previews Play without credentials.
+            let signed_in = std::env::var("AURORA_SHOWCASE_GAME_STATE")
+                .is_ok_and(|state| state == "play")
+                || self.accounts.accounts.iter().any(|saved| {
+                    Some(&saved.account_id) == account.as_ref() && saved.status == "signedIn"
+                });
             let decision = api::PlayReadiness {
                 ready: signed_in,
                 can_prepare: false,
@@ -832,7 +843,7 @@ impl Launcher {
     /// taken while it ran, so it decides process state whenever it exists.
     fn game_phase(&self, id: &str) -> GamePhase {
         let child = self.processes.get(id).map(|child| child.status.as_str());
-        let finished = matches!(child, Some("exited" | "failed"));
+        let finished = matches!(child, Some("exited" | "failed" | "stopped"));
         let decision = self
             .readiness
             .as_ref()
@@ -840,7 +851,10 @@ impl Launcher {
             .map(|decision| decision.process_status.as_str());
         if child == Some("running") || decision == Some("running") {
             GamePhase::Running
-        } else if child == Some("starting") || decision == Some("starting") {
+        } else if self.launching.as_deref() == Some(id)
+            || child == Some("starting")
+            || decision == Some("starting")
+        {
             GamePhase::Starting
         } else {
             GamePhase::Idle
@@ -849,8 +863,20 @@ impl Launcher {
 
     fn play_label(&self, id: &str) -> &'static str {
         match self.game_phase(id) {
-            GamePhase::Running => "Running",
-            GamePhase::Starting => "Starting…",
+            GamePhase::Running => {
+                if self.can_kill(id) {
+                    "Kill"
+                } else {
+                    "Running"
+                }
+            }
+            GamePhase::Starting => {
+                if self.can_kill(id) {
+                    "Kill"
+                } else {
+                    "Starting\u{2026}"
+                }
+            }
             GamePhase::Idle => {
                 let preparable = self
                     .readiness
@@ -1014,6 +1040,8 @@ impl Launcher {
         else {
             return;
         };
+        self.launching = Some(instance_id.clone());
+        self.maybe_open_log(instance_id.clone());
         self.busy = true;
         self.serial = self.serial.wrapping_add(1);
         self.readiness = None;
@@ -1072,6 +1100,10 @@ impl Launcher {
             "Working…"
         }
         .into();
+        if op == "play" {
+            self.launching = Some(id.clone());
+            self.maybe_open_log(id.clone());
+        }
         let tx = self.tx.clone();
         let account = self.accounts.selected_account_id.clone();
         let process_serial = self.process_serial;
@@ -1390,6 +1422,12 @@ impl Launcher {
     }
     fn receive(&mut self, msg: Message) {
         match msg {
+            Message::MaybeOpenLog(_, _) => {}
+            Message::StopResult(result) => {
+                if let Err(error) = result {
+                    self.status = error.message;
+                }
+            }
             Message::Loaded(n, s) => {
                 let startup = s.status.is_some();
                 self.load_in_flight = false;
@@ -1487,6 +1525,8 @@ impl Launcher {
                 }
             }
             Message::Launched(id, process_serial, result) => {
+                self.launching = None;
+                self.pending_stop = None;
                 self.busy = false;
                 let failed = result.is_err();
                 match result {
@@ -1542,7 +1582,16 @@ impl Launcher {
                     if let Ok(process) = serde_json::from_value::<api::LaunchProcess>(payload) {
                         let id = process.instance_id.clone();
                         let failed = process.status == "failed";
-                        let terminal = failed || process.status == "exited";
+                        let terminal =
+                            failed || process.status == "exited" || process.status == "stopped";
+                        if (terminal || process.status == "running")
+                            && self.launching.as_deref() == Some(id.as_str())
+                        {
+                            self.launching = None;
+                            if terminal {
+                                self.pending_stop = None;
+                            }
+                        }
                         self.process_serial += 1;
                         self.processes.insert(id.clone(), process);
                         if self.selected_id() == Some(id.as_str()) {
@@ -1703,10 +1752,12 @@ impl Launcher {
             );
         if let Some(id) = selected.clone() {
             let play_id = id.clone();
-            let needs_sign_in = self
-                .visible_blockers(&id)
-                .iter()
-                .any(|blocker| blocker.code == "launch_authentication_required");
+            let can_kill = self.can_kill(&id);
+            let needs_sign_in = !can_kill
+                && self
+                    .visible_blockers(&id)
+                    .iter()
+                    .any(|blocker| blocker.code == "launch_authentication_required");
             details = details.child(
                 div()
                     .flex()
@@ -1723,17 +1774,29 @@ impl Launcher {
                                     self.play_label(&id)
                                 },
                             )
-                            .variant(ButtonVariant::Primary)
+                            .variant(if can_kill {
+                                ButtonVariant::Danger
+                            } else {
+                                ButtonVariant::Primary
+                            })
                             .size(ButtonSize::Large)
-                            .icon(if needs_sign_in { "login" } else { "play_arrow" })
+                            .icon(if can_kill {
+                                "stop"
+                            } else if needs_sign_in {
+                                "login"
+                            } else {
+                                "play_arrow"
+                            })
                             .disabled(if needs_sign_in {
                                 self.controls_blocked()
                             } else {
-                                !self.can_play(&id)
+                                !can_kill && !self.can_play(&id)
                             })
                             .on_click(cx.listener(
                                 move |this, _, window, cx| {
-                                    if needs_sign_in {
+                                    if can_kill {
+                                        this.request_kill(play_id.clone(), cx);
+                                    } else if needs_sign_in {
                                         this.open_page(1, window, cx);
                                     } else {
                                         this.action("play", play_id.clone(), cx);
@@ -1742,6 +1805,15 @@ impl Launcher {
                                 },
                             )),
                         ),
+                    )
+                    .child(
+                        self.button("game-log", "Game log")
+                            .disabled(self.host.is_none())
+                            .size(ButtonSize::Large)
+                            .on_click(cx.listener({
+                                let id = id.clone();
+                                move |this, _, _, cx| this.open_game_log(id.clone(), cx)
+                            })),
                     )
                     .child(
                         self.button("instance-settings", "Edit instance")
@@ -1805,6 +1877,7 @@ impl Launcher {
                             .exit_code
                             .map_or("unknown".into(), |code| code.to_string())
                     ),
+                    "stopped" if process.message.is_some() => "Stopped by you.".into(),
                     "failed" => process
                         .diagnostic
                         .as_ref()
@@ -2027,6 +2100,13 @@ impl Launcher {
             GamePhase::Running => return Some(("Running", ui::Tone::Success)),
             GamePhase::Starting => return Some(("Starting", ui::Tone::Accent)),
             GamePhase::Idle => {}
+        }
+        if self
+            .processes
+            .get(id)
+            .is_some_and(|p| p.status == "stopped" && p.message.is_some())
+        {
+            return Some(("Stopped", ui::Tone::Neutral));
         }
         let decision = self
             .readiness
@@ -2464,6 +2544,7 @@ impl Render for Launcher {
                         },
                     ),
             )
+            .child(self.kill_dialog(cx))
     }
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -2695,6 +2776,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         appearance: None,
                         readiness: None,
                         processes: HashMap::new(),
+                        game_showcase_applied: false,
+                        launching: None,
+                        pending_stop: None,
+                        kill_confirmation: None,
+                        log_windows: HashMap::new(),
                         process_serial: 0,
                         recovery: None,
                         load_error: None,
@@ -2782,7 +2868,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         if *serial == view.serial && !view.load_pending);
                                     let startup_updates = matches!(&message, Message::StartupUpdates(_));
                                     let loaded = matches!(&message, Message::Loaded(..));
+                                    if let Message::MaybeOpenLog(id, true) = &message { view.open_game_log(id.clone(), cx); }
+                                    if let Message::Event(name, payload) = &message {
+                                        if name == "launch-state" && payload.get("status").and_then(|v| v.as_str()) == Some("starting") {
+                                            if payload.get("instanceId").and_then(|v| v.as_str()) == view.pending_stop.as_deref() {
+                                                if let Some(id) = view.pending_stop.take() { view.send_stop(id, None); }
+                                            }
+                                        }
+                                    }
                                     view.receive(message);
+                                    view.apply_game_showcase(cx);
                                     if loaded {
                                         // A load that cleared the appearance turns the
                                         // background off and stops its motion.
@@ -2916,6 +3011,11 @@ mod tests {
             appearance: None,
             readiness: None,
             processes: HashMap::new(),
+            game_showcase_applied: false,
+            launching: None,
+            pending_stop: None,
+            kill_confirmation: None,
+            log_windows: HashMap::new(),
             process_serial: 0,
             recovery: None,
             load_error: None,
@@ -3245,6 +3345,50 @@ mod tests {
         assert_eq!(state.visible_blockers("old").len(), 1);
         state.readiness = None;
         assert!(state.visible_blockers("old").is_empty());
+    }
+
+    #[test]
+    fn preparation_stop_updates_the_primary_action_before_cleanup_finishes() {
+        let mut state = view();
+        select_fixture(&mut state);
+        state.launching = Some("old".into());
+        state.busy = true;
+        state.receive(Message::Event(
+            "launch-state".into(),
+            serde_json::json!({
+                "instanceId": "old", "status": "stopped", "canStop": false,
+                "processId": null, "exitCode": null, "message": "Stopped by you"
+            }),
+        ));
+        assert_eq!(state.play_label("old"), "Play");
+        assert!(!state.can_play("old"));
+        assert!(matches!(
+            state.readiness_badge("old"),
+            Some(("Stopped", ui::Tone::Neutral))
+        ));
+    }
+
+    #[test]
+    fn play_kill_labels_require_a_supervised_capability() {
+        let mut state = view();
+        select_fixture(&mut state);
+        assert_eq!(state.play_label("old"), "Play");
+        state.launching = Some("old".into());
+        assert_eq!(state.play_label("old"), "Kill");
+        state.launching = None;
+        for status in ["starting", "running"] {
+            let mut process = child("old", status);
+            process.can_stop = true;
+            process.process_id = Some(123);
+            state.processes.insert("old".into(), process);
+            assert_eq!(state.play_label("old"), "Kill");
+        }
+        state.processes.get_mut("old").unwrap().can_stop = false;
+        assert_eq!(state.play_label("old"), "Running");
+        state
+            .processes
+            .insert("old".into(), child("old", "stopped"));
+        assert_eq!(state.play_label("old"), "Play");
     }
 
     #[test]
