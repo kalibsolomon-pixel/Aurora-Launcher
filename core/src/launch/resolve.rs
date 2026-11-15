@@ -192,6 +192,13 @@ impl LaunchSpec {
                 .iter()
                 .map(|value| value.expose().to_owned()),
         );
+        // Minecraft/mods may print a profile UUID with or without hyphens.
+        let uuid_forms: Vec<_> = values
+            .iter()
+            .filter_map(|v| uuid::Uuid::parse_str(v).ok())
+            .flat_map(|id| [id.simple().to_string(), id.hyphenated().to_string()])
+            .collect();
+        values.extend(uuid_forms);
         values
     }
 
@@ -712,7 +719,10 @@ fn substitute_argument(
             "game_directory" => values.game_directory,
             "assets_root" => values.assets_root,
             "assets_index_name" => values.asset_index,
-            "auth_uuid" => values.uuid,
+            "auth_uuid" => {
+                sensitive = true;
+                values.uuid
+            }
             "auth_access_token" => {
                 sensitive = true;
                 values.token.expose()
