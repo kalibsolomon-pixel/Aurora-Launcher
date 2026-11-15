@@ -1056,6 +1056,56 @@ impl Store {
         })
     }
 
+    /// Saved-server edits move only the favorite, never rewrite visit evidence.
+    /// If another saved entry still uses the old address, retain its favorite.
+    pub(crate) fn migrate_saved_server_favorite(
+        &self,
+        instance: &InstanceId,
+        old: &ServerTarget,
+        new: &ServerTarget,
+        display: &str,
+        old_still_saved: bool,
+    ) -> Result<(), ()> {
+        self.update(|doc| {
+            let Some(index) = doc
+                .servers
+                .iter()
+                .position(|s| &s.instance == instance && &s.server == old && s.favorite)
+            else {
+                return Ok(());
+            };
+            if old == new {
+                doc.servers[index].display = display.to_owned();
+                return Ok(());
+            }
+            if !old_still_saved {
+                doc.servers[index].favorite = false;
+            }
+            if let Some(target) = doc
+                .servers
+                .iter_mut()
+                .find(|s| &s.instance == instance && &s.server == new)
+            {
+                target.favorite = true;
+                target.display = display.to_owned();
+            } else {
+                doc.servers.push(ServerHistory {
+                    instance: instance.clone(),
+                    server: new.clone(),
+                    display: display.to_owned(),
+                    last_played_at: 0,
+                    duration_ms: 0,
+                    favorite: true,
+                });
+            }
+            doc.servers.retain(|s| s.favorite || s.last_played_at != 0);
+            if doc.servers.iter().filter(|s| s.favorite).count() > MAX_FAVORITE_SERVERS {
+                return Err(());
+            }
+            Ok(())
+        })
+    }
+
     pub fn set_server_favorite(&self, id: &str, favorite: bool) -> Result<(), ()> {
         self.update(|doc| {
             let entry = doc

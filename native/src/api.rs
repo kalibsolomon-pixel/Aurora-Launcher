@@ -1139,6 +1139,23 @@ pub async fn favorite_server(host: Host, target_id: String, favorite: bool) -> A
     .await?
 }
 
+pub use aurora_launcher_lib::saved_servers::editor::{
+    Edit as ServerEdit, ResourcePacks, ServerInput, ServerList,
+};
+
+pub async fn server_list(host: Host, instance_id: String) -> ApiResult<ServerList> {
+    blocking(move || convert(app::get_server_list(host, instance_id))).await?
+}
+
+pub async fn edit_server_list(
+    host: Host,
+    instance_id: String,
+    revision: String,
+    edit: ServerEdit,
+) -> ApiResult<ServerList> {
+    blocking(move || convert(app::edit_server_list(host, instance_id, revision, edit))).await?
+}
+
 pub async fn runtime_status(host: Host, instance_id: String) -> ApiResult<RuntimeStatus> {
     let request = request(json!({ "instanceId": instance_id }))?;
     convert(app::get_instance_runtime_status(host, request).await)

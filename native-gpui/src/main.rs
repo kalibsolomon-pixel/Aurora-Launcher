@@ -22,6 +22,7 @@ mod instance_editor;
 mod media;
 mod pack_import;
 mod pulsar;
+mod server_editor;
 mod settings;
 mod skin_preview;
 mod skins;

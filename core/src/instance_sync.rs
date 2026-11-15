@@ -785,7 +785,18 @@ fn plan_files(
             if file_digest(&source) != hash || target.as_ref().map(|b| file_digest(b)) != old {
                 return Err(stale());
             }
-            let merged = servers::merge(&source, target.as_deref())?;
+            let filtered = crate::saved_servers::editor::filter_sync_source(
+                managed,
+                &request.destination_id,
+                &source,
+            )
+            .map_err(|_| {
+                fail(
+                    "sync_servers_invalid",
+                    "The server list edit history is unavailable; the list was left unchanged.",
+                )
+            })?;
+            let merged = servers::merge(&filtered, target.as_deref())?;
             let action = if merged.conflicts > 0 {
                 "keepConflict"
             } else if target.as_deref() == Some(merged.bytes.as_slice()) {

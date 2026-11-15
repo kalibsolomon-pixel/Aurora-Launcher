@@ -1889,6 +1889,8 @@ pub struct HomeWidgets {
     card_focus: HashMap<String, FocusHandle>,
     card_scroll: HashMap<String, ScrollHandle>,
     busy_published: bool,
+    server_editor: Entity<crate::server_editor::ServerEditor>,
+    server_editor_busy: bool,
     /// Created the first time the Media card is shown; kept (inactive) after
     /// that. Dropping this page drops it, which revokes its worker.
     media: Option<Entity<Media>>,
@@ -1934,6 +1936,28 @@ impl HomeWidgets {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let server_editor = cx.new(|cx| {
+            crate::server_editor::ServerEditor::new(host.clone(), runtime.clone(), window, cx)
+        });
+        cx.subscribe(
+            &server_editor,
+            |view: &mut Self, _, event: &crate::server_editor::ServerEditorEvent, cx| {
+                match event {
+                    crate::server_editor::ServerEditorEvent::BusyChanged(busy) => {
+                        view.server_editor_busy = *busy;
+                        view.publish_busy(cx);
+                    }
+                    crate::server_editor::ServerEditorEvent::Changed => {
+                        view.core.server_view = ServerView::Saved;
+                        view.core.pending_refresh = true;
+                        view.dispatch_pending(cx);
+                        cx.emit(HomeWidgetsEvent::Changed);
+                    }
+                }
+                cx.notify();
+            },
+        )
+        .detach();
         let mut view = Self {
             host,
             rt: runtime,
@@ -1946,6 +1970,8 @@ impl HomeWidgets {
             card_focus: HashMap::new(),
             card_scroll: HashMap::new(),
             busy_published: false,
+            server_editor,
+            server_editor_busy: false,
             media: None,
             media_creating: false,
             window: window.window_handle(),
@@ -2066,7 +2092,7 @@ impl HomeWidgets {
 
     /// Whether a layout or favorite write is in flight.
     pub fn is_busy(&self) -> bool {
-        self.core.is_busy()
+        self.core.is_busy() || self.server_editor_busy
     }
 
     /// Quick Play validation for the parent: the exact current row identity
@@ -2151,7 +2177,7 @@ impl HomeWidgets {
     }
 
     fn publish_busy(&mut self, cx: &mut Context<Self>) {
-        let busy = self.core.is_busy();
+        let busy = self.is_busy();
         if busy != self.busy_published {
             self.busy_published = busy;
             cx.emit(HomeWidgetsEvent::BusyChanged(busy));
@@ -3141,7 +3167,10 @@ impl Render for HomeWidgets {
             );
         }
 
-        div().w_full().child(page.child(div().w_full().child(grid)))
+        div()
+            .w_full()
+            .child(page.child(div().w_full().child(grid)))
+            .child(self.server_editor.clone())
     }
 }
 
@@ -3293,18 +3322,42 @@ impl HomeWidgets {
                         .into_any_element(),
                 );
                 extra = Some(
-                    icon_button(
-                        &palette,
-                        "servers-refresh".to_owned(),
-                        "refresh",
-                        "Refresh status".to_owned(),
-                        self.core.refreshing_servers || busy,
-                        false,
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.start_status_refresh(cx);
-                    }))
-                    .into_any_element(),
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(
+                            AuroraButton::new("servers-manage", "Manage")
+                                .accessibility_label("Manage Minecraft servers")
+                                .size(ButtonSize::Small)
+                                .disabled(
+                                    busy || self.server_editor_busy
+                                        || self.core.blocked
+                                        || self.core.selected_instance().is_none(),
+                                )
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    if let Some(instance) = view.core.selected_instance() {
+                                        let (id, name) =
+                                            (instance.id.clone(), instance.display_name.clone());
+                                        view.server_editor
+                                            .update(cx, |editor, cx| editor.open(id, name, cx));
+                                    }
+                                })),
+                        )
+                        .child(
+                            icon_button(
+                                &palette,
+                                "servers-refresh".to_owned(),
+                                "refresh",
+                                "Refresh status".to_owned(),
+                                self.core.refreshing_servers || busy,
+                                false,
+                            )
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.start_status_refresh(cx);
+                            })),
+                        )
+                        .into_any_element(),
                 );
             }
             "recent-worlds" => {
