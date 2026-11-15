@@ -135,7 +135,7 @@ impl Pulsar {
                     .flex_wrap()
                     .gap(px(4.))
                     .child(
-                        button("fight-report", "View report")
+                        button("fight-report", "Open HTML report")
                             .icon("open_in_new")
                             .disabled(!s.report_available)
                             .on_click({
@@ -144,7 +144,7 @@ impl Pulsar {
                             }),
                     )
                     .child(
-                        button("fight-export", "Export report")
+                        button("fight-export", "Export\u{2026}")
                             .icon("download")
                             .disabled(!s.report_available || self.busy)
                             .on_click(cx.listener(|this, _, _, cx| {
@@ -154,16 +154,65 @@ impl Pulsar {
                     )
                     .child(div().flex_1())
                     .child(
-                        button("fight-delete", "Delete fight")
-                            .variant(ButtonVariant::Danger)
-                            .icon("delete")
-                            .disabled(self.busy)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.delete_open = true;
-                                this.delete_source = false;
-                                this.pause();
-                                cx.notify();
-                            })),
+                        div()
+                            .relative()
+                            .child(
+                                button("fight-more", "More")
+                                    .icon("more_horiz")
+                                    .selected(self.disclosures.contains("fight-more"))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        if !this.disclosures.remove("fight-more") {
+                                            this.disclosures.insert("fight-more".into());
+                                            this.tab_content.focus(window, cx);
+                                        }
+                                        cx.notify();
+                                    })),
+                            )
+                            .when(self.disclosures.contains("fight-more"), |d| {
+                                d.child(gpui::deferred(
+                                    div()
+                                        .absolute()
+                                        .right_0()
+                                        .top(px(34.))
+                                        .w(px(170.))
+                                        .p(px(4.))
+                                        .rounded(t.radius)
+                                        .bg(t.raised)
+                                        .border_1()
+                                        .border_color(t.border)
+                                        .occlude()
+                                        .id("fight-more-menu")
+                                        .track_focus(&self.tab_content)
+                                        .tab_index(0)
+                                        .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                                            this.disclosures.remove("fight-more");
+                                            cx.notify();
+                                        }))
+                                        .on_key_down(cx.listener(
+                                            |this, e: &KeyDownEvent, _, cx| {
+                                                if e.keystroke.key == "escape" {
+                                                    this.disclosures.remove("fight-more");
+                                                    cx.stop_propagation();
+                                                    cx.notify();
+                                                }
+                                            },
+                                        ))
+                                        .child(
+                                            button("fight-delete", "Delete fight")
+                                                .full_width()
+                                                .variant(ButtonVariant::DangerSubtle)
+                                                .icon("delete")
+                                                .disabled(self.busy)
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.disclosures.remove("fight-more");
+                                                    this.delete_open = true;
+                                                    this.delete_source = false;
+                                                    this.pause();
+                                                    cx.notify();
+                                                })),
+                                        ),
+                                ))
+                            }),
                     ),
             );
         }
@@ -235,44 +284,9 @@ impl Pulsar {
                     "No combat in this manual session",
                     "The session was recorded, but no exchange with another player or mob was observed.",
                 ));
-            } else if self.detail_tab == 0 {
-                // P63: the exchange inventory, independent of the parent session result.
-                let mut list = ui::list_card(t).child(ui::row(t, false).child(
-                    ui::section_header(
-                        t,
-                        "Exchanges",
-                        Some("Each exchange keeps its own result; the session has none of its own opponent.".into()),
-                    ),
-                ));
-                for (i, e) in detail.exchanges.iter().enumerate() {
-                    let (label, tone) = super::presentation::resolution(&e.resolution);
-                    list = list.child(
-                        ui::row(t, i + 1 == detail.exchanges.len())
-                            .id(("manual-exchange-row", i))
-                            .role(gpui::Role::Group)
-                            .aria_label(format!(
-                                "Exchange {}: {}, {}, {:.1} seconds",
-                                i + 1,
-                                e.opponent,
-                                e.resolution.label,
-                                e.duration_nanos as f64 / 1e9
-                            ))
-                            .child(ui::caption(t, format!("#{}", i + 1)).w(px(40.)))
-                            .child(ui::muted(t, e.opponent.clone()).flex_1().min_w(px(0.)))
-                            .child(div().w(px(150.)).flex().child(ui::badge(
-                                t,
-                                label.to_owned(),
-                                tone,
-                            )))
-                            .child(
-                                ui::caption(t, format!("{:.1} s", e.duration_nanos as f64 / 1e9))
-                                    .w(px(64.)),
-                            ),
-                    );
-                }
-                page = page.child(list);
             }
         }
+
         match self.detail_tab {
             4 => page = page.child(self.playback_body(t, cx)),
             5 => {

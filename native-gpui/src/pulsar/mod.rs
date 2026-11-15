@@ -374,6 +374,11 @@ impl Pulsar {
             return false;
         }
         if key == "escape" {
+            if self.disclosures.remove("fight-more") {
+                self.root_focus.focus(window, cx);
+                cx.notify();
+                return true;
+            }
             if self.delete_open || self.export_open {
                 if !self.busy {
                     self.delete_open = false;
@@ -960,6 +965,12 @@ impl Pulsar {
                         }
                     }
                     "more-views" => self.tab_open = true,
+                    "more-actions" => {
+                        self.disclosures.insert("fight-more".into());
+                    }
+                    "enable-help" => {
+                        self.disclosures.insert("enable-help".into());
+                    }
                     "filter-shield" => self.event_filter = Some("SHIELD".into()),
                     "mid" => self.playhead = self.duration() / 2.,
                     _ => {}
