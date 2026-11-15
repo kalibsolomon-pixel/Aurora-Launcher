@@ -152,7 +152,9 @@ impl Pulsar {
         };
         div().child(
             ui::row(t, last)
-                .py(px(2.))
+                .h(px(64.))
+                .flex_shrink_0()
+                .py(px(0.))
                 .w_full()
                 .overflow_hidden()
                 .min_w(px(0.))
@@ -202,7 +204,7 @@ impl Pulsar {
                         .min_w(px(0.))
                         .overflow_hidden()
                         .child(
-                            div().flex().child(
+                            div().flex().items_center().gap(px(6.)).child(
                                 small(
                                     format!("pulsar-select-{index}"),
                                     if row.manual {
@@ -239,33 +241,23 @@ impl Pulsar {
                                         .flex_shrink_0(),
                                 )
                                 .child(
+                                    ui::caption(t, duration_text(row.duration_nanos))
+                                        .line_height(px(16.))
+                                        .flex_shrink_0(),
+                                )
+                                .child(
                                     ui::caption(t, row.provenance.instance_name.clone())
                                         .line_height(px(16.))
-                                        .flex_1()
                                         .min_w(px(0.))
                                         .overflow_hidden()
                                         .text_ellipsis()
                                         .whitespace_nowrap(),
-                                )
-                                .child(
-                                    ui::caption(t, duration_text(row.duration_nanos))
-                                        .line_height(px(16.))
-                                        .flex_shrink_0(),
                                 ),
                         )
                         .when(narrow, |d| {
-                            d.child(
-                                div()
-                                    .flex()
-                                    .flex_wrap()
-                                    .items_center()
-                                    .gap(px(6.))
-                                    .child(ui::badge(t, row.result_label.clone(), tone))
-                                    .child(ui::caption(
-                                        t,
-                                        format!("{hits} hits \u{b7} {accuracy} accuracy"),
-                                    )),
-                            )
+                            d.child(div().flex().flex_wrap().items_center().gap(px(6.)).child(
+                                ui::caption(t, format!("{hits} hits \u{b7} {accuracy} accuracy")),
+                            ))
                         }),
                 )
                 .when(!narrow, |d| {
@@ -291,13 +283,11 @@ impl Pulsar {
                         .flex_shrink_0(),
                     )
                 })
-                .when(!narrow, |d| {
-                    d.child(div().w(px(130.)).flex_shrink_0().flex().child(ui::badge(
-                        t,
-                        row.result_label.clone(),
-                        tone,
-                    )))
-                })
+                .child(div().w(px(130.)).flex_shrink_0().flex().child(ui::badge(
+                    t,
+                    row.result_label.clone(),
+                    tone,
+                )))
                 .child(
                     div()
                         .w(px(if narrow { 75. } else { 100. }))
@@ -490,70 +480,38 @@ impl Pulsar {
         if !narrow {
             body = body.child(history_header(t));
         }
-        let entries: Vec<_> = history_entries(&self.library.rows)
-            .into_iter()
-            .filter(|e| matches!(e, HistoryEntry::Fight(_)))
-            .collect();
-        let callback_entries = entries.clone();
-        let list = gpui::uniform_list(
-            "pulsar-history-rows",
-            entries.len(),
-            cx.processor(
-                move |this: &mut Self, range: std::ops::Range<usize>, _, cx| {
-                    let t = crate::theme::theme(cx).clone();
-                    range
-                        .map(|i| {
-                            let row = match &callback_entries[i] {
-                                HistoryEntry::Day(day) => {
-                                    ui::row(&t, false).child(ui::section_header(
-                                        &t,
-                                        day.clone(),
-                                        Some("UTC recording date".into()),
-                                    ))
-                                }
-
-                                HistoryEntry::Fight(index) => this.fight_row(
-                                    &t,
-                                    &this.library.rows[*index],
-                                    *index,
-                                    true,
-                                    narrow,
-                                    cx,
-                                ),
-                            };
-                            let grouped = match &callback_entries[i] {
-                                HistoryEntry::Fight(index)
-                                    if *index == 0
-                                        || this.library.rows[*index - 1].date_group
-                                            != this.library.rows[*index].date_group =>
-                                {
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .child(
-                                            ui::caption(
-                                                &t,
-                                                this.library.rows[*index].date_group.clone(),
-                                            )
-                                            .px(px(16.)),
-                                        )
-                                        .child(row)
-                                }
-                                _ => row,
-                            };
-                            grouped
-                                .w_full()
-                                .min_w(px(0.))
-                                .h(px(if narrow { 84. } else { 64. }))
-                                .into_any_element()
-                        })
-                        .collect::<Vec<_>>()
-                },
-            ),
-        )
-        .track_scroll(&self.history_scroll)
-        .h(px(480.))
-        .w_full();
+        // At most one page (100 fights) is loaded. Separate date headings from
+        // fixed-height rows so a heading never consumes a fight's vertical space.
+        let mut list = div()
+            .id("pulsar-history-rows")
+            .flex()
+            .flex_col()
+            .overflow_y_scroll()
+            .track_scroll(&self.history_scroll)
+            .h(px(480.))
+            .w_full();
+        for entry in history_entries(&self.library.rows) {
+            list = list.child(match entry {
+                HistoryEntry::Day(day) => div()
+                    .h(px(28.))
+                    .flex_shrink_0()
+                    .flex()
+                    .items_center()
+                    .px(px(16.))
+                    .child(ui::caption(t, day)),
+                HistoryEntry::Fight(index) => self
+                    .fight_row(
+                        t,
+                        &self.library.rows[index],
+                        index,
+                        index + 1 == self.library.rows.len(),
+                        narrow,
+                        cx,
+                    )
+                    .h(px(64.))
+                    .flex_shrink_0(),
+            });
+        }
         body=body.child(ui::list_card(t).child(div().id("pulsar-history-keyboard").track_focus(&self.history_focus).tab_index(0)
             .aria_label("Fight history. Up and Down select, Enter opens. Home and End jump to the first or last recording.")
             .on_key_down(cx.listener(|this,e:&KeyDownEvent,_,cx|{
@@ -561,7 +519,9 @@ impl Pulsar {
                 let current=this.selected.as_ref().and_then(|key|this.library.rows.iter().position(|r|&r.key==key)).unwrap_or(0);
                 let index=match e.keystroke.key.as_str(){"up"=>current.saturating_sub(1),"down"=>(current+1).min(this.library.rows.len()-1),"home"=>0,"end"=>this.library.rows.len()-1,"enter"=>{this.open_detail(this.library.rows[current].key.clone(),cx);cx.stop_propagation();return;},_=>return};
                 this.selected=Some(this.library.rows[index].key.clone());
-                this.history_scroll.scroll_to_item(index,gpui::ScrollStrategy::Center);
+                if let Some(entry) = history_entries(&this.library.rows).iter().position(|e| *e == HistoryEntry::Fight(index)) {
+                    this.history_scroll.scroll_to_item(entry);
+                }
                 cx.stop_propagation();cx.notify();
             })).child(list)));
         if self.library.has_more {
@@ -761,20 +721,23 @@ impl Pulsar {
                         div()
                             .w(px(132.))
                             .flex()
-                            .flex_wrap()
+                            .flex_col()
+                            .items_start()
                             .gap(px(2.))
-                            .child(small(("opponent-history", i), "View fights").on_click(
-                                cx.listener(move |this, _, window, cx| {
-                                    this.query.search = opponent.clone();
-                                    this.query.offset = 0;
-                                    this.top_tab = 4;
-                                    this.search.update(cx, |input, cx| {
-                                        input.set_value(opponent.clone(), window, cx)
-                                    });
-                                    this.load(false, cx);
-                                    cx.notify();
-                                }),
-                            ))
+                            .child(
+                                small(("opponent-history", i), "View fights")
+                                    .icon("arrow_forward")
+                                    .on_click(cx.listener(move |this, _, window, cx| {
+                                        this.query.search = opponent.clone();
+                                        this.query.offset = 0;
+                                        this.top_tab = 4;
+                                        this.search.update(cx, |input, cx| {
+                                            input.set_value(opponent.clone(), window, cx)
+                                        });
+                                        this.load(false, cx);
+                                        cx.notify();
+                                    })),
+                            )
                             .child(
                                 small(("opponent-open", i), "Open latest")
                                     .icon("arrow_forward")

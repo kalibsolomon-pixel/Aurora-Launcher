@@ -197,8 +197,12 @@ impl Pulsar {
         m: &BTreeMap<String, MetricValue>,
         cx: &mut Context<Self>,
     ) -> Div {
-        let mut group = div().flex().flex_wrap().gap(px(16.));
-        for metric in m.values() {
+        let five_columns = m.len() == 5 && self.width >= 950.;
+        let mut group = div()
+            .flex()
+            .gap(px(16.))
+            .when(!five_columns, |d| d.flex_wrap());
+        for (index, metric) in m.values().enumerate() {
             let key = metric.definition.key.clone();
             let metric_tip = format!("{}: {}", metric.definition.label, metric.definition.help);
             let metric_theme = t.clone();
@@ -219,7 +223,14 @@ impl Pulsar {
                     } else {
                         210.
                     }))
-                    .when(m.len() == 5, |d| d.w(gpui::relative(0.30)).min_w(px(130.)))
+                    .when(five_columns, |d| d.w(px(0.)).flex_1().min_w(px(0.)))
+                    .when(m.len() == 5 && !five_columns, |d| {
+                        if index == 4 {
+                            d.w_full()
+                        } else {
+                            d.w(gpui::relative(0.45))
+                        }
+                    })
                     .child(
                         div()
                             .flex()
@@ -281,10 +292,16 @@ impl Pulsar {
             );
         }
 
+        let mut panel = ui::card(t)
+            .p(px(16.))
+            .gap(px(12.))
+            .when(title == "Recent performance", |d| d.gap(px(8.)).p(px(16.)))
+            .child(ui::section_header(t, title.to_owned(), None))
+            .child(group);
         if m.get("unexplainedHealthDrops")
             .is_some_and(|v| v.value.is_none())
         {
-            group = group.child(
+            panel = panel.child(
                 ui::caption(
                     t,
                     "Health-drop attribution was not recorded; the dash means unavailable.",
@@ -292,12 +309,6 @@ impl Pulsar {
                 .w_full(),
             );
         }
-        let mut panel = ui::card(t)
-            .p(px(16.))
-            .gap(px(12.))
-            .when(title == "Recent performance", |d| d.gap(px(8.)).p(px(16.)))
-            .child(ui::section_header(t, title.to_owned(), None))
-            .child(group);
         if title == "Performance" || title == "Pooled performance" {
             let definitions = [
                 (

@@ -85,7 +85,7 @@ pub struct Pulsar {
     playback_focus: gpui::FocusHandle,
     seek_focus: gpui::FocusHandle,
     history_focus: gpui::FocusHandle,
-    history_scroll: gpui::UniformListScrollHandle,
+    history_scroll: gpui::ScrollHandle,
     /// The launcher's scroll container for this page, handed over on each render.
     pub page_scroll: Option<gpui::ScrollHandle>,
     scroll_memory: navigation::ScrollMemory,
@@ -259,7 +259,7 @@ impl Pulsar {
             playback_focus: cx.focus_handle(),
             seek_focus: cx.focus_handle(),
             history_focus: cx.focus_handle(),
-            history_scroll: gpui::UniformListScrollHandle::new(),
+            history_scroll: gpui::ScrollHandle::new(),
             page_scroll: None,
             scroll_memory: Default::default(),
             seek_bounds: Default::default(),
