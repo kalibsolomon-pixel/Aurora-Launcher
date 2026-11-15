@@ -1155,8 +1155,8 @@ impl Pulsar {
         let span = (self.jump_span / 100. * total).clamp(1., total);
         let start = self.jump_start / 100. * (total - span).max(0.);
         ui::card(t).child(ui::section_header(t,"Jump timeline window",Some(format!("{start:.2}-{:.2} s | {span:.2} s span | sliders use percent of the recording",start+span).into())))
-   .child(crate::controls::AuroraSlider::new(&self.jump_span_slider,"Span (%)"))
-   .child(crate::controls::AuroraSlider::new(&self.jump_start_slider,"Start (%)"))
+   .child(crate::controls::AuroraSlider::new(&self.jump_span_slider,"Span (%)").value_label(format!("{:.0}%",self.jump_span)))
+   .child(crate::controls::AuroraSlider::new(&self.jump_start_slider,"Start (%)").value_label(format!("{:.0}%",self.jump_start)))
     }
 }
 

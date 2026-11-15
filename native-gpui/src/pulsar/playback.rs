@@ -277,11 +277,17 @@ impl Pulsar {
                 )));
         for (i, band) in p.boundaries.iter().enumerate().take(40) {
             let time = band.start;
+            let label = if band.lane == "activeExchanges" {
+                "Combat".to_owned()
+            } else {
+                super::presentation::text(&band.label)
+            };
             jumps = jumps.child(
                 button(
                     ("playback-boundary", i),
-                    format!("{} · {:.1} s", band.label, time),
+                    format!("{label} · {time:.1}–{:.1} s", band.end),
                 )
+                .accessibility_label(format!("Seek to {label} at {time:.1} seconds"))
                 .on_click(cx.listener(move |this, _, _, cx| {
                     this.playhead = time.clamp(0., this.duration());
                     this.pause();
