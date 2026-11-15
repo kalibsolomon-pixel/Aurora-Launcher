@@ -27,8 +27,9 @@
 //! [`HomeWidgets::refresh`] is forwarded to Media only while the card is shown.
 //!
 //! Honest parity limits, kept deliberate:
-//! - Quick Play compatibility follows the preserved host's exact rule
-//!   (Minecraft 1.21.11); no launch paths are ever derived here.
+//! - Quick Play is offered for Minecraft 1.20+; the backend decides from the
+//!   version's launch metadata. Servers launch from the current instance and
+//!   no launch paths are ever derived here.
 
 #![allow(dead_code)]
 
@@ -94,8 +95,18 @@ const ENRICH_LIMIT: usize = 20;
 /// Read both recents and favorites before filtering (local store bound: 100+100).
 const SERVER_READ: usize = 200;
 const WORLD_READ: usize = 32;
-/// The preserved host's Quick Play compatibility rule.
-const QUICK_PLAY_MINECRAFT: &str = "1.21.11";
+/// Whether the widget offers Quick Play for a Minecraft version: the 1.20+
+/// direct-start arguments. The backend makes the final decision from the
+/// version's own launch metadata.
+pub(crate) fn quick_play_supported(version: &str) -> bool {
+    let mut parts = version.split('.').map(str::parse::<u32>);
+    match (parts.next(), parts.next()) {
+        (Some(Ok(1)), Some(Ok(minor))) => minor >= 20,
+        (Some(Ok(major)), _) => major >= 2,
+        _ => false,
+    }
+}
+
 const GRID_UNITS: i32 = 4;
 const MAX_GRID_COLUMNS: i32 = 6 * GRID_UNITS;
 const MAX_GRID_ROWS: i32 = 3 * GRID_UNITS;
@@ -782,6 +793,22 @@ pub(crate) fn server_tabs(
 ) -> (Vec<api::RecentTarget>, Vec<api::RecentTarget>) {
     let mut ordered = entries.to_vec();
     ordered.sort_by_key(|t| std::cmp::Reverse(server_timestamp(t.last_played_at)));
+    // One row per address: the same server played from several instances is
+    // still one destination. The newest visit is kept, and it is a favorite
+    // when any of its copies is.
+    let key = |t: &api::RecentTarget| {
+        if t.destination.is_empty() {
+            t.id.clone()
+        } else {
+            t.destination.clone()
+        }
+    };
+    let favorite: HashSet<String> = ordered.iter().filter(|t| t.favorite).map(key).collect();
+    let mut seen = HashSet::new();
+    ordered.retain(|t| seen.insert(key(t)));
+    for target in &mut ordered {
+        target.favorite |= favorite.contains(&key(target));
+    }
     let recents = ordered
         .iter()
         .filter(|t| t.last_played_at > 0)
@@ -1174,6 +1201,13 @@ impl Core {
         self.state.as_ref()?.config.selected_instance_id.as_deref()
     }
 
+    /// Servers are destinations, not instances: they launch from the
+    /// player's current instance whenever it can Quick Play.
+    fn current_quick_instance(&self) -> Option<String> {
+        let current = self.selected_instance()?;
+        quick_play_supported(&current.minecraft_version).then(|| current.id.clone())
+    }
+
     fn instance_exists(&self, id: &str) -> bool {
         self.state
             .as_ref()
@@ -1197,7 +1231,7 @@ impl Core {
                             i.id.clone(),
                             (
                                 i.display_name.clone(),
-                                i.minecraft_version == QUICK_PLAY_MINECRAFT,
+                                quick_play_supported(&i.minecraft_version),
                             ),
                         )
                     })
@@ -1496,7 +1530,7 @@ impl Core {
                         detail: if !target.available {
                             "Destination unavailable".into()
                         } else if !compatible {
-                            format!("{name} · Quick Play requires {QUICK_PLAY_MINECRAFT}")
+                            format!("{name} · Quick Play needs Minecraft 1.20 or newer")
                         } else {
                             name.clone()
                         },
@@ -1536,7 +1570,11 @@ impl Core {
                     *rows = entries
                         .iter()
                         .map(|entry| Row {
-                            detail: if entry.detail.is_empty() {
+                            // Servers are plain destinations; worlds belong
+                            // to their instance.
+                            detail: if !worlds {
+                                entry.detail.clone()
+                            } else if entry.detail.is_empty() {
                                 name.clone()
                             } else {
                                 format!("{name} · {}", entry.detail)
@@ -1816,14 +1854,21 @@ impl Core {
                 .map(|row| (row.id.clone(), row.instance.clone()))
         };
         match mode {
-            "server" => self
-                .servers
-                .iter()
-                .find(|t| t.id == id && t.available && self.instance_exists(&t.instance_id))
-                .map(|t| (mode.to_owned(), t.id.clone(), t.instance_id.clone())),
+            "server" => {
+                let current = self.current_quick_instance()?;
+                self.servers
+                    .iter()
+                    .find(|t| t.id == id && t.available)
+                    .map(|t| (mode.to_owned(), t.id.clone(), current))
+            }
             "world" => find_row(&self.worlds).map(|(id, instance)| (mode.to_owned(), id, instance)),
-            "saved-server" => find_row(&self.saved_servers_rows)
-                .map(|(id, instance)| (mode.to_owned(), id, instance)),
+            "saved-server" => {
+                let current = self.current_quick_instance()?;
+                self.saved_servers_rows
+                    .iter()
+                    .find(|row| row.id == id)
+                    .map(|row| (mode.to_owned(), row.id.clone(), current))
+            }
             "saved-world" => find_row(&self.saved_worlds_rows)
                 .map(|(id, instance)| (mode.to_owned(), id, instance)),
             _ => None,
@@ -1889,6 +1934,8 @@ pub struct HomeWidgets {
     card_focus: HashMap<String, FocusHandle>,
     card_scroll: HashMap<String, ScrollHandle>,
     busy_published: bool,
+    server_editor: Entity<crate::server_editor::ServerEditor>,
+    server_editor_busy: bool,
     /// Created the first time the Media card is shown; kept (inactive) after
     /// that. Dropping this page drops it, which revokes its worker.
     media: Option<Entity<Media>>,
@@ -1934,6 +1981,28 @@ impl HomeWidgets {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        let server_editor = cx.new(|cx| {
+            crate::server_editor::ServerEditor::new(host.clone(), runtime.clone(), window, cx)
+        });
+        cx.subscribe(
+            &server_editor,
+            |view: &mut Self, _, event: &crate::server_editor::ServerEditorEvent, cx| {
+                match event {
+                    crate::server_editor::ServerEditorEvent::BusyChanged(busy) => {
+                        view.server_editor_busy = *busy;
+                        view.publish_busy(cx);
+                    }
+                    crate::server_editor::ServerEditorEvent::Changed => {
+                        view.core.server_view = ServerView::Saved;
+                        view.core.pending_refresh = true;
+                        view.dispatch_pending(cx);
+                        cx.emit(HomeWidgetsEvent::Changed);
+                    }
+                }
+                cx.notify();
+            },
+        )
+        .detach();
         let mut view = Self {
             host,
             rt: runtime,
@@ -1946,6 +2015,8 @@ impl HomeWidgets {
             card_focus: HashMap::new(),
             card_scroll: HashMap::new(),
             busy_published: false,
+            server_editor,
+            server_editor_busy: false,
             media: None,
             media_creating: false,
             window: window.window_handle(),
@@ -2066,7 +2137,7 @@ impl HomeWidgets {
 
     /// Whether a layout or favorite write is in flight.
     pub fn is_busy(&self) -> bool {
-        self.core.is_busy()
+        self.core.is_busy() || self.server_editor_busy
     }
 
     /// Quick Play validation for the parent: the exact current row identity
@@ -2151,7 +2222,7 @@ impl HomeWidgets {
     }
 
     fn publish_busy(&mut self, cx: &mut Context<Self>) {
-        let busy = self.core.is_busy();
+        let busy = self.is_busy();
         if busy != self.busy_published {
             self.busy_published = busy;
             cx.emit(HomeWidgetsEvent::BusyChanged(busy));
@@ -2592,7 +2663,6 @@ impl HomeWidgets {
             ServerView::Favorites => favorites,
             _ => recents,
         };
-        let instances = self.core.instance_map();
         entries
             .iter()
             .map(|target| {
@@ -2606,14 +2676,7 @@ impl HomeWidgets {
                     .filter(|n| !n.is_empty())
                     .unwrap_or(&target.display_name)
                     .to_owned();
-                let instance = instances
-                    .get(&target.instance_id)
-                    .map(|(name, _)| name.as_str())
-                    .unwrap_or("Instance unavailable");
-                let mut detail = format!(
-                    "{} · {instance}",
-                    server_played(server_timestamp(target.last_played_at), now)
-                );
+                let mut detail = server_played(server_timestamp(target.last_played_at), now);
                 if !target.available {
                     detail.push_str(" · Unavailable");
                 }
@@ -2627,7 +2690,7 @@ impl HomeWidgets {
                     motd: presentation.map(server_motd).unwrap_or_default(),
                     favorite: target.favorite,
                     favorite_busy: self.core.favorite_pending.contains(&target.id),
-                    playable: target.available && self.core.instance_exists(&target.instance_id),
+                    playable: target.available && self.core.current_quick_instance().is_some(),
                     picture: self
                         .core
                         .server_pictures
@@ -3141,7 +3204,10 @@ impl Render for HomeWidgets {
             );
         }
 
-        div().w_full().child(page.child(div().w_full().child(grid)))
+        div()
+            .w_full()
+            .child(page.child(div().w_full().child(grid)))
+            .child(self.server_editor.clone())
     }
 }
 
@@ -3293,18 +3359,42 @@ impl HomeWidgets {
                         .into_any_element(),
                 );
                 extra = Some(
-                    icon_button(
-                        &palette,
-                        "servers-refresh".to_owned(),
-                        "refresh",
-                        "Refresh status".to_owned(),
-                        self.core.refreshing_servers || busy,
-                        false,
-                    )
-                    .on_click(cx.listener(|this, _, _, cx| {
-                        this.start_status_refresh(cx);
-                    }))
-                    .into_any_element(),
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(8.))
+                        .child(
+                            AuroraButton::new("servers-manage", "Manage")
+                                .accessibility_label("Manage Minecraft servers")
+                                .size(ButtonSize::Small)
+                                .disabled(
+                                    busy || self.server_editor_busy
+                                        || self.core.blocked
+                                        || self.core.selected_instance().is_none(),
+                                )
+                                .on_click(cx.listener(|view, _, _, cx| {
+                                    if let Some(instance) = view.core.selected_instance() {
+                                        let (id, name) =
+                                            (instance.id.clone(), instance.display_name.clone());
+                                        view.server_editor
+                                            .update(cx, |editor, cx| editor.open(id, name, cx));
+                                    }
+                                })),
+                        )
+                        .child(
+                            icon_button(
+                                &palette,
+                                "servers-refresh".to_owned(),
+                                "refresh",
+                                "Refresh status".to_owned(),
+                                self.core.refreshing_servers || busy,
+                                false,
+                            )
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.start_status_refresh(cx);
+                            })),
+                        )
+                        .into_any_element(),
                 );
             }
             "recent-worlds" => {
@@ -4115,6 +4205,7 @@ mod tests {
             id: id.to_string(),
             instance_id: "instance".into(),
             display_name: "Server".into(),
+            destination: String::new(),
             last_played_at: at,
             duration_ms: 0,
             available: true,
@@ -4828,7 +4919,7 @@ mod tests {
         );
         let old = core.begin_data_refresh().unwrap();
         assert!(core.set_state(
-            Some(launcher_state(Some("instance"), &[("instance", "1.20.1")])),
+            Some(launcher_state(Some("instance"), &[("instance", "1.19.4")])),
             2
         ));
         assert!(core.receive_history(&old, &empty_results()).is_none());
@@ -4889,7 +4980,7 @@ mod tests {
     // -- Quick Play identity ----------------------------------------------------
 
     #[test]
-    fn quick_play_uses_exact_row_identity_frozen_instance_and_known_modes() {
+    fn quick_play_servers_use_the_current_instance_and_worlds_their_own() {
         let mut core = core_with_default_layout();
         core.set_state(
             Some(launcher_state(
@@ -4897,7 +4988,7 @@ mod tests {
                 &[
                     ("original-instance", "1.21.11"),
                     ("selected-instance", "1.21.11"),
-                    ("old-game", "1.20.1"),
+                    ("old-game", "1.19.4"),
                 ],
             )),
             1,
@@ -4910,12 +5001,13 @@ mod tests {
         old.instance_id = "missing-instance".into();
         let servers = vec![target, unavailable, old];
         core.servers = servers.clone();
-        // The stored target's own instance is used, never the selected one.
+        // Servers are destinations: they launch from the current instance,
+        // whichever instance first recorded them (even a removed one).
         assert!(core.can_quick_play("server", "1", ""));
-        assert!(core.can_quick_play("server", "1", "original-instance"));
-        assert!(!core.can_quick_play("server", "1", "selected-instance"));
+        assert!(core.can_quick_play("server", "1", "selected-instance"));
+        assert!(!core.can_quick_play("server", "1", "original-instance"));
+        assert!(core.can_quick_play("server", "3", "selected-instance"));
         assert!(!core.can_quick_play("server", "2", ""));
-        assert!(!core.can_quick_play("server", "3", ""));
         assert!(!core.can_quick_play("server", "missing", ""));
         // Unknown modes are rejected outright.
         assert!(!core.can_quick_play("realms", "1", ""));
@@ -4928,6 +5020,7 @@ mod tests {
                 id: "w1".into(),
                 instance_id: "selected-instance".into(),
                 display_name: "New world".into(),
+                destination: String::new(),
                 last_played_at: 100,
                 duration_ms: 0,
                 available: true,
@@ -4937,6 +5030,7 @@ mod tests {
                 id: "w2".into(),
                 instance_id: "old-game".into(),
                 display_name: "Old world".into(),
+                destination: String::new(),
                 last_played_at: 100,
                 duration_ms: 0,
                 available: true,
@@ -4972,6 +5066,40 @@ mod tests {
         );
         assert!(!core.can_quick_play("saved-world", "sw1", "selected-instance"));
         assert!(core.can_quick_play("server", "1", "original-instance"));
+        // A current instance too old for Quick Play offers no server launch.
+        core.set_state(
+            Some(launcher_state(Some("old-game"), &[("old-game", "1.19.4")])),
+            3,
+        );
+        assert!(!core.can_quick_play("server", "1", "old-game"));
+    }
+
+    #[test]
+    fn quick_play_support_follows_minecraft_1_20_and_newer() {
+        for version in ["1.20", "1.20.1", "1.21.11", "26.1.2", "26.3"] {
+            assert!(quick_play_supported(version), "{version}");
+        }
+        for version in ["1.19.4", "1.8.9", "24w14a", ""] {
+            assert!(!quick_play_supported(version), "{version}");
+        }
+    }
+
+    #[test]
+    fn one_server_row_per_destination_keeps_the_newest_visit_and_any_favorite() {
+        let mut a = server(1, 100, true);
+        a.destination = "same".into();
+        let mut b = server(2, 200, false);
+        b.destination = "same".into();
+        b.instance_id = "other".into();
+        let mut c = server(3, 150, false);
+        c.destination = "elsewhere".into();
+        let (recents, favorites) = server_tabs(&[a, b, c]);
+        assert_eq!(
+            recents.iter().map(|t| t.id.as_str()).collect::<Vec<_>>(),
+            ["2", "3"]
+        );
+        assert_eq!(favorites.len(), 1);
+        assert_eq!(favorites[0].id, "2");
     }
 
     // -- row mapping ---------------------------------------------------------------
@@ -4988,6 +5116,7 @@ mod tests {
                 id: "fresh".into(),
                 instance_id: "i1".into(),
                 display_name: "Fresh".into(),
+                destination: String::new(),
                 last_played_at: 86_400,
                 duration_ms: 0,
                 available: true,
@@ -4997,6 +5126,7 @@ mod tests {
                 id: "pinned".into(),
                 instance_id: "i1".into(),
                 display_name: "Pinned".into(),
+                destination: String::new(),
                 last_played_at: 0,
                 duration_ms: 0,
                 available: true,

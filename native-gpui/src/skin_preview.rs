@@ -115,6 +115,7 @@ fn neutral_skin(accent: gpui::Hsla) -> Arc<api::HeadAvatar> {
     part(0, 16, 4, 12, 4, 0.50, 0.28); // right leg
     part(16, 48, 4, 12, 4, 0.50, 0.28); // left leg
     Arc::new(api::HeadAvatar {
+        sha256: String::new(),
         rgba: Vec::new(),
         skin_rgba: px,
         skin_height: 64,
@@ -250,7 +251,7 @@ impl SkinPreview {
         self.changed(cx);
     }
 }
-const STAGE_HEIGHT: f32 = 300.;
+const STAGE_HEIGHT: f32 = 260.;
 
 impl Render for SkinPreview {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -316,7 +317,7 @@ impl Render for SkinPreview {
 
         // The renderer produces a 320x440 image; the stage shows it scaled down
         // so the whole card (stage + controls) fits a 760px window.
-        let scale = 0.68;
+        let scale = 0.58;
         let stage = div()
             .id("player-preview-surface")
             .role(Role::Group)
@@ -484,9 +485,11 @@ impl Render for SkinPreview {
 
         ui::card(&t)
             .gap(px(14.))
-            .p(px(16.))
+            .p(px(0.))
+            .bg(gpui::transparent_black())
+            .border_0()
             .w(px(if neutral { 180. } else { 320. }))
-            .h(px(if neutral { 180. } else { 430. }))
+            .h(px(if neutral { 180. } else { 338. }))
             .when(neutral, |card| {
                 card.bg(gpui::transparent_black()).border_0().p(px(0.))
             })

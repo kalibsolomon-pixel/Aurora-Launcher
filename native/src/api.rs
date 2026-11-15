@@ -34,6 +34,11 @@ impl ApiError {
     }
 }
 
+impl From<app::CommandError> for ApiError {
+    fn from(error: app::CommandError) -> Self {
+        convert::<(), ()>(Err(error)).unwrap_err()
+    }
+}
 pub type ApiResult<T> = Result<T, ApiError>;
 pub async fn initialize_sync(host: Host) -> ApiResult<()> {
     blocking(move || convert(app::initialize_instance_sync(host))).await?
@@ -97,6 +102,77 @@ pub async fn sync_policy(host: Host) -> ApiResult<SyncPolicy> {
     blocking(move || convert(app::get_instance_sync_policy(host))).await?
 }
 
+/// The main-instance synced group. Members are seeded from the main when they
+/// join; afterwards settings edits from any member reach the others.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncGroupConfig {
+    pub schema_version: u32,
+    pub enabled: bool,
+    pub main_instance_id: Option<String>,
+    pub members: Vec<String>,
+    pub new_instances_join: bool,
+    pub vanilla: bool,
+    pub aurora: bool,
+    pub packs: bool,
+    #[serde(default)]
+    pub pending_seed: Vec<String>,
+    #[serde(default)]
+    pub known: Vec<String>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncGroupMember {
+    pub id: String,
+    pub name: String,
+    pub minecraft_version: String,
+    pub member: bool,
+    pub main: bool,
+    pub pending_seed: bool,
+    pub running: bool,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncGroupHistory {
+    pub id: String,
+    pub instance_id: String,
+    pub at: u64,
+    pub kind: String,
+    pub keys: Vec<String>,
+    pub files: Vec<String>,
+    pub packs: Vec<String>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncGroupOverview {
+    pub config: SyncGroupConfig,
+    pub instances: Vec<SyncGroupMember>,
+    pub history: Vec<SyncGroupHistory>,
+    pub suggested_main: Option<String>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncGroupReport {
+    pub applied: Vec<String>,
+    pub deferred: Vec<String>,
+    pub changed_settings: usize,
+    pub copied_packs: usize,
+    pub message: String,
+}
+pub async fn sync_group(host: Host) -> ApiResult<SyncGroupOverview> {
+    blocking(move || convert(app::get_sync_group(host))).await?
+}
+pub async fn sync_group_save(host: Host, config: SyncGroupConfig) -> ApiResult<SyncGroupOverview> {
+    let request = request(serde_json::to_value(config).map_err(contract)?)?;
+    blocking(move || convert(app::save_sync_group(host, request))).await?
+}
+pub async fn sync_group_now(host: Host) -> ApiResult<SyncGroupReport> {
+    blocking(move || convert(app::sync_group_now(host))).await?
+}
+pub async fn sync_group_restore(host: Host, id: String) -> ApiResult<SyncGroupOverview> {
+    blocking(move || convert(app::restore_sync_group(host, request(json!({ "id": id }))?))).await?
+}
+
 fn contract(error: serde_json::Error) -> ApiError {
     ApiError::new(
         "native_contract_mismatch",
@@ -135,6 +211,75 @@ async fn blocking<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) 
 }
 
 // ---------------------------------------------------------------- mirrors
+
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Screenshot {
+    pub name: String,
+    pub bytes: u64,
+    pub modified_ns: u128,
+}
+#[derive(Clone, Deserialize)]
+pub struct ScreenshotBitmap {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
+}
+pub async fn screenshots(host: Host, instance_id: String) -> ApiResult<Vec<Screenshot>> {
+    blocking(move || {
+        convert(app::get_screenshots(
+            host,
+            request(json!({"instanceId":instance_id}))?,
+        ))
+    })
+    .await?
+}
+pub async fn screenshot_image(
+    host: Host,
+    instance_id: String,
+    screenshot: Screenshot,
+    preview: bool,
+) -> ApiResult<ScreenshotBitmap> {
+    blocking(move || {
+        match app::get_screenshot_image(
+            host,
+            request(json!({"instanceId":instance_id,"screenshot":screenshot,"preview":preview}))?,
+        ) {
+            // Pixel buffers do not go through a JSON Value per channel. Preserve
+            // the typed boundary without millions of temporary numeric values.
+            Ok(bitmap) => Ok(ScreenshotBitmap {
+                width: bitmap.width,
+                height: bitmap.height,
+                rgba: bitmap.rgba,
+            }),
+            Err(error) => convert::<(), ScreenshotBitmap>(Err(error)),
+        }
+    })
+    .await?
+}
+pub async fn screenshot_rename(
+    host: Host,
+    instance_id: String,
+    screenshot: Screenshot,
+    name: String,
+) -> ApiResult<()> {
+    blocking(move || {
+        convert(app::rename_screenshot(
+            host,
+            request(json!({"instanceId":instance_id,"screenshot":screenshot,"name":name}))?,
+        ))
+    })
+    .await?
+}
+pub async fn screenshot_action(
+    host: Host,
+    instance_id: String,
+    screenshot: Screenshot,
+    action: String,
+    confirmed: bool,
+) -> ApiResult<()> {
+    blocking(move || convert(app::screenshot_action(host, request(json!({"instanceId":instance_id,"screenshot":screenshot,"action":action,"confirmed":confirmed}))?))).await?
+}
 
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
@@ -309,6 +454,8 @@ pub struct PlayBlocker {
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchProcess {
+    #[serde(default)]
+    pub can_stop: bool,
     pub instance_id: String,
     pub status: String,
     pub process_id: Option<u32>,
@@ -364,6 +511,8 @@ pub struct AccountSummary {
 #[serde(rename_all = "camelCase")]
 pub struct HeadAvatar {
     pub rgba: Vec<u8>,
+    #[serde(default)]
+    pub sha256: String,
     #[serde(default)]
     pub skin_rgba: Vec<u8>,
     #[serde(default)]
@@ -672,6 +821,8 @@ pub struct SkinPreset {
     pub name: String,
     pub model: String,
     #[serde(default)]
+    pub sha256: String,
+    #[serde(default)]
     pub favorite: bool,
 }
 
@@ -808,6 +959,8 @@ pub struct RecentTarget {
     pub id: String,
     pub instance_id: String,
     pub display_name: String,
+    #[serde(default)]
+    pub destination: String,
     pub last_played_at: u64,
     pub duration_ms: u64,
     pub available: bool,
@@ -966,6 +1119,66 @@ pub async fn play_readiness(
     convert(app::get_play_readiness(host, request).await)
 }
 
+pub use aurora_launcher_lib::launch::logs::{LogSnapshot, UploadResult};
+
+pub async fn game_log_preference(host: Host, show: Option<bool>) -> ApiResult<bool> {
+    blocking(move || convert(app::game_log_preference(host, show))).await?
+}
+pub async fn game_log(instance_id: String) -> ApiResult<LogSnapshot> {
+    let request = request(json!({"instanceId": instance_id}))?;
+    blocking(move || convert(app::game_log(request))).await?
+}
+pub fn subscribe_game_log(instance_id: String) -> ApiResult<tokio::sync::watch::Receiver<u64>> {
+    app::subscribe_game_log(request(json!({"instanceId": instance_id}))?).map_err(ApiError::from)
+}
+pub async fn stop_game(instance_id: String, process_id: Option<u32>) -> ApiResult<()> {
+    blocking(move || {
+        app::stop_game(app::StopGameRequest {
+            instance_id,
+            process_id,
+        })
+        .map_err(ApiError::from)
+    })
+    .await?
+}
+pub async fn diagnose_game_log(
+    host: Host,
+    instance_id: String,
+) -> ApiResult<aurora_launcher_lib::launch::diagnostics::LaunchFailureDiagnostic> {
+    let request = request(json!({"instanceId": instance_id}))?;
+    blocking(move || app::diagnose_game_log(host, request).map_err(ApiError::from)).await?
+}
+pub async fn game_log_folders(host: Host, instance_id: String) -> ApiResult<(bool, bool)> {
+    let request = request(json!({"instanceId": instance_id}))?;
+    blocking(move || app::game_log_folders(host, request).map_err(ApiError::from)).await?
+}
+pub async fn open_game_log_folder(host: Host, instance_id: String, crash: bool) -> ApiResult<()> {
+    let request = request(json!({"instanceId": instance_id}))?;
+    blocking(move || app::open_game_log_folder(host, request, crash).map_err(ApiError::from))
+        .await?
+}
+pub async fn upload_game_log(
+    instance_id: String,
+    confirmed_public: bool,
+) -> ApiResult<UploadResult> {
+    app::upload_game_log(
+        request(json!({"instanceId": instance_id}))?,
+        confirmed_public,
+    )
+    .await
+    .map_err(ApiError::from)
+}
+pub async fn open_game_log_link(url: String) -> ApiResult<()> {
+    if !url.starts_with("https://mclo.gs/") {
+        return Err(ApiError::new("invalid_log_link", "Invalid log link."));
+    }
+    blocking(move || {
+        aurora_launcher_lib::host::open_url(&url)
+            .map_err(|_| ApiError::new("open_failed", "The link could not be opened."))
+    })
+    .await?
+}
+
 pub async fn launch_state(instance_id: String) -> ApiResult<LaunchProcess> {
     let request = request(json!({ "instanceId": instance_id }))?;
     blocking(move || convert(app::get_launch_state(request))).await?
@@ -981,8 +1194,14 @@ pub async fn quick_play(
     mode: String,
     target_id: String,
     account_id: String,
+    instance_id: Option<String>,
 ) -> ApiResult<LaunchProcess> {
-    let request = request(json!({ "mode": mode, "targetId": target_id, "accountId": account_id }))?;
+    let request = request(json!({
+        "mode": mode,
+        "targetId": target_id,
+        "accountId": account_id,
+        "instanceId": instance_id,
+    }))?;
     convert(app::quick_play_history(host, request).await)
 }
 
@@ -995,6 +1214,23 @@ pub async fn favorite_server(host: Host, target_id: String, favorite: bool) -> A
         }
     })
     .await?
+}
+
+pub use aurora_launcher_lib::saved_servers::editor::{
+    Edit as ServerEdit, ResourcePacks, ServerInput, ServerList,
+};
+
+pub async fn server_list(host: Host, instance_id: String) -> ApiResult<ServerList> {
+    blocking(move || convert(app::get_server_list(host, instance_id))).await?
+}
+
+pub async fn edit_server_list(
+    host: Host,
+    instance_id: String,
+    revision: String,
+    edit: ServerEdit,
+) -> ApiResult<ServerList> {
+    blocking(move || convert(app::edit_server_list(host, instance_id, revision, edit))).await?
 }
 
 pub async fn runtime_status(host: Host, instance_id: String) -> ApiResult<RuntimeStatus> {
@@ -1873,12 +2109,22 @@ mod tests {
     #[test]
     fn full_skin_pixels_and_model_survive_the_camel_case_contract() {
         let avatar: HeadAvatar = serde_json::from_value(
-            json!({"rgba":[1,2,3,255],"skinRgba":[9,8,7,255],"skinHeight":64,"model":"slim"}),
+            json!({"rgba":[1,2,3,255],"skinRgba":[9,8,7,255],"skinHeight":64,"model":"slim","sha256":"skin-content"}),
         )
         .unwrap();
         assert_eq!(avatar.skin_rgba, vec![9, 8, 7, 255]);
         assert_eq!(avatar.skin_height, 64);
         assert_eq!(avatar.model, "slim");
+        assert_eq!(avatar.sha256, "skin-content");
+    }
+
+    #[test]
+    fn library_content_identity_survives_the_native_boundary() {
+        let preset: SkinPreset = serde_json::from_value(
+            json!({"id":"skin", "name":"Coat", "model":"slim", "sha256":"skin-content"}),
+        )
+        .unwrap();
+        assert_eq!(preset.sha256, "skin-content");
     }
 
     #[test]
@@ -1953,4 +2199,52 @@ pub async fn apply_recovery(
         json!({"instanceId":id,"fingerprint":fingerprint,"keepRemovedMods":keep_removed_mods}),
     )?;
     convert(app::apply_instance_recovery(host, request).await)
+}
+
+// Pulsar uses the shared, serde camelCase presentation contract.
+pub use aurora_launcher_lib::pulsar::view::*;
+pub async fn pulsar_library(host: Host, request: LibraryQuery) -> ApiResult<LibraryView> {
+    convert(app::list_pulsar_library(host, request).await)
+}
+pub async fn pulsar_refresh(host: Host, request: LibraryQuery) -> ApiResult<LibraryView> {
+    convert(app::refresh_pulsar_library(host, request).await)
+}
+pub async fn pulsar_analysis(host: Host, request: AnalysisRequest) -> ApiResult<AnalysisView> {
+    convert(app::analyze_pulsar(host, request).await)
+}
+pub async fn pulsar_detail(host: Host, request: DetailRequest) -> ApiResult<FightDetailView> {
+    convert(app::get_pulsar_fight(host, request).await)
+}
+pub async fn pulsar_playback(host: Host, request: PlaybackRequest) -> ApiResult<PlaybackView> {
+    convert(app::get_pulsar_playback(host, request).await)
+}
+pub async fn pulsar_detail_analysis(
+    host: Host,
+    request: DetailAnalysisRequest,
+) -> ApiResult<FightDetailView> {
+    convert(app::analyze_pulsar_fight(host, request).await)
+}
+pub async fn pulsar_settings(host: Host, request: FolderRequest) -> ApiResult<SettingsView> {
+    convert(app::get_pulsar_settings(host, request).await)
+}
+pub async fn pulsar_opponents(host: Host, request: LibraryQuery) -> ApiResult<Vec<OpponentView>> {
+    convert(app::get_pulsar_opponents(host, request).await)
+}
+pub async fn pulsar_records(host: Host, request: LibraryQuery) -> ApiResult<Vec<RecordView>> {
+    convert(app::get_pulsar_records(host, request).await)
+}
+pub async fn pulsar_compare(host: Host, request: CompareRequest) -> ApiResult<CompareView> {
+    convert(app::compare_pulsar_fights(host, request).await)
+}
+pub async fn pulsar_open_folder(host: Host, request: FolderRequest) -> ApiResult<ActionReceipt> {
+    convert(app::open_pulsar_folder(host, request).await)
+}
+pub async fn pulsar_view_report(host: Host, request: FightKey) -> ApiResult<ActionReceipt> {
+    convert(app::view_pulsar_report(host, request).await)
+}
+pub async fn pulsar_export(host: Host, request: ExportRequest) -> ApiResult<ActionReceipt> {
+    convert(app::export_pulsar_report(host, request).await)
+}
+pub async fn pulsar_delete(host: Host, request: DeleteRequest) -> ApiResult<ActionReceipt> {
+    convert(app::delete_pulsar_fight(host, request).await)
 }

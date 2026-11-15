@@ -1,0 +1,546 @@
+use super::presentation::ui;
+use super::{DETAIL_TABS, Pulsar, Reply, tabs};
+use crate::{
+    api,
+    backend::guarded,
+    controls::{AuroraButton, AuroraCheckbox, AuroraInput, ButtonSize, ButtonVariant},
+    theme::AuroraTheme,
+};
+use aurora_launcher_lib::pulsar::view::*;
+use gpui::{Context, Div, KeyDownEvent, div, prelude::*, px};
+use gpui_kit::base::Dialog;
+
+fn button(id: impl Into<gpui::ElementId>, label: impl Into<gpui::SharedString>) -> AuroraButton {
+    AuroraButton::new(id, super::presentation::text(label.into().as_ref()))
+        .variant(ButtonVariant::Ghost)
+        .size(ButtonSize::Small)
+}
+
+impl Pulsar {
+    fn confirm_delete(&mut self, cx: &mut Context<Self>) {
+        if self.busy {
+            return;
+        }
+        let (Some(host), Some(request)) = (self.host.clone(), self.detail_request.clone()) else {
+            return;
+        };
+        self.busy = true;
+        let tx = self.tx.clone();
+        let also_delete_from_instance = self.delete_source;
+        self.runtime.spawn(async move {
+            let r = guarded(api::pulsar_delete(
+                host,
+                DeleteRequest {
+                    key: request.key,
+                    confirmed: true,
+                    also_delete_from_instance,
+                },
+            ))
+            .await;
+            let _ = tx.send(Reply::Action(r, true)).await;
+        });
+        cx.notify();
+    }
+    fn confirm_export(&mut self, cx: &mut Context<Self>) {
+        if self.busy {
+            return;
+        }
+        let (Some(host), Some(request)) = (self.host.clone(), self.detail_request.clone()) else {
+            return;
+        };
+        let destination = self.export_path.read(cx).value().to_string();
+        if destination.trim().is_empty() {
+            self.message = "Choose a destination folder for the report.".into();
+            return;
+        }
+        self.busy = true;
+        self.export_open = false;
+        let tx = self.tx.clone();
+        self.runtime.spawn(async move {
+            let r = guarded(api::pulsar_export(
+                host,
+                ExportRequest {
+                    key: request.key,
+                    destination,
+                    confirmed: true,
+                },
+            ))
+            .await;
+            let _ = tx.send(Reply::Action(r, false)).await;
+        });
+        cx.notify();
+    }
+    pub(super) fn detail_body(&self, t: &AuroraTheme, narrow: bool, cx: &mut Context<Self>) -> Div {
+        let summary = self.detail.as_ref().map(|d| &d.summary).or_else(|| {
+            self.selected
+                .as_ref()
+                .and_then(|k| self.library.rows.iter().find(|r| &r.key == k))
+        });
+        let mut header = div().flex().flex_wrap().items_center().gap(px(8.));
+        if let Some(s) = summary {
+            header = header
+                .child(
+                    ui::page_header(
+                        t,
+                        if s.manual
+                            && self
+                                .detail_request
+                                .as_ref()
+                                .is_some_and(|r| r.exchange_id.is_some() || r.participant.is_some())
+                        {
+                            format!("Exchange with {}", s.opponent)
+                        } else if s.manual {
+                            "Manual session".to_owned()
+                        } else {
+                            format!("Fight against {}", s.opponent)
+                        },
+                        Some(
+                            format!(
+                                "{} · {} · {:.1} s",
+                                s.provenance.instance_name,
+                                super::page::utc_time(s.start_epoch_millis),
+                                s.duration_nanos as f64 / 1e9
+                            )
+                            .into(),
+                        ),
+                    )
+                    .flex_1(),
+                )
+                .child(ui::badge(
+                    t,
+                    s.result_label.clone(),
+                    super::presentation::outcome(s),
+                ));
+        }
+        let mut page = div()
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .min_w(px(0.))
+            .child(
+                div().flex().child(
+                    button("fight-back", "Back to library")
+                        .icon("arrow_back")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.close_detail();
+                            cx.notify();
+                        })),
+                ),
+            )
+            .child(header);
+        if let Some(s) = summary {
+            page = page.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(4.))
+                    .child(
+                        button("fight-export", "Export\u{2026}")
+                            .icon("download")
+                            .disabled(!s.report_available || self.busy)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.export_open = true;
+                                cx.notify();
+                            })),
+                    )
+                    .child(div().flex_1())
+                    .child(
+                        div()
+                            .relative()
+                            .child(
+                                button("fight-more", "More")
+                                    .icon("more_horiz")
+                                    .selected(self.disclosures.contains("fight-more"))
+                                    .on_click(cx.listener(|this, _, window, cx| {
+                                        if !this.disclosures.remove("fight-more") {
+                                            this.disclosures.insert("fight-more".into());
+                                            this.tab_content.focus(window, cx);
+                                        }
+                                        cx.notify();
+                                    })),
+                            )
+                            .when(self.disclosures.contains("fight-more"), |d| {
+                                d.child(gpui::deferred(
+                                    div()
+                                        .absolute()
+                                        .right_0()
+                                        .top(px(34.))
+                                        .w(px(195.))
+                                        .p(px(4.))
+                                        .rounded(t.radius)
+                                        .bg(t.raised)
+                                        .border_1()
+                                        .border_color(t.border)
+                                        .occlude()
+                                        .id("fight-more-menu")
+                                        .track_focus(&self.tab_content)
+                                        .tab_index(0)
+                                        .on_mouse_down_out(cx.listener(|this, _, _, cx| {
+                                            this.disclosures.remove("fight-more");
+                                            cx.notify();
+                                        }))
+                                        .on_key_down(cx.listener(
+                                            |this, e: &KeyDownEvent, _, cx| {
+                                                if e.keystroke.key == "escape" {
+                                                    this.disclosures.remove("fight-more");
+                                                    cx.stop_propagation();
+                                                    cx.notify();
+                                                }
+                                            },
+                                        ))
+                                        .child(
+                                            button("fight-report", "Open HTML report")
+                                                .full_width()
+                                                .icon("open_in_new")
+                                                .disabled(!s.report_available)
+                                                .on_click({
+                                                    let key = s.key.clone();
+                                                    cx.listener(move |this, _, _, cx| {
+                                                        this.disclosures.remove("fight-more");
+                                                        this.view_report(key.clone());
+                                                        cx.notify();
+                                                    })
+                                                }),
+                                        )
+                                        .child(
+                                            button("fight-delete", "Delete fight")
+                                                .full_width()
+                                                .variant(ButtonVariant::DangerSubtle)
+                                                .icon("delete")
+                                                .disabled(self.busy)
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.disclosures.remove("fight-more");
+                                                    this.delete_open = true;
+                                                    this.delete_source = false;
+                                                    this.pause();
+                                                    cx.notify();
+                                                })),
+                                        ),
+                                ))
+                            }),
+                    ),
+            );
+        }
+        if let Some(error) = &self.error {
+            page = page.child(ui::card(t).child(ui::title_block(
+                t,
+                "Detail unavailable",
+                Some(error.clone().into()),
+            )));
+        }
+        if !self.message.is_empty() {
+            page = page.child(ui::caption(t, self.message.clone()));
+        }
+        let mut strip = div()
+            .flex()
+            .flex_wrap()
+            .gap(px(2.))
+            .p(px(2.))
+            .rounded(t.radius)
+            .bg(t.sunken)
+            .border_1()
+            .border_color(t.border_subtle)
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+                let delta = match e.keystroke.key.as_str() {
+                    "left" => 5,
+                    "right" => 1,
+                    _ => return,
+                };
+                cx.stop_propagation();
+                this.pause();
+                this.detail_tab = (this.detail_tab + delta) % 6;
+                cx.notify();
+            }));
+        for (index, label) in DETAIL_TABS.iter().enumerate() {
+            strip = strip.child(
+                button(("fight-tab", index), *label)
+                    .selected(self.detail_tab == index)
+                    .on_click(cx.listener(move |this, _, window, cx| {
+                        this.pause();
+                        this.detail_tab = index;
+                        if index == 4 {
+                            this.playback_focus.focus(window, cx);
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+        page = page.child(div().flex().child(strip));
+        if self.detail_loading {
+            if let Some(s) = summary {
+                page = page.child(tabs::metric_card(
+                    t,
+                    "Recorded summary",
+                    &s.metrics,
+                    &["accuracy", "hits", "averageReach", "longestCombo"],
+                ));
+            }
+            return page.child(ui::muted(t, "Loading the recorded timeline…"));
+        }
+        let Some(detail) = &self.detail else {
+            return page;
+        };
+        if detail.summary.manual || !detail.exchanges.is_empty() {
+            page = page.child(self.focus_scopes(t, cx));
+            if detail.exchanges.is_empty() {
+                page = page.child(ui::empty_state(
+                    t,
+                    "swords",
+                    "No combat in this manual session",
+                    "The session was recorded, but no exchange with another player or mob was observed.",
+                ));
+            }
+        }
+
+        match self.detail_tab {
+            4 => page = page.child(self.playback_body(t, cx)),
+            5 => {
+                let r = &detail.summary.resolution;
+                let (observation, why) = decisive_evidence(detail);
+                page = page.child(
+                    ui::card(t)
+                        .child(ui::section_header(t, "Why this result was recorded", None))
+                        .child(ui::muted(
+                            t,
+                            format!(
+                                "{} \u{b7} {}",
+                                detail.summary.result_label,
+                                super::presentation::result_source(&r.source)
+                            ),
+                        ))
+                        .child(
+                            div()
+                                .border_l_2()
+                                .border_color(t.ring)
+                                .pl(px(12.))
+                                .flex()
+                                .flex_col()
+                                .gap(px(2.))
+                                .child(
+                                    ui::muted(t, observation)
+                                        .text_color(t.foreground)
+                                        .font_weight(gpui::FontWeight::MEDIUM),
+                                )
+                                .child(ui::caption(t, why)),
+                        )
+                        .children(r.notes.iter().map(|n| ui::muted(t, n.clone())))
+                        .child(ui::caption(
+                            t,
+                            format!(
+                                "Recorded in {} on {}. Aurora keeps its own copy, so this fight stays here even if the instance is deleted.",
+                                detail.summary.provenance.instance_name,
+                                super::page::utc_time(detail.summary.start_epoch_millis)
+                            ),
+                        )),
+                );
+                let full_path = detail.summary.provenance.source_path.clone();
+                let copy_path = full_path.clone();
+                let diagnostics=ui::card(t).child(ui::section_header(t,"Recording diagnostics",None))
+                    .child(ui::caption(t,format!("Recording identifier: {}",detail.summary.key.fight_id)))
+                    .child(ui::caption(t,format!("Classification: {}. Confidence: {}. Scope: {}. Source identifier: {}.",r.classification,r.confidence,r.scope,r.source)))
+                    .child(ui::caption(t,format!("Source: …/{}",full_path.rsplit(['/', '\\']).next().unwrap_or("recording.json"))))
+                    .child(div().flex().flex_wrap().gap(px(8.)).child(button("copy-recording-path","Copy full path").on_click(move|_,_,cx|cx.write_to_clipboard(gpui::ClipboardItem::new_string(copy_path.clone()))))
+                        .child(button("open-recording-source","Open recordings folder").on_click(cx.listener(|this,_,_,cx|this.folder(FolderKind::Recordings,cx)))))
+                    .children(detail.summary.provenance.conflicts.iter().map(|c|ui::caption(t,format!("Conflicting copy: {c}"))))
+                    .child(ui::caption(t,if detail.summary.stale{"The original file changed after Aurora copied it. This view shows Aurora's copy."}else{"Aurora's copy matches the original file."}));
+                let diagnostics = diagnostics
+                    .child(self.table_view(t, &detail.evidence, narrow, cx))
+                    .child(ui::section_header(t, "Original event details", None))
+                    .children(
+                        detail
+                            .timeline
+                            .iter()
+                            .map(|e| e.detail.as_str())
+                            .filter(|s| !s.is_empty())
+                            .collect::<std::collections::BTreeSet<_>>()
+                            .into_iter()
+                            .map(|s| ui::caption(t, s.to_owned())),
+                    );
+                page =
+                    page.child(self.disclosure(t, "diagnostics", "Diagnostics", diagnostics, cx));
+                let mut evidence = detail.evidence.clone();
+                evidence.columns.retain(|c| c != "nanoTime");
+                page = page.child(self.disclosure(
+                    t,
+                    "result-evidence",
+                    "Result evidence",
+                    self.table_view(t, &evidence, narrow, cx),
+                    cx,
+                ));
+                let events = detail
+                    .timeline
+                    .iter()
+                    .filter(|e| {
+                        self.event_filter
+                            .as_deref()
+                            .map(|kind| e.kind == kind)
+                            .unwrap_or(e.kind != "MOTION")
+                    })
+                    .collect::<Vec<_>>();
+                page = page
+                    .child(self.event_filters(cx))
+                    .child(self.event_table(t, &events));
+            }
+            i => {
+                let tab = match i {
+                    1 => &detail.offense,
+                    2 => &detail.defense,
+                    3 => &detail.flow,
+                    _ => &detail.summary_tab,
+                };
+                page = page.child(self.tab_body(t, tab, narrow, cx));
+            }
+        }
+        if let Some(termination) = &detail.termination {
+            page = page.child(ui::caption(
+                t,
+                format!(
+                    "How the recording ended: {}",
+                    super::presentation::text(termination)
+                ),
+            ));
+        }
+        let view = cx.entity();
+        let changed = view.clone();
+        let cancel = view.clone();
+        let mut panel=ui::card(t).w(px(if narrow{400.}else{480.})).max_w(gpui::relative(0.94)).bg(t.raised).child(ui::section_header(t,"Delete this fight?",None))
+            .child(ui::muted(t,format!("{} · {} · {} hits. Delete the launcher copy and prevent re-import. Existing exports are retained.",detail.summary.opponent,detail.summary.date_group,detail.summary.metrics.get("hits").map(tabs::metric_value).unwrap_or_else(||"Unavailable".into()))))
+            .child(div().flex().items_center().gap(px(8.)).child(AuroraCheckbox::new("delete-source","Also delete the recording from the instance").checked(self.delete_source).disabled(self.busy).on_change(move|checked,_,_,cx|{view.update(cx,|this,cx|{this.delete_source=checked;cx.notify();});})).child(ui::muted(t,"Also delete the recording from the instance")))
+            .child(ui::caption(t,"Deleting the instance recording is refused while that instance is running."));
+        panel = panel.child(
+            div()
+                .flex()
+                .justify_end()
+                .gap(px(8.))
+                .child(
+                    button("delete-cancel", "Cancel")
+                        .disabled(self.busy)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.delete_open = false;
+                            cx.notify();
+                        })),
+                )
+                .child(
+                    AuroraButton::new(
+                        "delete-confirm",
+                        if self.busy {
+                            "Deleting…"
+                        } else {
+                            "Delete fight"
+                        },
+                    )
+                    .variant(ButtonVariant::Danger)
+                    .disabled(self.busy)
+                    .on_click(cx.listener(|this, _, _, cx| this.confirm_delete(cx))),
+                ),
+        );
+        page = page.child(
+            Dialog::new(cx)
+                .open(self.delete_open)
+                .accessibility_label("Delete fight confirmation")
+                .close_on_backdrop_press(false)
+                .on_ok(|_, _, _| false)
+                .on_cancel(move |_, _, cx| !cancel.read(cx).busy)
+                .on_open_change(move |open, _, _, cx| {
+                    if !open {
+                        changed.update(cx, |this, cx| {
+                            this.delete_open = false;
+                            cx.notify();
+                        });
+                    }
+                })
+                .backdrop(div().absolute().size_full().bg(gpui::rgba(0x000000a6)))
+                .popup(panel),
+        );
+        let changed = cx.entity();
+        let panel=ui::card(t).w(px(if narrow{400.}else{480.})).max_w(gpui::relative(0.94)).bg(t.raised).child(ui::section_header(t,"Export existing report",None))
+            .child(ui::muted(t,"Copy this fight’s existing report folder unchanged. Its saved privacy and motion settings are preserved."))
+            .child(AuroraInput::new(&self.export_path).label("Export destination folder"))
+            .child(div().flex().justify_end().gap(px(8.)).child(button("export-cancel","Cancel").on_click(cx.listener(|this,_,_,cx|{this.export_open=false;cx.notify();})))
+                .child(AuroraButton::new("export-confirm","Confirm export").variant(ButtonVariant::Primary).disabled(self.busy).on_click(cx.listener(|this,_,_,cx|this.confirm_export(cx)))));
+        page.child(
+            Dialog::new(cx)
+                .open(self.export_open)
+                .accessibility_label("Export report confirmation")
+                .on_ok(|_, _, _| false)
+                .on_open_change(move |open, _, _, cx| {
+                    if !open {
+                        changed.update(cx, |this, cx| {
+                            this.export_open = false;
+                            cx.notify();
+                        });
+                    }
+                })
+                .backdrop(div().absolute().size_full().bg(gpui::rgba(0x000000a6)))
+                .popup(panel),
+        )
+    }
+}
+
+/// The observation that settled the result, its time, and why it decides it.
+fn decisive_evidence(detail: &FightDetailView) -> (String, String) {
+    let resolution = &detail.summary.resolution;
+    if resolution.classification == "NO_RESULT" {
+        return (
+            resolution
+                .reason
+                .clone()
+                .unwrap_or_else(|| "Ended without a death".into()),
+            "Win, Loss or Draw requires a recorded death or a confirmed server result.".into(),
+        );
+    }
+    let settled = "so the result is proven";
+    let Some(row) = detail
+        .evidence
+        .rows
+        .iter()
+        .find(|r| r.cells.get("Establishing").is_some_and(|v| v == "true"))
+    else {
+        return (
+            "No single server message settled this result.".into(),
+            super::presentation::result_source(&resolution.source).into(),
+        );
+    };
+    let time = row
+        .metrics
+        .get("time")
+        .and_then(|m| m.value)
+        .map(|s| format!("At {s:.1} s"))
+        .unwrap_or_else(|| "During the fight".into());
+    let kind = row.cells.get("kind").map(String::as_str).unwrap_or("");
+    let message = row
+        .cells
+        .get("text")
+        .and_then(|text| text.lines().map(str::trim).find(|l| !l.is_empty()))
+        .map(|line| {
+            let short: String = line.chars().take(60).collect();
+            if short.len() < line.len() {
+                format!(": \u{201c}{short}\u{2026}\u{201d}")
+            } else {
+                format!(": \u{201c}{short}\u{201d}")
+            }
+        })
+        .unwrap_or_default();
+    let (what, why) = match kind {
+        "RESULT" => (
+            "the server announced the match result",
+            "A match result from the server is the strongest evidence Pulsar records",
+        ),
+        "ROUND_RESULT" | "ROUND_END" => (
+            "the server announced the round result",
+            "The server's own round result decides this fight",
+        ),
+        "KILL" | "DEATH" => (
+            "a death ended the fight",
+            "A recorded death decides who won",
+        ),
+        _ => (
+            "the last accepted server message arrived",
+            "It was the final accepted server message before the fight ended",
+        ),
+    };
+    (
+        format!("{time}, {what}{message}"),
+        format!("{why}, {settled}."),
+    )
+}

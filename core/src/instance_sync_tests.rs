@@ -1311,6 +1311,56 @@ fn server_sync_excludes_running_games_and_interrupted_merge_keeps_backup() {
 }
 
 #[test]
+fn launcher_server_edits_survive_manual_and_restarted_automatic_additions_sync() {
+    use crate::saved_servers::editor::{self, Edit, ResourcePacks, ServerInput};
+    let (managed, mut request) = fixture();
+    request.category = Category::Servers;
+    automatic_policy(&managed, &request, vec![Category::Servers]);
+    let original = servers::tests::fixture(&[("A", "a.invalid", 1), ("B", "b.invalid", 2)]);
+    for id in [&request.source_id, &request.destination_id] {
+        put(&managed, id, "servers.dat", &original);
+    }
+    let mut engine = automatic::Engine::default();
+    engine.cycle(&managed).unwrap();
+    let loaded = editor::load(&managed, &request.destination_id).unwrap();
+    let changed = editor::apply(
+        &managed,
+        &request.destination_id,
+        &loaded.revision,
+        &Edit::Delete { index: 0 },
+    )
+    .unwrap();
+    editor::apply(
+        &managed,
+        &request.destination_id,
+        &changed.revision,
+        &Edit::Edit {
+            index: 0,
+            server: ServerInput {
+                name: "Renamed".into(),
+                address: "new.invalid".into(),
+                resource_packs: ResourcePacks::Disabled,
+            },
+        },
+    )
+    .unwrap();
+    let edited = get(&managed, &request.destination_id, "servers.dat");
+    let p = preview(&managed, &request).unwrap();
+    assert_eq!(p.changes, 0);
+    apply(&managed, &request, &p.fingerprint).unwrap();
+    engine.cycle(&managed).unwrap();
+    // Restarted workers read durable per-instance suppression identities.
+    automatic::Engine::default().cycle(&managed).unwrap();
+    assert_eq!(
+        get(&managed, &request.destination_id, "servers.dat"),
+        edited
+    );
+    let loaded = editor::load(&managed, &request.destination_id).unwrap();
+    assert_eq!(loaded.entries.len(), 1);
+    assert_eq!(loaded.entries[0].address, "new.invalid");
+}
+
+#[test]
 fn server_list_missing_destination_uses_no_clobber_commit() {
     let (managed, mut request) = fixture();
     request.category = Category::Servers;

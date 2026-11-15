@@ -110,9 +110,72 @@ pub fn classify(output: &str, java_major: Option<u32>) -> LaunchFailureDiagnosti
     unknown()
 }
 
+/// Explicit local analysis of live/partial output and the newest crash report.
+pub fn diagnose(
+    output: &str,
+    crash_report: &str,
+    java_major: Option<u32>,
+) -> LaunchFailureDiagnostic {
+    for text in [output, crash_report] {
+        let known = classify(text, java_major);
+        if known.category != "unknownCrash" {
+            return known;
+        }
+        for (pattern, category, message) in [
+            (
+                "OutOfMemoryError",
+                "outOfMemory",
+                "The game ran out of memory. Increase the instance memory limit if your computer has enough free RAM, or reduce resource packs and mods.",
+            ),
+            (
+                "EXCEPTION_ACCESS_VIOLATION",
+                "nativeCrash",
+                "A native library or graphics driver crashed. Update the graphics driver and review graphics mods in the crash report.",
+            ),
+            (
+                "GLFW error 65542",
+                "graphicsDriver",
+                "OpenGL is unavailable. Install the graphics driver supplied by your GPU manufacturer.",
+            ),
+            (
+                "No space left on device",
+                "diskFull",
+                "The disk is full. Free space on the instance drive before retrying.",
+            ),
+        ] {
+            if text.contains(pattern) {
+                return LaunchFailureDiagnostic {
+                    category: category.into(),
+                    implicated_mod_ids: vec![],
+                    requirement: None,
+                    message: message.into(),
+                };
+            }
+        }
+    }
+    LaunchFailureDiagnostic { category: "noKnownProblem".into(), implicated_mod_ids: vec![], requirement: None, message: "No known problem detected. You can upload the redacted log to get help. Diagnosis runs locally and sends nothing.".into() }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn local_diagnosis_accepts_partial_logs_and_crash_reports() {
+        assert_eq!(diagnose("INFO ready", "", None).category, "noKnownProblem");
+        assert_eq!(
+            diagnose(
+                "WARN harmless",
+                "java.lang.OutOfMemoryError: heap space",
+                None
+            )
+            .category,
+            "outOfMemory"
+        );
+        assert_eq!(
+            diagnose("UnsupportedClassVersionError: wrong bytecode", "", None).category,
+            "javaCompatibility"
+        );
+    }
     #[test]
     fn bounded_unicode_tail_preserves_late_fatal_evidence() {
         let output = format!(

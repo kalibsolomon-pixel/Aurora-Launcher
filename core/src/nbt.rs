@@ -3,7 +3,8 @@
 //! Saved-server (`servers.dat`) and saved-world (`level.dat`) browsing walk
 //! one level of named fields at a time over raw input spans, so unrelated
 //! compounds (for example worldgen settings) never enter memory. The reader
-//! also preserves raw spans for instance sync, which owns merge semantics.
+//! also preserves raw spans for instance sync and saved-server editing, whose
+//! callers own their respective merge and write semantics.
 
 /// Every discovery read is bounded by the caller's input cap; these bounds
 /// keep a single hostile document from exploding walk state.

@@ -14,11 +14,12 @@ mod desktop_acceptance;
 pub mod local_content;
 pub mod local_pack;
 // Bounded read-only NBT walking for saved-game discovery (servers.dat and
-// level.dat). Deliberately separate from instance_sync's span-preserving
-// merge reader, which keeps its own write-back semantics.
+// level.dat). Raw spans also support the server editor and instance sync;
+// those callers own their write-back semantics.
 pub(crate) mod nbt;
 pub mod saved_servers;
 pub mod saved_worlds;
+pub mod screenshots;
 
 pub use cosmetic_image::run_artwork_decoder_if_requested;
 pub mod cosmetics;
@@ -53,6 +54,7 @@ pub mod pack_state;
 pub mod pack_update;
 pub mod paths;
 mod performance;
+pub mod pulsar;
 pub mod runtime;
 pub mod server_enrichment;
 pub mod shortcuts;

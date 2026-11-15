@@ -1,0 +1,1198 @@
+//! Shared presentations for pooled analysis and a focused recording.
+use super::presentation::ui;
+use super::{
+    Pulsar,
+    charts::{Chart, Kind, Sample, Shape},
+    tabs,
+};
+use crate::{
+    controls::{AuroraButton, ButtonSize, ButtonVariant},
+    theme::AuroraTheme,
+};
+use aurora_launcher_lib::pulsar::view::*;
+use gpui::{Context, Div, div, prelude::*, px};
+use std::collections::BTreeMap;
+
+fn button(id: impl Into<gpui::ElementId>, label: impl Into<gpui::SharedString>) -> AuroraButton {
+    AuroraButton::new(id, super::presentation::text(label.into().as_ref()))
+        .variant(ButtonVariant::Ghost)
+        .size(ButtonSize::Small)
+}
+
+fn value(m: &BTreeMap<String, MetricValue>, key: &str) -> String {
+    m.get(key)
+        .map(tabs::metric_value)
+        .unwrap_or_else(|| "Unavailable".into())
+}
+
+fn denominator(m: &BTreeMap<String, MetricValue>, n: &str, d: &str) -> String {
+    format!("{} of {}", value(m, n), value(m, d))
+}
+
+/// Attack outcomes exactly as the outcome bar shows them.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(super) struct Outcomes {
+    pub hit: f64,
+    pub blocked: f64,
+    /// Shield disables, excluded from accuracy.
+    pub disabled: f64,
+    pub miss: f64,
+}
+
+pub(super) fn outcome_counts(tab: &TabView) -> Option<Outcomes> {
+    let chart = tab.charts.iter().find(|c| c.id == "attack_outcomes")?;
+    let mut o = Outcomes::default();
+    for p in chart.series.iter().flat_map(|s| &s.points) {
+        let n = p.y.filter(|v| v.is_finite()).unwrap_or(0.);
+        match p.category.as_str() {
+            "HIT" => o.hit += n,
+            "BLOCKED" => o.blocked += n,
+            "DISABLED" => o.disabled += n,
+            "MISS" => o.miss += n,
+            _ => {}
+        }
+    }
+    Some(o)
+}
+
+/// One evidence-qualified sentence above the accuracy breakdown.
+pub(super) fn accuracy_insight(m: &BTreeMap<String, MetricValue>, o: Outcomes) -> String {
+    let eligible = o.hit + o.miss;
+    format!(
+        "{} accuracy: {:.0} Hits of {eligible:.0} Hits and Misses. {:.0} Blocked and {:.0} Disabled are excluded.",
+        value(m, "accuracy"),
+        o.hit,
+        o.blocked,
+        o.disabled
+    )
+}
+
+/// Compact Summary version of the outcome breakdown, linking to Offense.
+fn outcome_strip(t: &AuroraTheme, o: Outcomes, cx: &mut Context<Pulsar>) -> Div {
+    let total = (o.hit + o.blocked + o.disabled + o.miss).max(1.);
+    let mut bar = div()
+        .flex()
+        .w_full()
+        .h(px(8.))
+        .rounded_full()
+        .overflow_hidden()
+        .bg(t.sunken);
+    for (n, color) in [
+        (o.hit, t.ring),
+        (o.blocked, t.success.opacity(0.8)),
+        (o.disabled, t.danger.opacity(0.75)),
+        (o.miss, t.warning.opacity(0.85)),
+    ] {
+        if n > 0. {
+            bar = bar.child(
+                div()
+                    .h_full()
+                    .w(px(0.))
+                    .flex_grow((n / total) as f32)
+                    .min_w(px(3.))
+                    .bg(color),
+            );
+        }
+    }
+    ui::card(t)
+        .p(px(16.))
+        .gap(px(8.))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(px(8.))
+                .child(ui::section_header(t, "Attack outcomes", None))
+                .child(
+                    button("summary-outcomes-offense", "Full breakdown in Offense")
+                        .icon("arrow_forward")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.detail_tab = 1;
+                            this.sections[1] = 1;
+                            cx.notify();
+                        })),
+                ),
+        )
+        .child(bar)
+        .child(ui::caption(
+            t,
+            format!(
+                "{:.0} {} \u{b7} {:.0} Blocked \u{b7} {:.0} Disabled \u{b7} {:.0} {}",
+                o.hit,
+                if o.hit == 1. { "hit" } else { "hits" },
+                o.blocked,
+                o.disabled,
+                o.miss,
+                if o.miss == 1. { "miss" } else { "misses" }
+            ),
+        ))
+}
+
+pub(super) fn stack(
+    t: &AuroraTheme,
+    id: &str,
+    title: &str,
+    entries: Vec<(&str, Option<f64>)>,
+    note: &str,
+) -> Div {
+    Chart {
+        id: id.into(),
+        title: title.into(),
+        x_label: "observations".into(),
+        y_label: "Count".into(),
+        samples: entries
+            .into_iter()
+            .enumerate()
+            .map(|(i, (label, y))| Sample {
+                x: i as f64,
+                y,
+                label: label.into(),
+                shape: Shape::Square,
+            })
+            .collect(),
+        kind: Kind::Stacked,
+        domain: (0., 1.),
+        range: (0., 1.),
+        band: None,
+        target: None,
+        playhead: None,
+        bands: vec![],
+        incomplete: vec![],
+        note: note.into(),
+    }
+    .render(t)
+}
+
+impl Pulsar {
+    pub(super) fn disclosure(
+        &self,
+        _t: &AuroraTheme,
+        id: &str,
+        label: &str,
+        content: Div,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        // Per-fight explanations (ids prefixed "fight-") start open.
+        let open = self.disclosures.contains(id) != id.starts_with("fight-");
+        let key = id.to_owned();
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .min_w(px(0.))
+            .when(open, |d| d.w_full())
+            .child(
+                div().flex().child(
+                    button(format!("disclosure-{id}"), label.to_owned())
+                        .icon(if open { "expand_less" } else { "expand_more" })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if !this.disclosures.remove(&key) {
+                                this.disclosures.insert(key.clone());
+                            }
+                            cx.notify();
+                        })),
+                ),
+            )
+            .when(open, |d| d.child(content))
+    }
+
+    pub(super) fn overview_lead(
+        &self,
+        t: &AuroraTheme,
+        tab: &TabView,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let primary = tab
+            .metrics
+            .iter()
+            .filter(|(k, _)| matches!(k.as_str(), "accuracy" | "averageReach" | "longestCombo"))
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        let mut deltas = BTreeMap::new();
+        let mut note = "No earlier recordings in this scope to compare.".to_owned();
+        let mut insight = "Review your recent fights to choose a focus.".to_owned();
+        let mut evidence = None;
+        if let Some(a) = &self.analysis {
+            if let Some(previous) = &a.previous_period {
+                for k in ["accuracy", "averageReach", "longestCombo"] {
+                    if let (Some(now), Some(before)) = (tab.metrics.get(k), previous.metrics.get(k))
+                    {
+                        deltas.insert(
+                            k.to_owned(),
+                            super::presentation::comparison_delta(before, now),
+                        );
+                    }
+                }
+                note = format!(
+                    "vs previous {}{}",
+                    super::presentation::count(a.previous_recordings, "recording"),
+                    if a.previous_recordings < 5 {
+                        " (small baseline)"
+                    } else {
+                        ""
+                    }
+                );
+                let outcomes = outcome_counts(&a.offense);
+                evidence = outcomes.map(|o| {
+                    format!(
+                        "{:.0} Hits and {:.0} Misses; {:.0} shield outcomes excluded{}",
+                        o.hit,
+                        o.miss,
+                        o.blocked + o.disabled,
+                        if a.previous_recordings < 5 {
+                            " (small baseline)"
+                        } else {
+                            ""
+                        }
+                    )
+                });
+                if let (Some(now), Some(before)) = (
+                    tab.metrics.get("accuracy").and_then(|m| m.value),
+                    previous.metrics.get("accuracy").and_then(|m| m.value),
+                ) {
+                    let change = deltas
+                        .get("accuracy")
+                        .map(|d| super::presentation::delta_display(d))
+                        .unwrap_or_default();
+                    insight = match (now.partial_cmp(&before), outcomes) {
+                        (Some(std::cmp::Ordering::Less), _) => {
+                            format!("Accuracy {change}. Review the misses in your weakest fight.")
+                        }
+                        (Some(std::cmp::Ordering::Greater), _) => {
+                            format!(
+                                "Accuracy {change}. Your weakest fight shows what is left to fix."
+                            )
+                        }
+                        _ => "Accuracy held steady. Your weakest fight shows where to focus next."
+                            .to_owned(),
+                    };
+                }
+            }
+        }
+        // The action opens the fight that drives the recommendation.
+        let target = self
+            .analysis
+            .as_ref()
+            .map(|a| a.coverage.recordings)
+            .and_then(|n| {
+                self.library
+                    .rows
+                    .iter()
+                    .take(n)
+                    .filter_map(|r| {
+                        r.metrics
+                            .get("accuracy")
+                            .and_then(|m| m.value)
+                            .filter(|v| v.is_finite())
+                            .map(|v| (v, r))
+                    })
+                    .min_by(|a, b| a.0.total_cmp(&b.0))
+                    .map(|(_, r)| (r.key.clone(), r.start_epoch_millis))
+            });
+        let evidence = Some(match evidence {
+            Some(e) => format!("{note} \u{b7} {e}"),
+            None => note,
+        });
+        let performance = self
+            .metrics_panel_with(t, "Recent performance", &primary, &deltas, cx)
+            .child(
+                div()
+                    .border_l_2()
+                    .border_color(t.ring)
+                    .pl(px(12.))
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(220.))
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(ui::muted(t, insight).font_weight(gpui::FontWeight::MEDIUM))
+                            .when_some(evidence, |d, e| d.child(ui::caption(t, e))),
+                    )
+                    .when_some(target, |d, (key, start)| {
+                        d.child(
+                            button(
+                                "overview-review-misses",
+                                format!(
+                                    "Open weakest fight \u{b7} {}",
+                                    super::presentation::short_stamp(&super::page::utc_time(start))
+                                ),
+                            )
+                            .icon("arrow_forward")
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    this.open_detail(key.clone(), cx);
+                                    this.detail_tab = 1;
+                                    this.sections[1] = 1;
+                                    cx.notify();
+                                },
+                            )),
+                        )
+                    }),
+            );
+        let mut body = div().flex().flex_col().gap(px(12.)).child(performance);
+        let key = ["accuracy", "reach", "critical", "interval"][self.trend_metric];
+        let mut selectors = div().flex().flex_wrap().gap(px(2.));
+        for (i, label) in ["Accuracy", "Reach", "Critical hits", "Hit interval"]
+            .into_iter()
+            .enumerate()
+        {
+            selectors = selectors.child(
+                button(("overview-trend", i), label)
+                    .selected(self.trend_metric == i)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.trend_metric = i;
+                        cx.notify();
+                    })),
+            );
+        }
+        if let Some(c) = tab
+            .charts
+            .iter()
+            .find(|c| c.id.contains("trend") && c.id.to_lowercase().contains(key))
+        {
+            let mut chart = tabs::chart(c);
+            let years = c
+                .series
+                .iter()
+                .flat_map(|s| &s.points)
+                .filter_map(|p| {
+                    self.library
+                        .rows
+                        .iter()
+                        .find(|f| Some(&f.key) == p.key.as_ref())
+                })
+                .map(|f| super::page::utc_time(f.start_epoch_millis)[..4].to_owned())
+                .collect::<std::collections::BTreeSet<_>>();
+            chart.x_label = match (years.first(), years.last()) {
+                (Some(a), Some(b)) if a != b => format!("Recording time (UTC, {a}\u{2013}{b})"),
+                (Some(a), _) => format!("Recording time (UTC, {a})"),
+                _ => "Recording time (UTC)".into(),
+            };
+            chart.note = "\u{25cf} Measured   \u{25cb} Genuine zero   \u{2014} Unavailable. Select a point to open its fight.".into();
+            let points = c.series.iter().flat_map(|s| &s.points).collect::<Vec<_>>();
+            let keys = points.iter().map(|p| p.key.clone()).collect::<Vec<_>>();
+            for (sample, point) in chart.samples.iter_mut().zip(&points) {
+                if let Some(fight) = self
+                    .library
+                    .rows
+                    .iter()
+                    .find(|f| Some(&f.key) == point.key.as_ref())
+                {
+                    sample.label = format!(
+                        "{}; {}; {}; Open fight (click or Enter)",
+                        point.label, fight.opponent, fight.result_label
+                    );
+                }
+            }
+            let selected = points.iter().rposition(|p| p.y.is_some());
+            let view = cx.entity();
+            body = body.child(chart.render_options(
+                t,
+                None,
+                super::charts::Options {
+                    preferences: self.preferences,
+                    header: Some(selectors),
+                    selected_sample: selected,
+                    activate: Some(std::rc::Rc::new(move |target, _, cx| {
+                        if let super::charts::Target::Sample(i) = target {
+                            if let Some(Some(key)) = keys.get(i) {
+                                view.update(cx, |this, cx| this.open_detail(key.clone(), cx));
+                            }
+                        }
+                    })),
+                    ..Default::default()
+                },
+            ));
+        }
+
+        body
+    }
+
+    pub(super) fn metrics_panel(
+        &self,
+        t: &AuroraTheme,
+        title: &str,
+        m: &BTreeMap<String, MetricValue>,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        self.metrics_panel_with(t, title, m, &BTreeMap::new(), cx)
+    }
+
+    /// `deltas` adds a change chip under each headline value.
+    pub(super) fn metrics_panel_with(
+        &self,
+        t: &AuroraTheme,
+        title: &str,
+        m: &BTreeMap<String, MetricValue>,
+        deltas: &BTreeMap<String, String>,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let five_columns = m.len() == 5 && self.width >= 950.;
+        let mut group = div()
+            .flex()
+            .gap(px(16.))
+            .when(!five_columns, |d| d.flex_wrap());
+        for (index, metric) in m.values().enumerate() {
+            let key = metric.definition.key.clone();
+            let metric_tip = format!("{}: {}", metric.definition.label, metric.definition.help);
+            let metric_theme = t.clone();
+            group = group.child(
+                div()
+                    .id(format!("metric-readout-{key}"))
+                    .tooltip(move |_, cx| {
+                        cx.new(|_| super::charts::Readout {
+                            text: metric_tip.clone(),
+                            theme: metric_theme.clone(),
+                        })
+                        .into()
+                    })
+                    .w(px(if m.len() == 4 && self.width >= 950. {
+                        170.
+                    } else if self.width < 950. {
+                        180.
+                    } else {
+                        210.
+                    }))
+                    .when(five_columns, |d| d.w(px(0.)).flex_1().min_w(px(0.)))
+                    .when(m.len() == 5 && !five_columns, |d| {
+                        if index == 4 {
+                            d.w_full()
+                        } else {
+                            d.w(gpui::relative(0.45))
+                        }
+                    })
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(4.))
+                            .h(px(if m.len() == 5 { 32. } else { 20. }))
+                            .child(
+                                ui::caption(
+                                    t,
+                                    match key.as_str() {
+                                        "accuracyDenominator" => "Hits and Misses".into(),
+                                        "incoming" => "Hits from opponent".into(),
+                                        "incomingCritical" | "criticalOnLocal"
+                                        | "opponentCrits" => "Incoming crits".into(),
+                                        "thirdPartyIncoming" => "Other attackers".into(),
+                                        "nonMeleeDamage" => "Other damage".into(),
+                                        "unexplainedHealthDrops" => "Unexplained damage".into(),
+                                        "emptyMisses" => "Aimed swings without a hit".into(),
+                                        "eligibleMisses" => "Counted misses".into(),
+                                        "uniqueAttacks" => "Distinct inputs".into(),
+                                        _ => display_label(&metric.definition.label),
+                                    },
+                                )
+                                .flex_1()
+                                .min_w(px(0.)),
+                            )
+                            .child(
+                                button(format!("metric-info-{key}"), "")
+                                    .icon("info")
+                                    .accessibility_label(format!(
+                                        "About {}",
+                                        metric.definition.label
+                                    ))
+                                    .selected(self.metric_info.as_ref() == Some(&key))
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.metric_info =
+                                            if this.metric_info.as_ref() == Some(&key) {
+                                                None
+                                            } else {
+                                                Some(key.clone())
+                                            };
+                                        cx.notify();
+                                    })),
+                            ),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(if title == "At a glance" {
+                                ui::TEXT_TITLE
+                            } else {
+                                ui::TEXT_SECTION
+                            }))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .text_color(t.foreground)
+                            .child(
+                                if metric.definition.key == "unexplainedHealthDrops"
+                                    && metric.value.is_none()
+                                {
+                                    "\u{2014}".into()
+                                } else {
+                                    tabs::metric_value(metric)
+                                },
+                            ),
+                    )
+                    .when_some(deltas.get(&metric.definition.key), |d, delta| {
+                        let change = super::presentation::delta_display(delta);
+                        let tone = match (metric.definition.key.as_str(), delta.chars().next()) {
+                            ("accuracy", Some('+')) => ui::Tone::Success,
+                            ("accuracy", Some('-')) => ui::Tone::Danger,
+                            _ => ui::Tone::Neutral,
+                        };
+                        d.child(div().flex().mt(px(4.)).child(ui::badge(t, change, tone)))
+                    }),
+            );
+        }
+
+        let mut panel = ui::card(t)
+            .p(px(16.))
+            .gap(px(12.))
+            .when(title == "Recent performance", |d| d.gap(px(8.)).p(px(16.)))
+            .child(ui::section_header(t, title.to_owned(), None))
+            .child(group);
+        if m.get("unexplainedHealthDrops")
+            .is_some_and(|v| v.value.is_none())
+        {
+            panel = panel.child(
+                ui::caption(
+                    t,
+                    "Health loss and knockback may not have been recorded; a dash means unavailable.",
+                )
+                .w_full(),
+            );
+        }
+        if title == "Performance" || title == "Pooled performance" {
+            let definitions = [
+                (
+                    "accuracy",
+                    "Accuracy: Hits divided by Hits plus Misses. Blocked and Disabled are excluded.",
+                ),
+                ("averageReach", "Reach: distance at confirmed contact."),
+                (
+                    "longestCombo",
+                    "Combo: hits in a row before your opponent hits back or the fight pauses.",
+                ),
+            ]
+            .into_iter()
+            .filter(|(key, _)| m.contains_key(*key))
+            .map(|(_, text)| text)
+            .collect::<Vec<_>>();
+            if !definitions.is_empty() {
+                panel = panel.child(ui::caption(t, definitions.join(" ")));
+            }
+        }
+        if let Some(metric) = self.metric_info.as_ref().and_then(|k| m.get(k)) {
+            panel = panel.child(explanation(
+                t,
+                format!(
+                    "{} · {} | {}",
+                    metric.definition.label, metric.definition.unit, metric.definition.confidence
+                ),
+                Some(
+                    format!(
+                        "{} {}",
+                        metric.definition.help,
+                        metric.reason.as_deref().unwrap_or("")
+                    )
+                    .into(),
+                ),
+            ));
+        }
+
+        panel
+    }
+
+    pub(super) fn table_view(
+        &self,
+        t: &AuroraTheme,
+        data: &TableView,
+        narrow: bool,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let expanded = self.table_expanded.contains(&data.id);
+        let mut projection = data.clone();
+        if !expanded {
+            projection.rows.truncate(8);
+        }
+
+        let id = data.id.clone();
+        let mut body = div()
+            .flex()
+            .flex_col()
+            .gap(px(8.))
+            .min_w(px(0.))
+            .child(tabs::table(t, &projection, narrow));
+        if data.rows.len() > 8 {
+            body = body.child(
+                div().flex().child(
+                    button(
+                        format!("table-toggle-{id}"),
+                        if expanded {
+                            "Collapse table".into()
+                        } else {
+                            format!("Show all {} rows", data.rows.len())
+                        },
+                    )
+                    .icon(if expanded {
+                        "expand_less"
+                    } else {
+                        "expand_more"
+                    })
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if !this.table_expanded.remove(&id) {
+                            this.table_expanded.insert(id.clone());
+                        }
+
+                        cx.notify();
+                    })),
+                ),
+            );
+        }
+
+        body
+    }
+
+    pub(super) fn overview_groups(
+        &self,
+        t: &AuroraTheme,
+        m: &BTreeMap<String, MetricValue>,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let groups = [
+            (
+                "Accuracy",
+                value(m, "accuracy"),
+                format!(
+                    "{} Hits from Hits and Misses",
+                    denominator(m, "hits", "accuracyDenominator")
+                ),
+            ),
+            (
+                "Confirmed hits",
+                value(m, "hits"),
+                format!("{} attack attempts", value(m, "attempts")),
+            ),
+            (
+                "Average eligible reach",
+                value(m, "averageReach"),
+                format!("{} comparable contact hits", value(m, "reachEligible")),
+            ),
+            (
+                "Within target window",
+                value(m, "reachWithin"),
+                format!(
+                    "{} contacts within the target window",
+                    denominator(m, "reachWithinCount", "reachEligible")
+                ),
+            ),
+            (
+                "Critical conditions",
+                value(m, "criticalRate"),
+                format!(
+                    "{} confirmed hits with critical conditions",
+                    denominator(m, "criticalConditions", "criticalDenominator")
+                ),
+            ),
+            (
+                "Combos",
+                format!(
+                    "{} average · {} longest",
+                    value(m, "averageCombo"),
+                    value(m, "longestCombo")
+                ),
+                format!("{} combos of 2+ hits", value(m, "comboCount")),
+            ),
+            (
+                "Dominance shares",
+                format!(
+                    "{} yours · {} opponent",
+                    value(m, "dominanceShare"),
+                    value(m, "opponentDominanceShare")
+                ),
+                format!(
+                    "{} of active combat; pauses and periods with too little evidence left out",
+                    value(m, "dominanceActiveSeconds")
+                ),
+            ),
+            (
+                "Hit interval",
+                format!(
+                    "{} average · {} standard deviation",
+                    value(m, "averageInterval"),
+                    value(m, "intervalDeviation")
+                ),
+                format!("{} eligible intervals", value(m, "intervalCount")),
+            ),
+            (
+                "Recording coverage",
+                format!(
+                    "{} in scope of {} total",
+                    self.analysis
+                        .as_ref()
+                        .map(|a| a.coverage.recordings)
+                        .unwrap_or(0),
+                    self.library.total
+                ),
+                format!(
+                    "{} with a full timeline | {} with shield and health context",
+                    self.analysis
+                        .as_ref()
+                        .map(|a| a.coverage.timeline_recordings)
+                        .unwrap_or(0),
+                    self.analysis
+                        .as_ref()
+                        .map(|a| a.coverage.context_recordings)
+                        .unwrap_or(0)
+                ),
+            ),
+        ];
+        ui::card(t)
+            .child(ui::section_header(t, "Pooled measurements", None))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(24.))
+                    .children(
+                        groups
+                            .into_iter()
+                            .enumerate()
+                            .map(|(i, (label, v, caption))| {
+                                let key = [
+                                    "accuracy",
+                                    "hits",
+                                    "averageReach",
+                                    "reachWithin",
+                                    "criticalRate",
+                                    "averageCombo",
+                                    "dominanceShare",
+                                    "averageInterval",
+                                    "recordings",
+                                ][i];
+                                self.measurement_group(t, m, key, label, v, caption, cx)
+                            }),
+                    ),
+            )
+    }
+
+    pub(super) fn latest_denominators(
+        &self,
+        t: &AuroraTheme,
+        s: &FightSummary,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let m = &s.metrics;
+        div().flex().flex_wrap().gap(px(24.)).children(
+            [
+                (
+                    "Recording",
+                    format!(
+                        "{:.1} s · {} attempts",
+                        s.duration_nanos as f64 / 1e9,
+                        value(m, "attempts")
+                    ),
+                ),
+                (
+                    "Accuracy",
+                    format!(
+                        "{} · {} hits",
+                        value(m, "accuracy"),
+                        denominator(m, "hits", "accuracyDenominator")
+                    ),
+                ),
+                (
+                    "Within reach window",
+                    format!(
+                        "{} · {} contacts",
+                        value(m, "reachWithin"),
+                        denominator(m, "reachWithinCount", "reachEligible")
+                    ),
+                ),
+                (
+                    "Longest combo and combo count",
+                    format!(
+                        "{} hits · {} combos",
+                        value(m, "longestCombo"),
+                        value(m, "comboCount")
+                    ),
+                ),
+                (
+                    "Your advantage share",
+                    format!(
+                        "{} · {}",
+                        value(m, "dominanceShare"),
+                        m.get("dominanceShare")
+                            .map(|m| if m.value.is_some() {
+                                "measured".to_owned()
+                            } else {
+                                "unavailable".to_owned()
+                            })
+                            .unwrap_or_else(|| "Unavailable".into())
+                    ),
+                ),
+            ]
+            .into_iter()
+            .enumerate()
+            .map(|(i, (label, v))| {
+                self.measurement_group(
+                    t,
+                    m,
+                    [
+                        "duration",
+                        "accuracy",
+                        "reachWithin",
+                        "longestCombo",
+                        "dominanceShare",
+                    ][i],
+                    label,
+                    v,
+                    String::new(),
+                    cx,
+                )
+            }),
+        )
+    }
+
+    fn measurement_group(
+        &self,
+        t: &AuroraTheme,
+        m: &BTreeMap<String, MetricValue>,
+        key: &str,
+        label: &str,
+        value: String,
+        caption: String,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let selected = self.metric_info.as_deref() == Some(key);
+        let id = key.to_owned();
+        let mut group = div()
+            .min_w(px(210.))
+            .flex_1()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(4.))
+                    .child(ui::caption(t, label.to_owned()).flex_1().min_w(px(0.)))
+                    .child(
+                        button(format!("group-info-{key}"), "")
+                            .icon("info")
+                            .accessibility_label(format!("About {label}"))
+                            .selected(selected)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.metric_info = if this.metric_info.as_ref() == Some(&id) {
+                                    None
+                                } else {
+                                    Some(id.clone())
+                                };
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(ui::muted(t, value));
+        if !caption.is_empty() {
+            group = group.child(ui::caption(t, caption));
+        }
+
+        if selected {
+            if let Some(metric) = m.get(key) {
+                group = group.child(ui::caption(
+                    t,
+                    format!(
+                        "{} · {} | {} {}",
+                        metric.definition.unit,
+                        metric.definition.confidence,
+                        metric.definition.help,
+                        metric.reason.as_deref().unwrap_or("")
+                    ),
+                ));
+            }
+        }
+
+        group
+    }
+
+    pub(super) fn compositions(
+        &self,
+        t: &AuroraTheme,
+        tab: &TabView,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let mut body = div().flex().flex_col().gap(px(24.));
+        let section = if index < 4 { self.sections[index] } else { 0 };
+        let get = |key: &str| {
+            tab.metrics
+                .get(key)
+                .or_else(|| {
+                    self.active_detail()
+                        .and_then(|d| d.offense.metrics.get(key))
+                })
+                .or_else(|| {
+                    self.analysis
+                        .as_ref()
+                        .and_then(|a| a.offense.metrics.get(key))
+                })
+                .and_then(|m| m.value)
+        };
+        // Summary keeps a compact strip; the full breakdown lives on Offense.
+        if index == 0 && self.detail_request.is_some() {
+            if let Some(o) = self
+                .active_detail()
+                .and_then(|d| outcome_counts(&d.offense))
+            {
+                body = body.child(outcome_strip(t, o, cx));
+                if let Some(stuns) = get("stuns") {
+                    body = body.child(ui::caption(t, format!("Stuns: {stuns:.0} of {:.0} Disabled. Follow-ups add no hit or attempt.", o.disabled)));
+                }
+            }
+        }
+
+        if index == 1 && matches!(section, 0 | 3) {
+            let table = tab.tables.iter().find(|t| t.id == "aim_samples");
+            let entries = ["IDEAL", "GOOD", "PERIPHERAL", "POOR"]
+                .into_iter()
+                .map(|k| {
+                    let count = table.map(|t| {
+                        t.rows
+                            .iter()
+                            .filter(|r| {
+                                r.cells.get("hit").is_some_and(|s| s == "true")
+                                    && r.cells.get("grade").is_some_and(|s| s == k)
+                            })
+                            .count() as f64
+                    });
+                    (k, count)
+                })
+                .collect();
+            body=body.child(stack(t,"aim-grade-distribution","Aim grade distribution",entries,"Confirmed hits with a measured contact point, graded by where they landed on the hitbox."));
+        }
+
+        if index == 2 && matches!(section, 0 | 1) {
+            body = body.child(stack(
+                t,
+                "incoming-attribution",
+                "Hits taken and other damage",
+                vec![
+                    ("Your opponent", get("incoming")),
+                    ("Other damage", get("nonMeleeDamage")),
+                ],
+                "Hits taken count only your opponent's direct melee. Other damage is listed by cause below.",
+            ));
+        }
+
+        if index == 2 && matches!(section, 0 | 2) {
+            let block_only = get("shieldBlocks")
+                .zip(get("shieldDisables"))
+                .map(|(b, d)| (b - d).max(0.));
+            body = body.child(stack(
+                t,
+                "shield-offense",
+                "Attack outcomes",
+                vec![
+                    ("Hit", get("hits")),
+                    ("Blocked", block_only),
+                    ("Disabled", get("shieldDisables")),
+                    ("Miss", get("emptyMisses")),
+                ],
+                "Blocked and Disabled are excluded from accuracy.",
+            ));
+            body = body.child(ui::caption(
+                t,
+                format!(
+                    "Stuns: {:.0} of {:.0} Disabled. A stun follow-up adds no hit or attempt.",
+                    get("stuns").unwrap_or(0.),
+                    get("shieldDisables").unwrap_or(0.)
+                ),
+            ));
+            body = body.child(stack(
+                t,
+                "shield-block-disable",
+                "Opponent shield",
+                vec![("Blocked", block_only), ("Disabled", get("shieldDisables"))],
+                "Blocked and Disabled are separate outcomes; a disable is counted once.",
+            ));
+            body = body.child(stack(
+                t,
+                "local-shield-outcomes",
+                "Your shield",
+                vec![
+                    ("Blocked", get("localShieldBlocks")),
+                    ("Not blocked", get("localShieldNotBlocked")),
+                    ("Disabled", get("localShieldDisabled")),
+                ],
+                "Opponent melee attacks into your raised shield. Damage prevented is not measured.",
+            ));
+            body = body.child(ui::caption(t, format!("Stuns against you: {:.0} of {:.0} Disabled. Only a follow-up confirmed by damage counts.", get("localStuns").unwrap_or(0.), get("localShieldDisabled").unwrap_or(0.))));
+        }
+
+        body
+    }
+
+    pub(super) fn scope_request(&self) -> Option<DetailRequest> {
+        if self.detail_request.is_some() {
+            self.detail_request.clone()
+        } else {
+            self.focus_request.clone()
+        }
+    }
+
+    pub(super) fn focus_scopes(&self, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
+        let Some(detail) = self.active_detail() else {
+            return div();
+        };
+        if !detail.summary.manual && detail.exchanges.is_empty() {
+            return div();
+        }
+        let request = self.scope_request();
+        let whole = request
+            .as_ref()
+            .is_some_and(|r| r.participant.is_none() && r.exchange_id.is_none());
+        let selected = (!whole)
+            .then(|| detail.selected_exchange.as_ref())
+            .flatten();
+        let name = |e: &ExchangeScope| {
+            detail
+                .participants
+                .iter()
+                .find(|p| e.participant_id.as_ref() == Some(&p.id))
+                .map(|p| p.label.clone())
+                .unwrap_or_else(|| e.opponent.clone())
+        };
+        let scope_label = selected
+            .and_then(|id| detail.exchanges.iter().position(|e| &e.id == id))
+            .map(|i| format!("{}, exchange {}", name(&detail.exchanges[i]), i + 1))
+            .unwrap_or_else(|| "Entire manual session".into());
+        let mut list = ui::list_card(t).child(
+            ui::row(t, false)
+                .py(px(6.))
+                .flex_wrap()
+                .child(ui::caption(t, format!("Showing: {scope_label}")).flex_1())
+                .child(
+                    button("scope-entire-session", "Entire session")
+                        .variant(ButtonVariant::Default)
+                        .selected(whole)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            if let Some(mut r) = this.scope_request() {
+                                r.participant = None;
+                                r.exchange_id = None;
+                                this.select_scope(r, cx);
+                            }
+                        })),
+                ),
+        );
+        // One compact row per exchange: who, which exchange, how long, result.
+        let count = detail.exchanges.len();
+        for (j, exchange) in detail.exchanges.iter().enumerate() {
+            let id = exchange.id.clone();
+            let chosen = selected == Some(&exchange.id);
+            let (label, tone) = super::presentation::resolution(&exchange.resolution);
+            list = list.child(
+                ui::row(t, j + 1 == count)
+                    .py(px(4.))
+                    .when(chosen, |d| d.bg(t.accent_soft))
+                    .child(
+                        div().w(px(220.)).flex_shrink_0().flex().child(
+                            button(("scope-exchange", j), name(exchange))
+                                .variant(ButtonVariant::Default)
+                                .icon("person")
+                                .selected(chosen)
+                                .accessibility_label(format!(
+                                    "Show exchange {} with {}",
+                                    j + 1,
+                                    name(exchange)
+                                ))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    if let Some(mut r) = this.scope_request() {
+                                        r.participant = None;
+                                        r.exchange_id = Some(id.clone());
+                                        this.select_scope(r, cx);
+                                    }
+                                })),
+                        ),
+                    )
+                    .child(ui::caption(t, format!("Exchange {}", j + 1)).w(px(96.)))
+                    .child(
+                        ui::numeric(ui::caption(
+                            t,
+                            super::page::duration_text(exchange.duration_nanos),
+                        ))
+                        .w(px(64.)),
+                    )
+                    .child(
+                        div()
+                            .pl(px(12.))
+                            .child(ui::badge(t, label.to_owned(), tone)),
+                    )
+                    .child(div().flex_1())
+                    .when(chosen, |d| d.child(ui::caption(t, "Selected"))),
+            );
+        }
+
+        div().child(list)
+    }
+
+    pub(super) fn shortcut_guide(&self, t: &AuroraTheme) -> Div {
+        ui::card(t).child(ui::section_header(t,"Shortcut guide",None)).children([
+   ("Open dashboard in game","Uses Aurora's feature key system, including Ctrl, Shift and Alt. Binding: Change in game."),
+   ("1-8 / 1-6","Switch library / fight-detail tabs. Left and Right wrap the focused tab strip."),
+   ("Tab / Shift+Tab","Move focus. Enter or Space activates a focused control or chart mark."),
+   ("Arrow keys","Change history selection and adjust focused timeline controls."),
+   ("Page Up / Page Down | Home / End","Scroll the page except while typing. Tab scroll positions are remembered."),
+   ("Escape","Dismiss the current dialog, then return to the previous screen."),
+   ("Space | comma / period","Play or pause; step to the previous / next recorded event. Reduced motion uses event stepping.")
+  ].into_iter().map(|(label,help)|explanation(t,label,Some(help.into()))))
+    }
+}
+
+pub(super) fn display_label(label: &str) -> String {
+    if label.contains(' ') || label.contains('_') || label.chars().all(|c| !c.is_lowercase()) {
+        return super::presentation::text(label);
+    }
+    let mut out = String::new();
+    for (i, c) in label.chars().enumerate() {
+        if c.is_uppercase() && i > 0 {
+            out.push(' ');
+        }
+        out.push(if i == 0 { c.to_ascii_uppercase() } else { c });
+    }
+    out
+}
+
+pub(super) fn explanation(
+    t: &AuroraTheme,
+    title: impl Into<gpui::SharedString>,
+    detail: Option<gpui::SharedString>,
+) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .min_w(px(0.))
+        .gap(px(4.))
+        .child(ui::section_header(t, title, None))
+        .when_some(detail, |d, text| d.child(ui::caption(t, text)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accuracy_insight_excludes_shield_outcomes() {
+        let mut accuracy = MetricValue::default();
+        accuracy.value = Some(80.);
+        accuracy.definition.unit = "%".into();
+        let m = [("accuracy".to_owned(), accuracy)].into_iter().collect();
+        let line = accuracy_insight(
+            &m,
+            Outcomes {
+                hit: 8.,
+                miss: 2.,
+                blocked: 3.,
+                disabled: 1.,
+            },
+        );
+        assert!(line.contains("8 Hits of 10 Hits and Misses"));
+        assert!(line.contains("3 Blocked and 1 Disabled are excluded"));
+    }
+}

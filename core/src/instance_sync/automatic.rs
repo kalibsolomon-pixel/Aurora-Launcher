@@ -42,7 +42,11 @@ pub(super) fn worker_active() -> bool {
 
 pub fn reconcile(host: Host, managed: ManagedPaths) -> Result<Status, SyncError> {
     let policy = policy(&managed)?;
-    let eligible = policy.enabled && policy.instances.len() >= 2 && policy.has_content();
+    // The main-instance group owns settings when active; the legacy pool stays idle.
+    let eligible = policy.enabled
+        && policy.instances.len() >= 2
+        && policy.has_content()
+        && !super::group::active(&managed);
     let mut state = manager().lock().expect("sync manager");
     state.status.enabled = policy.enabled;
     if let Some(wake) = &state.wake {
@@ -81,7 +85,11 @@ async fn worker(
     interval.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
         match policy(&managed) {
-            Ok(p) if p.enabled && p.instances.len() >= 2 && p.has_content() => {}
+            Ok(p)
+                if p.enabled
+                    && p.instances.len() >= 2
+                    && p.has_content()
+                    && !super::group::active(&managed) => {}
             _ => break,
         }
         tokio::select! {
@@ -139,8 +147,9 @@ async fn worker(
         }
         .into();
         let _ = host.emit("instance-sync-state", &state.status);
-        restart =
-            policy(&managed).is_ok_and(|p| p.enabled && p.instances.len() >= 2 && p.has_content());
+        restart = policy(&managed)
+            .is_ok_and(|p| p.enabled && p.instances.len() >= 2 && p.has_content())
+            && !super::group::active(&managed);
     }
     drop(state);
     if restart {
@@ -201,7 +210,7 @@ impl Engine {
     }
     fn cycle_inner(&mut self, managed: &ManagedPaths) -> Result<Status, SyncError> {
         let selected = policy(managed)?;
-        if !selected.enabled || selected.instances.len() < 2 {
+        if !selected.enabled || selected.instances.len() < 2 || super::group::active(managed) {
             return Ok(Status::default());
         }
         let _cycle = TargetLock::acquire(

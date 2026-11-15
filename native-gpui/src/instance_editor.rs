@@ -21,8 +21,14 @@ use std::{cell::Cell, collections::BTreeMap, ops::Range, rc::Rc};
 pub enum InstanceEditorEvent {
     Changed,
     OpenContent { instance: String },
+    OpenPulsar { instance: String },
 }
 impl EventEmitter<InstanceEditorEvent> for InstanceEditor {}
+fn pulsar_shortcut(instance: Option<&api::InstanceSummary>) -> Option<InstanceEditorEvent> {
+    instance.map(|instance| InstanceEditorEvent::OpenPulsar {
+        instance: instance.id.clone(),
+    })
+}
 
 struct SelectState {
     trigger: FocusHandle,
@@ -496,6 +502,7 @@ impl Observed {
 
 pub struct InstanceEditor {
     section: usize,
+    screenshots: Entity<crate::screenshots::Screenshots>,
     memory_details: bool,
     host: Option<Host>,
     runtime: tokio::runtime::Handle,
@@ -591,8 +598,12 @@ impl InstanceEditor {
             }
         })
         .detach();
+        let screenshots = cx.new(|cx| {
+            crate::screenshots::Screenshots::new(host.clone(), runtime.clone(), window, cx)
+        });
         let mut this = Self {
             section: 0,
+            screenshots,
             memory_details: false,
             host,
             runtime,
@@ -666,6 +677,13 @@ impl InstanceEditor {
             let r = guarded(api::launcher_state(host)).await;
             let _ = tx.send(Reply::State(serial, r)).await;
         });
+    }
+    pub fn on_page_open(&mut self, cx: &mut Context<Self>) {
+        if self.section == 5 {
+            let selected = self.selected.clone();
+            self.screenshots
+                .update(cx, |gallery, cx| gallery.open(selected, cx));
+        }
     }
     pub fn on_host_event(
         &mut self,
@@ -1057,6 +1075,11 @@ impl InstanceEditor {
             return;
         };
         self.selected = Some(id);
+        if self.section == 5 {
+            let selected = self.selected.clone();
+            self.screenshots
+                .update(cx, |gallery, cx| gallery.open(selected, cx));
+        }
         self.baseline = Some(instance.configuration.clone());
         self.observed = Some(Observed::of(&instance));
         self.generation += 1;
@@ -2243,6 +2266,13 @@ impl Render for InstanceEditor {
                     let index = wanted.parse::<usize>().unwrap_or(0);
                     if let Some(id) = state.instances.get(index).map(|i| i.id.clone()) {
                         self.choose(id, window, cx);
+                        if std::env::var("AURORA_SHOWCASE_SECTION").as_deref() == Ok("screenshots")
+                        {
+                            self.section = 5;
+                            let selected = self.selected.clone();
+                            self.screenshots
+                                .update(cx, |gallery, cx| gallery.open(selected, cx));
+                        }
                     }
                 }
             }
@@ -2534,9 +2564,16 @@ impl Render for InstanceEditor {
                 .bg(t.sunken)
                 .border_1()
                 .border_color(t.border_subtle);
-            for (index, label) in ["General", "Game version", "Runtime", "Java", "Maintenance"]
-                .into_iter()
-                .enumerate()
+            for (index, label) in [
+                "General",
+                "Game version",
+                "Runtime",
+                "Java",
+                "Maintenance",
+                "Screenshots",
+            ]
+            .into_iter()
+            .enumerate()
             {
                 tabs = tabs.child(
                     AuroraButton::new(("instance-section", index), label)
@@ -2545,10 +2582,29 @@ impl Render for InstanceEditor {
                         .selected(self.section == index)
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.section = index;
+                            if index == 5 {
+                                let selected = this.selected.clone();
+                                this.screenshots
+                                    .update(cx, |gallery, cx| gallery.open(selected, cx));
+                            }
                             cx.notify();
                         })),
                 );
                 if index == 0 {
+                    tabs = tabs.child(
+                        AuroraButton::new("instance-pulsar", "Pulsar")
+                            .accessibility_label("Open Pulsar for selected instance")
+                            .variant(ButtonVariant::Ghost)
+                            .size(ButtonSize::Small)
+                            .disabled(busy || instance.is_none())
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if !this.busy {
+                                    if let Some(event) = pulsar_shortcut(this.selected_instance()) {
+                                        cx.emit(event);
+                                    }
+                                }
+                            })),
+                    );
                     tabs = tabs.child(
                         AuroraButton::new("instance-content", "Content")
                             .accessibility_label("Open content for selected instance")
@@ -2569,6 +2625,9 @@ impl Render for InstanceEditor {
                 }
             }
             detail = detail.child(div().flex().child(tabs));
+            if self.section == 5 {
+                detail = detail.child(self.screenshots.clone());
+            }
             if self.section == 0 {
                 // General settings and the reviewed Client transition.
                 // Aurora is a reviewed transition, never a direct configuration toggle.
@@ -3615,6 +3674,19 @@ mod tests {
         .unwrap()
     }
 
+    #[test]
+    fn pulsar_shortcut_uses_editor_instance() {
+        let mut editor = instance(configuration(serde_json::json!({"kind":"vanilla"})));
+        editor.id = "editor-instance".into();
+        let active_play_instance = "different-play-instance";
+        let Some(InstanceEditorEvent::OpenPulsar { instance }) = pulsar_shortcut(Some(&editor))
+        else {
+            panic!("missing shortcut")
+        };
+        assert_eq!(instance, "editor-instance");
+        assert_ne!(instance, active_play_instance);
+        assert!(pulsar_shortcut(None).is_none());
+    }
     #[test]
     fn configuration_preserves_unknown_fields_and_loader() {
         let c = configuration(

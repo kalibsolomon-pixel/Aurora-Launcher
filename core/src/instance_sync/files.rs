@@ -494,11 +494,12 @@ pub fn resolve(managed: &ManagedPaths, id: &str, use_source: bool) -> Result<Rec
             &c.source_hash,
         )
     };
-    // Server edits remain unsupported; never replace entire lists on this action.
+    // Whole-list conflict replacement remains unsupported. Individual entries
+    // can be changed through Home's revision-checked server editor.
     if c.category == Category::Servers {
         return Err(fail(
             "sync_server_edit_unsupported",
-            "Server-list edits or ambiguous entries must be resolved in Minecraft; both lists are preserved.",
+            "Manage the individual servers on Home or in Minecraft to resolve ambiguous entries; both lists are preserved.",
         ));
     }
     let mut request = automatic::pair(&selected, source, target, c.category);

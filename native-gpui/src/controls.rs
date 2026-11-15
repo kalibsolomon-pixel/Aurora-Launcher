@@ -610,6 +610,7 @@ impl RenderOnce for AuroraCheckbox {
 pub struct AuroraSlider {
     state: Entity<SliderState>,
     label: SharedString,
+    value_label: Option<SharedString>,
     disabled: bool,
     show_label: bool,
 }
@@ -619,6 +620,7 @@ impl AuroraSlider {
         Self {
             state: state.clone(),
             label: label.into(),
+            value_label: None,
             disabled: false,
             show_label: true,
         }
@@ -631,6 +633,12 @@ impl AuroraSlider {
 
     pub fn show_label(mut self, show: bool) -> Self {
         self.show_label = show;
+        self
+    }
+
+    /// A unit-aware readout supplied by the domain using the slider.
+    pub fn value_label(mut self, label: impl Into<SharedString>) -> Self {
+        self.value_label = Some(label.into());
         self
     }
 }
@@ -671,10 +679,10 @@ impl RenderOnce for AuroraSlider {
                         )
                     })
                     .child(
-                        div()
-                            .text_size(px(13.))
-                            .text_color(t.foreground)
-                            .child(format!("{} / 100", value.end() as i64)),
+                        div().text_size(px(13.)).text_color(t.foreground).child(
+                            self.value_label
+                                .unwrap_or_else(|| format!("{} / 100", value.end() as i64).into()),
+                        ),
                     ),
             )
             .child(
