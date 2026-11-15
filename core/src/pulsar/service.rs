@@ -148,6 +148,7 @@ pub(crate) fn filtered<'a>(index: &'a Index, q: &LibraryQuery) -> Result<Vec<&'a
 pub(crate) fn summary(paths: &ManagedPaths, e: &Entry) -> FightSummary {
     let f = &e.record;
     let mut values = metrics::summary_values(&analytics::summary(f));
+    values.extend(super::cards::summary(f, None));
     for (key, label, unit, help, value) in [
         (
             "duration",
@@ -394,6 +395,9 @@ pub fn detail_analysis(
     let mut summary = summary(paths, &entry);
     summary.timeline_loaded = true;
     summary.metrics = metrics::values(&analysis.derived);
+    summary
+        .metrics
+        .extend(super::cards::summary(&record, Some(&analysis)));
     if selected.is_some() {
         summary.start_epoch_millis = record.start_epoch_millis;
         summary.date_group = format::date_group(record.start_epoch_millis);
@@ -405,7 +409,8 @@ pub fn detail_analysis(
         summary.result_label = format::result(&record);
         summary.outcome = record.outcome.clone().unwrap_or("UNKNOWN".into());
     }
-    let tabs = projection::tabs(&record, &analysis, &filters.weapon, &filters.timing_result);
+    let mut tabs = projection::tabs(&record, &analysis, &filters.weapon, &filters.timing_result);
+    tabs.0.tables.extend(super::cards::detail_tables(&record));
     let participants = parent
         .session
         .as_ref()
@@ -472,6 +477,7 @@ pub fn detail_analysis(
         flow: tabs.3,
         evidence,
         timeline,
+        aim_regions: super::cards::aim_regions(&analysis),
         derived: analysis.derived,
     })
 }
@@ -610,9 +616,16 @@ pub fn analyze_library(
         overview.notices.push("Mixed frozen reach policies; pooled target-window share uses each recording's own policy.".into());
         offense.notices.push("Mixed frozen reach policies; filtered distribution uses the newest loaded target/tolerance.".into());
     }
+    let latest = chosen.first().map(|e| {
+        let mut view = summary(paths, e);
+        if let Some((_, f, a)) = timelines.iter().find(|(key, _, _)| key == &e.key) {
+            view.metrics.extend(super::cards::summary(f, Some(a)));
+        }
+        view
+    });
     Ok(AnalysisView {
         coverage,
-        latest: chosen.first().map(|e| summary(paths, e)),
+        latest,
         focus: focus.map(|(key, _, _)| key.clone()),
         overview,
         offense,

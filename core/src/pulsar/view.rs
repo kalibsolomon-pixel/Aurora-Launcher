@@ -344,6 +344,10 @@ pub struct FightDetailView {
     /// Lossless normalized format-6 analytical payload for rich drill-down views.
     /// This is calculated from raw recordings, never read from an exported report.
     pub derived: serde_json::Value,
+    /// Frozen contact geometry by canonical sequence, including measured non-hit contacts.
+    /// Values contain idealRegion, box, face and confidence without changing format-6 Derived.
+    #[serde(default)]
+    pub aim_regions: BTreeMap<i64, serde_json::Value>,
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

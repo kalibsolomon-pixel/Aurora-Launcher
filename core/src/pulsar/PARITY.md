@@ -11,9 +11,9 @@ Every test name below is prefixed `pulsar::tests::`. Core support means the type
 | P3 | Core payload supported; UI/OS interaction acceptance remains Track B-owned | `application_commands_use_native_host_and_serialize_contract_end_to_end` |
 | P4 | UI-owned interactions; core supplies bounded typed data | `application_commands_use_native_host_and_serialize_contract_end_to_end` |
 | P5 | Persisted/empty data supported; capture state/control runtime-only | `manual_scope_no_hit_parent_and_child_selection_do_not_double_count`; `oracle_manual_participants` |
-| P6 | Core persisted analytics/data supported | `oracle_completed_multiweapon`; `oracle_manual_participants`; `oracle_historical`; `oracle_no_hit_incomplete` |
+| P6 | Core persisted analytics/data supported | `oracle_completed_multiweapon`; `oracle_manual_participants`; `oracle_historical`; `oracle_no_hit_incomplete`; `card_denominators_frozen_regions_rounds_and_focused_flow_are_source_supported` |
 | P7 | Core persisted analytics/data supported | `oracle_completed_multiweapon`; `oracle_manual_participants`; `oracle_historical`; `oracle_no_hit_incomplete` |
-| P8 | Core persisted analytics/data supported | `pooled_ratios_mixed_policy_and_summary_only_coverage`; `pooled_dominance_uses_observed_durations_and_old_context_stays_unavailable` |
+| P8 | Core persisted analytics/data supported | `pooled_ratios_mixed_policy_and_summary_only_coverage`; `pooled_dominance_uses_observed_durations_and_old_context_stays_unavailable`; `card_denominators_frozen_regions_rounds_and_focused_flow_are_source_supported` |
 | P9 | Core payload supported; UI/OS interaction acceptance remains Track B-owned | `formats_preserve_units_local_dates_and_unavailable`; `oracle_completed_multiweapon`; `pooled_ratios_mixed_policy_and_summary_only_coverage` |
 | P10 | Persisted/empty data supported; capture state/control runtime-only | `report_copy_receipt_integrity_confirmation_and_source_preservation`; `temp_checkpoint_export_depth_and_uuid_rules` |
 | P11 | Core persisted analytics/data supported | `canonical_duplicates_exclusions_and_frozen_timings_survive_preferences`; `oracle_separated_exchanges` |
@@ -23,7 +23,7 @@ Every test name below is prefixed `pulsar::tests::`. Core support means the type
 | P15 | Core persisted analytics/data supported | `creative_and_nearest_box_hits_do_not_enter_eligible_ray_reach`; `selected_detail_filters_apply_inside_manual_exchange_and_reject_invalid_filters`; `oracle_completed_multiweapon` |
 | P16 | Core persisted analytics/data supported | `creative_and_nearest_box_hits_do_not_enter_eligible_ray_reach`; `selected_detail_filters_apply_inside_manual_exchange_and_reject_invalid_filters`; `oracle_completed_multiweapon` |
 | P17 | Core persisted analytics/data supported | `selected_detail_filters_apply_inside_manual_exchange_and_reject_invalid_filters`; `oracle_completed_multiweapon` |
-| P18 | Core payload supported; UI/OS interaction acceptance remains Track B-owned | `selected_detail_filters_apply_inside_manual_exchange_and_reject_invalid_filters`; `oracle_completed_multiweapon` |
+| P18 | Core payload supported; UI/OS interaction acceptance remains Track B-owned | `selected_detail_filters_apply_inside_manual_exchange_and_reject_invalid_filters`; `oracle_completed_multiweapon`; `card_denominators_frozen_regions_rounds_and_focused_flow_are_source_supported` |
 | P19 | Core persisted analytics/data supported | `below_resolution_is_frozen_and_excluded_from_graded_timing_rate`; `canonical_duplicates_exclusions_and_frozen_timings_survive_preferences`; `application_commands_use_native_host_and_serialize_contract_end_to_end` |
 | P20 | Core payload supported; UI/OS interaction acceptance remains Track B-owned | `below_resolution_is_frozen_and_excluded_from_graded_timing_rate`; `canonical_duplicates_exclusions_and_frozen_timings_survive_preferences`; `application_commands_use_native_host_and_serialize_contract_end_to_end` |
 | P21 | Core persisted analytics/data supported | `below_resolution_is_frozen_and_excluded_from_graded_timing_rate`; `canonical_duplicates_exclusions_and_frozen_timings_survive_preferences`; `application_commands_use_native_host_and_serialize_contract_end_to_end` |
@@ -40,10 +40,10 @@ Every test name below is prefixed `pulsar::tests::`. Core support means the type
 | P32 | Core persisted analytics/data supported | `same_tick_trades_deduplicate_opponent_observations`; `oracle_multiround`; `oracle_separated_exchanges`; `pooled_dominance_uses_observed_durations_and_old_context_stays_unavailable` |
 | P33 | Core payload supported; UI/OS interaction acceptance remains Track B-owned | `same_tick_trades_deduplicate_opponent_observations`; `oracle_multiround`; `oracle_separated_exchanges`; `pooled_dominance_uses_observed_durations_and_old_context_stays_unavailable` |
 | P34 | Core payload supported; UI/OS interaction acceptance remains Track B-owned | `same_tick_trades_deduplicate_opponent_observations`; `oracle_multiround`; `oracle_separated_exchanges`; `pooled_dominance_uses_observed_durations_and_old_context_stays_unavailable` |
-| P35 | Core persisted analytics/data supported | `same_tick_trades_deduplicate_opponent_observations`; `oracle_multiround`; `oracle_separated_exchanges`; `pooled_dominance_uses_observed_durations_and_old_context_stays_unavailable` |
+| P35 | Core persisted analytics/data supported | `same_tick_trades_deduplicate_opponent_observations`; `oracle_multiround`; `oracle_separated_exchanges`; `pooled_dominance_uses_observed_durations_and_old_context_stays_unavailable`; `card_denominators_frozen_regions_rounds_and_focused_flow_are_source_supported` |
 | P36 | Core persisted analytics/data supported | `same_tick_trades_deduplicate_opponent_observations`; `oracle_multiround`; `oracle_separated_exchanges`; `pooled_dominance_uses_observed_durations_and_old_context_stays_unavailable` |
 | P37 | Core persisted analytics/data supported | `same_tick_trades_deduplicate_opponent_observations`; `oracle_multiround`; `oracle_separated_exchanges`; `pooled_dominance_uses_observed_durations_and_old_context_stays_unavailable` |
-| P38 | Core persisted analytics/data supported | `same_tick_trades_deduplicate_opponent_observations`; `oracle_multiround`; `oracle_separated_exchanges`; `pooled_dominance_uses_observed_durations_and_old_context_stays_unavailable` |
+| P38 | Core persisted analytics/data supported | `same_tick_trades_deduplicate_opponent_observations`; `oracle_multiround`; `oracle_separated_exchanges`; `pooled_dominance_uses_observed_durations_and_old_context_stays_unavailable`; `card_denominators_frozen_regions_rounds_and_focused_flow_are_source_supported` |
 | P39 | Core persisted analytics/data supported | `history_ties_filters_pagination_and_unavailable_last` |
 | P40 | Core payload supported; UI/OS interaction acceptance remains Track B-owned | `application_commands_use_native_host_and_serialize_contract_end_to_end` |
 | P41 | UI-owned interactions; core supplies bounded typed data | `application_commands_use_native_host_and_serialize_contract_end_to_end` |
@@ -68,11 +68,11 @@ Every test name below is prefixed `pulsar::tests::`. Core support means the type
 | P60 | Core payload supported; UI/OS interaction acceptance remains Track B-owned | `oracle_completed_multiweapon`; `oracle_manual_participants`; `oracle_historical`; `oracle_no_hit_incomplete` |
 | P61 | Core payload supported; UI/OS interaction acceptance remains Track B-owned | `application_commands_use_native_host_and_serialize_contract_end_to_end` |
 | P62 | Core persisted analytics/data supported | `oracle_completed_multiweapon`; `oracle_manual_participants`; `oracle_historical`; `oracle_no_hit_incomplete` |
-| P63 | Core persisted analytics/data supported | `manual_scope_no_hit_parent_and_child_selection_do_not_double_count`; `oracle_manual_participants` |
-| P64 | Core persisted analytics/data supported | `oracle_completed_multiweapon`; `oracle_manual_participants`; `oracle_historical`; `oracle_no_hit_incomplete` |
+| P63 | Core persisted analytics/data supported | `manual_scope_no_hit_parent_and_child_selection_do_not_double_count`; `oracle_manual_participants`; `card_denominators_frozen_regions_rounds_and_focused_flow_are_source_supported` |
+| P64 | Core persisted analytics/data supported | `oracle_completed_multiweapon`; `oracle_manual_participants`; `oracle_historical`; `oracle_no_hit_incomplete`; `card_denominators_frozen_regions_rounds_and_focused_flow_are_source_supported` |
 | P65 | Core persisted analytics/data supported | `canonical_duplicates_exclusions_and_frozen_timings_survive_preferences`; `oracle_separated_exchanges` |
 | P66 | Core persisted analytics/data supported | `creative_and_nearest_box_hits_do_not_enter_eligible_ray_reach`; `selected_detail_filters_apply_inside_manual_exchange_and_reject_invalid_filters`; `oracle_completed_multiweapon` |
-| P67 | Core payload supported; UI/OS interaction acceptance remains Track B-owned | `selected_detail_filters_apply_inside_manual_exchange_and_reject_invalid_filters`; `oracle_completed_multiweapon` |
+| P67 | Core payload supported; UI/OS interaction acceptance remains Track B-owned | `selected_detail_filters_apply_inside_manual_exchange_and_reject_invalid_filters`; `oracle_completed_multiweapon`; `card_denominators_frozen_regions_rounds_and_focused_flow_are_source_supported` |
 | P68 | Core persisted analytics/data supported | `below_resolution_is_frozen_and_excluded_from_graded_timing_rate`; `canonical_duplicates_exclusions_and_frozen_timings_survive_preferences`; `application_commands_use_native_host_and_serialize_contract_end_to_end` |
 | P69 | Core persisted analytics/data supported | `oracle_completed_multiweapon`; `oracle_historical` |
 | P70 | Core persisted analytics/data supported | `health_baseline_same_tick_and_jump_sequence_ties`; `oracle_completed_multiweapon`; `oracle_historical` |
@@ -82,7 +82,7 @@ Every test name below is prefixed `pulsar::tests::`. Core support means the type
 | P74 | Core persisted analytics/data supported | `health_baseline_same_tick_and_jump_sequence_ties`; `oracle_completed_multiweapon`; `oracle_historical` |
 | P75 | Core persisted analytics/data supported | `manual_scope_no_hit_parent_and_child_selection_do_not_double_count`; `oracle_manual_participants` |
 | P76 | Core payload supported; UI/OS interaction acceptance remains Track B-owned | `same_tick_trades_deduplicate_opponent_observations`; `oracle_multiround`; `oracle_separated_exchanges`; `pooled_dominance_uses_observed_durations_and_old_context_stays_unavailable` |
-| P77 | Core persisted analytics/data supported | `same_tick_trades_deduplicate_opponent_observations`; `oracle_multiround`; `oracle_separated_exchanges`; `pooled_dominance_uses_observed_durations_and_old_context_stays_unavailable` |
+| P77 | Core persisted analytics/data supported | `same_tick_trades_deduplicate_opponent_observations`; `oracle_multiround`; `oracle_separated_exchanges`; `pooled_dominance_uses_observed_durations_and_old_context_stays_unavailable`; `card_denominators_frozen_regions_rounds_and_focused_flow_are_source_supported` |
 | P78 | Core payload supported; UI/OS interaction acceptance remains Track B-owned | `application_commands_use_native_host_and_serialize_contract_end_to_end`; `oracle_completed_multiweapon`; `canonical_duplicates_exclusions_and_frozen_timings_survive_preferences` |
 | P79 | Core payload supported; UI/OS interaction acceptance remains Track B-owned | `application_commands_use_native_host_and_serialize_contract_end_to_end`; `oracle_completed_multiweapon`; `canonical_duplicates_exclusions_and_frozen_timings_survive_preferences` |
 | P80 | Core persisted analytics/data supported | `application_commands_use_native_host_and_serialize_contract_end_to_end`; `oracle_completed_multiweapon`; `canonical_duplicates_exclusions_and_frozen_timings_survive_preferences` |
@@ -98,6 +98,31 @@ Bounds and persistence: `malformed_future_order_and_missing_required_files_are_p
 
 Oracle status: all eight fixtures have zero mismatches across every Derived field, the 39 MetricDefs and manual child-scope Derived payloads. Numeric tolerance is 1e-9, except serialized dominance samples use 1e-4; text/enums/nulls/integers are exact. The anonymized manual parent oracle is compared after replacing announcement text with the explicit exporter privacy projection; core preserves the original raw text. The complete 880-event fixture is embedded, plus a path-based large case.
 
-Runtime limits: P5/P10 capture control and P50?P59 live facts, key routing, audio preview, editing/reset/import remain Change in game because finalized files contain no live IPC. The inspector shows raw persisted values before client validation/clamping, merged over constructor defaults and schema-1 display migration; it never rewrites preferences. P42/P84/P85 open and copy existing owner-marked reports with receipt/digest checks rather than regenerate/re-anonymize them. P83 retains the browser report unchanged; core provides no native print engine.
+Runtime limits: P5/P10 capture control and P50-P59 live facts, key routing, audio preview, editing/reset/import remain Change in game because finalized files contain no live IPC. The inspector shows raw persisted values before client validation/clamping, merged over constructor defaults and schema-1 display migration; it never rewrites preferences. P42/P84/P85 open and copy existing owner-marked reports with receipt/digest checks rather than regenerate/re-anonymize them. P83 retains the browser report unchanged; core provides no native print engine.
 
 Selected detail filters: `DetailAnalysisRequest` / `pulsar_detail_analysis` returns core-computed weapon reach/aim and weapon/result timing cards after selecting the manual exchange; evidence is `selected_detail_filters_apply_inside_manual_exchange_and_reject_invalid_filters`. Overall summary and `derived` stay recording/exchange scoped. Track B bound the additive operation in commit 2f7baad; its visual/interaction acceptance remains separate.
+
+## Core validation results
+
+Core validation recorded on 2026-11-14; supplemental source-supported card/geometry/table data is included in the final focused suite.
+
+- Core format check and `cargo check --manifest-path core/Cargo.toml --all-targets --locked -j 2`: pass.
+- Final focused suite: **43 passed, 0 failed, 1 ignored**. The ignored test is explicitly run separately below.
+- Read-only real-store test: **1 passed; 369 imported recordings; zero parse errors**. SHA-256 digests and modification times of finalized source files are unchanged after import.
+- Full core suite before the supplemental card test: **1,254 passed, 1 failed, 35 ignored**. The failure is `neoforge::processors::tests::a_tool_that_spawns_a_grandchild_cannot_outlive_supervision`, whose 2-second deadline expired in full-suite runs. Its isolated rerun passes (0.86 seconds). No NeoForge code or test was changed. A separate resource-exhausted attempt is excluded from these numbers.
+- Initial GPUI production check/debug build and all **407 binary tests** passed. A subsequent check while Track B edits were in flight found `pulsar/tabs.rs::table` returning `Stateful<Div>` where `Div` was declared. GPUI examples also have pre-existing missing `crate::ui` / `crate::symbols` imports; native formatting reports unrelated `content.rs` differences. Those paths belong to Track B.
+
+| Fixture | Raw events | Oracle test | Mismatches |
+|---|---:|---|---:|
+| 02100001 | 218 | `oracle_completed_multiweapon` | 0 |
+| 02100002 | 30 | `oracle_multiround` | 0 |
+| 02100003 | 31 | `oracle_separated_exchanges` | 0 |
+| 02100004 | 228 | `oracle_manual_participants` | 0 |
+| 02100005 | 10 | `oracle_interrupted` | 0 |
+| 02100006 | 18 | `oracle_historical` | 0 |
+| 02100007 | 3 | `oracle_no_hit_incomplete` | 0 |
+| 02100008 | 880 | `oracle_long_forty_round_match` | 0 |
+
+Logs are under `C:/Dev/`: `pulsar-final-focused.log`, `pulsar-final-core-check.log`, `pulsar-core-clean-final.log`, `pulsar-real-import-final.log`, `pulsar-neoforge-isolated.log`, and `pulsar-gpui-current-*.log`. Build commands use `CARGO_TARGET_DIR=C:/Dev/aurora-gpui-build-a`, `--locked` and `-j 2`. Full-suite/serial verification uses two test threads.
+
+The additive card/geometry/table test covers the P6/P8 denominators, measured non-hit frozen regions (P18/P67), manual announcements and full round history (P63/P64), and focused longest-advantage/swing definitions (P35/P77). The canonical eight fixture payloads remain unchanged.

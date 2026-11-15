@@ -116,7 +116,7 @@ pub(crate) fn table(id: &str, title: &str, data: &Value, key: Option<&FightKey>)
                         metrics::metric(k, Some(n))
                     } else {
                         let unit = match k.as_str() {
-                            "time" | "t" | "start" | "end" | "duration" => "s",
+                            "time" | "t" | "start" | "end" | "duration" | "from" | "to" => "s",
                             "reach" | "estimatedReach" | "distance" | "mean" | "deviation"
                             | "max" => "m",
                             "tick" | "offsetTicks" | "jumpOffsetTicks" | "interval"
@@ -893,6 +893,7 @@ fn tabs_value(
     if f.session.is_some() {
         flow.notices.push("Entire manual sessions have no tracked opponent. Select one participant exchange for opponent combos and dominance.".into());
     }
+    super::cards::focused_flow(&mut flow, d);
     (overview, offense, defense, flow)
 }
 
@@ -1435,6 +1436,9 @@ pub(crate) fn pool(
         local + opponent + neutral
     ));
     let (mut overview, mut offense, mut defense, mut flow) = tabs_value(&f, &d, weapon, timing);
+    overview
+        .metrics
+        .extend(super::cards::pooled(entries, timelines));
     if !timelines.iter().any(|(_, f, _)| f.schema_version >= 3) {
         defense
             .metrics

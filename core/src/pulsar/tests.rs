@@ -1306,3 +1306,98 @@ fn selected_detail_filters_apply_inside_manual_exchange_and_reject_invalid_filte
         "pulsar_invalid_filter"
     );
 }
+
+#[test]
+fn card_denominators_frozen_regions_rounds_and_focused_flow_are_source_supported() {
+    let lab = Lab::new();
+    for n in [0, 1, 3] {
+        lab.write(n);
+    }
+    let index = lab.refresh();
+    let request = |n| view::DetailRequest {
+        key: index
+            .entries
+            .iter()
+            .find(|e| e.key.fight_id == IDS[n])
+            .unwrap()
+            .key
+            .clone(),
+        ..Default::default()
+    };
+    let detail = service::detail(&lab.paths, request(0)).unwrap();
+    assert_eq!(
+        detail.summary.metrics["accuracyDenominator"].value,
+        Some(14.0)
+    );
+    assert_eq!(detail.summary.metrics["reachEligible"].value, Some(13.0));
+    assert_eq!(detail.summary.metrics["reachWithinCount"].value, Some(7.0));
+    assert_eq!(detail.summary.metrics["comboCount"].value, Some(3.0));
+    for sample in detail.derived["aim"]["samples"].as_array().unwrap() {
+        let region = &detail.aim_regions[&sample["seq"].as_i64().unwrap()];
+        assert!(region["idealRegion"].is_object());
+        assert!(region["box"].is_object());
+    }
+    let not_hit = detail.derived["aim"]["samples"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|s| s["hit"] == false)
+        .unwrap();
+    assert!(
+        detail
+            .aim_regions
+            .contains_key(&not_hit["seq"].as_i64().unwrap())
+    );
+    let longest = &detail.derived["dominance"]["longest"];
+    let duration = longest["end"].as_f64().unwrap() - longest["start"].as_f64().unwrap();
+    assert_eq!(
+        detail.flow.metrics["longestAdvantageDuration"].value,
+        Some(duration)
+    );
+    assert_eq!(
+        detail.flow.metrics["longestAdvantageDuration"]
+            .definition
+            .unit,
+        "s"
+    );
+    let swing = &detail.derived["dominance"]["swing"];
+    assert_eq!(
+        detail.flow.metrics["largestSwingDifference"].value,
+        Some((swing["toValue"].as_f64().unwrap() - swing["fromValue"].as_f64().unwrap()).abs())
+    );
+    let manual = service::detail(&lab.paths, request(3)).unwrap();
+    let announcements = manual
+        .summary_tab
+        .tables
+        .iter()
+        .find(|t| t.id == "manual_announcements")
+        .unwrap();
+    assert_eq!(
+        announcements.rows.len(),
+        fight(3).session.unwrap().announcements.len()
+    );
+    let rounds = service::detail(&lab.paths, request(1)).unwrap();
+    let table = rounds
+        .summary_tab
+        .tables
+        .iter()
+        .find(|t| t.id == "round_history")
+        .unwrap();
+    assert_eq!(table.rows.len(), fight(1).evidence().rounds.len());
+    assert_eq!(table.rows[0].metrics["start"].definition.unit, "s");
+    let pooled = service::analyze_library(&lab.paths, view::AnalysisRequest::default()).unwrap();
+    assert!(
+        pooled.latest.unwrap().metrics["accuracyDenominator"]
+            .value
+            .is_some()
+    );
+    assert_eq!(pooled.overview.metrics["recordings"].value, Some(3.0));
+    assert_eq!(
+        pooled.overview.metrics["timelineRecordings"].value,
+        Some(3.0)
+    );
+    assert_eq!(
+        pooled.overview.metrics["criticalDenominator"].value,
+        Some(41.0)
+    );
+}

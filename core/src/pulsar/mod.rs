@@ -1,5 +1,6 @@
 //! Launcher-owned Pulsar recordings and immutable analytical views.
 mod analytics;
+mod cards;
 mod parse;
 mod projection;
 mod reports;
