@@ -2272,18 +2272,28 @@ impl Render for Skins {
                                     ),
                             ),
                     )
-                    .child(
+                    // The Applied badge already marks the worn skin; its card
+                    // states that plainly instead of repeating a dead button.
+                    .child(if applied {
+                        div()
+                            .h(px(30.))
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .text_size(px(ui::TEXT_CAPTION))
+                            .text_color(palette.muted_foreground)
+                            .child(format!(
+                                "On {} now",
+                                signed_in.map(|a| a.name.as_str()).unwrap_or("your account")
+                            ))
+                            .into_any_element()
+                    } else {
                         AuroraButton::new(
                             format!("skins-apply-{}", preset.id),
-                            if applied {
-                                "Applied".to_owned()
-                            } else {
-                                self.core.apply_label()
-                            },
+                            self.core.apply_label(),
                         )
                         .accessibility_label(format!(
-                            "{} {} to {}{}",
-                            if applied { "Applied" } else { "Apply" },
+                            "Apply {} to {}{}",
                             preset.name,
                             signed_in.map(|a| a.name.as_str()).unwrap_or("your account"),
                             self.core
@@ -2291,18 +2301,15 @@ impl Render for Skins {
                                 .map(|reason| format!(". {reason}"))
                                 .unwrap_or_default()
                         ))
-                        .variant(if applied {
-                            ButtonVariant::Soft
-                        } else {
-                            ButtonVariant::Primary
-                        })
+                        .variant(ButtonVariant::Primary)
                         .size(ButtonSize::Small)
                         .full_width()
-                        .disabled(applied || self.core.apply_unavailable(self.blocked).is_some())
+                        .disabled(self.core.apply_unavailable(self.blocked).is_some())
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.open_apply_review(apply_id.clone(), cx)
-                        })),
-                    )
+                        }))
+                        .into_any_element()
+                    })
                     .child(
                         div()
                             .flex()
@@ -2474,19 +2481,24 @@ impl Render for Skins {
                                         },
                                     )),
                                 )
-                                .child(
-                                    AuroraButton::new(
-                                        format!("skins-cape-wear-{}", cape.id),
-                                        if cape.selected { "Worn" } else { "Wear cape" },
+                                // A worn cape is marked by its badge; only others offer Wear.
+                                .when(!cape.selected, |row| {
+                                    row.child(
+                                        AuroraButton::new(
+                                            format!("skins-cape-wear-{}", cape.id),
+                                            "Wear cape",
+                                        )
+                                        .accessibility_label(format!("Wear {} cape", cape.name))
+                                        .size(ButtonSize::Small)
+                                        .variant(ButtonVariant::Soft)
+                                        .disabled(locked)
+                                        .on_click(
+                                            cx.listener(move |this, _, _, cx| {
+                                                this.select_cape(wear_id.clone(), cx)
+                                            }),
+                                        ),
                                     )
-                                    .accessibility_label(format!("Wear {} cape", cape.name))
-                                    .size(ButtonSize::Small)
-                                    .variant(ButtonVariant::Soft)
-                                    .disabled(locked || cape.selected)
-                                    .on_click(cx.listener(
-                                        move |this, _, _, cx| this.select_cape(wear_id.clone(), cx),
-                                    )),
-                                ),
+                                }),
                         ),
                 );
             }
