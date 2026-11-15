@@ -419,6 +419,8 @@ pub struct SettingsView {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct OpponentView {
+    #[serde(default)]
+    pub latest: Option<FightSummary>,
     pub id: String,
     pub label: String,
     pub fights: Vec<FightKey>,
@@ -432,6 +434,8 @@ pub struct OpponentView {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct RecordView {
+    #[serde(default)]
+    pub source: Option<FightSummary>,
     pub id: String,
     pub label: String,
     pub key: Option<FightKey>,

@@ -1021,6 +1021,22 @@ fn opponents_records_and_compare_link_to_fights_and_gate_accuracy() {
     assert_eq!(b.fights.len(), 2);
     assert!((b.metrics["accuracy"].value.unwrap() - 100.0 * 23.0 / 26.0).abs() < 1e-9);
     let records = service::records(&lab.paths, view::LibraryQuery::default()).unwrap();
+    for r in &records {
+        assert_eq!(r.source.as_ref().map(|f| &f.key), r.key.as_ref());
+    }
+    for o in service::opponents(
+        &lab.paths,
+        view::LibraryQuery {
+            sort: view::HistorySort::Hits,
+            ..Default::default()
+        },
+    )
+    .unwrap()
+    {
+        let latest = o.latest.as_ref().unwrap();
+        assert!(o.fights.contains(&latest.key));
+        assert_eq!(o.last_fought_epoch_millis, latest.start_epoch_millis);
+    }
     let accuracy = records.iter().find(|r| r.id == "bestAccuracy").unwrap();
     assert_eq!(accuracy.minimum_attempts, Some(10));
     assert_eq!(accuracy.key.as_ref().unwrap().fight_id, IDS[0]);

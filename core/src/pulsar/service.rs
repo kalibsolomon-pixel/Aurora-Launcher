@@ -709,7 +709,8 @@ pub fn opponents(paths: &ManagedPaths, q: LibraryQuery) -> Result<Vec<OpponentVi
     let index = store::read_index(paths)?;
     let entries = filtered(&index, &q)?;
     let mut groups: BTreeMap<String, (OpponentView, f64, f64, f64, f64)> = BTreeMap::new();
-    let mut add = |f: &FightRecord, key: &FightKey| {
+    let mut add = |f: &FightRecord, entry: &Entry| {
+        let key = &entry.key;
         let Some(id) = f.opponent.as_ref() else {
             return;
         };
@@ -735,8 +736,16 @@ pub fn opponents(paths: &ManagedPaths, q: LibraryQuery) -> Result<Vec<OpponentVi
             Some("DRAW") => group.0.draws += 1,
             _ => group.0.unknown += 1,
         };
-        group.0.last_fought_epoch_millis =
-            group.0.last_fought_epoch_millis.max(f.start_epoch_millis);
+        let recorded_at = entry.record.start_epoch_millis;
+        if group
+            .0
+            .latest
+            .as_ref()
+            .is_none_or(|old| recorded_at > old.start_epoch_millis)
+        {
+            group.0.latest = Some(summary(paths, entry));
+        }
+        group.0.last_fought_epoch_millis = group.0.last_fought_epoch_millis.max(recorded_at);
         group.1 += f.statistics.hits as f64;
         group.2 += (f.statistics.attempts - f.statistics.shield_blocks).max(0) as f64;
         group.3 += f.statistics.reach_sum;
@@ -745,10 +754,10 @@ pub fn opponents(paths: &ManagedPaths, q: LibraryQuery) -> Result<Vec<OpponentVi
     for e in entries {
         if let Some(session) = &e.record.session {
             for ex in &session.exchanges {
-                add(ex, &e.key);
+                add(ex, e);
             }
         } else {
-            add(&e.record, &e.key);
+            add(&e.record, e);
         }
     }
     let mut result: Vec<_> = groups
@@ -858,6 +867,7 @@ pub fn records(paths: &ManagedPaths, q: LibraryQuery) -> Result<Vec<RecordView>,
             metric.reason = Some("Best among readable timelines within the 64 MiB / 50,000 event budget; other recordings were skipped.".into());
         }
         result.push(RecordView {
+            source: best.map(|(e, _)| summary(paths, e)),
             id: id.into(),
             label: label.into(),
             key: best.map(|(e, _)| e.key.clone()),
