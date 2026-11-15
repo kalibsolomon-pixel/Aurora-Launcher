@@ -716,11 +716,7 @@ impl Pulsar {
                             ui::muted(t, n.to_string())
                                 .w(px(width))
                                 .flex_shrink_0()
-                                .text_color(if n == 0 {
-                                    t.muted_foreground.opacity(0.5)
-                                } else {
-                                    color
-                                })
+                                .text_color(if n == 0 { t.muted_foreground } else { color })
                         }),
                     )
                     .children([("accuracy", 68.), ("averageReach", 56.)].into_iter().map(

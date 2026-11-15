@@ -761,7 +761,7 @@ impl Pulsar {
                     .child(
                         button(
                             ("scope-participant", i),
-                            format!("All exchanges with {}", participant.label),
+                            format!("{} (first exchange)", participant.label),
                         )
                         .selected(request.as_ref().is_some_and(|r| {
                             r.participant.as_ref() == Some(&id) && r.exchange_id.is_none()
