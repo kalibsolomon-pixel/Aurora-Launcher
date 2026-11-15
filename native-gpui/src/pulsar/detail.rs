@@ -77,12 +77,6 @@ impl Pulsar {
                 .and_then(|k| self.library.rows.iter().find(|r| &r.key == k))
         });
         let mut header = div().flex().flex_wrap().items_center().gap(px(8.));
-        header = header.child(button("fight-back", "Back").icon("arrow_back").on_click(
-            cx.listener(|this, _, _, cx| {
-                this.close_detail();
-                cx.notify();
-            }),
-        ));
         if let Some(s) = summary {
             header = header
                 .child(
@@ -123,6 +117,16 @@ impl Pulsar {
             .flex_col()
             .gap(px(12.))
             .min_w(px(0.))
+            .child(
+                div().flex().child(
+                    button("fight-back", "Back to library")
+                        .icon("arrow_back")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.close_detail();
+                            cx.notify();
+                        })),
+                ),
+            )
             .child(header);
         if let Some(s) = summary {
             page = page.child(
@@ -148,8 +152,11 @@ impl Pulsar {
                                 cx.notify();
                             })),
                     )
+                    .child(div().flex_1())
                     .child(
                         button("fight-delete", "Delete fight")
+                            .variant(ButtonVariant::DangerSubtle)
+                            .icon("delete")
                             .disabled(self.busy)
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.delete_open = true;
@@ -300,9 +307,16 @@ impl Pulsar {
                 let events = detail
                     .timeline
                     .iter()
-                    .filter(|e| e.kind != "MOTION")
+                    .filter(|e| {
+                        self.event_filter
+                            .as_deref()
+                            .map(|kind| e.kind == kind)
+                            .unwrap_or(e.kind != "MOTION")
+                    })
                     .collect::<Vec<_>>();
-                page = page.child(self.event_table(t, &events));
+                page = page
+                    .child(self.event_filters(cx))
+                    .child(self.event_table(t, &events));
             }
             i => {
                 let tab = match i {

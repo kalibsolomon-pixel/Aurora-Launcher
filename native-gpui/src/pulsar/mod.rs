@@ -71,6 +71,11 @@ pub struct Pulsar {
     active: bool,
     visible: bool,
     root_focus: gpui::FocusHandle,
+    tab_trigger: gpui::FocusHandle,
+    tab_content: gpui::FocusHandle,
+    tab_bounds: std::rc::Rc<std::cell::Cell<Option<gpui::Bounds<gpui::Pixels>>>>,
+    tab_open: bool,
+    tab_highlight: usize,
     scope_trigger: gpui::FocusHandle,
     scope_content: gpui::FocusHandle,
     scope_bounds: std::rc::Rc<std::cell::Cell<Option<gpui::Bounds<gpui::Pixels>>>>,
@@ -240,6 +245,11 @@ impl Pulsar {
             active: true,
             visible: window.is_visible(),
             root_focus: cx.focus_handle(),
+            tab_trigger: cx.focus_handle(),
+            tab_content: cx.focus_handle(),
+            tab_bounds: Default::default(),
+            tab_open: false,
+            tab_highlight: 0,
             scope_trigger: cx.focus_handle(),
             scope_content: cx.focus_handle(),
             scope_bounds: Default::default(),
@@ -263,7 +273,7 @@ impl Pulsar {
                 limit: 100,
                 ..Default::default()
             },
-            window: AnalysisWindow::Last25,
+            window: AnalysisWindow::Last10,
             weapon: None,
             timing_result: None,
             top_tab: 0,
@@ -904,8 +914,16 @@ impl Pulsar {
         if ready {
             for option in self.showcase_options.clone() {
                 match option.as_str() {
-                    "overview-details" | "counting" | "flow-metrics" | "supporting-metrics"
-                    | "diagnostics" | "result-evidence" | "shortcuts" | "interpretation" => {
+                    "overview-details"
+                    | "counting"
+                    | "flow-metrics"
+                    | "supporting-metrics"
+                    | "diagnostics"
+                    | "result-evidence"
+                    | "shortcuts"
+                    | "interpretation"
+                    | "settings-diagnostics"
+                    | "offense-filters" => {
                         self.disclosures.insert(option.clone());
                     }
                     "delete" => self.delete_open = true,
@@ -941,6 +959,8 @@ impl Pulsar {
                             }
                         }
                     }
+                    "more-views" => self.tab_open = true,
+                    "filter-shield" => self.event_filter = Some("SHIELD".into()),
                     "mid" => self.playhead = self.duration() / 2.,
                     _ => {}
                 }

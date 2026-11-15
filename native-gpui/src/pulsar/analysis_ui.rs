@@ -84,7 +84,6 @@ impl Pulsar {
                 div().flex().child(
                     button(format!("disclosure-{id}"), label.to_owned())
                         .icon(if open { "expand_less" } else { "expand_more" })
-                        .selected(open)
                         .on_click(cx.listener(move |this, _, _, cx| {
                             if !this.disclosures.remove(&key) {
                                 this.disclosures.insert(key.clone());
@@ -129,6 +128,38 @@ impl Pulsar {
             );
         }
 
+        if let Some(a) = &self.analysis {
+            if let Some(previous) = &a.previous_period {
+                let comparisons = ["accuracy", "averageReach", "longestCombo"]
+                    .into_iter()
+                    .filter_map(|k| {
+                        let now = tab.metrics.get(k)?;
+                        let before = previous.metrics.get(k)?;
+                        Some(format!(
+                            "{}: {}",
+                            now.definition.label,
+                            super::presentation::comparison_delta(before, now)
+                        ))
+                    })
+                    .collect::<Vec<_>>()
+                    .join(" \u{b7} ");
+                body = body.child(ui::caption(
+                    t,
+                    format!(
+                        "Against the previous {} recordings \u{b7} {comparisons}",
+                        a.previous_recordings
+                    ),
+                ));
+                if let (Some(now), Some(before)) = (
+                    tab.metrics.get("accuracy").and_then(|m| m.value),
+                    previous.metrics.get("accuracy").and_then(|m| m.value),
+                ) {
+                    body = body.child(ui::muted(t, if now > before { "Your confirmed-hit accuracy improved over the preceding recordings." } else if now < before { "Your confirmed-hit accuracy fell; inspect the misses in your recent fights." } else { "Your confirmed-hit accuracy held steady over the preceding recordings." }));
+                }
+            } else {
+                body = body.child(ui::caption(t, "No earlier period in this scope. Review individual points to find your next focus."));
+            }
+        }
         body = body.child(selectors);
         if let Some(c) = tab
             .charts
@@ -138,7 +169,7 @@ impl Pulsar {
             let mut chart = tabs::chart(c);
             chart.x_label = "Recording date (UTC)".into();
             chart.note =
-                "Each point is one recording, in time order. Missing measurements leave a gap."
+                "Each point is one recording. A hollow 0% point means eligible attempts with no confirmed hits; missing or ineligible measurements leave a gap. Hover a point for the fight and counts."
                     .into();
             body = body.child(chart.render_options(
                 t,
@@ -172,6 +203,7 @@ impl Pulsar {
                     } else {
                         210.
                     }))
+                    .when(m.len() == 5, |d| d.flex_1().min_w(px(170.)))
                     .child(
                         div()
                             .flex()
@@ -213,11 +245,24 @@ impl Pulsar {
                             .text_size(px(ui::TEXT_SECTION))
                             .font_weight(gpui::FontWeight::SEMIBOLD)
                             .text_color(t.foreground)
-                            .child(tabs::metric_value(metric)),
+                            .child(
+                                if metric.definition.key == "unexplainedHealthDrops"
+                                    && metric.value.is_none()
+                                {
+                                    "\u{2014}".into()
+                                } else {
+                                    tabs::metric_value(metric)
+                                },
+                            ),
                     ),
             );
         }
 
+        if m.get("unexplainedHealthDrops")
+            .is_some_and(|v| v.value.is_none())
+        {
+            group = group.child(ui::caption(t, "No usable health-drop attribution was recorded. This measure is unavailable, rather than zero.").w_full());
+        }
         let mut panel = ui::card(t)
             .child(ui::section_header(t, title.to_owned(), None))
             .child(group);
