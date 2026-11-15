@@ -34,7 +34,7 @@ pub fn text(input: &str) -> String {
                 || (word.len() > 1
                     && word.chars().any(|c| c.is_ascii_alphabetic())
                     && word.chars().all(|c| !c.is_ascii_lowercase())
-                    && !matches!(word, "HP" | "UI" | "SD" | "UTC" | "MB"))
+                    && !matches!(word, "HP" | "UI" | "SD" | "UTC" | "MB" | "HUD"))
             {
                 let mut s = word.replace('_', " ").to_lowercase();
                 if let Some(c) = s.get_mut(0..1) {

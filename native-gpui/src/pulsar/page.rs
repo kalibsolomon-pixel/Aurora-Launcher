@@ -819,11 +819,13 @@ impl Pulsar {
         let mut groups = std::collections::BTreeMap::<&str, Vec<&SettingView>>::new();
         for row in &s.settings {
             groups
-                .entry(if row.key == "schemaVersion" {
-                    "Diagnostics"
-                } else {
-                    &row.group
-                })
+                .entry(
+                    if row.key == "schemaVersion" || row.key.starts_with("standalone:") {
+                        "Diagnostics"
+                    } else {
+                        &row.group
+                    },
+                )
                 .or_default()
                 .push(row);
         }
@@ -860,15 +862,16 @@ impl Pulsar {
             }
             let count = rows.len();
             for (i, row) in rows.into_iter().enumerate() {
-                let value = if row.value.is_null() {
-                    "In-game control".into()
-                } else if let Some(s) = row.value.as_str() {
-                    s.to_owned()
+                let full_value = setting_readout(row);
+                let value = if row.key == "feedback" {
+                    row.value
+                        .as_array()
+                        .map(|v| super::presentation::count(v.len(), "feedback style"))
+                        .unwrap_or_else(|| "Unavailable".into())
                 } else {
-                    row.value.to_string()
+                    full_value.clone()
                 };
                 let value_theme = t.clone();
-                let full_value = value.clone();
                 let help_id = format!("setting-help-{group}-{i}");
                 let help_open = self.disclosures.contains(&help_id);
                 list = list.child(
@@ -955,6 +958,63 @@ fn history_header(t: &AuroraTheme) -> Div {
         .child(div().w(px(100.)))
 }
 
+/// Human-readable saved values. Raw standalone documents live only in Diagnostics.
+fn setting_readout(row: &SettingView) -> String {
+    let v = &row.value;
+    if v.is_null() {
+        return "In-game control".into();
+    }
+    if matches!(
+        row.key.as_str(),
+        "accent" | "forwardColor" | "backwardColor" | "neutralColor"
+    ) {
+        if let Some(n) = v.as_i64() {
+            let argb = n as i32 as u32;
+            let color = format!("#{:06X}", argb & 0xffffff);
+            return if argb >> 24 == 255 {
+                color
+            } else {
+                format!(
+                    "{color} ({:.0}% opacity)",
+                    (argb >> 24) as f64 * 100. / 255.
+                )
+            };
+        }
+    }
+    if matches!(row.key.as_str(), "analytics" | "direction" | "alert") && v.is_object() {
+        let number = |key: &str, factor: f64, digits: usize| {
+            v.get(key)
+                .and_then(|v| v.as_f64())
+                .map(|n| format!("{:.*}", digits, n * factor))
+                .unwrap_or_else(|| "Unavailable".into())
+        };
+        let flag = |key: &str, yes: &'static str, no: &'static str| {
+            v.get(key)
+                .and_then(|v| v.as_bool())
+                .map(|b| if b { yes } else { no })
+                .unwrap_or("Unavailable")
+        };
+        return format!(
+            "Position {}%, {}% \u{b7} Scale {}\u{d7} \u{b7} {}% opacity \u{b7} {} \u{b7} {} \u{b7} {}",
+            number("x", 100., 0),
+            number("y", 100., 0),
+            number("scale", 1., 1),
+            number("opacity", 100., 0),
+            flag("visible", "Visible", "Hidden"),
+            flag("background", "Background on", "Background off"),
+            flag("rightAligned", "Right aligned", "Left aligned")
+        );
+    }
+    if row.key == "feedback" {
+        if let Some(styles) = v.as_array() {
+            return styles.iter().enumerate().map(|(i, style)| format!("Style {}: {} \u{b7} Color {} \u{b7} Volume {} \u{b7} Pitch {} \u{b7} Visual {} \u{b7} Audio {}", i + 1, style["sound"].as_str().unwrap_or("Unavailable"), style.get("color").and_then(|v| v.as_i64()).map(|n| format!("#{:06X}", n as i32 as u32 & 0xffffff)).unwrap_or_else(|| "Unavailable".into()), style.get("volume").map(ToString::to_string).unwrap_or_else(|| "Unavailable".into()), style.get("pitch").map(ToString::to_string).unwrap_or_else(|| "Unavailable".into()), style.get("visual").map(ToString::to_string).unwrap_or_else(|| "Unavailable".into()), style.get("audio").map(ToString::to_string).unwrap_or_else(|| "Unavailable".into()))).collect::<Vec<_>>().join("; ");
+        }
+    }
+    v.as_str()
+        .map(str::to_owned)
+        .unwrap_or_else(|| v.to_string())
+}
+
 fn setting_label(key: &str, fallback: &str) -> String {
     match key {
         "schemaVersion" => "Saved format version",
@@ -972,6 +1032,11 @@ fn setting_label(key: &str, fallback: &str) -> String {
         "perfectReachTarget" => "Target reach (metres)",
         "perfectReachTolerance" => "Reach tolerance (metres)",
         "timingToleranceTicks" => "Timing tolerance (ticks)",
+        "analytics" => "Analytics HUD layout",
+        "direction" => "Direction HUD layout",
+        "alert" => "Alert HUD layout",
+        "hudOverlay" => "HUD overlay",
+        "feedback" => "Hit feedback styles",
         "chartGrid" => "Chart gridlines",
         "chartPoints" => "Chart point markers",
         "trendWindow" => "Recordings in trends",
@@ -1537,6 +1602,31 @@ fn history_entries(rows: &[FightSummary]) -> Vec<HistoryEntry> {
 mod tests {
     use super::*;
 
+    #[test]
+    fn saved_setting_values_use_player_units_and_preserve_layout_flags() {
+        let mut row = SettingView {
+            key: "accent".into(),
+            value: serde_json::json!(-7812950),
+            ..Default::default()
+        };
+        assert!(setting_readout(&row).starts_with('#'));
+        assert!(!setting_readout(&row).contains("-7812950"));
+        row.key = "analytics".into();
+        row.value = serde_json::json!({"x":0.02,"y":0.2,"scale":1.0,"opacity":0.8,"visible":true,"background":false,"rightAligned":true});
+        let value = setting_readout(&row);
+        for part in [
+            "2%",
+            "20%",
+            "80% opacity",
+            "Visible",
+            "Background off",
+            "Right aligned",
+        ] {
+            assert!(value.contains(part), "{value}");
+        }
+        row.value = serde_json::Value::Null;
+        assert_eq!(setting_readout(&row), "In-game control");
+    }
     #[test]
 
     fn page_keys_scroll_within_bounds() {
