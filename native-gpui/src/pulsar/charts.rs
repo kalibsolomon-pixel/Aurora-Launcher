@@ -1,0 +1,552 @@
+//! Native, event-driven charts. A missing sample always breaks a path.
+use crate::{theme::AuroraTheme, ui};
+use gpui::{
+    Context, Div, Hsla, PathBuilder, Role, Window, canvas, div, point, prelude::*, px, relative,
+};
+
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum Shape {
+    #[default]
+    Square,
+    Diamond,
+    Hollow,
+    Reset,
+}
+
+#[derive(Clone, Debug)]
+pub struct Sample {
+    pub x: f64,
+    pub y: Option<f64>,
+    pub label: String,
+    pub shape: Shape,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Kind {
+    Line,
+    Histogram,
+    Scatter,
+    Timeline,
+    Area,
+    Lanes,
+    Grid,
+}
+
+#[derive(Clone, Debug)]
+pub struct Band {
+    pub start: f64,
+    pub end: f64,
+    pub lane: Option<f64>,
+    pub label: String,
+    pub selected: bool,
+}
+
+#[derive(Clone)]
+pub struct Chart {
+    pub id: String,
+    pub title: String,
+    pub x_label: String,
+    pub y_label: String,
+    pub samples: Vec<Sample>,
+    pub kind: Kind,
+    pub domain: (f64, f64),
+    pub range: (f64, f64),
+    pub band: Option<(f64, f64)>,
+    pub target: Option<f64>,
+    pub playhead: Option<f64>,
+    pub bands: Vec<Band>,
+    pub incomplete: Vec<(f64, f64)>,
+    pub note: String,
+}
+
+pub fn fraction(value: f64, domain: (f64, f64)) -> f32 {
+    if !value.is_finite() || !domain.0.is_finite() || !domain.1.is_finite() || domain.1 <= domain.0
+    {
+        return 0.;
+    }
+    ((value - domain.0) / (domain.1 - domain.0)).clamp(0., 1.) as f32
+}
+
+pub fn nice_peak(value: f64) -> f64 {
+    if !value.is_finite() || value <= 0. {
+        return 1.;
+    }
+    let magnitude = 10_f64.powf(value.log10().floor());
+    [1., 2., 5., 10.]
+        .into_iter()
+        .map(|n| n * magnitude)
+        .find(|n| *n >= value)
+        .unwrap_or(value)
+}
+
+pub fn segments(samples: &[Sample]) -> Vec<Vec<(f64, f64)>> {
+    let mut out = Vec::new();
+    let mut run = Vec::new();
+    for s in samples {
+        if let Some(y) = s.y.filter(|y| y.is_finite() && s.x.is_finite()) {
+            run.push((s.x, y));
+        } else if !run.is_empty() {
+            out.push(std::mem::take(&mut run));
+        }
+    }
+    if !run.is_empty() {
+        out.push(run);
+    }
+    out
+}
+
+/// Frozen fine-reach display bins: underflow, forty 0.05 m bins, overflow.
+pub fn reach_bins(values: impl IntoIterator<Item = f64>) -> [u64; 42] {
+    let mut bins = [0; 42];
+    for value in values.into_iter().filter(|v| v.is_finite() && *v >= 0.) {
+        let index = if value < 2. {
+            0
+        } else if value >= 4. {
+            41
+        } else {
+            1 + (((value - 2.) / 0.05 + 1e-9).floor() as usize).min(39)
+        };
+        bins[index] += 1;
+    }
+    bins
+}
+
+#[derive(Clone)]
+struct Readout {
+    text: String,
+    theme: AuroraTheme,
+}
+impl gpui::Render for Readout {
+    fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+        div()
+            .w(px(320.))
+            .p(px(12.))
+            .rounded(self.theme.radius)
+            .bg(self.theme.raised)
+            .border_1()
+            .border_color(self.theme.border)
+            .text_size(px(ui::TEXT_CAPTION))
+            .text_color(self.theme.foreground)
+            .child(self.text.clone())
+    }
+}
+
+fn stroke(window: &mut Window, coords: &[(gpui::Pixels, gpui::Pixels)], color: Hsla, width: f32) {
+    let mut p = PathBuilder::stroke(px(width));
+    for (i, &(x, y)) in coords.iter().enumerate() {
+        if i == 0 {
+            p.move_to(point(x, y));
+        } else {
+            p.line_to(point(x, y));
+        }
+    }
+    if let Ok(path) = p.build() {
+        window.paint_path(path, color);
+    }
+}
+fn polygon(window: &mut Window, coords: &[(gpui::Pixels, gpui::Pixels)], color: Hsla) {
+    let mut p = PathBuilder::fill();
+    for (i, &(x, y)) in coords.iter().enumerate() {
+        if i == 0 {
+            p.move_to(point(x, y));
+        } else {
+            p.line_to(point(x, y));
+        }
+    }
+    p.close();
+    if let Ok(path) = p.build() {
+        window.paint_path(path, color);
+    }
+}
+
+impl Chart {
+    pub fn render(&self, t: &AuroraTheme) -> Div {
+        let chart = self.clone();
+        let palette = t.clone();
+        let available = self.samples.iter().any(|p| p.y.is_some_and(f64::is_finite));
+        let description = format!(
+            "{}. Horizontal axis: {} ({:.2} to {:.2}). Vertical axis: {} ({:.2} to {:.2}). {}. {}",
+            self.title,
+            self.x_label,
+            self.domain.0,
+            self.domain.1,
+            self.y_label,
+            self.range.0,
+            self.range.1,
+            if available {
+                "Missing samples are gaps"
+            } else {
+                "Unavailable"
+            },
+            self.note
+        );
+        let mut plot = div()
+            .id(format!("{}-plot", self.id))
+            .role(Role::Image)
+            .aria_label(description.clone())
+            .relative()
+            .w_full()
+            .h(px(if self.kind == Kind::Grid { 240. } else { 164. }))
+            .child(
+                canvas(
+                    |_, _, _| (),
+                    move |bounds, _, window, _| {
+                        let left = bounds.origin.x;
+                        let top = bounds.origin.y;
+                        let width = bounds.size.width;
+                        let height = bounds.size.height;
+                        let x = |v| left + width * fraction(v, chart.domain);
+                        let y = |v| top + height * (1. - fraction(v, chart.range));
+                        for n in 0..=4 {
+                            let yy = top + height * (n as f32 / 4.);
+                            stroke(
+                                window,
+                                &[(left, yy), (left + width, yy)],
+                                palette.border_subtle,
+                                1.,
+                            );
+                        }
+                        for band in &chart.bands {
+                            let (a, b) = if let Some(lane) = band.lane {
+                                (y(lane) - px(13.), y(lane) + px(13.))
+                            } else {
+                                (top, top + height)
+                            };
+                            polygon(
+                                window,
+                                &[
+                                    (x(band.start), a),
+                                    (x(band.end), a),
+                                    (x(band.end), b),
+                                    (x(band.start), b),
+                                ],
+                                if band.selected {
+                                    palette.ring.opacity(0.25)
+                                } else {
+                                    palette.control
+                                },
+                            );
+                            stroke(
+                                window,
+                                &[(x(band.start), a), (x(band.start), b)],
+                                palette.border,
+                                1.,
+                            );
+                            stroke(
+                                window,
+                                &[(x(band.end), a), (x(band.end), b)],
+                                palette.border,
+                                1.,
+                            );
+                        }
+                        if let Some((a, b)) = chart.band {
+                            let pts = if chart.kind == Kind::Histogram {
+                                vec![
+                                    (x(a), top),
+                                    (x(b), top),
+                                    (x(b), top + height),
+                                    (x(a), top + height),
+                                ]
+                            } else {
+                                vec![
+                                    (left, y(a)),
+                                    (left + width, y(a)),
+                                    (left + width, y(b)),
+                                    (left, y(b)),
+                                ]
+                            };
+                            polygon(window, &pts, palette.accent_soft);
+                        }
+                        if let Some(target) = chart.target {
+                            let pts = if chart.kind == Kind::Histogram {
+                                vec![(x(target), top), (x(target), top + height)]
+                            } else {
+                                vec![(left, y(target)), (left + width, y(target))]
+                            };
+                            stroke(window, &pts, palette.muted_foreground, 1.);
+                        }
+                        if matches!(chart.kind, Kind::Line | Kind::Area) {
+                            for run in segments(&chart.samples) {
+                                let pts: Vec<_> = run.iter().map(|&(a, b)| (x(a), y(b))).collect();
+                                if chart.kind == Kind::Area {
+                                    // Fill each segment separately: a sign change never colors the opposite side.
+                                    for pair in run.windows(2) {
+                                        let (a, b) = pair[0];
+                                        let (c, d) = pair[1];
+                                        let color = if b >= 0. {
+                                            palette.ring
+                                        } else {
+                                            palette.muted_foreground
+                                        };
+                                        if b * d < 0. {
+                                            let cross = a + (c - a) * b / (b - d);
+                                            polygon(
+                                                window,
+                                                &[(x(a), y(0.)), (x(a), y(b)), (x(cross), y(0.))],
+                                                color.opacity(0.18),
+                                            );
+                                            polygon(
+                                                window,
+                                                &[(x(cross), y(0.)), (x(c), y(d)), (x(c), y(0.))],
+                                                if d >= 0. {
+                                                    palette.ring.opacity(0.18)
+                                                } else {
+                                                    palette.muted_foreground.opacity(0.18)
+                                                },
+                                            );
+                                        } else {
+                                            polygon(
+                                                window,
+                                                &[
+                                                    (x(a), y(0.)),
+                                                    (x(a), y(b)),
+                                                    (x(c), y(d)),
+                                                    (x(c), y(0.)),
+                                                ],
+                                                color.opacity(0.18),
+                                            );
+                                        }
+                                    }
+                                }
+                                stroke(window, &pts, palette.ring, 2.);
+                            }
+                        }
+                        let bar = width / (chart.samples.len().max(1) as f32);
+                        for s in &chart.samples {
+                            let Some(v) = s.y.filter(|v| v.is_finite()) else {
+                                continue;
+                            };
+                            let xx = x(s.x);
+                            let yy = y(v);
+                            let color = if chart.kind == Kind::Histogram
+                                && chart.band.is_some_and(|(a, b)| s.x >= a && s.x <= b)
+                            {
+                                palette.ring
+                            } else {
+                                palette.muted_foreground
+                            };
+                            match chart.kind {
+                                Kind::Histogram => {
+                                    let half = (bar * 0.4).min(px(14.));
+                                    polygon(
+                                        window,
+                                        &[
+                                            (xx - half, y(0.)),
+                                            (xx - half, yy),
+                                            (xx + half, yy),
+                                            (xx + half, y(0.)),
+                                        ],
+                                        color.opacity(0.8),
+                                    );
+                                }
+                                Kind::Scatter
+                                | Kind::Timeline
+                                | Kind::Lanes
+                                | Kind::Grid
+                                | Kind::Line => {
+                                    if chart.kind == Kind::Line && chart.samples.len() > 120 {
+                                        continue;
+                                    }
+                                    let r = px(3.5);
+                                    match s.shape {
+                                        Shape::Square => polygon(
+                                            window,
+                                            &[
+                                                (xx - r, yy - r),
+                                                (xx + r, yy - r),
+                                                (xx + r, yy + r),
+                                                (xx - r, yy + r),
+                                            ],
+                                            palette.ring,
+                                        ),
+                                        Shape::Diamond => polygon(
+                                            window,
+                                            &[
+                                                (xx, yy - r - px(1.)),
+                                                (xx + r + px(1.), yy),
+                                                (xx, yy + r + px(1.)),
+                                                (xx - r - px(1.), yy),
+                                            ],
+                                            palette.foreground,
+                                        ),
+                                        Shape::Hollow => stroke(
+                                            window,
+                                            &[
+                                                (xx - r, yy),
+                                                (xx, yy - r),
+                                                (xx + r, yy),
+                                                (xx, yy + r),
+                                                (xx - r, yy),
+                                            ],
+                                            palette.muted_foreground,
+                                            1.5,
+                                        ),
+                                        Shape::Reset => stroke(
+                                            window,
+                                            &[
+                                                (xx - r, top + height - px(4.)),
+                                                (xx + r, top + height - px(4.)),
+                                            ],
+                                            palette.subtle_foreground,
+                                            2.,
+                                        ),
+                                    }
+                                }
+                                Kind::Area => {}
+                            }
+                        }
+                        for &(from, to) in &chart.incomplete {
+                            let mut xx = x(from);
+                            let end = x(to);
+                            while xx < end {
+                                stroke(
+                                    window,
+                                    &[(xx, top), (xx, top + height)],
+                                    palette.muted_foreground.opacity(0.35),
+                                    1.,
+                                );
+                                xx += px(6.);
+                            }
+                        }
+                        if let Some(head) = chart.playhead {
+                            stroke(
+                                window,
+                                &[(x(head), top), (x(head), top + height)],
+                                palette.foreground,
+                                2.,
+                            );
+                        }
+                    },
+                )
+                .size_full(),
+            );
+        // Each measured point has a native hover readout and exposed text. Paths do no I/O.
+        for (i, s) in self.samples.iter().enumerate().take(2048) {
+            let theme = t.clone();
+            let label = s.label.clone();
+            let tip = label.clone();
+            plot = plot.child(
+                div()
+                    .id(format!("{}-sample-{i}", self.id))
+                    .absolute()
+                    .left(relative(fraction(s.x, self.domain)))
+                    .top(relative(
+                        1. - fraction(s.y.unwrap_or(self.range.0), self.range),
+                    ))
+                    .w(px(12.))
+                    .h(px(12.))
+                    .mt(px(-6.))
+                    .ml(px(-6.))
+                    .role(Role::Image)
+                    .aria_label(label)
+                    .tooltip(move |_, cx| {
+                        cx.new(|_| Readout {
+                            text: tip.clone(),
+                            theme: theme.clone(),
+                        })
+                        .into()
+                    }),
+            );
+        }
+        for (i, b) in self.bands.iter().enumerate() {
+            let theme = t.clone();
+            let label = b.label.clone();
+            plot = plot.child(
+                div()
+                    .id(format!("{}-band-{i}", self.id))
+                    .absolute()
+                    .left(relative(fraction(b.start, self.domain)))
+                    .top(relative(
+                        b.lane.map(|v| 1. - fraction(v, self.range)).unwrap_or(0.),
+                    ))
+                    .w(relative(
+                        (fraction(b.end, self.domain) - fraction(b.start, self.domain)).max(0.01),
+                    ))
+                    .h(px(20.))
+                    .mt(px(-10.))
+                    .role(Role::Image)
+                    .aria_label(label.clone())
+                    .tooltip(move |_, cx| {
+                        cx.new(|_| Readout {
+                            text: label.clone(),
+                            theme: theme.clone(),
+                        })
+                        .into()
+                    }),
+            );
+        }
+        ui::card(t)
+            .min_w(px(0.))
+            .child(ui::section_header(t, self.title.clone(), None))
+            .child(ui::caption(t, self.y_label.clone()))
+            .child(
+                div()
+                    .flex()
+                    .gap(px(12.))
+                    .child(
+                        div()
+                            .w(px(36.))
+                            .flex_shrink_0()
+                            .h(px(164.))
+                            .flex()
+                            .flex_col()
+                            .justify_between()
+                            .child(ui::caption(t, format!("{:.1}", self.range.1)))
+                            .child(ui::caption(t, format!("{:.1}", self.range.0))),
+                    )
+                    .child(plot.flex_1().when(!available, |d| {
+                        d.child(
+                            div()
+                                .absolute()
+                                .inset_0()
+                                .flex()
+                                .items_center()
+                                .justify_center()
+                                .child("Unavailable"),
+                        )
+                    })),
+            )
+            .child(
+                div()
+                    .pl(px(48.))
+                    .flex()
+                    .justify_between()
+                    .child(ui::caption(t, format!("{:.1}", self.domain.0)))
+                    .child(ui::caption(t, self.x_label.clone()))
+                    .child(ui::caption(t, format!("{:.1}", self.domain.1))),
+            )
+            .child(ui::caption(t, self.note.clone()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn bins_preserve_boundaries_and_missing() {
+        let b = reach_bins([1.9, 2., 2.05, 3.999, 4., f64::NAN, -1.]);
+        assert_eq!(b.iter().sum::<u64>(), 5);
+        assert_eq!((b[0], b[1], b[2], b[40], b[41]), (1, 1, 1, 1, 1));
+    }
+    #[test]
+    fn gaps_split_lines_instead_of_zero_filling() {
+        let s = |x, y| Sample {
+            x,
+            y,
+            label: String::new(),
+            shape: Shape::Square,
+        };
+        assert_eq!(
+            segments(&[s(0., Some(2.)), s(1., None), s(2., Some(0.))]),
+            vec![vec![(0., 2.)], vec![(2., 0.)]]
+        );
+    }
+    #[test]
+    fn scales_are_finite_and_bounded() {
+        assert_eq!(fraction(1., (1., 1.)), 0.);
+        assert_eq!(fraction(-2., (0., 10.)), 0.);
+        assert_eq!(fraction(20., (0., 10.)), 1.);
+        assert_eq!(nice_peak(23.), 50.);
+        assert_eq!(nice_peak(f64::NAN), 1.);
+    }
+}
