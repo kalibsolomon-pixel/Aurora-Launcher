@@ -84,6 +84,7 @@ impl Pulsar {
             );
             list = list.child(
                 ui::row(t, i + 1 == events.len())
+                    .py(px(5.))
                     .id(format!("event-{}", e.sequence))
                     .child(
                         ui::caption(t, format!("{:.2} s", e.time))
@@ -91,20 +92,27 @@ impl Pulsar {
                             .flex_shrink_0(),
                     )
                     .child(
-                        ui::title_block(
-                            t,
-                            format!(
-                                "{}{}",
-                                e.kind,
-                                e.outcome
-                                    .as_ref()
-                                    .map(|s| format!(" · {s}"))
-                                    .unwrap_or_default()
-                            ),
-                            Some(format!("{} · {}", e.confidence, e.detail).into()),
-                        )
-                        .flex_1()
-                        .min_w(px(0.)),
+                        div()
+                            .flex_1()
+                            .min_w(px(0.))
+                            .flex()
+                            .flex_col()
+                            .gap(px(1.))
+                            .child(ui::muted(
+                                t,
+                                format!(
+                                    "{}{}",
+                                    e.kind,
+                                    e.outcome
+                                        .as_ref()
+                                        .map(|s| format!(" \u{b7} {s}"))
+                                        .unwrap_or_default()
+                                ),
+                            ))
+                            .child(ui::caption(
+                                t,
+                                format!("{} \u{b7} {}", e.confidence, e.detail),
+                            )),
                     )
                     .role(Role::Group)
                     .aria_label(line),
@@ -162,7 +170,7 @@ impl Pulsar {
             .id("pulsar-playback")
             .flex()
             .flex_col()
-            .gap(px(24.))
+            .gap(px(12.))
             .track_focus(&self.playback_focus)
             .tab_index(0)
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
@@ -227,6 +235,19 @@ impl Pulsar {
             );
         }
 
+        let selected = p
+            .events
+            .iter()
+            .rev()
+            .find(|e| e.kind != "MOTION" && e.time <= self.playhead + 1e-9);
+        controls = controls.child(
+            div().flex_1().min_w(px(180.)).child(ui::caption(
+                t,
+                selected
+                    .map(|e| format!("{:.2} s \u{b7} {} \u{b7} {}", e.time, e.kind, e.detail))
+                    .unwrap_or_else(|| "Start of recording; no event selected yet.".into()),
+            )),
+        );
         page = page.child(controls);
         // The seek rail is keyboard accessible and pointer seeking uses its actual layout bounds.
         let bounds = self.seek_bounds.clone();
@@ -241,11 +262,7 @@ impl Pulsar {
             .child(div().absolute().left(gpui::relative((self.playhead/duration.max(0.001))as f32)).ml(px(-7.)).top(px(8.)).w(px(14.)).h(px(14.)).rounded_full().bg(t.foreground))
             .on_mouse_down(MouseButton::Left,cx.listener(move|this,e:&gpui::MouseDownEvent,_,cx|{if let Some(b)=bounds.get(){let f=((e.position.x-b.origin.x)/b.size.width).clamp(0.,1.);this.playhead=f as f64*this.duration();this.pause();cx.notify();}}))
             .on_key_down(cx.listener(|this,e:&KeyDownEvent,_,cx|{let head=match e.keystroke.key.as_str(){"left"=>this.playhead-1.,"right"=>this.playhead+1.,"home"=>0.,"end"=>this.duration(),_=>return};this.playhead=head.clamp(0.,this.duration());this.pause();cx.stop_propagation();cx.notify();}));
-        page = page
-            .child(rail)
-            .child(div().flex().justify_between().children(
-                (0..=4).map(|i| ui::caption(t, format!("{:.1} s", duration * i as f64 / 4.))),
-            ));
+        page = page.child(rail);
         let lanes = if p.lanes.is_empty() {
             vec![
                 "rounds".into(),
@@ -309,6 +326,33 @@ impl Pulsar {
             note: "Click the lanes to seek. The vertical marker shows the current playback time."
                 .into(),
         };
+        let keys = [
+            ("\u{25a0}", "Attack", t.ring),
+            ("\u{25c6}", "Shield or trade", t.warning),
+            ("\u{25cb}", "Jump", t.success),
+            ("\u{25b2}", "Incoming", t.danger),
+            ("+", "Hit evidence or critical", t.success),
+            ("\u{00d7}", "Death", t.danger),
+            ("|", "Sprint or boundary", t.muted_foreground),
+        ];
+        page = page.child(
+            div()
+                .flex()
+                .flex_wrap()
+                .gap(px(16.))
+                .children(keys.into_iter().map(|(shape, label, color)| {
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .child(div().text_color(color).child(shape))
+                        .child(ui::caption(t, label))
+                })),
+        );
+        let shortcuts = ui::caption(
+            t,
+            "Space: play or pause \u{b7} Comma: previous event \u{b7} Period: next event \u{b7} Arrow keys: seek one second",
+        );
         page = page.child(
             lane_chart
                 .render_options(
@@ -332,17 +376,7 @@ impl Pulsar {
                     }),
                 ),
         );
-        let keys = [
-            ("\u{25a0}", "Attack", t.ring),
-            ("\u{25c6}", "Shield or trade", t.warning),
-            ("\u{25cb}", "Jump", t.success),
-            ("\u{25b2}", "Incoming", t.danger),
-            ("+", "Hit evidence or critical", t.success),
-            ("\u{00d7}", "Death", t.danger),
-            ("|", "Sprint or boundary", t.muted_foreground),
-        ];
-        page = page.child(div().flex().flex_wrap().gap(px(16.)).children(keys.into_iter().map(|(shape, label, color)| div().flex().items_center().gap(px(6.)).child(div().text_color(color).child(shape)).child(ui::caption(t, label)))))
-            .child(ui::caption(t, "Space: play or pause \u{b7} Comma: previous event \u{b7} Period: next event \u{b7} Arrow keys: seek one second"));
+        page = page.child(shortcuts);
         let mut jumps =
             div()
                 .flex()
