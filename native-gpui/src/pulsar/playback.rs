@@ -1,0 +1,367 @@
+//! Playback operates on one immutable event snapshot; ticks never call the API.
+use super::{
+    Pulsar,
+    charts::{Chart, Kind, Sample, Shape},
+    tabs,
+};
+use crate::{
+    controls::{AuroraButton, ButtonSize, ButtonVariant},
+    theme::AuroraTheme,
+    ui,
+};
+use aurora_launcher_lib::pulsar::view::{EventView, PlaybackCheckpoint};
+use gpui::{Context, Div, KeyDownEvent, MouseButton, Role, div, prelude::*, px};
+
+pub(super) fn advance(head: f64, elapsed: f64, speed: f64, duration: f64) -> f64 {
+    if !elapsed.is_finite() || !speed.is_finite() || !duration.is_finite() {
+        return head;
+    }
+    (head + elapsed.max(0.) * speed.clamp(0.25, 4.)).clamp(0., duration.max(0.))
+}
+pub(super) fn step(events: &[EventView], head: f64, forward: bool, duration: f64) -> f64 {
+    if forward {
+        events
+            .iter()
+            .filter(|e| e.kind != "MOTION" && e.time > head + 1e-9)
+            .map(|e| e.time)
+            .min_by(f64::total_cmp)
+            .unwrap_or(duration)
+    } else {
+        events
+            .iter()
+            .filter(|e| e.kind != "MOTION" && e.time < head - 1e-9)
+            .map(|e| e.time)
+            .max_by(f64::total_cmp)
+            .unwrap_or(0.)
+    }
+}
+pub(super) fn visible<'a>(
+    events: &'a [EventView],
+    head: f64,
+    filter: Option<&str>,
+) -> Vec<&'a EventView> {
+    let mut rows: Vec<_> = events
+        .iter()
+        .filter(|e| e.time <= head + 1e-9 && filter.map_or(e.kind != "MOTION", |f| e.kind == f))
+        .collect();
+    if rows.len() > 200 {
+        rows.drain(..rows.len() - 200);
+    }
+    rows
+}
+pub(super) fn checkpoint_at(
+    points: &[PlaybackCheckpoint],
+    head: f64,
+) -> Option<&PlaybackCheckpoint> {
+    let i = points.partition_point(|p| p.time <= head + 1e-9);
+    i.checked_sub(1).and_then(|i| points.get(i))
+}
+fn button(id: impl Into<gpui::ElementId>, label: impl Into<gpui::SharedString>) -> AuroraButton {
+    AuroraButton::new(id, label)
+        .variant(ButtonVariant::Ghost)
+        .size(ButtonSize::Small)
+}
+
+impl Pulsar {
+    pub(super) fn event_table(&self, t: &AuroraTheme, events: &[&EventView]) -> Div {
+        let mut list=ui::list_card(t).child(ui::row(t,false).child(ui::section_header(t,format!("Events · {}",events.len()),Some("Time in seconds · frozen results · newest 200 matching observations, chronological".into()))));
+        for (i, e) in events.iter().enumerate() {
+            let line = format!(
+                "{:.2} s · {} · {} · {}{}",
+                e.time,
+                e.kind,
+                e.confidence,
+                e.detail,
+                e.outcome
+                    .as_ref()
+                    .map(|s| format!(" · {s}"))
+                    .unwrap_or_default()
+            );
+            list = list.child(
+                ui::row(t, i + 1 == events.len())
+                    .id(format!("event-{}", e.sequence))
+                    .child(
+                        ui::caption(t, format!("{:.2} s", e.time))
+                            .w(px(64.))
+                            .flex_shrink_0(),
+                    )
+                    .child(
+                        ui::title_block(
+                            t,
+                            format!(
+                                "{}{}",
+                                e.kind,
+                                e.outcome
+                                    .as_ref()
+                                    .map(|s| format!(" · {s}"))
+                                    .unwrap_or_default()
+                            ),
+                            Some(format!("{} · {}", e.confidence, e.detail).into()),
+                        )
+                        .flex_1()
+                        .min_w(px(0.)),
+                    )
+                    .role(Role::Group)
+                    .aria_label(line),
+            );
+        }
+        if events.is_empty() {
+            list = list.child(
+                ui::row(t, true).child(ui::muted(t, "No matching observations at this time.")),
+            );
+        }
+        list
+    }
+    pub(super) fn playback_body(&self, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
+        let mut page = div()
+            .id("pulsar-playback")
+            .flex()
+            .flex_col()
+            .gap(px(24.))
+            .track_focus(&self.playback_focus)
+            .tab_index(0)
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+                match e.keystroke.key.as_str() {
+                    "space" | " " => this.toggle_play(cx),
+                    "," | "comma" => this.step(false, cx),
+                    "." | "period" => this.step(true, cx),
+                    _ => return,
+                }
+                cx.stop_propagation();
+                cx.notify();
+            }));
+        let Some(p) = &self.playback else {
+            return div().child(page.child(ui::muted(
+                t,
+                "Playback unavailable: no canonical event timeline was loaded.",
+            )));
+        };
+        let duration = self.duration();
+        let mut controls = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(8.))
+            .child(
+                AuroraButton::new("playback-play", if self.playing { "Pause" } else { "Play" })
+                    .variant(ButtonVariant::Primary)
+                    .icon(if self.playing { "pause" } else { "play_arrow" })
+                    .disabled(duration <= 0.)
+                    .on_click(cx.listener(|this, _, _, cx| this.toggle_play(cx))),
+            )
+            .child(
+                button("playback-previous", "Previous event")
+                    .on_click(cx.listener(|this, _, _, cx| this.step(false, cx))),
+            )
+            .child(
+                button("playback-next", "Next event")
+                    .on_click(cx.listener(|this, _, _, cx| this.step(true, cx))),
+            )
+            .child(ui::muted(
+                t,
+                format!("{:.2} / {:.2} s", self.playhead, duration),
+            ));
+        for (i, speed) in [0.25, 0.5, 1., 2., 4.].into_iter().enumerate() {
+            controls = controls.child(
+                button(("playback-speed", i), format!("{speed}×"))
+                    .selected(self.speed == speed)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.speed = speed;
+                        cx.notify();
+                    })),
+            );
+        }
+        page=page.child(controls).child(ui::caption(t,"Space: play/pause · comma / period: previous / next event · select a lane mark to seek. Playback stops when hidden."));
+        // The seek rail is keyboard accessible and pointer seeking uses its actual layout bounds.
+        let bounds = self.seek_bounds.clone();
+        let recorded = bounds.clone();
+        let rail=div().id("playback-seek").relative().w_full().h(px(30.)).rounded(t.radius).bg(t.sunken).role(Role::Slider)
+            .aria_label(format!("Playback position {:.2} seconds of {:.2}. Left and right seek one second; Home and End jump.",self.playhead,duration))
+            .track_focus(&self.seek_focus).tab_index(0)
+            .child(gpui::canvas(move|b,_,_|{recorded.set(Some(b));},|_,_,_,_|{}).absolute().size_full())
+            .child(div().absolute().left_0().top(px(12.)).h(px(6.)).w(gpui::relative((self.playhead/duration.max(0.001))as f32)).rounded_full().bg(t.accent))
+            .on_mouse_down(MouseButton::Left,cx.listener(move|this,e:&gpui::MouseDownEvent,_,cx|{if let Some(b)=bounds.get(){let f=((e.position.x-b.origin.x)/b.size.width).clamp(0.,1.);this.playhead=f as f64*this.duration();this.pause();cx.notify();}}))
+            .on_key_down(cx.listener(|this,e:&KeyDownEvent,_,cx|{let head=match e.keystroke.key.as_str(){"left"=>this.playhead-1.,"right"=>this.playhead+1.,"home"=>0.,"end"=>this.duration(),_=>return};this.playhead=head.clamp(0.,this.duration());this.pause();cx.stop_propagation();cx.notify();}));
+        page = page.child(rail);
+        let lanes = if p.lanes.is_empty() {
+            vec![
+                "rounds".into(),
+                "exchanges".into(),
+                "attacks".into(),
+                "incoming".into(),
+                "shields".into(),
+                "jumps".into(),
+                "sprint".into(),
+            ]
+        } else {
+            p.lanes.clone()
+        };
+        let samples = p
+            .events
+            .iter()
+            .filter(|e| e.kind != "MOTION")
+            .map(|e| Sample {
+                x: e.time,
+                y: Some(lanes.iter().position(|l| l == &e.lane).unwrap_or(0) as f64),
+                label: format!("{:.2} s · {} · {} · {}", e.time, e.lane, e.kind, e.detail),
+                shape: match e.kind.as_str() {
+                    "SHIELD" => Shape::Diamond,
+                    "JUMP" => Shape::Hollow,
+                    _ => Shape::Square,
+                },
+            })
+            .collect();
+        page=page.child(Chart{id:"playback-lanes".into(),title:"Recorded event lanes".into(),x_label:"Recording time (s)".into(),y_label:format!("Lanes, bottom to top: {}",lanes.join(" / ")),samples,kind:Kind::Lanes,domain:(0.,duration.max(1.)),range:(-0.5,lanes.len()as f64-0.5),band:None,target:None,playhead:Some(self.playhead),bands:vec![],incomplete:vec![],note:"■ Attack / damage · ◇ Shield · ◇ outline Actual jump. Observations only; no world reconstruction.".into()}.render(t));
+        let mut jumps =
+            div()
+                .flex()
+                .flex_wrap()
+                .gap(px(4.))
+                .child(button("playback-start", "Start").on_click(cx.listener(
+                    |this, _, _, cx| {
+                        this.playhead = 0.;
+                        this.pause();
+                        cx.notify();
+                    },
+                )));
+        for (i, band) in p.boundaries.iter().enumerate().take(40) {
+            let time = band.start;
+            jumps = jumps.child(
+                button(
+                    ("playback-boundary", i),
+                    format!("{} · {:.1} s", band.label, time),
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.playhead = time.clamp(0., this.duration());
+                    this.pause();
+                    cx.notify();
+                })),
+            );
+        }
+        page = page.child(jumps);
+        let checkpoint = checkpoint_at(&p.checkpoints, self.playhead);
+        let count = |get: fn(&aurora_launcher_lib::pulsar::view::PlaybackCheckpoint) -> usize| {
+            checkpoint
+                .map(|c| get(c).to_string())
+                .unwrap_or_else(|| "Unavailable".into())
+        };
+        let dominance = checkpoint.and_then(|c| c.dominance);
+        page = page.child(
+            ui::card(t).child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(24.))
+                    .child(ui::stat(t, "Confirmed hits", count(|c| c.hits)))
+                    .child(ui::stat(t, "Eligible attempts", count(|c| c.attempts)))
+                    .child(ui::stat(t, "Attributed incoming", count(|c| c.incoming)))
+                    .child(ui::stat(t, "Current streak", count(|c| c.local_streak)))
+                    .child(ui::stat(
+                        t,
+                        "Dominance",
+                        dominance
+                            .map(|d| format!("{d:+.3}"))
+                            .unwrap_or_else(|| "Unavailable".into()),
+                    )),
+            ),
+        );
+        let mut filters = div().flex().flex_wrap().gap(px(4.));
+        for (i, kind) in [
+            "All",
+            "ATTACK",
+            "HURT",
+            "DAMAGE_IN",
+            "SHIELD",
+            "CRIT",
+            "JUMP",
+            "SPRINT",
+            "HEALTH",
+            "VELOCITY",
+            "DEATH",
+            "MOTION",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let selected =
+                self.event_filter.as_deref() == if kind == "All" { None } else { Some(kind) };
+            filters = filters.child(
+                button(("event-filter", i), kind)
+                    .selected(selected)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.event_filter = if kind == "All" {
+                            None
+                        } else {
+                            Some(kind.into())
+                        };
+                        cx.notify();
+                    })),
+            );
+        }
+        page = page.child(filters).child(self.event_table(
+            t,
+            &visible(&p.events, self.playhead, self.event_filter.as_deref()),
+        ));
+        for n in &p.notices {
+            page = page.child(ui::caption(t, n.clone()));
+        }
+        let _ = tabs::metric_value;
+        div().child(page)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    fn event(t: f64, k: &str) -> EventView {
+        EventView {
+            time: t,
+            kind: k.into(),
+            ..Default::default()
+        }
+    }
+    #[test]
+    fn cached_checkpoint_keeps_attribution_and_canonical_counts() {
+        let points = vec![
+            PlaybackCheckpoint {
+                time: 0.,
+                ..Default::default()
+            },
+            PlaybackCheckpoint {
+                time: 1.,
+                hits: 2,
+                attempts: 3,
+                incoming: 1,
+                local_streak: 2,
+                ..Default::default()
+            },
+        ];
+        assert_eq!(checkpoint_at(&points, 0.5).unwrap().hits, 0);
+        assert_eq!(checkpoint_at(&points, 1.).unwrap().attempts, 3);
+        assert_eq!(checkpoint_at(&points, 3.).unwrap().incoming, 1);
+        assert!(checkpoint_at(&points, -1.).is_none());
+    }
+    #[test]
+    fn playhead_stepping_skips_motion_and_clamps() {
+        let e = vec![
+            event(0.1, "ATTACK"),
+            event(0.2, "MOTION"),
+            event(0.3, "JUMP"),
+        ];
+        assert_eq!(step(&e, 0.1, true, 1.), 0.3);
+        assert_eq!(step(&e, 0.3, false, 1.), 0.1);
+        assert_eq!(step(&e, 0., false, 1.), 0.);
+        assert_eq!(advance(0.9, 1., 4., 1.), 1.);
+        assert_eq!(advance(0.5, f64::NAN, 1., 1.), 0.5);
+    }
+    #[test]
+    fn playback_filter_excludes_future_and_motion_by_default() {
+        let e = vec![
+            event(0.1, "ATTACK"),
+            event(0.2, "MOTION"),
+            event(0.3, "JUMP"),
+        ];
+        assert_eq!(visible(&e, 0.2, None).len(), 1);
+        assert_eq!(visible(&e, 0.2, Some("MOTION"))[0].kind, "MOTION");
+    }
+}

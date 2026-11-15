@@ -25,6 +25,7 @@ pub struct Sample {
 pub enum Kind {
     Line,
     Histogram,
+    Stacked,
     Scatter,
     Timeline,
     Area,
@@ -161,6 +162,65 @@ fn polygon(window: &mut Window, coords: &[(gpui::Pixels, gpui::Pixels)], color: 
 
 impl Chart {
     pub fn render(&self, t: &AuroraTheme) -> Div {
+        if self.kind == Kind::Stacked {
+            let total = self
+                .samples
+                .iter()
+                .filter_map(|s| s.y)
+                .filter(|n| n.is_finite() && *n >= 0.)
+                .sum::<f64>();
+            let mut bar = div().flex().w_full().h(px(24.)).gap(px(2.));
+            let mut labels = div().flex().flex_wrap().gap(px(16.));
+            for (i, s) in self.samples.iter().enumerate() {
+                let theme = t.clone();
+                let label = s.label.clone();
+                let n = s.y.filter(|n| n.is_finite() && *n >= 0.);
+                labels = labels.child(ui::caption(
+                    t,
+                    format!(
+                        "{}: {}",
+                        s.label,
+                        n.map(|n| format!("{n:.0}"))
+                            .unwrap_or_else(|| "Unavailable".into())
+                    ),
+                ));
+                if let Some(n) = n.filter(|n| *n > 0.) {
+                    bar = bar.child(
+                        div()
+                            .id(format!("{}-stack-{i}", self.id))
+                            .h_full()
+                            .w(relative((n / total.max(1.)) as f32))
+                            .bg(if i == 0 {
+                                t.ring
+                            } else {
+                                t.muted_foreground
+                                    .opacity((0.85 - i as f32 * 0.1).max(0.35))
+                            })
+                            .role(Role::Image)
+                            .aria_label(format!("{}: {n:.0}", s.label))
+                            .tooltip(move |_, cx| {
+                                cx.new(|_| Readout {
+                                    text: format!("{label}: {n:.0}"),
+                                    theme: theme.clone(),
+                                })
+                                .into()
+                            }),
+                    );
+                }
+            }
+            return ui::card(t)
+                .child(ui::section_header(t, self.title.clone(), None))
+                .child(bar)
+                .child(
+                    div()
+                        .flex()
+                        .justify_between()
+                        .child(ui::caption(t, "0"))
+                        .child(ui::caption(t, format!("{total:.0} {}", self.x_label))),
+                )
+                .child(labels)
+                .child(ui::caption(t, self.note.clone()));
+        }
         let chart = self.clone();
         let palette = t.clone();
         let available = self.samples.iter().any(|p| p.y.is_some_and(f64::is_finite));
@@ -369,18 +429,16 @@ impl Chart {
                                             ],
                                             palette.foreground,
                                         ),
-                                        Shape::Hollow => stroke(
-                                            window,
-                                            &[
-                                                (xx - r, yy),
-                                                (xx, yy - r),
-                                                (xx + r, yy),
-                                                (xx, yy + r),
-                                                (xx - r, yy),
-                                            ],
-                                            palette.muted_foreground,
-                                            1.5,
-                                        ),
+                                        Shape::Hollow => {
+                                            let circle = (0..=16)
+                                                .map(|i| {
+                                                    let angle =
+                                                        i as f32 * std::f32::consts::TAU / 16.;
+                                                    (xx + r * angle.cos(), yy + r * angle.sin())
+                                                })
+                                                .collect::<Vec<_>>();
+                                            stroke(window, &circle, palette.muted_foreground, 1.5);
+                                        }
                                         Shape::Reset => stroke(
                                             window,
                                             &[
@@ -392,7 +450,7 @@ impl Chart {
                                         ),
                                     }
                                 }
-                                Kind::Area => {}
+                                Kind::Area | Kind::Stacked => {}
                             }
                         }
                         for &(from, to) in &chart.incomplete {

@@ -1,0 +1,1030 @@
+use super::{Pulsar, TOP_TABS, tabs};
+use crate::{
+    controls::{AuroraButton, AuroraCheckbox, AuroraInput, ButtonSize, ButtonVariant},
+    symbols,
+    theme::AuroraTheme,
+    ui,
+};
+use aurora_launcher_lib::pulsar::view::*;
+use gpui::{Context, Div, KeyDownEvent, Window, div, prelude::*, px};
+
+fn small(id: impl Into<gpui::ElementId>, label: impl Into<gpui::SharedString>) -> AuroraButton {
+    AuroraButton::new(id, label)
+        .variant(ButtonVariant::Ghost)
+        .size(ButtonSize::Small)
+}
+
+impl Pulsar {
+    fn scope_bar(&self, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
+        let mut scopes = div().flex().flex_wrap().items_center().gap(px(4.)).child(
+            small("pulsar-all", "All instances")
+                .selected(self.query.instance_id.is_none())
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.query.instance_id = None;
+                    this.query.offset = 0;
+                    this.close_detail();
+                    this.load(false, cx);
+                })),
+        );
+        for i in &self.library.instances {
+            let id = i.instance_id.clone();
+            scopes = scopes.child(
+                small(format!("pulsar-scope-{id}"), i.instance_name.clone())
+                    .selected(self.query.instance_id.as_ref() == Some(&id))
+                    .on_click(cx.listener(move |this, _, _, cx| this.show(id.clone(), cx))),
+            );
+        }
+        div().flex().flex_col().gap(px(12.)).child(scopes).child(
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(px(12.))
+                .child(div().flex_1().min_w(px(160.)).max_w(px(380.)).child(
+                    AuroraInput::new(&self.search).label("Search fights by opponent or server"),
+                ))
+                .child(ui::caption(
+                    t,
+                    format!(
+                        "{} recordings · retained in your library",
+                        self.library.total
+                    ),
+                )),
+        )
+    }
+    pub(super) fn fight_row(
+        &self,
+        t: &AuroraTheme,
+        row: &FightSummary,
+        index: usize,
+        last: bool,
+        narrow: bool,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let columns = history_columns(self.width);
+        let key = row.key.clone();
+        let compare_key = key.clone();
+        let open_key = key.clone();
+        let chosen = self.selected.as_ref() == Some(&key);
+        let checked = self.compare_keys.contains(&key);
+        let accuracy = row
+            .metrics
+            .get("accuracy")
+            .map(tabs::metric_value)
+            .unwrap_or_else(|| "Unavailable".into());
+        let hits = row
+            .metrics
+            .get("hits")
+            .map(tabs::metric_value)
+            .unwrap_or_else(|| "Unavailable".into());
+        let confirmed = row.resolution.confidence.eq_ignore_ascii_case("confirmed");
+        let tone = if confirmed {
+            match row.outcome.as_str() {
+                "WIN" => ui::Tone::Success,
+                "LOSS" => ui::Tone::Danger,
+                _ => ui::Tone::Neutral,
+            }
+        } else {
+            ui::Tone::Neutral
+        };
+        ui::row(t, last)
+            .min_w(px(0.))
+            .when(chosen, |d| d.bg(t.accent_soft))
+            .child(
+                AuroraCheckbox::new(
+                    format!("pulsar-compare-{index}"),
+                    format!(
+                        "Compare {} from {}",
+                        row.opponent, row.provenance.instance_name
+                    ),
+                )
+                .checked(checked)
+                .disabled(!checked && self.compare_keys.len() >= 2)
+                .on_change({
+                    let view = cx.entity();
+                    move |checked, _, _, cx| {
+                        view.update(cx, |this, cx| {
+                            if checked
+                                && !this.compare_keys.contains(&compare_key)
+                                && this.compare_keys.len() < 2
+                            {
+                                this.compare_keys.push(compare_key.clone());
+                            } else if !checked {
+                                this.compare_keys.retain(|k| k != &compare_key);
+                            }
+                            cx.notify();
+                        });
+                    }
+                }),
+            )
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(4.))
+                    .flex_1()
+                    .min_w(px(0.))
+                    .child(
+                        small(
+                            format!("pulsar-select-{index}"),
+                            if row.manual {
+                                "Manual session".to_owned()
+                            } else {
+                                short_label(&row.opponent, if narrow { 18 } else { 30 })
+                            },
+                        )
+                        .selected(chosen)
+                        .accessibility_label(format!(
+                            "Select {}. {}, {} hits, accuracy {}",
+                            row.opponent, row.result_label, hits, accuracy
+                        ))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if this.selected.as_ref() == Some(&key) {
+                                this.open_detail(key.clone(), cx);
+                            } else {
+                                this.selected = Some(key.clone());
+                                cx.notify();
+                            }
+                        })),
+                    )
+                    .child(
+                        ui::caption(t, {
+                            let mut parts = vec![row.provenance.instance_name.clone()];
+                            if columns.date {
+                                parts.push(utc_time(row.start_epoch_millis));
+                            }
+                            if columns.duration {
+                                parts.push(format!("{:.1} s", row.duration_nanos as f64 / 1e9));
+                            }
+                            parts.extend(row.server.clone());
+                            if row.stale {
+                                parts.push("Source changed since import".into());
+                            }
+                            if !row.provenance.conflicts.is_empty() {
+                                parts.push("Conflicting snapshot".into());
+                            }
+                            if !columns.result {
+                                parts.push(row.result_label.clone());
+                            }
+                            parts.join(" · ")
+                        })
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .whitespace_nowrap(),
+                    ),
+            )
+            .child(ui::stat(t, "Hits", hits).w(px(55.)))
+            .child(ui::stat(t, "Accuracy", accuracy).w(px(85.)))
+            .when(columns.reach, |d| {
+                d.child(
+                    ui::stat(
+                        t,
+                        "Reach",
+                        row.metrics
+                            .get("averageReach")
+                            .map(tabs::metric_value)
+                            .unwrap_or_else(|| "Unavailable".into()),
+                    )
+                    .w(px(76.)),
+                )
+            })
+            .when(columns.result, |d| {
+                d.child(ui::badge(t, row.result_label.clone(), tone))
+            })
+            .child(
+                small(format!("pulsar-open-{index}"), "Open fight")
+                    .icon("arrow_forward")
+                    .accessibility_label(format!("Open fight against {}", row.opponent))
+                    .on_click(
+                        cx.listener(move |this, _, _, cx| this.open_detail(open_key.clone(), cx)),
+                    ),
+            )
+    }
+    fn history(&self, t: &AuroraTheme, narrow: bool, cx: &mut Context<Self>) -> Div {
+        let sorts = ["Newest", "Oldest", "Hits", "Accuracy", "Reach", "Duration"];
+        let sort_index = match self.query.sort {
+            HistorySort::Newest => 0,
+            HistorySort::Oldest => 1,
+            HistorySort::Hits => 2,
+            HistorySort::Accuracy => 3,
+            HistorySort::Reach => 4,
+            HistorySort::Duration => 5,
+        };
+        let mut tools = div()
+            .flex()
+            .flex_wrap()
+            .gap(px(8.))
+            .items_center()
+            .child(
+                small("history-sort", format!("Sort: {}", sorts[sort_index])).on_click(
+                    cx.listener(move |this, _, _, cx| {
+                        this.query.sort = match (sort_index + 1) % 6 {
+                            0 => HistorySort::Newest,
+                            1 => HistorySort::Oldest,
+                            2 => HistorySort::Hits,
+                            3 => HistorySort::Accuracy,
+                            4 => HistorySort::Reach,
+                            _ => HistorySort::Duration,
+                        };
+                        this.load(false, cx);
+                    }),
+                ),
+            )
+            .child(
+                small("history-hits", "Hits only")
+                    .selected(self.query.hits_only)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.query.hits_only = !this.query.hits_only;
+                        this.query.offset = 0;
+                        this.load(false, cx);
+                    })),
+            )
+            .child(
+                small(
+                    "history-compare",
+                    format!("Compare ({}/2)", self.compare_keys.len()),
+                )
+                .disabled(self.compare_keys.len() != 2)
+                .on_click(cx.listener(|this, _, _, cx| this.open_compare(cx))),
+            );
+        // Contextual actions for the selected fight (P42); disabled without a selection.
+        let chosen = self
+            .selected
+            .as_ref()
+            .and_then(|k| self.library.rows.iter().find(|r| &r.key == k))
+            .map(|r| (r.key.clone(), r.report_available));
+        let none = chosen.is_none();
+        let report = chosen.as_ref().is_some_and(|c| c.1);
+        for (id, label, icon, action) in [
+            ("history-details", "Details", "info", 0),
+            ("history-report", "View report", "open_in_new", 1),
+            ("history-export", "Export report", "download", 2),
+            ("history-delete", "Delete fight", "delete", 3),
+        ] {
+            let key = chosen.as_ref().map(|c| c.0.clone());
+            tools = tools.child(
+                small(id, label)
+                    .icon(icon)
+                    .disabled(none || self.busy || (matches!(action, 1 | 2) && !report))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        let Some(key) = key.clone() else { return };
+                        match action {
+                            1 => this.view_report(key),
+                            _ => {
+                                this.open_detail(key, cx);
+                                this.export_open = action == 2;
+                                this.delete_open = action == 3;
+                                this.delete_source = false;
+                            }
+                        }
+                        cx.notify();
+                    })),
+            );
+        }
+        for (i, (label, outcome)) in [
+            ("All", OutcomeFilter::All),
+            ("Win", OutcomeFilter::Win),
+            ("Loss", OutcomeFilter::Loss),
+            ("Draw", OutcomeFilter::Draw),
+            ("Unknown", OutcomeFilter::Unknown),
+            ("Interrupted", OutcomeFilter::Interrupted),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let selected =
+                std::mem::discriminant(&self.query.outcome) == std::mem::discriminant(&outcome);
+            tools = tools.child(
+                small(("pulsar-outcome", i), label)
+                    .selected(selected)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.query.outcome = outcome.clone();
+                        this.query.offset = 0;
+                        this.load(false, cx);
+                    })),
+            )
+        }
+        let mut body = div()
+            .flex()
+            .flex_col()
+            .gap(px(16.))
+            .child(tools)
+            .child(ui::caption(
+                t,
+                format!(
+                    "{} matching recordings · select two to compare",
+                    self.library.filtered_total
+                ),
+            ));
+        if self.library.rows.is_empty() {
+            return body.child(ui::empty_state(
+                t,
+                "search_off",
+                "No matching fights",
+                "Try a different opponent, server, result, or instance.",
+            ));
+        }
+        let entries = history_entries(&self.library.rows);
+        let callback_entries = entries.clone();
+        let list = gpui::uniform_list(
+            "pulsar-history-rows",
+            entries.len(),
+            cx.processor(
+                move |this: &mut Self, range: std::ops::Range<usize>, _, cx| {
+                    let t = crate::theme::theme(cx).clone();
+                    range
+                        .map(|i| {
+                            let row = match &callback_entries[i] {
+                                HistoryEntry::Day(day) => {
+                                    ui::row(&t, false).child(ui::section_header(
+                                        &t,
+                                        day.clone(),
+                                        Some("UTC recording date".into()),
+                                    ))
+                                }
+                                HistoryEntry::Fight(index) => this.fight_row(
+                                    &t,
+                                    &this.library.rows[*index],
+                                    *index,
+                                    true,
+                                    narrow,
+                                    cx,
+                                ),
+                            };
+                            row.h(px(if narrow { 92. } else { 80. })).into_any_element()
+                        })
+                        .collect::<Vec<_>>()
+                },
+            ),
+        )
+        .track_scroll(&self.history_scroll)
+        .h(px(480.))
+        .w_full();
+        body=body.child(ui::list_card(t).child(div().id("pulsar-history-keyboard").track_focus(&self.history_focus).tab_index(0)
+            .aria_label("Fight history. Up and Down select, Enter opens. Home and End jump to the first or last recording.")
+            .on_key_down(cx.listener(|this,e:&KeyDownEvent,_,cx|{
+                if this.library.rows.is_empty(){return;}
+                let current=this.selected.as_ref().and_then(|key|this.library.rows.iter().position(|r|&r.key==key)).unwrap_or(0);
+                let index=match e.keystroke.key.as_str(){"up"=>current.saturating_sub(1),"down"=>(current+1).min(this.library.rows.len()-1),"home"=>0,"end"=>this.library.rows.len()-1,"enter"=>{this.open_detail(this.library.rows[current].key.clone(),cx);cx.stop_propagation();return;},_=>return};
+                this.selected=Some(this.library.rows[index].key.clone());
+                let entries=history_entries(&this.library.rows);if let Some(item)=entries.iter().position(|e|matches!(e,HistoryEntry::Fight(i)if *i==index)){this.history_scroll.scroll_to_item(item,gpui::ScrollStrategy::Center);}
+                cx.stop_propagation();cx.notify();
+            })).child(list)));
+        if self.library.has_more {
+            body = body.child(
+                small("pulsar-more", "Next 100 recordings").on_click(cx.listener(
+                    |this, _, _, cx| {
+                        this.query.offset += 100;
+                        this.load(false, cx);
+                    },
+                )),
+            );
+        }
+        if self.query.offset > 0 {
+            body = body.child(
+                small("pulsar-first", "Back to newest page").on_click(cx.listener(
+                    |this, _, _, cx| {
+                        this.query.offset = 0;
+                        this.load(false, cx);
+                    },
+                )),
+            );
+        }
+        body
+    }
+    fn opponents_body(&self, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
+        let mut list = ui::list_card(t).child(ui::row(t, false).child(ui::section_header(
+            t,
+            "Opponents",
+            Some("Results and pooled measurements for each recorded opponent.".into()),
+        )));
+        for (i, o) in self.opponents.iter().enumerate() {
+            let key = o.fights.first().cloned();
+            list = list.child(
+                ui::row(t, i + 1 == self.opponents.len())
+                    .flex_wrap()
+                    .child(symbols::icon(Some("person"), px(20.), t.muted_foreground))
+                    .child(
+                        ui::title_block(
+                            t,
+                            o.label.clone(),
+                            Some(
+                                format!(
+                                    "{} fights · {} W / {} L / {} D · {} without result",
+                                    o.fights.len(),
+                                    o.wins,
+                                    o.losses,
+                                    o.draws,
+                                    o.unknown
+                                )
+                                .into(),
+                            ),
+                        )
+                        .flex_1()
+                        .min_w(px(160.)),
+                    )
+                    .child(ui::caption(
+                        t,
+                        format!("Last fought {}", utc_time(o.last_fought_epoch_millis)),
+                    ))
+                    .child(tabs::stats(t, &o.metrics, &["accuracy", "averageReach"]))
+                    .child(
+                        small(("opponent-open", i), "Latest fight")
+                            .disabled(key.is_none())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let Some(k) = &key {
+                                    this.open_detail(k.clone(), cx);
+                                }
+                            })),
+                    ),
+            );
+        }
+        if self.opponents.is_empty() {
+            list=list.child(ui::row(t,true).child(ui::muted(t,"No tracked opponents in this scope. Manual sessions retain their participant identity.")));
+        }
+        list
+    }
+    fn records_body(&self, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
+        let mut list = ui::list_card(t).child(ui::row(t, false).child(ui::section_header(
+            t,
+            "Personal records",
+            Some("Measured milestones. Each record links to its source fight.".into()),
+        )));
+        for (i, r) in self.records.iter().enumerate() {
+            let key = r.key.clone();
+            list = list.child(
+                ui::row(t, i + 1 == self.records.len())
+                    .child(
+                        ui::title_block(
+                            t,
+                            r.label.clone(),
+                            Some(
+                                r.minimum_attempts
+                                    .map(|n| format!("At least {n} eligible attempts required"))
+                                    .unwrap_or_else(|| r.metric.definition.help.clone())
+                                    .into(),
+                            ),
+                        )
+                        .flex_1(),
+                    )
+                    .child(ui::muted(t, tabs::metric_value(&r.metric)))
+                    .child(
+                        small(("record-open", i), "Open fight")
+                            .disabled(key.is_none())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let Some(k) = &key {
+                                    this.open_detail(k.clone(), cx);
+                                }
+                            })),
+                    ),
+            );
+        }
+        list
+    }
+    fn settings_body(&self, t: &AuroraTheme) -> Div {
+        let mut body=div().flex().flex_col().gap(px(24.)).child(ui::section_header(t,"Settings inspector",Some("Read-only persisted preferences. Recording, bindings, audio preview and live capture: Change in game.".into())));
+        let Some(s) = &self.settings else {
+            return body.child(ui::muted(
+                t,
+                "Select an instance to inspect its saved Pulsar settings.",
+            ));
+        };
+        body = body.child(ui::caption(
+            t,
+            s.source_path
+                .clone()
+                .unwrap_or_else(|| "No saved configuration · defaults shown".into()),
+        ));
+        let mut groups = std::collections::BTreeMap::<&str, Vec<&SettingView>>::new();
+        for row in &s.settings {
+            groups.entry(&row.group).or_default().push(row);
+        }
+        for (group, rows) in groups {
+            let mut list = ui::list_card(t).child(ui::row(t, false).child(ui::section_header(
+                t,
+                group.to_owned(),
+                None,
+            )));
+            let count = rows.len();
+            for (i, row) in rows.into_iter().enumerate() {
+                let value = if row.value.is_null() {
+                    "Unavailable".into()
+                } else if let Some(s) = row.value.as_str() {
+                    s.to_owned()
+                } else {
+                    row.value.to_string()
+                };
+                list = list.child(
+                    ui::row(t, i + 1 == count)
+                        .flex_wrap()
+                        .child(
+                            ui::title_block(t, row.label.clone(), Some(row.help.clone().into()))
+                                .flex_1()
+                                .min_w(px(200.)),
+                        )
+                        .child(ui::muted(t, value))
+                        .child(ui::badge(t, "Change in game", ui::Tone::Neutral)),
+                );
+            }
+            body = body.child(list);
+        }
+        for warning in &s.warnings {
+            body = body.child(ui::caption(t, warning.clone()));
+        }
+        body
+    }
+}
+/// PageUp/PageDown/Home/End over the launcher's page scroll. Offsets are
+/// negative downward, as GPUI stores them.
+pub(super) fn scroll_target(key: &str, offset: f32, max: f32, page: f32) -> Option<f32> {
+    let step = (page * 0.9).max(40.);
+    let y = match key {
+        "pageup" => offset + step,
+        "pagedown" => offset - step,
+        "home" => 0.,
+        "end" => -max,
+        _ => return None,
+    };
+    Some(y.clamp(-max.max(0.), 0.))
+}
+
+impl gpui::Render for Pulsar {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let body = self.page_body(window, cx);
+        div()
+            .id("pulsar-page")
+            .track_focus(&self.root_focus)
+            .flex()
+            .flex_col()
+            .min_w(px(0.))
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, window, cx| {
+                let key = e.keystroke.key.as_str();
+                if e.keystroke.modifiers.control || e.keystroke.modifiers.alt {
+                    return;
+                }
+                if this.on_key(key, window, cx) {
+                    cx.stop_propagation();
+                    return;
+                }
+                if this.typing(window, cx) {
+                    return;
+                }
+                if let Some(scroll) = &this.page_scroll {
+                    let max = scroll.max_offset().y.as_f32();
+                    let page = scroll.bounds().size.height.as_f32();
+                    if let Some(y) = scroll_target(key, scroll.offset().y.as_f32(), max, page) {
+                        scroll.set_offset(gpui::point(px(0.), px(y)));
+                        cx.stop_propagation();
+                        cx.notify();
+                    }
+                }
+            }))
+            .child(body)
+    }
+}
+impl Pulsar {
+    fn page_body(&mut self, window: &mut Window, cx: &mut Context<Self>) -> Div {
+        let t = crate::theme::theme(cx).clone();
+        self.width = window.viewport_size().width.as_f32();
+        let narrow = self.width < 1100.;
+        if self.compare_open {
+            return self.compare_body(&t, cx);
+        }
+        if self.detail_request.is_some() {
+            return self.detail_body(&t, narrow, cx);
+        }
+        let mut page=div().flex().flex_col().gap(px(ui::PAGE_GAP)).min_w(px(0.))
+            .child(div().flex().items_start().justify_between().gap(px(16.)).child(ui::page_header(&t,"Pulsar",Some("Your fights, kept together. Find a recording and inspect the evidence.".into())))
+                .child(AuroraButton::new("pulsar-refresh",if self.loading{"Refreshing…"}else{"Refresh"}).icon("refresh").disabled(self.loading||self.busy).on_click(cx.listener(|this,_,_,cx|this.refresh(cx)))))
+            .child(self.scope_bar(&t,cx));
+        let mut strip = div()
+            .flex()
+            .flex_wrap()
+            .gap(px(2.))
+            .p(px(2.))
+            .rounded(t.radius)
+            .bg(t.sunken)
+            .border_1()
+            .border_color(t.border_subtle)
+            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
+                let delta = match e.keystroke.key.as_str() {
+                    "left" => 7,
+                    "right" => 1,
+                    _ => return,
+                };
+                cx.stop_propagation();
+                this.top_tab = (this.top_tab + delta) % 8;
+                this.load_sections();
+                cx.notify();
+            }));
+        for (index, label) in TOP_TABS.iter().enumerate() {
+            strip = strip.child(
+                small(("pulsar-tab", index), *label)
+                    .selected(self.top_tab == index)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.top_tab = index;
+                        this.load_sections();
+                        cx.notify();
+                    })),
+            );
+        }
+        page = page.child(div().flex().child(strip));
+        if let Some(error) = &self.error {
+            page = page.child(
+                ui::card(&t)
+                    .child(ui::title_block(
+                        &t,
+                        "Pulsar could not load this view",
+                        Some(error.clone().into()),
+                    ))
+                    .child(
+                        div().flex().child(
+                            small("pulsar-retry", "Try again")
+                                .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
+                        ),
+                    ),
+            );
+        }
+        if !self.message.is_empty() {
+            page = page.child(ui::caption(&t, self.message.clone()));
+        }
+        if self.loading && self.library.rows.is_empty() {
+            return page.child(ui::muted(&t, "Reading your launcher library…"));
+        }
+        if self.library.total == 0 && self.error.is_none() {
+            return page.child(ui::empty_state(&t,"swords","No recordings yet","Pulsar recordings appear here after a fight is finalized in game. Your library keeps imported fights even after an instance is removed.")).child(ui::caption(&t,"Live capture and manual recording controls · Change in game"));
+        }
+        if self.top_tab == 0 {
+            page = page.child(ui::caption(
+                &t,
+                if self.library.runtime_status.is_empty() {
+                    "Live capture state and manual recording · Change in game".to_owned()
+                } else {
+                    format!(
+                        "{} · live capture and manual recording: Change in game",
+                        self.library.runtime_status
+                    )
+                },
+            ));
+        }
+        if self.top_tab < 4 {
+            let mut window_bar = div().flex().flex_wrap().gap(px(4.)).items_center();
+            for (i, (label, window)) in [
+                ("Last 10", AnalysisWindow::Last10),
+                ("Last 25", AnalysisWindow::Last25),
+                ("All", AnalysisWindow::All),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let selected =
+                    std::mem::discriminant(&self.window) == std::mem::discriminant(&window);
+                window_bar = window_bar.child(
+                    small(("pulsar-window", i), label)
+                        .selected(selected)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.window = window.clone();
+                            this.revision += 1;
+                            this.load_sections();
+                            cx.notify();
+                        })),
+                );
+            }
+            if let Some(a) = &self.analysis {
+                window_bar = window_bar.child(ui::caption(
+                    &t,
+                    format!(
+                        "{} recordings · {} timelines · {} with context",
+                        a.coverage.recordings,
+                        a.coverage.timeline_recordings,
+                        a.coverage.context_recordings
+                    ),
+                ));
+            }
+            page = page.child(window_bar);
+        }
+        if self.top_tab == 1 {
+            let mut weapons = std::collections::BTreeSet::new();
+            if let Some(a) = &self.analysis {
+                for table in &a.offense.tables {
+                    for row in &table.rows {
+                        for value in row.cells.values() {
+                            if value.starts_with("minecraft:") {
+                                weapons.insert(value.clone());
+                            }
+                        }
+                    }
+                }
+            }
+            let mut filters = div().flex().flex_wrap().gap(px(4.)).child(
+                small("pooled-weapon-all", "All weapons")
+                    .selected(self.weapon.is_none())
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.weapon = None;
+                        this.revision += 1;
+                        this.load_sections();
+                        cx.notify();
+                    })),
+            );
+            for (i, w) in weapons.into_iter().enumerate() {
+                let id = w.clone();
+                filters = filters.child(
+                    small(
+                        ("pooled-weapon", i),
+                        w.strip_prefix("minecraft:").unwrap_or(&w).replace('_', " "),
+                    )
+                    .selected(self.weapon.as_ref() == Some(&w))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.weapon = Some(id.clone());
+                        this.revision += 1;
+                        this.load_sections();
+                        cx.notify();
+                    })),
+                );
+            }
+            page = page.child(filters);
+        }
+        if self.top_tab == 3 {
+            let focus = self.analysis.as_ref().and_then(|a| a.focus.as_ref());
+            let index = focus
+                .and_then(|k| self.library.rows.iter().position(|r| &r.key == k))
+                .unwrap_or(0);
+            let mut controls = div().flex().flex_wrap().gap(px(8.));
+            for (newer, label) in [(true, "Newer recording"), (false, "Older recording")] {
+                controls = controls.child(
+                    small(if newer { "flow-newer" } else { "flow-older" }, label)
+                        .disabled(if newer {
+                            index == 0
+                        } else {
+                            index + 1 >= self.library.rows.len()
+                        })
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            let i = if newer {
+                                index.saturating_sub(1)
+                            } else {
+                                (index + 1).min(this.library.rows.len().saturating_sub(1))
+                            };
+                            if let Some(row) = this.library.rows.get(i) {
+                                this.selected = Some(row.key.clone());
+                                this.combo_selection = 0;
+                                this.revision += 1;
+                                this.load_sections();
+                                cx.notify();
+                            }
+                        })),
+                );
+            }
+            if let Some(key) = focus.cloned() {
+                controls =
+                    controls.child(small("flow-open-focused", "Open focused fight").on_click(
+                        cx.listener(move |this, _, _, cx| this.open_detail(key.clone(), cx)),
+                    ));
+            }
+            page = page.child(controls);
+        }
+        match self.top_tab {
+            4 => page = page.child(self.history(&t, narrow, cx)),
+            5 => page = page.child(self.opponents_body(&t, cx)),
+            6 => page = page.child(self.records_body(&t, cx)),
+            7 => page = page.child(self.settings_body(&t)),
+            index => {
+                if let Some(a) = &self.analysis {
+                    if index == 0 {
+                        if let Some(latest) = &a.latest {
+                            let key = latest.key.clone();
+                            page = page.child(
+                                ui::card(&t)
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_wrap()
+                                            .items_center()
+                                            .justify_between()
+                                            .gap(px(12.))
+                                            .child(ui::title_block(
+                                                &t,
+                                                if latest.manual {
+                                                    "Latest manual session".to_owned()
+                                                } else {
+                                                    format!("Latest fight · {}", latest.opponent)
+                                                },
+                                                Some(
+                                                    format!(
+                                                        "{} · {} · {}",
+                                                        latest.provenance.instance_name,
+                                                        latest.date_group,
+                                                        latest.result_label
+                                                    )
+                                                    .into(),
+                                                ),
+                                            ))
+                                            .child(
+                                                AuroraButton::new("pulsar-latest", "Open fight")
+                                                    .variant(ButtonVariant::Primary)
+                                                    .icon("arrow_forward")
+                                                    .on_click(cx.listener(
+                                                        move |this, _, _, cx| {
+                                                            this.open_detail(key.clone(), cx)
+                                                        },
+                                                    )),
+                                            ),
+                                    )
+                                    .child(tabs::stats(
+                                        &t,
+                                        &latest.metrics,
+                                        &[
+                                            "accuracy",
+                                            "hits",
+                                            "averageReach",
+                                            "longestCombo",
+                                            "dominanceShare",
+                                        ],
+                                    )),
+                            );
+                        }
+                    }
+                    page = page.child(self.tab_body(
+                        &t,
+                        match index {
+                            1 => &a.offense,
+                            2 => &a.defense,
+                            3 => &a.flow,
+                            _ => &a.overview,
+                        },
+                        narrow,
+                        cx,
+                    ));
+                    if index == 0 {
+                        let mut recent =
+                            ui::list_card(&t).child(ui::row(&t, false).child(ui::section_header(
+                                &t,
+                                "Recent recordings",
+                                None,
+                            )));
+                        for (i, row) in self.library.rows.iter().take(5).enumerate() {
+                            recent = recent.child(self.fight_row(
+                                &t,
+                                row,
+                                i,
+                                i + 1 == self.library.rows.len().min(5),
+                                narrow,
+                                cx,
+                            ));
+                        }
+                        page = page.child(recent);
+                    }
+                } else if self.error.is_none() {
+                    page = page.child(ui::muted(&t, "Loading analysis…"));
+                }
+            }
+        }
+        page = page.child(
+            div()
+                .flex()
+                .flex_wrap()
+                .gap(px(8.))
+                .child(
+                    small("pulsar-recordings-folder", "Recordings folder")
+                        .icon("folder_open")
+                        .on_click(
+                            cx.listener(|this, _, _, cx| this.folder(FolderKind::Recordings, cx)),
+                        ),
+                )
+                .child(
+                    small("pulsar-exports-folder", "Exports folder")
+                        .icon("folder_open")
+                        .on_click(
+                            cx.listener(|this, _, _, cx| this.folder(FolderKind::Exports, cx)),
+                        ),
+                ),
+        );
+        for issue in &self.library.errors {
+            page = page.child(ui::caption(
+                &t,
+                format!("{} · {}", issue.code, issue.message),
+            ));
+        }
+        page
+    }
+}
+
+/// FightList columns that fit a viewport width. Duration, Reach, Date and
+/// Result drop in that order (P40); opponent, hits and accuracy always stay.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(super) struct Columns {
+    pub duration: bool,
+    pub reach: bool,
+    pub date: bool,
+    pub result: bool,
+}
+pub(super) fn history_columns(width: f32) -> Columns {
+    Columns {
+        duration: width >= 1100.,
+        reach: width >= 980.,
+        date: width >= 860.,
+        result: width >= 760.,
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+enum HistoryEntry {
+    Day(String),
+    Fight(usize),
+}
+fn history_entries(rows: &[FightSummary]) -> Vec<HistoryEntry> {
+    let mut day = "";
+    let mut entries = Vec::new();
+    for (i, row) in rows.iter().enumerate() {
+        if row.date_group != day {
+            day = &row.date_group;
+            entries.push(HistoryEntry::Day(day.into()));
+        }
+        entries.push(HistoryEntry::Fight(i));
+    }
+    entries
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn page_keys_scroll_within_bounds() {
+        assert_eq!(scroll_target("pagedown", 0., 1000., 400.), Some(-360.));
+        assert_eq!(scroll_target("pageup", -100., 1000., 400.), Some(0.));
+        assert_eq!(scroll_target("end", 0., 1000., 400.), Some(-1000.));
+        assert_eq!(scroll_target("home", -700., 1000., 400.), Some(0.));
+        assert_eq!(scroll_target("pagedown", -900., 1000., 400.), Some(-1000.));
+        assert_eq!(scroll_target("pagedown", 0., 0., 400.), Some(0.));
+        assert_eq!(scroll_target("a", 0., 1000., 400.), None);
+    }
+    #[test]
+    fn history_columns_drop_in_reference_order() {
+        let wide = history_columns(1400.);
+        assert!(wide.duration && wide.reach && wide.date && wide.result);
+        let order = [1050., 950., 800., 700.].map(history_columns);
+        assert!(!order[0].duration && order[0].reach);
+        assert!(!order[1].reach && order[1].date);
+        assert!(!order[2].date && order[2].result);
+        assert!(!order[3].result);
+    }
+    #[test]
+    fn history_keeps_date_groups_and_stable_fight_indices() {
+        let rows = vec![
+            FightSummary {
+                date_group: "2026-11-14".into(),
+                ..Default::default()
+            },
+            FightSummary {
+                date_group: "2026-11-14".into(),
+                ..Default::default()
+            },
+            FightSummary {
+                date_group: "2026-11-13".into(),
+                ..Default::default()
+            },
+        ];
+        assert_eq!(
+            history_entries(&rows),
+            vec![
+                HistoryEntry::Day("2026-11-14".into()),
+                HistoryEntry::Fight(0),
+                HistoryEntry::Fight(1),
+                HistoryEntry::Day("2026-11-13".into()),
+                HistoryEntry::Fight(2)
+            ]
+        );
+    }
+}
+
+fn short_label(value: &str, max: usize) -> String {
+    if value.chars().count() > max {
+        format!(
+            "{}...",
+            value
+                .chars()
+                .take(max.saturating_sub(3))
+                .collect::<String>()
+        )
+    } else {
+        value.into()
+    }
+}
+fn utc_time(epoch_millis: i64) -> String {
+    let seconds = epoch_millis.div_euclid(1000);
+    let day = seconds.div_euclid(86400);
+    let clock = seconds.rem_euclid(86400);
+    let z = day + 719468;
+    let era = z.div_euclid(146097);
+    let doe = z - era * 146097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146096) / 365;
+    let mut year = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let date = doy - (153 * mp + 2) / 5 + 1;
+    let month = mp + if mp < 10 { 3 } else { -9 };
+    year += i64::from(month <= 2);
+    format!(
+        "{year:04}-{month:02}-{date:02} {:02}:{:02} UTC",
+        clock / 3600,
+        clock / 60 % 60
+    )
+}

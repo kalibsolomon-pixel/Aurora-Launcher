@@ -20,6 +20,7 @@ mod instance_creator;
 mod instance_editor;
 mod media;
 mod pack_import;
+mod pulsar;
 mod settings;
 mod skin_preview;
 mod skins;
@@ -56,6 +57,7 @@ use home_widgets::{HomeWidgets, HomeWidgetsEvent};
 use instance_creator::{InstanceCreator, InstanceCreatorEvent};
 use instance_editor::{InstanceEditor, InstanceEditorEvent};
 use pack_import::{PackImport, PackImportEvent};
+use pulsar::Pulsar;
 use settings::{Settings, SettingsEvent};
 use skin_preview::SkinPreview;
 use skins::{Skins, SkinsEvent};
@@ -330,6 +332,7 @@ struct Launcher {
     instance_creator: Option<gpui::Entity<InstanceCreator>>,
     settings: Option<gpui::Entity<Settings>>,
     content: Option<gpui::Entity<Content>>,
+    pulsar: Option<gpui::Entity<Pulsar>>,
     discover: Option<gpui::Entity<Discover>>,
     downloads: Option<gpui::Entity<Downloads>>,
     syncing: Option<gpui::Entity<Syncing>>,
@@ -1133,6 +1136,14 @@ impl Launcher {
             content.update(cx, |content, cx| content.show(instance, kind, cx));
         }
     }
+    fn open_pulsar_for(&mut self, instance: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.open_page(9, window, cx);
+        if self.page == 9 {
+            if let Some(pulsar) = &self.pulsar {
+                pulsar.update(cx, |pulsar, cx| pulsar.show(instance, cx));
+            }
+        }
+    }
     fn open_page(&mut self, page: u8, window: &mut Window, cx: &mut Context<Self>) {
         if !navigation_accepted(self.page, page, self.client_update_running(cx)) {
             return;
@@ -1141,6 +1152,21 @@ impl Launcher {
         // navigation, including the one that leaves Settings.
         if let Some(settings) = &self.settings {
             settings.update(cx, |settings, cx| settings.cancel_previews(cx));
+        }
+        if page == 9 {
+            if let Some(pulsar) = &self.pulsar {
+                if self.page != 9 {
+                    pulsar.update(cx, |pulsar, cx| pulsar.refresh(cx));
+                }
+            } else {
+                self.pulsar =
+                    Some(cx.new(|cx| Pulsar::new(self.host.clone(), self.rt.clone(), window, cx)));
+            }
+        }
+        if (self.page == 9) != (page == 9) {
+            if let Some(pulsar) = &self.pulsar {
+                pulsar.update(cx, |pulsar, cx| pulsar.set_active(page == 9, cx));
+            }
         }
         if page == 7 && self.skins.is_none() {
             let preview = cx.new(|cx| SkinPreview::new(self.rt.clone(), window, cx));
@@ -2067,6 +2093,7 @@ impl Render for Launcher {
             ("Discover", 5, "explore"),
             ("Content", 4, "extension"),
             ("Downloads", 8, "download"),
+            ("Pulsar", 9, "swords"),
             ("Skins", 7, "checkroom"),
             ("Accounts", 1, "account_circle"),
             ("Sync", 6, "sync"),
@@ -2142,7 +2169,7 @@ impl Render for Launcher {
                 .children(nav.by_ref().take(count).collect::<Vec<_>>())
         };
         let play_group = nav_group(Some("PLAY"), 2);
-        let library_group = nav_group(Some("LIBRARY"), 3);
+        let library_group = nav_group(Some("LIBRARY"), 4);
         let profile_group = nav_group(Some("PROFILE"), 2);
         let system_group = nav_group(None, 2);
         let brand = div()
@@ -2290,6 +2317,15 @@ impl Render for Launcher {
                     content = content.child(page.clone());
                 }
             }
+            9 => {
+                if let Some(pulsar) = &self.pulsar {
+                    // Pulsar's PageUp/PageDown/Home/End drive this page's scroll.
+                    pulsar.update(cx, |pulsar, _| {
+                        pulsar.page_scroll = Some(page_scroll.clone())
+                    });
+                    content = content.child(pulsar.clone());
+                }
+            }
             8 => {
                 if let Some(downloads) = &self.downloads {
                     content = content.child(downloads.clone());
@@ -2401,6 +2437,11 @@ impl Render for Launcher {
                                 if this.page == 4 {
                                     if let Some(content) = &this.content {
                                         content.update(cx, |content, cx| content.refresh(cx));
+                                    }
+                                }
+                                if this.page == 9 {
+                                    if let Some(pulsar) = &this.pulsar {
+                                        pulsar.update(cx, |pulsar, cx| pulsar.refresh(cx));
                                     }
                                 }
                                 if this.page == 5 {
@@ -2608,6 +2649,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             syncing.update(cx, |syncing, cx| syncing.refresh(cx));
                                         }
                                     }
+                                    InstanceEditorEvent::OpenPulsar { instance } => {
+                                        this.open_pulsar_for(instance.clone(), window, cx);
+                                    }
                                     InstanceEditorEvent::OpenContent { instance } => {
                                         this.return_to_content(instance.clone(), 0, window, cx);
                                     }
@@ -2659,6 +2703,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         instance_creator: Some(creator),
                         settings: None,
                         content: None,
+                        pulsar: None,
                         discover: None,
                         downloads: None,
                         syncing: None,
@@ -2750,6 +2795,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             settings.update(cx, |settings, cx| {
                                                 settings.on_host_event(name, payload, cx)
                                             });
+                                        }
+                                        if let Some(pulsar) = &view.pulsar {
+                                            pulsar.update(cx, |pulsar, cx| pulsar.on_host_event(name, payload, cx));
                                         }
                                         if let Some(content) = &view.content {
                                             content.update(cx, |content, cx| {
@@ -2873,6 +2921,7 @@ mod tests {
             instance_creator: None,
             settings: None,
             content: None,
+            pulsar: None,
             discover: None,
             downloads: None,
             syncing: None,
