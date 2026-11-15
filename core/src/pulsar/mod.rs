@@ -1,6 +1,12 @@
 //! Launcher-owned Pulsar recordings and immutable analytical views.
+mod analytics;
 mod parse;
+mod projection;
+mod reports;
+mod service;
+mod settings;
 mod store;
+pub use service::*;
 pub mod view;
 mod wire;
 

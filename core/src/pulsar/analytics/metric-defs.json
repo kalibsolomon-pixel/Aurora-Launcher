@@ -1,0 +1,275 @@
+[
+  {
+    "key": "accuracy",
+    "label": "Combat accuracy",
+    "unit": "%",
+    "confidence": "Inferred",
+    "help": "Confirmed hits / (attempts minus confirmed shield blocks). Uncertain attempts stay in the denominator."
+  },
+  {
+    "key": "hits",
+    "label": "Confirmed hits",
+    "unit": "",
+    "confidence": "Confirmed source",
+    "help": "Server melee damage events from the local player, matched to an attack."
+  },
+  {
+    "key": "attempts",
+    "label": "Attack attempts",
+    "unit": "",
+    "confidence": "Observed",
+    "help": "Unique eligible combat attempts. Noncombat inputs and duplicates are excluded; older recordings keep their original policy."
+  },
+  {
+    "key": "emptyMisses",
+    "label": "Eligible misses",
+    "unit": "",
+    "confidence": "Observed",
+    "help": "Aimed empty swings with opponent geometry and no server confirmation in the confirmation window. Inferred misses, not proof of server rejection. Historical empty-swing counts retain their older policy."
+  },
+  {
+    "key": "uncertain",
+    "label": "Uncertain attacks",
+    "unit": "",
+    "confidence": "Inferred",
+    "help": "Entity attacks with no matching server report. Not proven misses."
+  },
+  {
+    "key": "averageReach",
+    "label": "Average reach",
+    "unit": "m",
+    "confidence": "Observed",
+    "help": "Eye to attack-pick contact on confirmed survival hits. Not a server verdict."
+  },
+  {
+    "key": "maxReach",
+    "label": "Maximum reach",
+    "unit": "m",
+    "confidence": "Observed",
+    "help": "Largest eye to attack-pick contact on a confirmed survival hit."
+  },
+  {
+    "key": "criticalRate",
+    "label": "Critical-hit rate",
+    "unit": "%",
+    "confidence": "Observed",
+    "help": "Hits with critical conditions / confirmed hits. Damage is not verified."
+  },
+  {
+    "key": "sprintRate",
+    "label": "Sprint-hit rate",
+    "unit": "%",
+    "confidence": "Observed",
+    "help": "Hits made while sprinting / confirmed hits. Knockback is not verified."
+  },
+  {
+    "key": "averageInterval",
+    "label": "Average hit interval",
+    "unit": "s",
+    "confidence": "Observed",
+    "help": "Mean attack-time gap between consecutive confirmed hits."
+  },
+  {
+    "key": "intervalDeviation",
+    "label": "Interval deviation",
+    "unit": "s",
+    "confidence": "Observed",
+    "help": "Population standard deviation of hit intervals; lower is more consistent."
+  },
+  {
+    "key": "jumpCandidates",
+    "label": "Jump candidates",
+    "unit": "",
+    "confidence": "Inferred",
+    "help": "Actual jumps within the signed client-tick window around incoming damage. Same tick is an ideal candidate; success is unavailable."
+  },
+  {
+    "key": "longestCombo",
+    "label": "Longest combo",
+    "unit": "",
+    "confidence": "Inferred",
+    "help": "Most consecutive confirmed hits before an attributed return hit, a same-tick trade or a disengagement gap (combo timeout)."
+  },
+  {
+    "key": "averageCombo",
+    "label": "Average combo",
+    "unit": "",
+    "confidence": "Inferred",
+    "help": "Mean length of combos: runs of two or more consecutive confirmed hits."
+  },
+  {
+    "key": "momentum",
+    "label": "Legacy momentum",
+    "unit": "",
+    "confidence": "Inferred",
+    "help": "Older recordings' per-hit value: +0.20 per hit, -0.25 per attributed incoming hit, 3 s decay. Superseded by encounter dominance."
+  },
+  {
+    "key": "incoming",
+    "label": "Attributed incoming hits",
+    "unit": "",
+    "confidence": "Confirmed source",
+    "help": "Server damage events whose cause entity is the tracked opponent. Only these break your combos or move dominance."
+  },
+  {
+    "key": "unattributedIncoming",
+    "label": "Unattributed damage",
+    "unit": "",
+    "confidence": "Observed",
+    "help": "Damage whose cause the server did not report (fall, fire, environment). Third-party damage is shown separately. Neither counts as opponent retaliation."
+  },
+  {
+    "key": "attacksIntoShield",
+    "label": "Attacks into a raised shield",
+    "unit": "",
+    "confidence": "Observed",
+    "help": "Attacks made while the target's client-visible state showed an active shield."
+  },
+  {
+    "key": "shieldBlocks",
+    "label": "Confirmed shield blocks",
+    "unit": "",
+    "confidence": "Confirmed source / inferred match",
+    "help": "Attack into a blocking target followed by the server's shield sound at the target and no damage event. Removed from the accuracy denominator."
+  },
+  {
+    "key": "estimatedShieldBlocks",
+    "label": "Estimated shield blocks",
+    "unit": "",
+    "confidence": "Estimated",
+    "help": "Attack into a raised, facing shield with no damage event and no shield sound. Stays uncertain and in the accuracy denominator."
+  },
+  {
+    "key": "shieldDisables",
+    "label": "Shield disables",
+    "unit": "",
+    "confidence": "Confirmed source / inferred match",
+    "help": "Your attack followed by the shield-disable sound at the opponent."
+  },
+  {
+    "key": "hitsAfterDisable",
+    "label": "Hits after a disable",
+    "unit": "",
+    "confidence": "Confirmed source",
+    "help": "Confirmed hits within 5 s of a shield disable you caused."
+  },
+  {
+    "key": "localShieldBlocks",
+    "label": "Your shield blocks",
+    "unit": "",
+    "confidence": "Observed",
+    "help": "Shield-block sounds at your position. The blocked attacker is not reported."
+  },
+  {
+    "key": "serverCrits",
+    "label": "Server critical hits",
+    "unit": "",
+    "confidence": "Confirmed source",
+    "help": "Your confirmed hits with the server's critical-hit animation on the opponent within one tick. Damage is not reported."
+  },
+  {
+    "key": "comboCount",
+    "label": "Combos",
+    "unit": "",
+    "confidence": "Inferred",
+    "help": "Runs of two or more consecutive confirmed hits."
+  },
+  {
+    "key": "comboHits",
+    "label": "Hits in combos",
+    "unit": "",
+    "confidence": "Inferred",
+    "help": "Confirmed hits that were part of a combo of two or more."
+  },
+  {
+    "key": "longestOpponentCombo",
+    "label": "Longest opp. combo",
+    "unit": "",
+    "confidence": "Inferred",
+    "help": "Same rule using attributed incoming hits. Estimated or unavailable when some incoming damage is unattributed."
+  },
+  {
+    "key": "longestUnanswered",
+    "label": "Longest streak",
+    "unit": "",
+    "confidence": "Inferred",
+    "help": "Most consecutive confirmed hits before an attributed return hit, ignoring disengagement gaps."
+  },
+  {
+    "key": "dominance",
+    "label": "Encounter dominance",
+    "unit": "",
+    "confidence": "Inferred",
+    "help": "Decayed share of confirmed evidence: (P - N) / (P + N + 1), 3 s time constant. Neutral or not drawn when evidence is thin or incoming damage is unattributed."
+  },
+  {
+    "key": "dominanceShare",
+    "label": "Advantage share",
+    "unit": "%",
+    "confidence": "Inferred",
+    "help": "Share of observed active combat time with dominance above +0.2 (you) or below -0.2 (opponent). Inactive and incomplete periods are excluded."
+  },
+  {
+    "key": "reachWithin",
+    "label": "Reach in target window",
+    "unit": "%",
+    "confidence": "Observed",
+    "help": "Eligible confirmed hits (ray contact) within the configured target and tolerance."
+  },
+  {
+    "key": "reachDeviation",
+    "label": "Reach consistency",
+    "unit": "m",
+    "confidence": "Observed",
+    "help": "Population standard deviation of eligible confirmed-hit reach; lower is more consistent."
+  },
+  {
+    "key": "reachError",
+    "label": "Average deviation from target",
+    "unit": "m",
+    "confidence": "Observed",
+    "help": "Mean absolute difference between eligible hit reach and the configured target."
+  },
+  {
+    "key": "aimCentral",
+    "label": "Central aim",
+    "unit": "%",
+    "confidence": "Observed geometry",
+    "help": "Hits graded ideal or good by the client hitbox heuristic. Not a damage measure."
+  },
+  {
+    "key": "aimDistance",
+    "label": "Distance from ideal point",
+    "unit": "m",
+    "confidence": "Observed geometry",
+    "help": "Mean blocks between the recorded contact and the region's ideal point; SD is aim consistency."
+  },
+  {
+    "key": "timingPerfect",
+    "label": "Cooldown-matched intervals",
+    "unit": "%",
+    "confidence": "Observed",
+    "help": "Graded attack intervals within the tick tolerance of the weapon's cooldown. Mechanical readiness, not tactical quality."
+  },
+  {
+    "key": "damageTaken",
+    "label": "Health lost",
+    "unit": "HP",
+    "confidence": "Observed",
+    "help": "Sum of observed decreases of your health plus absorption during the recording."
+  },
+  {
+    "key": "knockback",
+    "label": "Knockback observed",
+    "unit": "",
+    "confidence": "Observed",
+    "help": "Incoming hits with a server velocity update for you within one tick."
+  },
+  {
+    "key": "fights",
+    "label": "Recordings",
+    "unit": "",
+    "confidence": "Observed",
+    "help": "Fights and manual sessions in local history."
+  }
+]

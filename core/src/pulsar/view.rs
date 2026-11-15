@@ -348,6 +348,21 @@ pub struct EventView {
     pub detail: String,
     pub outcome: Option<String>,
     pub lane: String,
+    #[serde(default)]
+    pub attributed_incoming: bool,
+    #[serde(default)]
+    pub eligible_attempt: bool,
+}
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PlaybackCheckpoint {
+    pub time: f64,
+    pub hits: usize,
+    pub attempts: usize,
+    pub incoming: usize,
+    pub local_streak: usize,
+    pub dominance: Option<f64>,
+    pub dominance_state: String,
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -361,6 +376,8 @@ pub struct PlaybackView {
     pub boundaries: Vec<ChartBand>,
     pub cumulative: BTreeMap<String, MetricValue>,
     pub notices: Vec<String>,
+    #[serde(default)]
+    pub checkpoints: Vec<PlaybackCheckpoint>,
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

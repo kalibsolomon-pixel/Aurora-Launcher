@@ -316,3 +316,126 @@ fn full_large_fixture_path_when_available() {
     }
     assert!(found);
 }
+
+fn compare_oracle(
+    actual: &serde_json::Value,
+    expected: &serde_json::Value,
+    path: &str,
+    errors: &mut Vec<String>,
+) {
+    use serde_json::Value;
+    match (actual, expected) {
+        (Value::Object(a), Value::Object(e)) => {
+            let keys: std::collections::BTreeSet<_> = a.keys().chain(e.keys()).collect();
+            for key in keys {
+                compare_oracle(
+                    a.get(key).unwrap_or(&Value::Null),
+                    e.get(key).unwrap_or(&Value::Null),
+                    &format!("{path}.{key}"),
+                    errors,
+                );
+            }
+        }
+        (Value::Array(a), Value::Array(e)) => {
+            if a.len() != e.len() {
+                errors.push(format!("{path}: array length {} != {}", a.len(), e.len()));
+            }
+            for (i, (a, e)) in a.iter().zip(e).enumerate() {
+                compare_oracle(a, e, &format!("{path}[{i}]"), errors);
+            }
+        }
+        (Value::Number(a), Value::Number(e)) => {
+            let (a, e) = (a.as_f64().unwrap(), e.as_f64().unwrap());
+            let tolerance = if path.contains("dominance.values[") {
+                1e-4
+            } else {
+                1e-9
+            };
+            if (a - e).abs() > tolerance {
+                errors.push(format!("{path}: {a} != {e}"));
+            }
+        }
+        _ => {
+            if actual != expected {
+                errors.push(format!("{path}: {actual} != {expected}"));
+            }
+        }
+    }
+}
+fn oracle_case(n: usize) {
+    let data = fixture(n);
+    let raw = fight(n);
+    let a = analytics::analyze(&raw);
+    let mut errors = Vec::new();
+    let mut projected = a.derived.clone();
+    // Production exports replace announcement text only in the manual parent payload.
+    // Core retains the original evidence; compare the same explicit privacy projection.
+    if data["oracle"]["anonymized"] == true && raw.session.is_some() {
+        for entry in projected["boundaries"].as_array_mut().unwrap() {
+            entry["text"] = "Announcement text redacted".into();
+        }
+    }
+    compare_oracle(
+        &projected,
+        &data["oracle"]["derived"],
+        "derived",
+        &mut errors,
+    );
+    compare_oracle(
+        &serde_json::to_value(analytics::metrics::definitions()).unwrap(),
+        &data["oracle"]["metrics"],
+        "metrics",
+        &mut errors,
+    );
+    if let Some(session) = &raw.session {
+        for (i, ex) in session.exchanges.iter().enumerate() {
+            compare_oracle(
+                &analytics::analyze(ex).derived,
+                &data["oracle"]["scopes"][i]["derived"],
+                &format!("scopes[{i}]"),
+                &mut errors,
+            );
+        }
+    }
+    for e in errors.iter().take(30) {
+        eprintln!("{} {e}", IDS[n]);
+    }
+    assert!(
+        errors.is_empty(),
+        "{}: {} oracle mismatches",
+        IDS[n],
+        errors.len()
+    );
+}
+#[test]
+fn oracle_completed_multiweapon() {
+    oracle_case(0);
+}
+#[test]
+fn oracle_multiround() {
+    oracle_case(1);
+}
+#[test]
+fn oracle_separated_exchanges() {
+    oracle_case(2);
+}
+#[test]
+fn oracle_manual_participants() {
+    oracle_case(3);
+}
+#[test]
+fn oracle_interrupted() {
+    oracle_case(4);
+}
+#[test]
+fn oracle_historical() {
+    oracle_case(5);
+}
+#[test]
+fn oracle_no_hit_incomplete() {
+    oracle_case(6);
+}
+#[test]
+fn oracle_long_forty_round_match() {
+    oracle_case(7);
+}
