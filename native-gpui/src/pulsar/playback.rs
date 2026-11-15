@@ -1,4 +1,5 @@
 //! Playback operates on one immutable event snapshot; ticks never call the API.
+use super::presentation::ui;
 use super::{
     Pulsar,
     charts::{Chart, Kind, Sample, Shape},
@@ -7,17 +8,17 @@ use super::{
 use crate::{
     controls::{AuroraButton, ButtonSize, ButtonVariant},
     theme::AuroraTheme,
-    ui,
 };
 use aurora_launcher_lib::pulsar::view::{EventView, PlaybackCheckpoint};
 use gpui::{Context, Div, KeyDownEvent, MouseButton, Role, div, prelude::*, px};
-
 pub(super) fn advance(head: f64, elapsed: f64, speed: f64, duration: f64) -> f64 {
     if !elapsed.is_finite() || !speed.is_finite() || !duration.is_finite() {
         return head;
     }
+
     (head + elapsed.max(0.) * speed.clamp(0.25, 4.)).clamp(0., duration.max(0.))
 }
+
 pub(super) fn step(events: &[EventView], head: f64, forward: bool, duration: f64) -> f64 {
     if forward {
         events
@@ -35,6 +36,7 @@ pub(super) fn step(events: &[EventView], head: f64, forward: bool, duration: f64
             .unwrap_or(0.)
     }
 }
+
 pub(super) fn visible<'a>(
     events: &'a [EventView],
     head: f64,
@@ -47,8 +49,10 @@ pub(super) fn visible<'a>(
     if rows.len() > 200 {
         rows.drain(..rows.len() - 200);
     }
+
     rows
 }
+
 pub(super) fn checkpoint_at(
     points: &[PlaybackCheckpoint],
     head: f64,
@@ -56,8 +60,9 @@ pub(super) fn checkpoint_at(
     let i = points.partition_point(|p| p.time <= head + 1e-9);
     i.checked_sub(1).and_then(|i| points.get(i))
 }
+
 fn button(id: impl Into<gpui::ElementId>, label: impl Into<gpui::SharedString>) -> AuroraButton {
-    AuroraButton::new(id, label)
+    AuroraButton::new(id, super::presentation::text(label.into().as_ref()))
         .variant(ButtonVariant::Ghost)
         .size(ButtonSize::Small)
 }
@@ -105,13 +110,16 @@ impl Pulsar {
                     .aria_label(line),
             );
         }
+
         if events.is_empty() {
             list = list.child(
                 ui::row(t, true).child(ui::muted(t, "No matching observations at this time.")),
             );
         }
+
         list
     }
+
     pub(super) fn playback_body(&self, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
         let mut page = div()
             .id("pulsar-playback")
@@ -127,6 +135,7 @@ impl Pulsar {
                     "." | "period" => this.step(true, cx),
                     _ => return,
                 }
+
                 cx.stop_propagation();
                 cx.notify();
             }));
@@ -168,7 +177,7 @@ impl Pulsar {
             )
             .child(ui::muted(
                 t,
-                format!("{:.2} / {:.2} s", self.playhead, duration),
+                format!("{:.1} of {:.1} s", self.playhead, duration),
             ));
         for (i, speed) in [0.25, 0.5, 1., 2., 4.].into_iter().enumerate() {
             controls = controls.child(
@@ -180,7 +189,8 @@ impl Pulsar {
                     })),
             );
         }
-        page=page.child(controls).child(ui::caption(t,"Space: play/pause · comma / period: previous / next event · select a lane mark to seek. Playback stops when hidden."));
+
+        page = page.child(controls);
         // The seek rail is keyboard accessible and pointer seeking uses its actual layout bounds.
         let bounds = self.seek_bounds.clone();
         let recorded = bounds.clone();
@@ -221,14 +231,14 @@ impl Pulsar {
         let lane_chart = Chart {
             id: "playback-lanes".into(), title: "Recorded event lanes".into(),
             x_label: "Recording time (s)".into(),
-            y_label: format!("Lanes, bottom to top: {}", lanes.join(" / ")),
+            y_label: lanes.iter().map(|s|super::analysis_ui::display_label(s)).collect::<Vec<_>>().join("\n"),
             samples, kind: Kind::Lanes, domain: (0., duration.max(1.)),
             range: (-0.5, lanes.len() as f64 - 0.5), band: None, target: None,
             playhead: Some(self.playhead),
             bands: p.boundaries.iter().map(|b| super::charts::Band {
                 start: b.start, end: b.end, lane: None, label: b.label.clone(), selected: false,
             }).collect(), incomplete: vec![],
-            note: "Square: attack | Diamond: shield / trade | Circle: jump | Triangle: incoming | Plus: critical | Cross: death | Tick: sprint / boundary. Select a time to seek. Observations only; no world reconstruction.".into(),
+            note: "? Attack   · Shield or trade   · Jump   · Incoming   + Critical   · Death   · Sprint or boundary. Click to seek. Space plays; comma and period step between events.".into(),
         };
         page = page.child(
             lane_chart
@@ -279,6 +289,7 @@ impl Pulsar {
                 })),
             );
         }
+
         page = page.child(jumps);
         let checkpoint = checkpoint_at(&p.checkpoints, self.playhead);
         let count = |get: fn(&aurora_launcher_lib::pulsar::view::PlaybackCheckpoint) -> usize| {
@@ -327,7 +338,7 @@ impl Pulsar {
             let selected =
                 self.event_filter.as_deref() == if kind == "All" { None } else { Some(kind) };
             filters = filters.child(
-                button(("event-filter", i), kind)
+                button(("event-filter", i), super::presentation::text(kind))
                     .selected(selected)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.event_filter = if kind == "All" {
@@ -339,6 +350,7 @@ impl Pulsar {
                     })),
             );
         }
+
         page = page.child(filters).child(self.event_table(
             t,
             &visible(&p.events, self.playhead, self.event_filter.as_deref()),
@@ -346,6 +358,7 @@ impl Pulsar {
         for n in &p.notices {
             page = page.child(ui::caption(t, n.clone()));
         }
+
         let _ = tabs::metric_value;
         div().child(page)
     }
@@ -354,6 +367,7 @@ impl Pulsar {
 #[cfg(test)]
 mod tests {
     use super::*;
+
     fn event(t: f64, k: &str) -> EventView {
         EventView {
             time: t,
@@ -361,7 +375,9 @@ mod tests {
             ..Default::default()
         }
     }
+
     #[test]
+
     fn cached_checkpoint_keeps_attribution_and_canonical_counts() {
         let points = vec![
             PlaybackCheckpoint {
@@ -382,7 +398,9 @@ mod tests {
         assert_eq!(checkpoint_at(&points, 3.).unwrap().incoming, 1);
         assert!(checkpoint_at(&points, -1.).is_none());
     }
+
     #[test]
+
     fn playhead_stepping_skips_motion_and_clamps() {
         let e = vec![
             event(0.1, "ATTACK"),
@@ -395,7 +413,9 @@ mod tests {
         assert_eq!(advance(0.9, 1., 4., 1.), 1.);
         assert_eq!(advance(0.5, f64::NAN, 1., 1.), 0.5);
     }
+
     #[test]
+
     fn playback_filter_excludes_future_and_motion_by_default() {
         let e = vec![
             event(0.1, "ATTACK"),
@@ -411,6 +431,7 @@ fn event_shape(e: &EventView) -> Shape {
     if e.detail.to_lowercase().contains("trade") {
         return Shape::Diamond;
     }
+
     match e.kind.as_str() {
         "SHIELD" => Shape::Diamond,
         "JUMP" => Shape::Hollow,

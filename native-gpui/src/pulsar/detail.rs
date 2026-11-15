@@ -1,17 +1,17 @@
+use super::presentation::ui;
 use super::{DETAIL_TABS, Pulsar, Reply, tabs};
 use crate::{
     api,
     backend::guarded,
     controls::{AuroraButton, AuroraCheckbox, AuroraInput, ButtonSize, ButtonVariant},
     theme::AuroraTheme,
-    ui,
 };
 use aurora_launcher_lib::pulsar::view::*;
 use gpui::{Context, Div, KeyDownEvent, div, prelude::*, px};
 use gpui_kit::base::Dialog;
 
 fn button(id: impl Into<gpui::ElementId>, label: impl Into<gpui::SharedString>) -> AuroraButton {
-    AuroraButton::new(id, label)
+    AuroraButton::new(id, super::presentation::text(label.into().as_ref()))
         .variant(ButtonVariant::Ghost)
         .size(ButtonSize::Small)
 }
@@ -76,103 +76,82 @@ impl Pulsar {
                 .as_ref()
                 .and_then(|k| self.library.rows.iter().find(|r| &r.key == k))
         });
-        let mut page = div()
-            .flex()
-            .flex_col()
-            .gap(px(ui::PAGE_GAP))
-            .min_w(px(0.))
-            .child(
-                div().flex().child(
-                    button("fight-back", "Back to fights")
-                        .icon("arrow_back")
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.close_detail();
-                            cx.notify();
-                        })),
-                ),
-            )
-            .child(ui::page_header(
-                t,
-                summary
-                    .map(|s| {
+        let mut header = div().flex().flex_wrap().items_center().gap(px(8.));
+        header = header.child(button("fight-back", "Back").icon("arrow_back").on_click(
+            cx.listener(|this, _, _, cx| {
+                this.close_detail();
+                cx.notify();
+            }),
+        ));
+        if let Some(s) = summary {
+            header = header
+                .child(
+                    ui::page_header(
+                        t,
                         if s.manual {
                             "Manual session".to_owned()
                         } else {
                             format!("Fight against {}", s.opponent)
-                        }
-                    })
-                    .unwrap_or_else(|| "Fight detail".into()),
-                summary.map(|s| {
-                    format!(
-                        "{} · {} · {:.1} s",
-                        s.provenance.instance_name,
-                        s.date_group,
-                        s.duration_nanos as f64 / 1e9
-                    )
-                    .into()
-                }),
-            ));
-        if let Some(s) = summary {
-            page = page
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap(px(8.))
-                        .items_center()
-                        .child(ui::badge(t, s.result_label.clone(), ui::Tone::Neutral))
-                        .child(ui::caption(
-                            t,
+                        },
+                        Some(
                             format!(
-                                "{} · {} · {}{}",
-                                s.resolution.source,
-                                s.resolution.confidence,
-                                s.resolution.scope,
-                                if s.resolution.derived {
-                                    " · older recording"
-                                } else {
-                                    ""
-                                }
-                            ),
-                        )),
-                )
-                .child(
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .gap(px(8.))
-                        .child(
-                            button("fight-report", "View report")
-                                .icon("open_in_new")
-                                .disabled(!s.report_available)
-                                .on_click({
-                                    let key = s.key.clone();
-                                    cx.listener(move |this, _, _, _| this.view_report(key.clone()))
-                                }),
-                        )
-                        .child(
-                            button("fight-export", "Export report")
-                                .icon("download")
-                                .disabled(!s.report_available || self.busy)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.export_open = true;
-                                    cx.notify();
-                                })),
-                        )
-                        .child(
-                            button("fight-delete", "Delete fight")
-                                .disabled(self.busy)
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.delete_open = true;
-                                    this.delete_source = false;
-                                    this.pause();
-                                    cx.notify();
-                                })),
+                                "{} · {} · {:.1} s",
+                                s.provenance.instance_name,
+                                super::page::utc_time(s.start_epoch_millis),
+                                s.duration_nanos as f64 / 1e9
+                            )
+                            .into(),
                         ),
-                );
-            if !s.report_available {
-                page=page.child(ui::caption(t,"No existing report folder is available. The raw recording remains viewable here."));
-            }
+                    )
+                    .flex_1(),
+                )
+                .child(ui::badge(
+                    t,
+                    s.result_label.clone(),
+                    super::presentation::outcome(s),
+                ));
+        }
+        let mut page = div()
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .min_w(px(0.))
+            .child(header);
+        if let Some(s) = summary {
+            page = page.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(4.))
+                    .child(
+                        button("fight-report", "View report")
+                            .icon("open_in_new")
+                            .disabled(!s.report_available)
+                            .on_click({
+                                let key = s.key.clone();
+                                cx.listener(move |this, _, _, _| this.view_report(key.clone()))
+                            }),
+                    )
+                    .child(
+                        button("fight-export", "Export report")
+                            .icon("download")
+                            .disabled(!s.report_available || self.busy)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.export_open = true;
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        button("fight-delete", "Delete fight")
+                            .disabled(self.busy)
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.delete_open = true;
+                                this.delete_source = false;
+                                this.pause();
+                                cx.notify();
+                            })),
+                    ),
+            );
         }
         if let Some(error) = &self.error {
             page = page.child(ui::card(t).child(ui::title_block(
@@ -278,66 +257,34 @@ impl Pulsar {
         match self.detail_tab {
             4 => page = page.child(self.playback_body(t, cx)),
             5 => {
-                page = page
-                    .child(
-                        ui::card(t)
-                            .child(ui::section_header(t, "Result provenance", None))
-                            .child(ui::caption(
-                                t,
-                                format!(
-                                    "Classification: {} · source: {} · confidence: {} · scope: {}",
-                                    detail.summary.resolution.classification,
-                                    detail.summary.resolution.source,
-                                    detail.summary.resolution.confidence,
-                                    detail.summary.resolution.scope
-                                ),
-                            ))
-                            .child(ui::caption(
-                                t,
-                                format!("Recording: {}", detail.summary.key.fight_id),
-                            ))
-                            .child(ui::caption(
-                                t,
-                                format!("Source: {}", detail.summary.provenance.source_path),
-                            ))
-                            .children(
-                                detail
-                                    .summary
-                                    .resolution
-                                    .notes
-                                    .iter()
-                                    .map(|s| ui::muted(t, s.clone())),
-                            ),
-                    )
-                    .child(
-                        div().flex().child(
-                            button(
-                                "evidence-toggle",
-                                if self.show_evidence {
-                                    "Hide result evidence"
-                                } else {
-                                    "Show result evidence"
-                                },
-                            )
-                            .selected(self.show_evidence)
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.show_evidence = !this.show_evidence;
-                                cx.notify();
-                            })),
-                        ),
-                    )
-                    .when(self.show_evidence, |d| {
-                        d.child(self.table_view(t, &detail.evidence, narrow,cx))
-                    })
-                    .children(detail.summary.provenance.conflicts.iter().map(|c| {
-                        ui::caption(t, format!("Conflicting snapshot · {c}"))
-                    }))
-                    .when(detail.summary.stale, |d| {
-                        d.child(ui::caption(
-                            t,
-                            "The instance copy changed after import. This view shows the retained library snapshot.",
-                        ))
-                    });
+                let r = &detail.summary.resolution;
+                page=page.child(ui::card(t).child(ui::section_header(t,"Why this result was recorded",None))
+                    .child(ui::muted(t,format!("{} · {}",detail.summary.result_label,r.source)))
+                    .children(r.notes.iter().map(|n|ui::muted(t,n.clone())))
+                    .child(ui::caption(t,format!("Recorded in {} on {}. Your launcher retains this snapshot independently of the instance.",detail.summary.provenance.instance_name,super::page::utc_time(detail.summary.start_epoch_millis)))));
+                let full_path = detail.summary.provenance.source_path.clone();
+                let copy_path = full_path.clone();
+                let diagnostics=ui::card(t).child(ui::section_header(t,"Recording diagnostics",None))
+                    .child(ui::caption(t,format!("Recording identifier: {}",detail.summary.key.fight_id)))
+                    .child(ui::caption(t,format!("Classification: {}. Confidence: {}. Scope: {}.",r.classification,r.confidence,r.scope)))
+                    .child(ui::caption(t,format!("Source: …/{}",full_path.rsplit(['/', '\\']).next().unwrap_or("recording.json"))))
+                    .child(div().flex().flex_wrap().gap(px(8.)).child(button("copy-recording-path","Copy full path").on_click(move|_,_,cx|cx.write_to_clipboard(gpui::ClipboardItem::new_string(copy_path.clone()))))
+                        .child(button("open-recording-source","Open recordings folder").on_click(cx.listener(|this,_,_,cx|this.folder(FolderKind::Recordings,cx)))))
+                    .children(detail.summary.provenance.conflicts.iter().map(|c|ui::caption(t,format!("Conflicting snapshot: {c}"))))
+                    .child(ui::caption(t,if detail.summary.stale{"The source changed after import. This view shows the retained snapshot."}else{"The retained snapshot matches the imported source."}));
+                let diagnostics =
+                    diagnostics.child(self.table_view(t, &detail.evidence, narrow, cx));
+                page =
+                    page.child(self.disclosure(t, "diagnostics", "Diagnostics", diagnostics, cx));
+                let mut evidence = detail.evidence.clone();
+                evidence.columns.retain(|c| c != "nanoTime");
+                page = page.child(self.disclosure(
+                    t,
+                    "result-evidence",
+                    "Result evidence",
+                    self.table_view(t, &evidence, narrow, cx),
+                    cx,
+                ));
                 let events = detail
                     .timeline
                     .iter()

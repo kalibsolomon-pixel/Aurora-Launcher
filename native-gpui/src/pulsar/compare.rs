@@ -1,10 +1,10 @@
+use super::presentation::ui;
 use super::{Pulsar, Reply, tabs};
 use crate::{
     api,
     backend::guarded,
     controls::{AuroraButton, ButtonSize, ButtonVariant},
     theme::AuroraTheme,
-    ui,
 };
 use aurora_launcher_lib::pulsar::view::*;
 use gpui::{Context, Div, div, prelude::*, px};
@@ -75,28 +75,60 @@ impl Pulsar {
                 },
             ));
         };
-        page = page.child(ui::card(t).child(div().flex().gap(px(24.)).children(
-            [&data.left, &data.right].into_iter().map(|f| {
-                ui::title_block(
-                    t,
-                    f.opponent.clone(),
-                    Some(
-                        format!(
-                            "{} · {} · {}",
-                            f.provenance.instance_name, f.date_group, f.result_label
-                        )
-                        .into(),
-                    ),
-                )
-                .flex_1()
-            }),
-        )));
+        page = page.child(
+            ui::card(t).child(
+                div().flex().flex_wrap().gap(px(20.)).children(
+                    [&data.left, &data.right]
+                        .into_iter()
+                        .enumerate()
+                        .map(|(i, f)| {
+                            div()
+                                .flex_1()
+                                .min_w(px(180.))
+                                .flex()
+                                .flex_col()
+                                .gap(px(6.))
+                                .child(ui::caption(
+                                    t,
+                                    if i == 0 {
+                                        "First fight"
+                                    } else {
+                                        "Second fight"
+                                    },
+                                ))
+                                .child(ui::section_header(t, f.opponent.clone(), None))
+                                .child(ui::caption(
+                                    t,
+                                    format!(
+                                        "{} · {}",
+                                        f.date_group,
+                                        super::page::utc_time(f.start_epoch_millis)
+                                    ),
+                                ))
+                                .child(ui::caption(
+                                    t,
+                                    format!(
+                                        "{:.1} s · {}",
+                                        f.duration_nanos as f64 / 1e9,
+                                        f.provenance.instance_name
+                                    ),
+                                ))
+                                .child(div().flex().child(ui::badge(
+                                    t,
+                                    f.result_label.clone(),
+                                    super::presentation::outcome(f),
+                                )))
+                        }),
+                ),
+            ),
+        );
+        page=page.child(ui::caption(t,"Differences are second − first. Percentage point changes describe rates; a positive change is not always better."));
         let mut rows = ui::list_card(t).min_w(px(700.)).w_full().child(
             ui::row(t, false)
                 .child(ui::caption(t, "Measurement").flex_1().min_w(px(0.)))
                 .child(ui::caption(t, "First fight").flex_1().min_w(px(0.)))
                 .child(ui::caption(t, "Second fight").flex_1().min_w(px(0.)))
-                .child(ui::caption(t, "Difference").w(px(100.))),
+                .child(ui::caption(t, "Second − first").w(px(130.))),
         );
         for (i, m) in data.metrics.iter().enumerate() {
             rows = rows.child(
@@ -117,14 +149,7 @@ impl Pulsar {
                             .min_w(px(0.)),
                     )
                     .child(
-                        ui::caption(
-                            t,
-                            m.delta
-                                .filter(|n| n.is_finite())
-                                .map(|n| format!("{n:+.2}"))
-                                .unwrap_or_else(|| "Unavailable".into()),
-                        )
-                        .w(px(100.)),
+                        ui::caption(t, super::presentation::delta(&m.left, m.delta)).w(px(130.)),
                     ),
             );
         }

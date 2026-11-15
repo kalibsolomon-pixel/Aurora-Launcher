@@ -6,16 +6,15 @@ mod detail;
 mod navigation;
 mod page;
 mod playback;
+mod presentation;
 mod projections;
 mod sections;
 mod tabs;
-
 use crate::{api, backend::guarded};
 use aurora_launcher_lib::{host::Host, pulsar::view::*};
 use gpui::{Context, Entity, Subscription, Task, Window, prelude::*};
 use gpui_kit::base::input::{InputEvent, InputState};
 use std::time::Duration;
-
 pub(super) const TOP_TABS: [&str; 8] = [
     "Overview",
     "Offense",
@@ -27,12 +26,7 @@ pub(super) const TOP_TABS: [&str; 8] = [
     "Settings",
 ];
 pub(super) const DETAIL_TABS: [&str; 6] = [
-    "Summary",
-    "Offense",
-    "Defense",
-    "Flow",
-    "Playback",
-    "Evidence / Timeline",
+    "Summary", "Offense", "Defense", "Flow", "Playback", "Evidence",
 ];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -60,6 +54,11 @@ enum Reply {
     Action(api::ApiResult<ActionReceipt>, bool),
 }
 
+pub enum PulsarEvent {
+    OpenInstances,
+}
+impl gpui::EventEmitter<PulsarEvent> for Pulsar {}
+
 pub struct Pulsar {
     host: Option<Host>,
     runtime: tokio::runtime::Handle,
@@ -72,6 +71,12 @@ pub struct Pulsar {
     active: bool,
     visible: bool,
     root_focus: gpui::FocusHandle,
+    scope_trigger: gpui::FocusHandle,
+    scope_content: gpui::FocusHandle,
+    scope_bounds: std::rc::Rc<std::cell::Cell<Option<gpui::Bounds<gpui::Pixels>>>>,
+    scope_open: bool,
+    scope_highlight: usize,
+    disclosures: std::collections::BTreeSet<String>,
     playback_focus: gpui::FocusHandle,
     seek_focus: gpui::FocusHandle,
     history_focus: gpui::FocusHandle,
@@ -125,7 +130,6 @@ pub struct Pulsar {
     combo_selection: usize,
     show_methods: bool,
     show_data: bool,
-    show_evidence: bool,
     aim_density: bool,
     aim_third: usize,
     aim_selection: Option<i64>,
@@ -236,6 +240,12 @@ impl Pulsar {
             active: true,
             visible: window.is_visible(),
             root_focus: cx.focus_handle(),
+            scope_trigger: cx.focus_handle(),
+            scope_content: cx.focus_handle(),
+            scope_bounds: Default::default(),
+            scope_open: false,
+            scope_highlight: 0,
+            disclosures: Default::default(),
             playback_focus: cx.focus_handle(),
             seek_focus: cx.focus_handle(),
             history_focus: cx.focus_handle(),
@@ -289,7 +299,6 @@ impl Pulsar {
             combo_selection: 0,
             show_methods: false,
             show_data: false,
-            show_evidence: true,
             aim_density: false,
             aim_third: 0,
             aim_selection: None,
@@ -895,6 +904,10 @@ impl Pulsar {
         if ready {
             for option in self.showcase_options.clone() {
                 match option.as_str() {
+                    "overview-details" | "counting" | "flow-metrics" | "supporting-metrics"
+                    | "diagnostics" | "result-evidence" | "shortcuts" | "interpretation" => {
+                        self.disclosures.insert(option.clone());
+                    }
                     "delete" => self.delete_open = true,
                     "export" => self.export_open = true,
                     "density" => self.aim_density = true,

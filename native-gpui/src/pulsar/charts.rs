@@ -1,5 +1,6 @@
 //! Native, event-driven charts. A missing sample always breaks a path.
-use crate::{theme::AuroraTheme, ui};
+use super::presentation::ui;
+use crate::theme::AuroraTheme;
 use gpui::{
     Context, Div, Hsla, PathBuilder, Role, Window, canvas, div, point, prelude::*, px, relative,
 };
@@ -193,7 +194,7 @@ impl gpui::Render for Readout {
             .border_color(self.theme.border)
             .text_size(px(ui::TEXT_CAPTION))
             .text_color(self.theme.foreground)
-            .child(self.text.clone())
+            .child(super::presentation::text(&self.text))
     }
 }
 
@@ -282,7 +283,7 @@ impl Chart {
                             .aria_label(format!("{}: {n:.0}", s.label))
                             .tooltip(move |_, cx| {
                                 cx.new(|_| Readout {
-                                    text: format!("{label}: {n:.0}"),
+                                    text: super::presentation::text(&format!("{label}: {n:.0}")),
                                     theme: theme.clone(),
                                 })
                                 .into()
@@ -562,7 +563,17 @@ impl Chart {
                                         continue;
                                     }
                                     let r = px(3.5);
-                                    let ink = grade_color(&palette, &s.label);
+                                    let ink = if chart.kind == Kind::Lanes {
+                                        match s.shape {
+                                            Shape::Square => palette.ring,
+                                            Shape::Diamond => palette.warning,
+                                            Shape::Hollow => palette.success,
+                                            Shape::Triangle | Shape::Cross => palette.danger,
+                                            _ => palette.muted_foreground,
+                                        }
+                                    } else {
+                                        grade_color(&palette, &s.label)
+                                    };
                                     match s.shape {
                                         Shape::Square => polygon(
                                             window,
@@ -760,7 +771,7 @@ impl Chart {
                     })
                     .tooltip(move |_, cx| {
                         cx.new(|_| Readout {
-                            text: label.clone(),
+                            text: super::presentation::text(&label),
                             theme: theme.clone(),
                         })
                         .into()
@@ -770,12 +781,28 @@ impl Chart {
         ui::card(t)
             .min_w(px(0.))
             .child(ui::section_header(t, self.title.clone(), None))
-            .child(ui::caption(t, self.y_label.clone()))
+            .when(self.kind != Kind::Lanes, |d| {
+                d.child(ui::caption(t, self.y_label.clone()))
+            })
             .child(
                 div()
                     .flex()
                     .gap(px(12.))
-                    .child(
+                    .child(if self.kind == Kind::Lanes {
+                        div()
+                            .w(px(92.))
+                            .flex_shrink_0()
+                            .h(px(164.))
+                            .flex()
+                            .flex_col()
+                            .justify_around()
+                            .children(
+                                self.y_label
+                                    .lines()
+                                    .rev()
+                                    .map(|label| ui::caption(t, label.to_owned())),
+                            )
+                    } else {
                         div()
                             .w(px(36.))
                             .flex_shrink_0()
@@ -784,8 +811,8 @@ impl Chart {
                             .flex_col()
                             .justify_between()
                             .child(ui::caption(t, format!("{:.1}", self.range.1)))
-                            .child(ui::caption(t, format!("{:.1}", self.range.0))),
-                    )
+                            .child(ui::caption(t, format!("{:.1}", self.range.0)))
+                    })
                     .child(plot.flex_1().when(!available, |d| {
                         d.child(
                             div()
@@ -800,7 +827,7 @@ impl Chart {
             )
             .child(
                 div()
-                    .pl(px(48.))
+                    .pl(px(if self.kind == Kind::Lanes { 104. } else { 48. }))
                     .flex()
                     .justify_between()
                     .child(ui::caption(t, format!("{:.1}", self.domain.0)))
@@ -809,19 +836,23 @@ impl Chart {
             )
             .when(self.id.contains("trend"), |d| {
                 d.child(
-                    div().flex().justify_between().pl(px(48.)).children(
-                        [
-                            self.samples.first(),
-                            self.samples.get(self.samples.len() / 2),
-                            self.samples.last(),
-                        ]
-                        .into_iter()
-                        .flatten()
-                        .map(|s| {
-                            let date = axis_date(&s.label);
-                            ui::caption(t, date.to_owned())
-                        }),
-                    ),
+                    div()
+                        .flex()
+                        .justify_between()
+                        .pl(px(if self.kind == Kind::Lanes { 104. } else { 48. }))
+                        .children(
+                            [
+                                self.samples.first(),
+                                self.samples.get(self.samples.len() / 2),
+                                self.samples.last(),
+                            ]
+                            .into_iter()
+                            .flatten()
+                            .map(|s| {
+                                let date = axis_date(&s.label);
+                                ui::caption(t, date.to_owned())
+                            }),
+                        ),
                 )
             })
             .child(ui::caption(t, self.note.clone()))

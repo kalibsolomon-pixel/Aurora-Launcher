@@ -2,14 +2,13 @@
 //! metric, chart and table semantically; a section is the set of id fragments
 //! that belong to it, so filtering never invents or drops a measurement.
 use aurora_launcher_lib::pulsar::view::TabView;
-
 pub(super) type Section = (&'static str, &'static [&'static str]);
-
 const OFFENSE: &[Section] = &[
     (
         "Accuracy",
         &[
             "accuracy",
+            "accuracyDenominator",
             "hits",
             "attempts",
             "emptyMisses",

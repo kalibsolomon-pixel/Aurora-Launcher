@@ -1,5 +1,6 @@
 //! Display projections from the core's normalized analytical payload.
 //! This module never opens recordings or reports, and never reclassifies events.
+use super::presentation::ui;
 use super::{
     Pulsar,
     charts::{Chart, Kind, Sample, Shape, nice_peak, reach_bins},
@@ -8,7 +9,6 @@ use super::{
 use crate::{
     controls::{AuroraButton, ButtonSize, ButtonVariant},
     theme::AuroraTheme,
-    ui,
 };
 use gpui::{Context, Div, Role, div, prelude::*, px};
 use serde_json::Value;
@@ -27,7 +27,7 @@ fn format(v: Option<f64>, unit: &str) -> String {
         .unwrap_or_else(|| "Unavailable".into())
 }
 fn button(id: impl Into<gpui::ElementId>, label: impl Into<gpui::SharedString>) -> AuroraButton {
-    AuroraButton::new(id, label)
+    AuroraButton::new(id, super::presentation::text(label.into().as_ref()))
         .variant(ButtonVariant::Ghost)
         .size(ButtonSize::Small)
 }

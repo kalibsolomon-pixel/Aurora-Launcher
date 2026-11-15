@@ -1,3 +1,4 @@
+use super::presentation::ui;
 use super::{
     Pulsar,
     charts::{Chart, Kind, Sample, Shape, nice_peak},
@@ -5,12 +6,10 @@ use super::{
 use crate::{
     controls::{AuroraButton, ButtonSize, ButtonVariant},
     theme::AuroraTheme,
-    ui,
 };
 use aurora_launcher_lib::pulsar::view::*;
 use gpui::{Context, Div, Role, div, prelude::*, px};
 use std::collections::BTreeMap;
-
 pub(super) fn metric_value(metric: &MetricValue) -> String {
     if metric.availability == Availability::RuntimeOnly {
         return "Change in game".into();
@@ -26,12 +25,15 @@ pub(super) fn metric_value(metric: &MetricValue) -> String {
     ) {
         return format!("{n:.2}");
     }
+    if metric.definition.key == "averageCombo" {
+        return format!("{n:.1}");
+    }
     match metric.definition.unit.as_str() {
         "%" => format!("{n:.1}%"),
-        "m" => format!("{n:.2} m"),
-        "s" => format!("{n:.2} s"),
+        "m" => format!("{n:.1} m"),
+        "s" => format!("{n:.1} s"),
         "HP" => format!("{n:.1} HP"),
-        "ticks" => format!("{n:.2} ticks"),
+        "ticks" => format!("{n:.1} ticks"),
         "count" => format!("{n:.0}"),
         "" | "dimensionless" if n.fract() != 0. => format!("{n:.3}")
             .trim_end_matches('0')
@@ -128,7 +130,8 @@ fn table_columns(columns: &[String]) -> Vec<&String> {
     ordered
 }
 fn cell(row: &TableRow, column: &str) -> String {
-    row.metrics
+    let value = row
+        .metrics
         .get(column)
         .map(metric_value)
         .or_else(|| {
@@ -137,7 +140,8 @@ fn cell(row: &TableRow, column: &str) -> String {
                 .cloned()
                 .filter(|v| v != "-" && v != "null")
         })
-        .unwrap_or_else(|| "Unavailable".into())
+        .unwrap_or_else(|| "Unavailable".into());
+    super::presentation::text(&value)
 }
 pub(super) fn table(t: &AuroraTheme, data: &TableView, narrow: bool) -> Div {
     let _ = narrow;
@@ -149,7 +153,7 @@ pub(super) fn table(t: &AuroraTheme, data: &TableView, narrow: bool) -> Div {
         .w(px(width))
         .child(ui::row(t, false).child(ui::section_header(t, data.title.clone(), None)))
         .child(ui::row(t, false).children(columns.iter().map(|c| {
-            ui::caption(t, (*c).clone())
+            ui::caption(t, super::analysis_ui::display_label(c))
                 .flex_1()
                 .min_w(px(0.))
                 .overflow_hidden()
@@ -246,13 +250,13 @@ fn heatmap(t: &AuroraTheme, view: &ChartView) -> Div {
         .child(ui::section_header(t, view.title.clone(), None))
         .child(ui::caption(
             t,
-            "Normalized face height: 1 at top, 0 at bottom ? horizontal position: 0 left, 1 right",
+            "Normalized face height: 1 at top, 0 at bottom · horizontal position: 0 left, 1 right",
         ))
         .child(grid)
         .child(ui::caption(
             t,
             format!(
-                "6 columns ? 12 rows ? cell unit: confirmed hits ? {}",
+                "6 columns · 12 rows · cell unit: confirmed hits · {}",
                 view.description
             ),
         ))
@@ -486,51 +490,130 @@ impl Pulsar {
         if index == 0 && self.detail_request.is_none() {
             body = body.child(self.overview_groups(t, &tab.metrics, cx));
         }
-        if !tab.metrics.is_empty() && !(index == 0 && self.detail_request.is_none()) {
+        let diagnostic = |k: &str| {
+            matches!(
+                k,
+                "totalInputs"
+                    | "uniqueAttacks"
+                    | "deduplicatedAttacks"
+                    | "excludedSwings"
+                    | "eligibleMisses"
+                    | "unresolved"
+                    | "uncertainShield"
+            )
+        };
+        let summary = index == 0 && self.detail_request.is_some();
+        let accuracy = index == 1 && self.sections[1] == 1;
+        let dominance = index == 3 && self.sections[3] == 2;
+        let primary_dominance = |k: &str| {
+            matches!(
+                k,
+                "dominanceShare" | "opponentDominanceShare" | "dominanceActiveSeconds"
+            )
+        };
+        let primary_accuracy = |k: &str| matches!(k, "hits" | "accuracy" | "accuracyDenominator");
+        let main: BTreeMap<_, _> = tab
+            .metrics
+            .iter()
+            .filter(|(k, _)| {
+                !diagnostic(k)
+                    && (!accuracy || primary_accuracy(k))
+                    && (!dominance || primary_dominance(k))
+                    && (!summary
+                        || matches!(
+                            k.as_str(),
+                            "accuracy" | "hits" | "averageReach" | "longestCombo"
+                        ))
+            })
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        if !main.is_empty() && !(index == 0 && self.detail_request.is_none()) {
+            if summary {
+                if let Some(insight) = tab.interpretations.first() {
+                    body = body.child(ui::muted(t, insight.clone()));
+                }
+            }
             body = body.child(self.metrics_panel(
                 t,
-                if self.detail_request.is_some() && index == 1 {
-                    "Selected measurements"
+                if summary {
+                    "At a glance"
+                } else if self.detail_request.is_none() {
+                    "Pooled performance"
                 } else {
-                    "Recorded measurements"
+                    "Performance"
                 },
-                &tab.metrics,
+                &main,
                 cx,
             ));
         }
-        for notice in &tab.notices {
-            body = body.child(ui::caption(t, notice.clone()));
-        }
-        for (index, line) in tab.interpretations.iter().enumerate() {
-            if self.top_tab != 0 || index < 4 {
-                body = body.child(ui::muted(t, line.clone()));
+        // Accuracy starts with the outcome breakdown; counters remain inspectable.
+        if index == 1 && matches!(self.sections[1], 0 | 1) {
+            for c in tab.charts.iter().filter(|c| c.id == "attack_outcomes") {
+                body = body.child(chart(c).render(t));
             }
+            body=body.child(ui::caption(t,"Accuracy counts confirmed hits out of eligible attempts. Confirmed shield blocks are excluded; uncertain results stay in the denominator."));
+        }
+        if index == 2 {
+            body = body.child(self.compositions(t, tab, index));
+        }
+        let diagnostics: BTreeMap<_, _> = tab
+            .metrics
+            .iter()
+            .filter(|(k, _)| {
+                diagnostic(k) || ((summary || accuracy || dominance) && !main.contains_key(*k))
+            })
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect();
+        if !diagnostics.is_empty() {
+            body = body.child(self.disclosure(
+                t,
+                if summary {
+                    "supporting-metrics"
+                } else if dominance {
+                    "flow-metrics"
+                } else {
+                    "counting"
+                },
+                if summary {
+                    "Supporting measurements"
+                } else if dominance {
+                    "Model measurements"
+                } else {
+                    "How this is counted"
+                },
+                self.metrics_panel(t, "Counting details", &diagnostics, cx),
+                cx,
+            ));
+        }
+        let mut context = div().flex().flex_col().gap(px(12.));
+        for notice in &tab.notices {
+            context = context.child(ui::caption(t, notice.clone()));
+        }
+        for line in tab.interpretations.iter().skip(if summary { 1 } else { 0 }) {
+            context = context.child(ui::muted(t, line.clone()));
+        }
+        if !tab.notices.is_empty() || !tab.interpretations.is_empty() {
+            body = body.child(self.disclosure(
+                t,
+                "interpretation",
+                "Interpretation and limitations",
+                context,
+                cx,
+            ));
         }
         if (self.detail_request.is_some() && (1..=3).contains(&index))
             || (self.detail_request.is_none()
                 && (index == 3 || (index == 1 && self.sections[1] == 3)))
         {
             if self.detail_request.is_none() {
-                if let Some(d) = self.focus_detail.as_ref() {
-                    body = body.child(ui::section_header(
-                        t,
-                        format!("Focused recording | {}", d.summary.opponent),
-                        Some(
-                            format!(
-                                "{} | {} | {:.1} s",
-                                d.summary.provenance.instance_name,
-                                d.summary.date_group,
-                                d.summary.duration_nanos as f64 / 1e9
-                            )
-                            .into(),
-                        ),
-                    ));
-                }
+                body = body.child(self.focus_navigation(t, cx));
                 body = body.child(self.focus_scopes(t, cx));
             }
             body = body.child(self.advanced_body(t, narrow, cx));
         }
-        body = body.child(self.compositions(t, tab, index));
+        if index != 2 {
+            body = body.child(self.compositions(t, tab, index));
+        }
         if self.detail_request.is_none() && self.top_tab == 0 {
             let mut selectors = div().flex().flex_wrap().gap(px(4.));
             for (i, label) in [
@@ -556,6 +639,9 @@ impl Pulsar {
             body = body.child(selectors);
         }
         for view in &tab.charts {
+            if index == 1 && view.id == "attack_outcomes" && matches!(self.sections[1], 0 | 1) {
+                continue;
+            }
             // The detailed controls below replace these static projections.
             if (self.detail_request.is_some()
                 || (index == 3 && self.focus_detail.is_some())
@@ -733,7 +819,7 @@ mod tests {
             .into(),
             ..Default::default()
         };
-        assert_eq!(cell(&row, "mean"), "2.78 m");
+        assert_eq!(cell(&row, "mean"), "2.8 m");
         assert_eq!(cell(&row, "missing"), "Unavailable");
     }
     #[test]

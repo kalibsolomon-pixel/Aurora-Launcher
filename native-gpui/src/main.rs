@@ -1161,6 +1161,13 @@ impl Launcher {
             } else {
                 self.pulsar =
                     Some(cx.new(|cx| Pulsar::new(self.host.clone(), self.rt.clone(), window, cx)));
+                self._subscriptions.push(cx.subscribe_in(
+                    self.pulsar.as_ref().unwrap(),
+                    window,
+                    |this, _, event: &pulsar::PulsarEvent, window, cx| match event {
+                        pulsar::PulsarEvent::OpenInstances => this.open_page(3, window, cx),
+                    },
+                ));
             }
         }
         if (self.page == 9) != (page == 9) {
