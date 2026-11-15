@@ -959,6 +959,8 @@ pub struct RecentTarget {
     pub id: String,
     pub instance_id: String,
     pub display_name: String,
+    #[serde(default)]
+    pub destination: String,
     pub last_played_at: u64,
     pub duration_ms: u64,
     pub available: bool,
@@ -1192,8 +1194,14 @@ pub async fn quick_play(
     mode: String,
     target_id: String,
     account_id: String,
+    instance_id: Option<String>,
 ) -> ApiResult<LaunchProcess> {
-    let request = request(json!({ "mode": mode, "targetId": target_id, "accountId": account_id }))?;
+    let request = request(json!({
+        "mode": mode,
+        "targetId": target_id,
+        "accountId": account_id,
+        "instanceId": instance_id,
+    }))?;
     convert(app::quick_play_history(host, request).await)
 }
 

@@ -935,6 +935,10 @@ impl Store {
                 id: target_id(Mode::Multiplayer, &entry.instance, entry.server.as_str()),
                 instance_id: entry.instance.to_string(),
                 display_name: entry.display.clone(),
+                destination: {
+                    use sha2::{Digest, Sha256};
+                    format!("{:x}", Sha256::digest(entry.server.as_str().as_bytes()))
+                },
                 last_played_at: entry.last_played_at,
                 duration_ms: entry.duration_ms,
                 available: true,
@@ -990,6 +994,11 @@ impl Store {
                     id,
                     instance_id: session.instance.as_str().to_owned(),
                     display_name: String::new(),
+                    destination: if mode == Mode::Multiplayer {
+                        format!("{:x}", Sha256::digest(target.as_bytes()))
+                    } else {
+                        String::new()
+                    },
                     last_played_at: 0,
                     duration_ms: 0,
                     available: true,
@@ -1179,6 +1188,10 @@ pub struct RecentTarget {
     pub id: String,
     pub instance_id: String,
     pub display_name: String,
+    /// An opaque key for the server's canonical address (SHA-256), so the
+    /// same destination recorded from several instances can be shown once.
+    /// The address itself is never exposed. Empty for worlds.
+    pub destination: String,
     pub last_played_at: u64,
     pub duration_ms: u64,
     pub available: bool,
@@ -2056,6 +2069,51 @@ mod tests {
         assert_eq!(recent[0].display_name, "New label");
         assert_eq!(recent[0].duration_ms, 10_000);
         assert!(!format!("{recent:?}").contains("example.invalid"));
+        let _ = fs::remove_file(file);
+    }
+
+    #[test]
+    fn one_server_from_two_instances_shares_an_opaque_destination_key() {
+        let file = path();
+        let store = Store::open(file.clone()).unwrap();
+        let start = now();
+        let server = ServerTarget::parse("shared.invalid".into()).unwrap();
+        store
+            .edit(|doc| {
+                let other = InstanceId::new("abcdef1234567890abcdef1234567890").unwrap();
+                for (offset, instance) in [(0, id()), (20, other)] {
+                    doc.sessions.push(SessionRecord {
+                        id: uuid::Uuid::new_v4().to_string(),
+                        owner: None,
+                        instance,
+                        started_at: start + offset,
+                        ended_at: Some(start + offset + 5),
+                        duration_ms: 5_000,
+                        outcome: Some(Outcome::Normal),
+                        mode: Mode::Multiplayer,
+                        visits: vec![Visit {
+                            mode: Mode::Multiplayer,
+                            started_at: start + offset,
+                            ended_at: start + offset + 5,
+                            duration_ms: 5_000,
+                            world: None,
+                            server: Some(server.clone()),
+                            display: Some("Shared".into()),
+                        }],
+                    });
+                }
+            })
+            .unwrap();
+        let recent = store.recent(Mode::Multiplayer, None, 10).unwrap();
+        assert_eq!(
+            recent.len(),
+            2,
+            "one row per instance in the history itself"
+        );
+        assert_ne!(recent[0].instance_id, recent[1].instance_id);
+        assert!(!recent[0].destination.is_empty());
+        assert_eq!(recent[0].destination, recent[1].destination);
+        assert!(!format!("{recent:?}").contains("shared.invalid"));
         let _ = fs::remove_file(file);
     }
 }

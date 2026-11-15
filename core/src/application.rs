@@ -6363,6 +6363,10 @@ pub struct QuickPlayRequest {
     target_id: String,
     mode: String,
     account_id: String,
+    /// Servers are destinations, not instances: a server Quick Play launches
+    /// this instance (the player's current one) and joins the server.
+    #[serde(default)]
+    instance_id: Option<String>,
 }
 
 fn validate_quick_world(
@@ -6461,6 +6465,15 @@ pub async fn quick_play_history(
                     "This recent target is no longer in local history.",
                 )
             })?
+    };
+    let target = match (target, request.instance_id.as_deref()) {
+        (QuickLaunchTarget::Multiplayer { server, .. }, Some(current)) => {
+            QuickLaunchTarget::Multiplayer {
+                instance: crate::instances::InstanceId::new(current.trim())?,
+                server,
+            }
+        }
+        (target, _) => target,
     };
     let instance = match &target {
         QuickLaunchTarget::Singleplayer { instance, world } => {
@@ -6893,11 +6906,29 @@ async fn play_instance_with_target(
             // reaches this point — resolve_instance_launch_plans performs the deep
             // validation that reports staleness as NotReady.
             let record = prepared.record();
-            if quick_target.is_some() && record.installed().minecraft_version != "1.21.11" {
-                return Err(CommandError::new(
-                    "quick_version_unsupported",
-                    "Quick Launch is currently supported for Minecraft 1.21.11 only.",
-                ));
+            // Quick Play is available wherever the version's own launch
+            // metadata declares the matching quick-play argument (1.20+).
+            if let Some(target) = &quick_target {
+                let feature = match target {
+                    crate::gameplay_history::QuickLaunchTarget::Singleplayer { .. } => {
+                        crate::minecraft::rules::FeatureFlag::IsQuickPlaySingleplayer
+                    }
+                    crate::gameplay_history::QuickLaunchTarget::Multiplayer { .. } => {
+                        crate::minecraft::rules::FeatureFlag::IsQuickPlayMultiplayer
+                    }
+                };
+                if !game_plan
+                    .minecraft()
+                    .launch()
+                    .game_arguments()
+                    .iter()
+                    .any(|argument| argument.features.contains(&feature))
+                {
+                    return Err(CommandError::new(
+                        "quick_version_unsupported",
+                        "Quick Play needs Minecraft 1.20 or newer for this instance.",
+                    ));
+                }
             }
             let launch_loader_family = record.installed().platform.kind();
             if record.installed().platform.supports_mods()
@@ -7199,13 +7230,9 @@ async fn play_instance_with_target(
                     })
                     .flatten();
                 let spec = match &activity_log {
+                    // The activity log is verified on 1.21.11 only; other
+                    // versions Quick Play without visit history.
                     Some(log) => spec.with_activity_log(log.argument()),
-                    None if quick_target.is_some() => {
-                        return Err(CommandError::new(
-                            "quick_activity_path_invalid",
-                            "The instance logs directory is unavailable for Quick Play.",
-                        ));
-                    }
                     None => spec,
                 };
                 let history_paths = managed.clone();

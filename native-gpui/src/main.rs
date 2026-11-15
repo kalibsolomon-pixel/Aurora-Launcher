@@ -1064,7 +1064,9 @@ impl Launcher {
         let tx = self.tx.clone();
         let process_serial = self.process_serial;
         self.rt.spawn(async move {
-            let result = guarded(api::quick_play(host, mode, target_id, account)).await;
+            // Servers launch from the current instance; worlds from their own.
+            let current = mode.ends_with("server").then(|| instance_id.clone());
+            let result = guarded(api::quick_play(host, mode, target_id, account, current)).await;
             let _ = tx
                 .send(Message::Launched(instance_id, process_serial, result))
                 .await;
