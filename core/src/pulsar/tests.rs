@@ -862,6 +862,16 @@ fn manual_scope_no_hit_parent_and_child_selection_do_not_double_count() {
     )
     .unwrap();
     assert_eq!(child.selected_exchange.as_deref(), Some(ex.id.as_str()));
+    let selected = store::load_record(&lab.paths, &index.entries[0])
+        .unwrap()
+        .session
+        .unwrap()
+        .exchanges
+        .remove(0);
+    assert_eq!(
+        child.summary.start_epoch_millis,
+        selected.start_epoch_millis
+    );
     assert!(
         service::detail(
             &lab.paths,
@@ -905,6 +915,11 @@ fn pooled_ratios_mixed_policy_and_summary_only_coverage() {
     let summary = projection::pool(&entries, &[], &None, &None);
     assert_eq!(summary.0.metrics["hits"].value, Some(23.0));
     assert_eq!(summary.1.metrics["reachWithin"].value, None);
+    assert_eq!(summary.1.metrics["serverCrits"].value, Some(1.0));
+    assert_eq!(summary.2.metrics["damageTaken"].value, Some(14.0));
+    assert_eq!(summary.2.metrics["shieldBlocks"].value, Some(3.0));
+    assert_eq!(summary.2.metrics["hitsAfterDisable"].value, None);
+    assert_eq!(summary.2.metrics["knockback"].value, None);
     let empty = analytics::metrics::metric("accuracy", analytics::ratio(0.0, 0.0));
     assert_eq!(empty.availability, view::Availability::Unavailable);
     assert_eq!(
@@ -1105,7 +1120,7 @@ fn report_copy_receipt_integrity_confirmation_and_source_preservation() {
     fs::write(folder.join(".phenomena-owner"), IDS[0]).unwrap();
     fs::write(folder.join("index.html"), b"<html>anonymized</html>").unwrap();
     fs::write(folder.join("report.json"), b"{}").unwrap();
-    assert!(reports::available(&lab.paths,&index.entries[0]));
+    assert!(reports::available(&lab.paths, &index.entries[0]));
     let destination = Lab::new();
     let mut request = view::ExportRequest {
         key: key.clone(),

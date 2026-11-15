@@ -1253,7 +1253,7 @@ pub(crate) fn pool(
     ] {
         summary[key] = json!(value);
     }
-    summary["contextAvailable"] = json!(timelines.iter().any(|(_, f, _)| f.schema_version >= 3));
+    summary["contextAvailable"] = json!(entries.iter().any(|e| e.record.schema_version >= 3));
     summary["opponentComboAvailability"] = "Estimated".into();
     summary["duration"] = json!(entries.iter().map(|e| e.record.duration()).sum::<f64>());
     let measurement = entries
@@ -1360,7 +1360,7 @@ pub(crate) fn pool(
         .map(|(_, f, _)| f.policy().perfect_reach_tolerance)
         .unwrap_or(0.06);
     d["reach"] = analytics::reach_summary(all_hits, target, tolerance);
-    let mut shields = json!({"available":timelines.iter().any(|(_,f,_)|f.schema_version>=3)});
+    let mut shields = json!({"available":entries.iter().any(|e|e.record.schema_version>=3)});
     for (key, get) in [
         (
             "attacksIntoShield",
@@ -1389,12 +1389,16 @@ pub(crate) fn pool(
         );
     }
     for key in ["hitsAfterDisable", "bypassed"] {
-        shields[key] = json!(
-            timelines
-                .iter()
-                .map(|(_, _, a)| analytics::num(&a.derived["shields"], key))
-                .sum::<f64>()
-        );
+        shields[key] = if !timelines.iter().any(|(_, f, _)| f.schema_version >= 3) {
+            Value::Null
+        } else {
+            json!(
+                timelines
+                    .iter()
+                    .map(|(_, _, a)| analytics::num(&a.derived["shields"], key))
+                    .sum::<f64>()
+            )
+        };
     }
     shields["events"] = json!(
         timelines
@@ -1430,7 +1434,12 @@ pub(crate) fn pool(
         100.0 * neutral,
         local + opponent + neutral
     ));
-    let (mut overview, mut offense, defense, mut flow) = tabs_value(&f, &d, weapon, timing);
+    let (mut overview, mut offense, mut defense, mut flow) = tabs_value(&f, &d, weapon, timing);
+    if !timelines.iter().any(|(_, f, _)| f.schema_version >= 3) {
+        defense
+            .metrics
+            .insert("knockback".into(), metrics::metric("knockback", None));
+    }
     overview.metrics.insert(
         "fights".into(),
         metrics::metric("fights", Some(entries.len() as f64)),
@@ -1450,7 +1459,6 @@ pub(crate) fn pool(
     // Latest incoming/shield tables preserve the reference's per-record origin.
     if let Some((_, latest, a)) = timelines.first() {
         let latest_tabs = tabs(latest, a, weapon, timing);
-        let mut defense = defense;
         defense.tables = latest_tabs.2.tables;
         defense.charts = latest_tabs.2.charts;
         flow.metrics.extend(pooled_flow_metrics(entries, timelines));

@@ -395,6 +395,8 @@ pub fn detail_analysis(
     summary.timeline_loaded = true;
     summary.metrics = metrics::values(&analysis.derived);
     if selected.is_some() {
+        summary.start_epoch_millis = record.start_epoch_millis;
+        summary.date_group = format::date_group(record.start_epoch_millis);
         summary.opponent =
             format::opponent(record.opponent_label.as_deref(), record.opponent.as_deref());
         summary.opponent_id = record.opponent.clone();
