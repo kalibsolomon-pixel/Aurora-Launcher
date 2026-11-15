@@ -9,7 +9,7 @@
 //! superseded inventory is dropped.
 //!
 //! Local files can also be dropped onto the page. A dropped path feeds the
-//! same preview-ticket review as the path field; nothing installs before the
+//! same preview-ticket review as the native picker; nothing installs before the
 //! reviewed install action.
 use crate::{
     api,
@@ -17,7 +17,7 @@ use crate::{
     backend::guarded,
     content_updates::{ContentUpdates, ContentUpdatesEvent},
     controls::{AuroraButton, AuroraInput, AuroraSelect, AuroraToggle, ButtonSize, ButtonVariant},
-    ui,
+    file_picker, ui,
 };
 use aurora_launcher_lib::host::Host;
 use gpui::{
@@ -523,6 +523,40 @@ fn classify_content_drop(paths: &[PathBuf]) -> Result<String, &'static str> {
     }
 }
 
+/// Selection survives a cancelled picker, including an already open review.
+#[derive(Default)]
+struct LocalImport {
+    path: String,
+    open: bool,
+    picking: bool,
+}
+impl LocalImport {
+    fn start_picker(&mut self, blocked: bool) -> bool {
+        if blocked || self.picking {
+            return false;
+        }
+        self.picking = true;
+        true
+    }
+
+    /// `true` asks the caller to preview the selected file, never install it.
+    fn finish_picker(&mut self, result: api::ApiResult<Option<String>>) -> api::ApiResult<bool> {
+        self.picking = false;
+        let Some(path) = result? else {
+            return Ok(false);
+        };
+        let path = classify_content_drop(&[PathBuf::from(path)])
+            .map_err(|reason| api::ApiError::new("local_import_failed", reason))?;
+        self.select_path(path);
+        Ok(true)
+    }
+
+    fn select_path(&mut self, path: String) {
+        self.path = path;
+        self.open = true;
+    }
+}
+
 fn review_allowed(v: &Value) -> bool {
     v["blockers"].as_array().is_some_and(|b| b.is_empty())
         && v["ticket"].as_str().is_some_and(|s| !s.is_empty())
@@ -572,14 +606,11 @@ pub struct Content {
     busy: bool,
     loading: bool,
     message: String,
-    path: Entity<InputState>,
-    path_value: String,
-    _path_events: Subscription,
+    local_import: LocalImport,
     filter: Entity<InputState>,
     _filter_events: Subscription,
     review: Option<Review>,
     removing: Option<(Target, Entry)>,
-    import_open: bool,
     updates_open: bool,
     actions_open: bool,
     updates: Entity<ContentUpdates>,
@@ -602,16 +633,6 @@ impl Content {
             cx.new(|cx| InputState::new(window, cx).placeholder("Filter installed content…"));
         let filter_events = cx.subscribe(&filter, |_this: &mut Self, _, _: &InputEvent, cx| {
             cx.notify();
-        });
-        let path =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Path to a local content file"));
-        let subscription = cx.subscribe(&path, |this: &mut Self, input, _: &InputEvent, cx| {
-            let value = input.read(cx).value().to_string();
-            if value != this.path_value {
-                this.path_value = value;
-                this.invalidate_review();
-                cx.notify();
-            }
         });
         let updates = cx.new(|cx| ContentUpdates::new(host.clone(), runtime.clone(), window, cx));
         let update_events = cx.subscribe(
@@ -684,14 +705,11 @@ impl Content {
             busy: false,
             loading: false,
             message: String::new(),
-            path,
-            path_value: String::new(),
-            _path_events: subscription,
+            local_import: LocalImport::default(),
             filter,
             _filter_events: filter_events,
             review: None,
             removing: None,
-            import_open: false,
             updates_open: false,
             actions_open: false,
             updates,
@@ -713,7 +731,7 @@ impl Content {
         })
     }
     pub fn is_busy(&self, cx: &gpui::App) -> bool {
-        self.busy || self.updates.read(cx).is_busy()
+        self.busy || self.local_import.picking || self.updates.read(cx).is_busy()
     }
     fn sync_updates(&self, cx: &mut Context<Self>) {
         let instance = self
@@ -728,7 +746,10 @@ impl Content {
             .cloned();
         self.updates.update(cx, |updates, cx| {
             updates.set_target(instance, self.kind.api(), self.revision, cx);
-            updates.set_blocked(self.busy || self.preview_request.is_some(), cx);
+            updates.set_blocked(
+                self.busy || self.local_import.picking || self.preview_request.is_some(),
+                cx,
+            );
         });
     }
     fn discard(&self, instance: String, ticket: String) {
@@ -879,7 +900,7 @@ impl Content {
                             &t,
                             self.review_serial,
                             serial,
-                            &self.path_value,
+                            &self.local_import.path,
                             &path,
                             self.busy,
                         ) {
@@ -900,7 +921,7 @@ impl Content {
                     Err(e) => {
                         if self.target().as_ref().is_some_and(|now| current(now, &t))
                             && self.review_serial == serial
-                            && self.path_value == path
+                            && self.local_import.path == path
                         {
                             self.message = error(e);
                         }
@@ -992,15 +1013,85 @@ impl Content {
         self.load();
         self.sync_updates(cx);
     }
+    fn choose_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(target) = self.target().filter(|_| self.host.is_some()) else {
+            return;
+        };
+        let blocked = self.is_busy(cx) || self.preview_request.is_some();
+        if !self.local_import.start_picker(blocked) {
+            return;
+        }
+        let serial = self.review_serial;
+        let Some(owner) = file_picker::owner(window) else {
+            self.receive_pick(
+                target,
+                serial,
+                Err(api::ApiError::new(
+                    "local_import_failed",
+                    "The file picker is unavailable in this window.",
+                )),
+                cx,
+            );
+            return;
+        };
+        self.sync_updates(cx);
+        cx.notify();
+        let (tx, rx) = tokio::sync::oneshot::channel();
+        self.runtime.spawn(async move {
+            let result = guarded(file_picker::choose_content_path(Some(owner))).await;
+            let _ = tx.send(result);
+        });
+        cx.spawn(async move |weak, cx| {
+            let result = rx.await.unwrap_or_else(|_| {
+                Err(api::ApiError::new(
+                    "native_operation_failed",
+                    "The file picker stopped unexpectedly. Try again.",
+                ))
+            });
+            let _ = weak.update(cx, |this, cx| this.receive_pick(target, serial, result, cx));
+        })
+        .detach();
+    }
+
+    fn receive_pick(
+        &mut self,
+        target: Target,
+        serial: u64,
+        result: api::ApiResult<Option<String>>,
+        cx: &mut Context<Self>,
+    ) {
+        self.local_import.picking = false;
+        // A state refresh while the dialog was open must not retarget a file.
+        if self.target().as_ref() == Some(&target)
+            && self.review_serial == serial
+            && !self.is_busy(cx)
+            && self.preview_request.is_none()
+        {
+            match self.local_import.finish_picker(result) {
+                Ok(true) => {
+                    self.message.clear();
+                    self.preview(cx);
+                }
+                Ok(false) => {}
+                Err(e) => self.message = error(e),
+            }
+        }
+        self.sync_updates(cx);
+        cx.notify();
+    }
+
     fn preview(&mut self, cx: &mut Context<Self>) {
-        if self.is_busy(cx) || self.preview_request.is_some() || self.path_value.trim().is_empty() {
+        if self.is_busy(cx)
+            || self.preview_request.is_some()
+            || self.local_import.path.trim().is_empty()
+        {
             return;
         }
         self.invalidate_review();
         let (Some(host), Some(t)) = (self.host.clone(), self.target()) else {
             return;
         };
-        let path = self.path_value.clone();
+        let path = self.local_import.path.clone();
         let serial = self.review_serial;
         self.preview_request = Some(serial);
         self.sync_updates(cx);
@@ -1040,7 +1131,10 @@ impl Content {
             let Some(r) = self.review.take() else {
                 return;
             };
-            if !current(&r.target, &t) || r.path != self.path_value || !review_allowed(&r.value) {
+            if !current(&r.target, &t)
+                || r.path != self.local_import.path
+                || !review_allowed(&r.value)
+            {
                 self.discard(r.target.instance, r.ticket);
                 return;
             }
@@ -1167,8 +1261,8 @@ impl Content {
         });
     }
     /// A file dropped from the file manager: the same preview-ticket review
-    /// as the path field, never an install. The core validates the archive.
-    fn drop_files(&mut self, paths: &[PathBuf], window: &mut Window, cx: &mut Context<Self>) {
+    /// as the picker, never an install. The core validates the archive.
+    fn drop_files(&mut self, paths: &[PathBuf], cx: &mut Context<Self>) {
         if self.host.is_none() {
             return;
         }
@@ -1181,12 +1275,8 @@ impl Content {
                     "Finish the current operation, then drop the file again.".into()
                 }
                 Ok(path) => {
-                    self.import_open = true;
                     self.message.clear();
-                    // Keep the field and the reviewed path in step so the
-                    // preview guard accepts this review.
-                    self.path_value = path.clone();
-                    self.path.update(cx, |p, cx| p.set_value(path, window, cx));
+                    self.local_import.select_path(path);
                     self.preview(cx);
                     cx.notify();
                     return;
@@ -1436,12 +1526,11 @@ impl Render for WarningTooltip {
                     .flex()
                     .items_start()
                     .gap(px(6.))
-                    .child(
-                        div()
-                            .flex_none()
-                            .pt(px(2.))
-                            .child(crate::symbols::icon(Some("warning"), px(12.), t.warning)),
-                    )
+                    .child(div().flex_none().pt(px(2.)).child(crate::symbols::icon(
+                        Some("warning"),
+                        px(12.),
+                        t.warning,
+                    )))
                     .child(div().min_w(px(0.)).child(line.clone()))
             }))
     }
@@ -1455,7 +1544,6 @@ impl Render for Content {
         let palette = crate::theme::theme(cx).clone();
         let t = &palette;
         let available = self.host.is_some();
-        self.path.update(cx, |p, cx| p.set_disabled(busy, cx));
         // Compact instance chooser: one select in the page header row.
         let instance_picker = self
             .state
@@ -1535,8 +1623,8 @@ impl Render for Content {
                     reject
                 })
             })
-            .on_drop(cx.listener(|this, paths: &ExternalPaths, window, cx| {
-                this.drop_files(paths.paths(), window, cx);
+            .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
+                this.drop_files(paths.paths(), cx);
             }))
             .child(
                 div()
@@ -1726,11 +1814,10 @@ impl Render for Content {
                                     AuroraButton::new("content-import-open", "Import local")
                                         .size(ButtonSize::Small)
                                         .icon("upload_file")
-                                        .selected(self.import_open)
+                                        .selected(self.local_import.open)
                                         .disabled(busy || previewing)
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.import_open = !this.import_open;
-                                            cx.notify();
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.choose_file(window, cx);
                                         })),
                                 ),
                         )
@@ -1788,8 +1875,9 @@ impl Render for Content {
                 let disabled_row = entry.enabled == Some(false);
                 // Warnings collapse to one icon beside the name; the full text
                 // stays one hover away so rows keep a single rhythm.
-                let (warnings, notes): (Vec<&str>, Vec<&str>) =
-                    notes.into_iter().partition(|note| note.starts_with("Warning:"));
+                let (warnings, notes): (Vec<&str>, Vec<&str>) = notes
+                    .into_iter()
+                    .partition(|note| note.starts_with("Warning:"));
                 let mut line = vec![entry.file_name.as_str()];
                 line.extend(meta.iter().copied().filter(|m| {
                     *m != "No provider provenance"
@@ -1988,7 +2076,6 @@ impl Render for Content {
                 );
             }
             // ------------------------------------------------------ local import
-            let v = view.clone();
             let mut import = ui::card(t)
                 .gap(px(14.))
                 .child(
@@ -1996,14 +2083,14 @@ impl Render for Content {
                         .child(ui::section_header(
                             t,
                             "Import local content",
-                            Some("Drop a .jar or .zip here, or enter its path. Review it before installing.".into()),
+                            Some("Choose a .jar or .zip, or drop it here. You'll review it before it's installed.".into()),
                         ))
                         .child(
                             AuroraButton::new("content-import-close", "Close import")
                                 .size(ButtonSize::Small)
                                 .disabled(busy || previewing)
                                 .on_click(cx.listener(|this, _, _, cx| {
-                                    this.import_open = false;
+                                    this.local_import.open = false;
                                     cx.notify();
                                 })),
                         ),
@@ -2014,34 +2101,33 @@ impl Render for Content {
                         .items_center()
                         .gap(px(10.))
                         .child(
-                            div()
-                                .flex_1()
-                                .min_w(px(0.))
-                                .child(AuroraInput::new(&self.path).label("Local file path")),
+                            ui::muted(t, if previewing {
+                                "Reading file…".to_owned()
+                            } else {
+                                std::path::Path::new(&self.local_import.path)
+                                    .file_name()
+                                    .and_then(|name| name.to_str())
+                                    .unwrap_or("Choose a file to review")
+                                    .to_owned()
+                            })
+                            .flex_1()
+                            .min_w(px(0.))
+                            .overflow_hidden()
+                            .text_ellipsis(),
                         )
                         .child(
-                            AuroraButton::new(
-                                "preview-local",
-                                if previewing {
-                                    "Reading file…"
-                                } else {
-                                    "Preview file"
-                                },
-                            )
-                            .icon("upload_file")
-                            .disabled(busy || previewing || self.path_value.trim().is_empty())
-                            .on_click(move |_, _, cx| {
-                                v.update(cx, |s, cx| {
-                                    s.preview(cx);
-                                    cx.notify();
-                                });
-                            }),
+                            AuroraButton::new("content-import-choose", "Choose another file")
+                                .icon("upload_file")
+                                .disabled(busy || previewing)
+                                .on_click(cx.listener(|this, _, window, cx| {
+                                    this.choose_file(window, cx);
+                                })),
                         ),
                 );
             if let Some(review) = &self.review {
                 let value = &review.value;
                 let allowed = review_allowed(value)
-                    && review.path == self.path_value
+                    && review.path == self.local_import.path
                     && self.target().as_ref() == Some(&review.target);
                 let mut block = div()
                     .flex()
@@ -2141,7 +2227,7 @@ impl Render for Content {
                 );
                 import = import.child(block);
             }
-            if self.import_open {
+            if self.local_import.open {
                 root = root.child(import);
             }
             if self.updates_open {
@@ -2255,6 +2341,74 @@ fn ownership_label(ownership: &str) -> &str {
 mod tests {
     use super::*;
     use std::sync::Arc;
+
+    #[test]
+    fn cancelling_picker_preserves_selection_and_panel_without_preview() {
+        for (path, open) in [("", false), ("previous.jar", true), ("previous.jar", false)] {
+            let mut import = LocalImport {
+                path: path.into(),
+                open,
+                ..LocalImport::default()
+            };
+            assert!(import.start_picker(false));
+            assert!(!import.finish_picker(Ok(None)).unwrap());
+            assert_eq!(import.path, path);
+            assert_eq!(import.open, open);
+            assert!(!import.picking);
+        }
+    }
+
+    #[test]
+    fn picked_content_opens_panel_and_requests_preview() {
+        let mut import = LocalImport::default();
+        assert!(import.start_picker(false));
+        assert!(
+            import
+                .finish_picker(Ok(Some("selected.JAR".into())))
+                .unwrap()
+        );
+        assert_eq!(import.path, "selected.JAR");
+        assert!(import.open);
+        assert!(!import.picking);
+        assert!(import.start_picker(false));
+        assert!(
+            import
+                .finish_picker(Ok(Some("another.zip".into())))
+                .unwrap()
+        );
+        assert_eq!(import.path, "another.zip");
+    }
+
+    #[test]
+    fn picker_refuses_double_open_and_busy_or_previewing_imports() {
+        let mut import = LocalImport::default();
+        assert!(!import.start_picker(true));
+        assert!(!import.picking);
+        assert!(import.start_picker(false));
+        assert!(!import.start_picker(false));
+        assert!(!import.finish_picker(Ok(None)).unwrap());
+        assert!(import.start_picker(false));
+    }
+
+    #[test]
+    fn failed_or_unsupported_pick_preserves_selection_without_preview() {
+        let mut import = LocalImport::default();
+        import.select_path("previous.jar".into());
+        for result in [
+            Err(api::ApiError::new(
+                "local_import_failed",
+                "Picker unavailable",
+            )),
+            Ok(Some("unsupported.txt".into())),
+        ] {
+            assert!(import.start_picker(false));
+            assert!(import.finish_picker(result).is_err());
+            assert_eq!(import.path, "previous.jar");
+            assert!(import.open);
+            assert!(!import.picking);
+        }
+    }
+
     #[test]
     fn required_label_names_the_dependent_mods() {
         assert_eq!(
