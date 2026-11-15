@@ -49,6 +49,47 @@ pub fn save_instance_sync_policy(
     crate::instance_sync::automatic::reconcile(app, managed)?;
     Ok(policy)
 }
+pub fn get_sync_group(app: Host) -> Result<crate::instance_sync::group::Overview, CommandError> {
+    Ok(crate::instance_sync::group::overview(&managed_paths(
+        &app,
+    )?)?)
+}
+
+/// Turning the group on hands settings to it, so the legacy pool is switched off.
+pub fn save_sync_group(
+    app: Host,
+    request: crate::instance_sync::group::GroupConfig,
+) -> Result<crate::instance_sync::group::Overview, CommandError> {
+    let managed = managed_paths(&app)?;
+    let saved = crate::instance_sync::group::save_config(&managed, request)?;
+    if saved.enabled && crate::instance_sync::policy(&managed)?.enabled {
+        crate::instance_sync::set_enabled(&managed, false)?;
+    }
+    crate::instance_sync::automatic::reconcile(app, managed.clone())?;
+    Ok(crate::instance_sync::group::overview(&managed)?)
+}
+
+pub fn sync_group_now(app: Host) -> Result<crate::instance_sync::group::SyncReport, CommandError> {
+    Ok(crate::instance_sync::group::sync_now(&managed_paths(
+        &app,
+    )?)?)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SyncGroupRestoreRequest {
+    pub id: String,
+}
+
+pub fn restore_sync_group(
+    app: Host,
+    request: SyncGroupRestoreRequest,
+) -> Result<crate::instance_sync::group::Overview, CommandError> {
+    let managed = managed_paths(&app)?;
+    crate::instance_sync::group::restore(&managed, &request.id)?;
+    Ok(crate::instance_sync::group::overview(&managed)?)
+}
+
 pub fn get_instance_sync_status() -> crate::instance_sync::automatic::Status {
     crate::instance_sync::automatic::status()
 }
@@ -6720,6 +6761,22 @@ async fn play_instance_with_target(
             ));
         }
 
+        // A synced group brings this instance up to date before anything reads
+        // its files. A sync problem is reported but never blocks Play.
+        emit_launch_phase(&app, "syncingSettings");
+        match crate::instance_sync::group::before_launch(&managed, &instance) {
+            Ok(Some(report)) => {
+                let _ = app.emit("instance-sync-group", &report);
+            }
+            Ok(None) => {}
+            Err(error) => {
+                let _ = app.emit(
+                    "instance-sync-group-error",
+                    &serde_json::json!({ "code": error.code, "message": error.message }),
+                );
+            }
+        }
+
         emit_launch_phase(&app, "resolvingLaunch");
         let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
             .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
@@ -7079,6 +7136,16 @@ async fn play_instance_with_target(
                         }
                         crate::launch::state::LaunchProcessStatus::Exited
                         | crate::launch::state::LaunchProcessStatus::Failed => {
+                            // The process has terminated; its saved settings
+                            // enter the synced group off the observer thread.
+                            let sync_paths = history_paths.clone();
+                            let sync_instance = history_instance.clone();
+                            std::thread::spawn(move || {
+                                let _ = crate::instance_sync::group::after_exit(
+                                    &sync_paths,
+                                    &sync_instance,
+                                );
+                            });
                             if let Some(active) =
                                 recorder.lock().ok().and_then(|mut guard| guard.take())
                             {

@@ -620,6 +620,24 @@ fn read(path: &Path) -> Result<Document, ()> {
     doc.validate()?;
     Ok(doc)
 }
+/// Read-only advisory selection: the most recently started of `members`.
+/// History can suggest a main instance but never enrolls anyone.
+pub(crate) fn most_recent_member(bytes: &[u8], members: &[InstanceId]) -> Option<InstanceId> {
+    if bytes.len() > 16 * 1024 * 1024 {
+        return None;
+    }
+    let doc: Document = serde_json::from_slice(bytes).ok()?;
+    doc.validate().ok()?;
+    doc.sessions
+        .iter()
+        .filter(|session| members.contains(&session.instance))
+        .max_by(|a, b| {
+            a.started_at
+                .cmp(&b.started_at)
+                .then_with(|| b.instance.as_str().cmp(a.instance.as_str()))
+        })
+        .map(|session| session.instance.clone())
+}
 fn write(path: &Path, doc: &Document) -> Result<(), ()> {
     doc.validate()?;
     read(path)?;

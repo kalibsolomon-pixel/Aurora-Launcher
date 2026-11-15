@@ -16,6 +16,8 @@ use crate::paths::ManagedPaths;
 pub mod automatic;
 mod files;
 pub use files::{Conflict, conflicts, resolve as resolve_conflict};
+pub mod group;
+mod group_catalog;
 mod servers;
 
 // Internal hash-bound selection, never a frontend replacement authority.

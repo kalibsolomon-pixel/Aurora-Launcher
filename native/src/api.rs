@@ -97,6 +97,77 @@ pub async fn sync_policy(host: Host) -> ApiResult<SyncPolicy> {
     blocking(move || convert(app::get_instance_sync_policy(host))).await?
 }
 
+/// The main-instance synced group. Members are seeded from the main when they
+/// join; afterwards settings edits from any member reach the others.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncGroupConfig {
+    pub schema_version: u32,
+    pub enabled: bool,
+    pub main_instance_id: Option<String>,
+    pub members: Vec<String>,
+    pub new_instances_join: bool,
+    pub vanilla: bool,
+    pub aurora: bool,
+    pub packs: bool,
+    #[serde(default)]
+    pub pending_seed: Vec<String>,
+    #[serde(default)]
+    pub known: Vec<String>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncGroupMember {
+    pub id: String,
+    pub name: String,
+    pub minecraft_version: String,
+    pub member: bool,
+    pub main: bool,
+    pub pending_seed: bool,
+    pub running: bool,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncGroupHistory {
+    pub id: String,
+    pub instance_id: String,
+    pub at: u64,
+    pub kind: String,
+    pub keys: Vec<String>,
+    pub files: Vec<String>,
+    pub packs: Vec<String>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncGroupOverview {
+    pub config: SyncGroupConfig,
+    pub instances: Vec<SyncGroupMember>,
+    pub history: Vec<SyncGroupHistory>,
+    pub suggested_main: Option<String>,
+}
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SyncGroupReport {
+    pub applied: Vec<String>,
+    pub deferred: Vec<String>,
+    pub changed_settings: usize,
+    pub copied_packs: usize,
+    pub message: String,
+}
+pub async fn sync_group(host: Host) -> ApiResult<SyncGroupOverview> {
+    blocking(move || convert(app::get_sync_group(host))).await?
+}
+pub async fn sync_group_save(host: Host, config: SyncGroupConfig) -> ApiResult<SyncGroupOverview> {
+    let request = request(serde_json::to_value(config).map_err(contract)?)?;
+    blocking(move || convert(app::save_sync_group(host, request))).await?
+}
+pub async fn sync_group_now(host: Host) -> ApiResult<SyncGroupReport> {
+    blocking(move || convert(app::sync_group_now(host))).await?
+}
+pub async fn sync_group_restore(host: Host, id: String) -> ApiResult<SyncGroupOverview> {
+    blocking(move || convert(app::restore_sync_group(host, request(json!({ "id": id }))?))).await?
+}
+
 fn contract(error: serde_json::Error) -> ApiError {
     ApiError::new(
         "native_contract_mismatch",
