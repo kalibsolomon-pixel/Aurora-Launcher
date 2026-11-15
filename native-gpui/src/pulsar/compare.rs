@@ -258,13 +258,19 @@ fn delta_color(t: &AuroraTheme, key: &str, change: i8) -> gpui::Hsla {
     }
 }
 fn metric_group(key: &str) -> &'static str {
-    if key.to_ascii_lowercase().contains("combo")
+    if matches!(
+        key,
+        "longestUnanswered" | "momentum" | "fights" | "duration"
+    ) || key.to_ascii_lowercase().contains("combo")
         || key.contains("dominance")
         || key.contains("Active")
         || key.contains("Duration")
     {
         "Flow"
-    } else if key.contains("incoming")
+    } else if matches!(
+        key,
+        "damageTaken" | "opponentCrits" | "unexplainedHealthDrops"
+    ) || key.contains("incoming")
         || key.contains("Incoming")
         || key.contains("localShield")
         || key.contains("health")
@@ -279,7 +285,7 @@ fn metric_group(key: &str) -> &'static str {
 fn brief_definition(key: &str) -> &'static str {
     match key {
         "averageReach" => "Distance at confirmed contact",
-        "centralAim" => "Contacts inside the frozen target region",
+        "aimCentral" => "Contacts inside the frozen target region",
         "aimDistance" => "Distance from the ideal contact point",
         "accuracyDenominator" => "Attempts eligible for confirmed-hit accuracy",
         "dominanceShare" => "Share of measured active combat with an advantage",
@@ -299,5 +305,7 @@ mod tests {
         assert_eq!(metric_group("accuracy"), "Offense");
         assert_eq!(metric_group("incoming"), "Defense");
         assert_eq!(metric_group("longestCombo"), "Flow");
+        assert_eq!(metric_group("damageTaken"), "Defense");
+        assert_eq!(metric_group("longestUnanswered"), "Flow");
     }
 }
