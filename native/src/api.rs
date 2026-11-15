@@ -34,6 +34,11 @@ impl ApiError {
     }
 }
 
+impl From<app::CommandError> for ApiError {
+    fn from(error: app::CommandError) -> Self {
+        convert::<(), ()>(Err(error)).unwrap_err()
+    }
+}
 pub type ApiResult<T> = Result<T, ApiError>;
 pub async fn initialize_sync(host: Host) -> ApiResult<()> {
     blocking(move || convert(app::initialize_instance_sync(host))).await?
@@ -309,6 +314,8 @@ pub struct PlayBlocker {
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct LaunchProcess {
+    #[serde(default)]
+    pub can_stop: bool,
     pub instance_id: String,
     pub status: String,
     pub process_id: Option<u32>,
@@ -964,6 +971,66 @@ pub async fn play_readiness(
 ) -> ApiResult<PlayReadiness> {
     let request = request(json!({ "instanceId": instance_id, "accountId": account_id }))?;
     convert(app::get_play_readiness(host, request).await)
+}
+
+pub use aurora_launcher_lib::launch::logs::{LogSnapshot, UploadResult};
+
+pub async fn game_log_preference(host: Host, show: Option<bool>) -> ApiResult<bool> {
+    blocking(move || convert(app::game_log_preference(host, show))).await?
+}
+pub async fn game_log(instance_id: String) -> ApiResult<LogSnapshot> {
+    let request = request(json!({"instanceId": instance_id}))?;
+    blocking(move || convert(app::game_log(request))).await?
+}
+pub fn subscribe_game_log(instance_id: String) -> ApiResult<tokio::sync::watch::Receiver<u64>> {
+    app::subscribe_game_log(request(json!({"instanceId": instance_id}))?).map_err(ApiError::from)
+}
+pub async fn stop_game(instance_id: String, process_id: Option<u32>) -> ApiResult<()> {
+    blocking(move || {
+        app::stop_game(app::StopGameRequest {
+            instance_id,
+            process_id,
+        })
+        .map_err(ApiError::from)
+    })
+    .await?
+}
+pub async fn diagnose_game_log(
+    host: Host,
+    instance_id: String,
+) -> ApiResult<aurora_launcher_lib::launch::diagnostics::LaunchFailureDiagnostic> {
+    let request = request(json!({"instanceId": instance_id}))?;
+    blocking(move || app::diagnose_game_log(host, request).map_err(ApiError::from)).await?
+}
+pub async fn game_log_folders(host: Host, instance_id: String) -> ApiResult<(bool, bool)> {
+    let request = request(json!({"instanceId": instance_id}))?;
+    blocking(move || app::game_log_folders(host, request).map_err(ApiError::from)).await?
+}
+pub async fn open_game_log_folder(host: Host, instance_id: String, crash: bool) -> ApiResult<()> {
+    let request = request(json!({"instanceId": instance_id}))?;
+    blocking(move || app::open_game_log_folder(host, request, crash).map_err(ApiError::from))
+        .await?
+}
+pub async fn upload_game_log(
+    instance_id: String,
+    confirmed_public: bool,
+) -> ApiResult<UploadResult> {
+    app::upload_game_log(
+        request(json!({"instanceId": instance_id}))?,
+        confirmed_public,
+    )
+    .await
+    .map_err(ApiError::from)
+}
+pub async fn open_game_log_link(url: String) -> ApiResult<()> {
+    if !url.starts_with("https://mclo.gs/") {
+        return Err(ApiError::new("invalid_log_link", "Invalid log link."));
+    }
+    blocking(move || {
+        aurora_launcher_lib::host::open_url(&url)
+            .map_err(|_| ApiError::new("open_failed", "The link could not be opened."))
+    })
+    .await?
 }
 
 pub async fn launch_state(instance_id: String) -> ApiResult<LaunchProcess> {

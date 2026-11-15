@@ -126,6 +126,7 @@ windows-sys = { version = "0.61", features = [
     "Win32_System_Threading",
     "Win32_System_SystemInformation",
     "Win32_System_Diagnostics_Debug",
+    "Win32_System_Diagnostics_ToolHelp",
 ] }
 # `std` provides OsStr conversions; Tauri enabled it implicitly before the
 # native host could build the core without Tauri.

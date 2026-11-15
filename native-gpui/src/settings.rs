@@ -683,6 +683,8 @@ enum ShortcutOperation {
 // ---------------------------------------------------------------------------
 
 pub struct Settings {
+    show_game_log: Option<bool>,
+    log_preference_busy: bool,
     section: usize,
     host: Option<Host>,
     rt: tokio::runtime::Handle,
@@ -777,6 +779,8 @@ impl Settings {
             }),
         ];
         let mut view = Self {
+            show_game_log: None,
+            log_preference_busy: false,
             section: 0,
             host: host.clone(),
             rt: runtime,
@@ -838,6 +842,24 @@ impl Settings {
         let Some(host) = self.host.clone() else {
             return;
         };
+        if !self.log_preference_busy {
+            self.log_preference_busy = true;
+            self.request_read(
+                cx,
+                {
+                    let host = host.clone();
+                    async move { api::game_log_preference(host, None).await }
+                },
+                |view, result, cx| {
+                    view.log_preference_busy = false;
+                    match result {
+                        Ok(show) => view.show_game_log = Some(show),
+                        Err(e) => view.desktop_error = Some(e.message),
+                    }
+                    cx.notify();
+                },
+            );
+        }
         if !self.appearance.is_busy() {
             self.appearance_read += 1;
             let revision = self.appearance_read;
@@ -2061,9 +2083,15 @@ impl Render for Settings {
             .bg(t.sunken)
             .border_1()
             .border_color(t.border_subtle);
-        for (index, label) in ["Appearance", "Discord", "Desktop", "Updates & about"]
-            .into_iter()
-            .enumerate()
+        for (index, label) in [
+            "Appearance",
+            "Discord",
+            "Desktop",
+            "Updates & about",
+            "Game",
+        ]
+        .into_iter()
+        .enumerate()
         {
             tabs = tabs.child(
                 AuroraButton::new(("settings-section", index), label)
@@ -2612,6 +2640,60 @@ impl Render for Settings {
                     card = card.child(card_error(t, error.clone()));
                 }
                 page = page.child(card);
+            }
+        }
+        if self.section == 4 {
+            let weak = cx.entity().downgrade();
+            page = page.child(
+                section_card(t)
+                    .child(card_header(
+                        t,
+                        "Game launch",
+                        Some("Read game output in a separate window.".into()),
+                        div(),
+                    ))
+                    .child(
+                        ui::setting_row(
+                            t,
+                            "Show game log window when launching",
+                            Some("Off by default. Game log remains available next to Play.".into()),
+                            true,
+                        )
+                        .child(control_slot(
+                            AuroraToggle::new("show-game-log")
+                                .label("Show game log window when launching")
+                                .checked(self.show_game_log.unwrap_or(false))
+                                .disabled(
+                                    no_host
+                                        || self.log_preference_busy
+                                        || self.show_game_log.is_none(),
+                                )
+                                .on_change(move |show, _, _, app| {
+                                    let _ = weak.update(app, |this, cx| {
+                                        let Some(host) = this.host.clone() else {
+                                            return;
+                                        };
+                                        this.log_preference_busy = true;
+                                        this.request_read(
+                                            cx,
+                                            api::game_log_preference(host, Some(show)),
+                                            |this, result, cx| {
+                                                this.log_preference_busy = false;
+                                                match result {
+                                                    Ok(show) => this.show_game_log = Some(show),
+                                                    Err(e) => this.desktop_error = Some(e.message),
+                                                }
+                                                cx.notify();
+                                            },
+                                        );
+                                        cx.notify();
+                                    });
+                                }),
+                        )),
+                    ),
+            );
+            if let Some(error) = &self.desktop_error {
+                page = page.child(card_error(t, error.clone()));
             }
         }
         if self.section == 3 {

@@ -41,6 +41,8 @@ pub struct LauncherConfig {
     appearance: AppearancePreferences,
     home_widgets: crate::home_widgets::HomeLayout,
     discord: crate::discord::DiscordPreferences,
+    #[serde(default)]
+    show_game_log: bool,
     #[serde(skip)]
     revision: ConfigRevision,
 }
@@ -67,6 +69,7 @@ impl Default for LauncherConfig {
             appearance: AppearancePreferences::new(),
             home_widgets: Default::default(),
             discord: Default::default(),
+            show_game_log: false,
             revision: Default::default(),
         }
     }
@@ -111,6 +114,14 @@ impl LauncherConfig {
     pub fn set_discord(&mut self, preferences: crate::discord::DiscordPreferences) {
         self.discord = preferences;
     }
+    /// An optional schema-7 preference: absent in older documents means off.
+    pub fn show_game_log(&self) -> bool {
+        self.show_game_log
+    }
+    pub fn set_show_game_log(&mut self, show: bool) {
+        self.show_game_log = show;
+    }
+
     /// Parses and validates a configuration from JSON text.
     ///
     /// Schema 1 (the pre-appearance shape) migrates deterministically: the
@@ -220,6 +231,7 @@ impl LauncherConfig {
                     appearance: legacy.appearance,
                     home_widgets: Default::default(),
                     discord: Default::default(),
+                    show_game_log: false,
                     revision: Default::default(),
                 }
             }
@@ -232,6 +244,7 @@ impl LauncherConfig {
                     appearance: AppearancePreferences::new(),
                     home_widgets: Default::default(),
                     discord: Default::default(),
+                    show_game_log: false,
                     revision: Default::default(),
                 }
             }
@@ -436,6 +449,26 @@ mod tests {
     use super::*;
     use std::path::PathBuf;
 
+    #[test]
+    fn game_log_preference_defaults_off_and_preserves_old_documents() {
+        let mut config = LauncherConfig::default();
+        assert!(!config.show_game_log());
+        config.set_show_game_log(true);
+        assert!(
+            LauncherConfig::from_json(&config.to_json())
+                .unwrap()
+                .show_game_log()
+        );
+        let mut old = serde_json::to_value(config).unwrap();
+        old.as_object_mut().unwrap().remove("showGameLog");
+        assert!(
+            !LauncherConfig::from_json(&old.to_string())
+                .unwrap()
+                .show_game_log()
+        );
+        old["showGameLog"] = "yes".into();
+        assert!(LauncherConfig::from_json(&old.to_string()).is_err());
+    }
     #[test]
     fn current_configuration_has_no_update_preference() {
         let document = serde_json::to_value(LauncherConfig::default()).unwrap();
@@ -684,6 +717,7 @@ mod tests {
             selected_instance_id: Some(InstanceId::new("aurora-default").unwrap()),
             home_widgets: Default::default(),
             discord: Default::default(),
+            show_game_log: false,
             revision: Default::default(),
             appearance: AppearancePreferences {
                 aurora_motion_speed: 50,
@@ -861,6 +895,7 @@ mod tests {
             selected_instance_id: Some(InstanceId::new("beta-playground").unwrap()),
             home_widgets: Default::default(),
             discord: Default::default(),
+            show_game_log: false,
             revision: Default::default(),
             appearance: AppearancePreferences {
                 aurora_motion_speed: 50,
