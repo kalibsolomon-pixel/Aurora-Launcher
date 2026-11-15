@@ -487,6 +487,9 @@ impl Pulsar {
         if matches!(self.showcase_state.as_deref(), Some("empty" | "error")) {
             self.loading = false;
             self.library = LibraryView::default();
+            if self.showcase_options.iter().any(|o| o == "enable-help") {
+                self.disclosures.insert("enable-help".into());
+            }
             if self.showcase_state.as_deref() == Some("error") {
                 self.error=Some("This recording could not be read. The source file was preserved. Refresh after the recording has finished saving.".into());
             }

@@ -665,20 +665,25 @@ impl Pulsar {
     }
 
     fn opponents_body(&self, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
-        let mut list = ui::list_card(t).min_w(px(840.)).w_full().child(
+        let mut list = ui::list_card(t).min_w(px(844.)).w_full().child(
             ui::row(t, false)
                 .py(px(6.))
                 .gap(px(8.))
-                .child(ui::caption(t, "Opponent").flex_1().min_w(px(120.)))
+                .child(ui::caption(t, "Opponent").flex_1().min_w(px(98.)))
                 .children(
-                    ["Wins", "Losses", "Draws", "Unknown"]
-                        .into_iter()
-                        .map(|v| ui::caption(t, v).w(px(34.))),
+                    [
+                        ("Wins", 34.),
+                        ("Losses", 40.),
+                        ("Draws", 38.),
+                        ("Unknown", 54.),
+                    ]
+                    .into_iter()
+                    .map(|(v, width)| ui::caption(t, v).w(px(width)).flex_shrink_0()),
                 )
-                .child(ui::caption(t, "Accuracy").w(px(60.)))
-                .child(ui::caption(t, "Reach").w(px(52.)))
-                .child(ui::caption(t, "Latest fight").w(px(140.)))
-                .child(div().w(px(140.))),
+                .child(ui::caption(t, "Accuracy").w(px(68.)))
+                .child(ui::caption(t, "Reach").w(px(56.)))
+                .child(ui::caption(t, "Latest fight").w(px(132.)))
+                .child(div().w(px(132.))),
         );
         for (i, o) in self.opponents.iter().enumerate() {
             let latest = o.latest.as_ref();
@@ -697,19 +702,20 @@ impl Pulsar {
                             Some(super::presentation::count(o.fights.len(), "fight").into()),
                         )
                         .flex_1()
-                        .min_w(px(120.)),
+                        .min_w(px(98.)),
                     )
                     .children(
                         [
-                            (o.wins, t.success),
-                            (o.losses, t.danger),
-                            (o.draws, t.foreground),
-                            (o.unknown, t.foreground),
+                            (o.wins, t.success, 34.),
+                            (o.losses, t.danger, 40.),
+                            (o.draws, t.foreground, 38.),
+                            (o.unknown, t.foreground, 54.),
                         ]
                         .into_iter()
-                        .map(|(n, color)| {
+                        .map(|(n, color, width)| {
                             ui::muted(t, n.to_string())
-                                .w(px(34.))
+                                .w(px(width))
+                                .flex_shrink_0()
                                 .text_color(if n == 0 {
                                     t.muted_foreground.opacity(0.5)
                                 } else {
@@ -717,19 +723,27 @@ impl Pulsar {
                                 })
                         }),
                     )
-                    .children([("accuracy", 60.), ("averageReach", 52.)].into_iter().map(
+                    .children([("accuracy", 68.), ("averageReach", 56.)].into_iter().map(
                         |(key, width)| {
                             ui::muted(
                                 t,
                                 o.metrics
                                     .get(key)
+                                    .filter(|m| m.value.is_some())
+                                    .map(tabs::metric_value)
+                                    .unwrap_or_else(|| "\u{2014}".into()),
+                            )
+                            .w(px(width))
+                            .id(format!("opponent-metric-{i}-{key}"))
+                            .aria_label(
+                                o.metrics
+                                    .get(key)
                                     .map(tabs::metric_value)
                                     .unwrap_or_else(|| "Unavailable".into()),
                             )
-                            .w(px(width))
                         },
                     ))
-                    .child(div().w(px(140.)).flex().flex_col().gap(px(2.)).when_some(
+                    .child(div().w(px(132.)).flex().flex_col().gap(px(2.)).when_some(
                         latest,
                         |d, f| {
                             d.child(
@@ -744,7 +758,7 @@ impl Pulsar {
                     ))
                     .child(
                         div()
-                            .w(px(140.))
+                            .w(px(132.))
                             .flex()
                             .flex_wrap()
                             .gap(px(2.))
