@@ -211,7 +211,36 @@ impl Pulsar {
                 },
             })
             .collect();
-        page=page.child(Chart{id:"playback-lanes".into(),title:"Recorded event lanes".into(),x_label:"Recording time (s)".into(),y_label:format!("Lanes, bottom to top: {}",lanes.join(" / ")),samples,kind:Kind::Lanes,domain:(0.,duration.max(1.)),range:(-0.5,lanes.len()as f64-0.5),band:None,target:None,playhead:Some(self.playhead),bands:vec![],incomplete:vec![],note:"■ Attack / damage · ◇ Shield · ◇ outline Actual jump. Observations only; no world reconstruction.".into()}.render(t));
+        let lane_bounds = std::rc::Rc::new(std::cell::Cell::new(None));
+        let measured = lane_bounds.clone();
+        let lane_chart = Chart {
+            id: "playback-lanes".into(), title: "Recorded event lanes".into(),
+            x_label: "Recording time (s)".into(),
+            y_label: format!("Lanes, bottom to top: {}", lanes.join(" / ")),
+            samples, kind: Kind::Lanes, domain: (0., duration.max(1.)),
+            range: (-0.5, lanes.len() as f64 - 0.5), band: None, target: None,
+            playhead: Some(self.playhead),
+            bands: p.boundaries.iter().map(|b| super::charts::Band {
+                start: b.start, end: b.end, lane: None, label: b.label.clone(), selected: false,
+            }).collect(), incomplete: vec![],
+            note: "? Attack / damage ? ? Shield ? ? Actual jump. Select a time to seek. Observations only; no world reconstruction.".into(),
+        };
+        page = page.child(
+            lane_chart
+                .render_with_bounds(t, Some(measured))
+                .on_mouse_down(
+                    MouseButton::Left,
+                    cx.listener(move |this, e: &gpui::MouseDownEvent, _, cx| {
+                        if let Some(bounds) = lane_bounds.get() {
+                            let fraction = ((e.position.x - bounds.origin.x) / bounds.size.width)
+                                .clamp(0., 1.);
+                            this.playhead = fraction as f64 * this.duration();
+                            this.pause();
+                            cx.notify();
+                        }
+                    }),
+                ),
+        );
         let mut jumps =
             div()
                 .flex()

@@ -15,8 +15,10 @@ impl Pulsar {
             return;
         }
         self.pause();
+        self.compare_revision = self.compare_revision.wrapping_add(1);
         self.compare_open = true;
         self.comparison = None;
+        self.error = None;
         let request = CompareRequest {
             left: DetailRequest {
                 key: self.compare_keys[0].clone(),
@@ -29,7 +31,7 @@ impl Pulsar {
         };
         if let Some(host) = self.host.clone() {
             let tx = self.tx.clone();
-            let rev = self.revision;
+            let rev = self.compare_revision;
             self.runtime.spawn(async move {
                 let r = guarded(api::pulsar_compare(host, request)).await;
                 let _ = tx.send(Reply::Compare(rev, r)).await;
@@ -60,8 +62,18 @@ impl Pulsar {
                 "Compare fights",
                 Some("Shared measurements, with each recording’s own policy and coverage.".into()),
             ));
+        if let Some(error) = &self.error {
+            page = page.child(ui::muted(t, error.clone()));
+        }
         let Some(data) = &self.comparison else {
-            return page.child(ui::muted(t, "Loading comparison…"));
+            return page.child(ui::muted(
+                t,
+                if self.error.is_some() {
+                    "Comparison unavailable. Return to history and try again."
+                } else {
+                    "Loading comparison..."
+                },
+            ));
         };
         page = page.child(ui::card(t).child(div().flex().gap(px(24.)).children(
             [&data.left, &data.right].into_iter().map(|f| {

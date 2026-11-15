@@ -113,9 +113,9 @@ pub fn reach_bins(values: impl IntoIterator<Item = f64>) -> [u64; 42] {
 }
 
 #[derive(Clone)]
-struct Readout {
-    text: String,
-    theme: AuroraTheme,
+pub(super) struct Readout {
+    pub text: String,
+    pub theme: AuroraTheme,
 }
 impl gpui::Render for Readout {
     fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
@@ -162,6 +162,13 @@ fn polygon(window: &mut Window, coords: &[(gpui::Pixels, gpui::Pixels)], color: 
 
 impl Chart {
     pub fn render(&self, t: &AuroraTheme) -> Div {
+        self.render_with_bounds(t, None)
+    }
+    pub fn render_with_bounds(
+        &self,
+        t: &AuroraTheme,
+        plot_bounds: Option<std::rc::Rc<std::cell::Cell<Option<gpui::Bounds<gpui::Pixels>>>>>,
+    ) -> Div {
         if self.kind == Kind::Stacked {
             let total = self
                 .samples
@@ -223,7 +230,8 @@ impl Chart {
         }
         let chart = self.clone();
         let palette = t.clone();
-        let available = self.samples.iter().any(|p| p.y.is_some_and(f64::is_finite));
+        let available =
+            !self.bands.is_empty() || self.samples.iter().any(|p| p.y.is_some_and(f64::is_finite));
         let description = format!(
             "{}. Horizontal axis: {} ({:.2} to {:.2}). Vertical axis: {} ({:.2} to {:.2}). {}. {}",
             self.title,
@@ -249,7 +257,11 @@ impl Chart {
             .h(px(if self.kind == Kind::Grid { 240. } else { 164. }))
             .child(
                 canvas(
-                    |_, _, _| (),
+                    move |bounds, _, _| {
+                        if let Some(recorded) = &plot_bounds {
+                            recorded.set(Some(bounds));
+                        }
+                    },
                     move |bounds, _, window, _| {
                         let left = bounds.origin.x;
                         let top = bounds.origin.y;
@@ -374,6 +386,18 @@ impl Chart {
                         let bar = width / (chart.samples.len().max(1) as f32);
                         for s in &chart.samples {
                             let Some(v) = s.y.filter(|v| v.is_finite()) else {
+                                if s.shape == Shape::Reset && s.x.is_finite() {
+                                    let xx = x(s.x);
+                                    stroke(
+                                        window,
+                                        &[
+                                            (xx - px(3.5), top + height - px(4.)),
+                                            (xx + px(3.5), top + height - px(4.)),
+                                        ],
+                                        palette.subtle_foreground,
+                                        2.,
+                                    );
+                                }
                                 continue;
                             };
                             let xx = x(s.x);

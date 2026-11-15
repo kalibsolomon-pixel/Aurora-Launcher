@@ -684,7 +684,6 @@ impl Pulsar {
                         .selected(selected)
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.window = window.clone();
-                            this.revision += 1;
                             this.load_sections();
                             cx.notify();
                         })),
@@ -703,7 +702,7 @@ impl Pulsar {
             }
             page = page.child(window_bar);
         }
-        if self.top_tab == 1 {
+        if self.top_tab == 1 && matches!(self.sections[1], 0 | 2 | 3 | 4) {
             let mut weapons = std::collections::BTreeSet::new();
             if let Some(a) = &self.analysis {
                 for table in &a.offense.tables {
@@ -721,7 +720,6 @@ impl Pulsar {
                     .selected(self.weapon.is_none())
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.weapon = None;
-                        this.revision += 1;
                         this.load_sections();
                         cx.notify();
                     })),
@@ -736,13 +734,34 @@ impl Pulsar {
                     .selected(self.weapon.as_ref() == Some(&w))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.weapon = Some(id.clone());
-                        this.revision += 1;
                         this.load_sections();
                         cx.notify();
                     })),
                 );
             }
             page = page.child(filters);
+            if matches!(self.sections[1], 0 | 4) {
+                let mut results = div().flex().flex_wrap().gap(px(4.));
+                for (i, (label, result)) in [
+                    ("All attempts", None),
+                    ("Hits", Some("HIT")),
+                    ("No hit", Some("NO_HIT")),
+                ]
+                .into_iter()
+                .enumerate()
+                {
+                    results = results.child(
+                        small(("pooled-timing-result", i), label)
+                            .selected(self.timing_result.as_deref() == result)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.timing_result = result.map(str::to_owned);
+                                this.load_sections();
+                                cx.notify();
+                            })),
+                    );
+                }
+                page = page.child(results);
+            }
         }
         if self.top_tab == 3 {
             let focus = self.analysis.as_ref().and_then(|a| a.focus.as_ref());
@@ -767,7 +786,6 @@ impl Pulsar {
                             if let Some(row) = this.library.rows.get(i) {
                                 this.selected = Some(row.key.clone());
                                 this.combo_selection = 0;
-                                this.revision += 1;
                                 this.load_sections();
                                 cx.notify();
                             }

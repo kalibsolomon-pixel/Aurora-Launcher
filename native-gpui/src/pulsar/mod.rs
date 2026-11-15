@@ -63,6 +63,8 @@ pub struct Pulsar {
     tx: async_channel::Sender<Reply>,
     revision: u64,
     detail_revision: u64,
+    analysis_revision: u64,
+    compare_revision: u64,
     active: bool,
     visible: bool,
     root_focus: gpui::FocusHandle,
@@ -178,6 +180,8 @@ impl Pulsar {
             tx,
             revision: 0,
             detail_revision: 0,
+            analysis_revision: 0,
+            compare_revision: 0,
             active: true,
             visible: window.is_visible(),
             root_focus: cx.focus_handle(),
@@ -203,7 +207,7 @@ impl Pulsar {
             top_tab: 0,
             trend_metric: 0,
             detail_tab: 0,
-            sections: [0; 4],
+            sections: [0, 1, 1, 1],
             library: LibraryView::default(),
             analysis: None,
             opponents: vec![],
@@ -360,9 +364,14 @@ impl Pulsar {
     }
     fn load(&mut self, import: bool, cx: &mut Context<Self>) {
         self.revision = self.revision.wrapping_add(1);
+        self.analysis_revision = self.analysis_revision.wrapping_add(1);
         self.dirty = false;
         self.loading = true;
         self.error = None;
+        self.analysis = None;
+        self.settings = None;
+        self.opponents.clear();
+        self.records.clear();
         #[cfg(debug_assertions)]
         if self.showcase_state.as_deref() == Some("loading") {
             // Hold the first read open so the loading state can be captured.
@@ -395,11 +404,12 @@ impl Pulsar {
         });
         cx.notify();
     }
-    fn load_sections(&self) {
+    fn load_sections(&mut self) {
+        self.analysis_revision = self.analysis_revision.wrapping_add(1);
         let Some(host) = self.host.clone() else {
             return;
         };
-        let rev = self.revision;
+        let rev = self.analysis_revision;
         let tx = self.tx.clone();
         let query = self.query.clone();
         let req = AnalysisRequest {
@@ -477,19 +487,19 @@ impl Pulsar {
                     Err(e) => self.error = Some(e.message),
                 }
             }
-            Reply::Analysis(rev, r) if rev == self.revision => match r {
+            Reply::Analysis(rev, r) if rev == self.analysis_revision => match r {
                 Ok(v) => self.analysis = Some(v),
                 Err(e) => self.error = Some(e.message),
             },
-            Reply::Opponents(rev, r) if rev == self.revision => match r {
+            Reply::Opponents(rev, r) if rev == self.analysis_revision => match r {
                 Ok(v) => self.opponents = v,
                 Err(e) => self.error = Some(e.message),
             },
-            Reply::Records(rev, r) if rev == self.revision => match r {
+            Reply::Records(rev, r) if rev == self.analysis_revision => match r {
                 Ok(v) => self.records = v,
                 Err(e) => self.error = Some(e.message),
             },
-            Reply::Settings(rev, r) if rev == self.revision => match r {
+            Reply::Settings(rev, r) if rev == self.analysis_revision => match r {
                 Ok(v) => self.settings = Some(v),
                 Err(e) => self.error = Some(e.message),
             },
@@ -518,10 +528,12 @@ impl Pulsar {
                     Err(e) => self.error = Some(e.message),
                 }
             }
-            Reply::Compare(rev, r) if rev == self.revision && self.compare_open => match r {
-                Ok(v) => self.comparison = Some(v),
-                Err(e) => self.error = Some(e.message),
-            },
+            Reply::Compare(rev, r) if rev == self.compare_revision && self.compare_open => {
+                match r {
+                    Ok(v) => self.comparison = Some(v),
+                    Err(e) => self.error = Some(e.message),
+                }
+            }
             Reply::Action(r, refresh) => {
                 self.busy = false;
                 match r {
@@ -699,7 +711,8 @@ impl Pulsar {
             let mut parts = rest.split(':');
             let id = parts.next().unwrap_or_default();
             let tab = parts.next().unwrap_or("summary");
-            self.showcase_participant = parts.next() == Some("participant");
+            let section = parts.next().unwrap_or_default();
+            self.showcase_participant = section == "participant";
             if let Some(row) = self
                 .library
                 .rows
@@ -715,6 +728,14 @@ impl Pulsar {
                             || (tab == "evidence" && t.starts_with("Evidence"))
                     })
                     .unwrap_or(0);
+                if let Some(i) = sections::for_tab(self.detail_tab)
+                    .iter()
+                    .position(|(label, _)| {
+                        !section.is_empty() && label.to_lowercase().starts_with(section)
+                    })
+                {
+                    self.sections[self.detail_tab] = i + 1;
+                }
             }
         } else if let Some(rest) = state.strip_prefix("compare") {
             let ids: Vec<String> = match rest.strip_prefix(':') {

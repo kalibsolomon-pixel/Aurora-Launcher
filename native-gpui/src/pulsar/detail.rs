@@ -428,9 +428,6 @@ impl Pulsar {
                     _ => &detail.summary_tab,
                 };
                 page = page.child(self.tab_body(t, tab, narrow, cx));
-                if (1..=3).contains(&self.detail_tab) {
-                    page = page.child(self.advanced_body(t, narrow, cx));
-                }
             }
         }
         if let Some(termination) = &detail.termination {

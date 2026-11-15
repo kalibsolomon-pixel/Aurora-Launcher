@@ -69,51 +69,105 @@ pub(super) fn metric_card(
         .child(ui::section_header(t, title.to_owned(), None))
         .child(stats(t, metrics, keys))
 }
+/// Identity and evidence stay visible when a narrow table drops secondary fields.
+fn table_columns(columns: &[String]) -> Vec<&String> {
+    let priority = [
+        "name",
+        "weapon",
+        "time",
+        "t",
+        "start",
+        "round",
+        "opponent",
+        "kind",
+        "type",
+        "attribution",
+        "grade",
+        "outcome",
+        "hits",
+        "within",
+        "mean",
+        "deviation",
+        "max",
+        "damage",
+        "knockback",
+        "crit",
+        "jumpOffsetTicks",
+        "jumpClass",
+        "accepted",
+        "origin",
+        "rule",
+        "text",
+        "duration",
+        "end",
+    ];
+    let mut ordered = Vec::new();
+    for name in priority {
+        if let Some(column) = columns.iter().find(|c| c.as_str() == name) {
+            ordered.push(column);
+        }
+    }
+    for column in columns {
+        if !ordered.contains(&column) {
+            ordered.push(column);
+        }
+    }
+    ordered
+}
+fn cell(row: &TableRow, column: &str) -> String {
+    row.metrics
+        .get(column)
+        .map(metric_value)
+        .or_else(|| {
+            row.cells
+                .get(column)
+                .cloned()
+                .filter(|v| v != "-" && v != "null")
+        })
+        .unwrap_or_else(|| "Unavailable".into())
+}
 pub(super) fn table(t: &AuroraTheme, data: &TableView, narrow: bool) -> Div {
     let count = if narrow { 3 } else { data.columns.len().min(7) };
-    let columns: Vec<_> = data.columns.iter().take(count).collect();
+    let order = table_columns(&data.columns);
+    let columns: Vec<_> = order.into_iter().take(count).collect();
     let mut list = ui::list_card(t)
         .min_w(px(0.))
-        .child(ui::row(t, false).child(ui::section_header(t, data.title.clone(), None)));
-    list = list.child(
-        ui::row(t, false).children(
-            columns
-                .iter()
-                .map(|c| ui::caption(t, (*c).clone()).flex_1().min_w(px(0.))),
-        ),
-    );
+        .child(ui::row(t, false).child(ui::section_header(t, data.title.clone(), None)))
+        .child(ui::row(t, false).children(columns.iter().map(|c| {
+            ui::caption(t, (*c).clone())
+                .flex_1()
+                .min_w(px(0.))
+                .overflow_hidden()
+                .text_ellipsis()
+                .whitespace_nowrap()
+        })));
     for (i, row) in data.rows.iter().take(50).enumerate() {
         let full = data
             .columns
             .iter()
-            .map(|c| {
-                format!(
-                    "{c}: {}",
-                    row.cells
-                        .get(c)
-                        .cloned()
-                        .or_else(|| row.metrics.get(c).map(metric_value))
-                        .unwrap_or_else(|| "Unavailable".into())
-                )
-            })
+            .map(|c| format!("{c}: {}", cell(row, c)))
             .collect::<Vec<_>>()
             .join(". ");
+        let theme = t.clone();
         list = list.child(
             ui::row(t, i + 1 == data.rows.len().min(50))
                 .id(format!("{}-row-{i}", data.id))
                 .role(Role::Group)
-                .aria_label(full)
+                .aria_label(full.clone())
+                .tooltip(move |_, cx| {
+                    cx.new(|_| super::charts::Readout {
+                        text: full.clone(),
+                        theme: theme.clone(),
+                    })
+                    .into()
+                })
                 .children(columns.iter().map(|c| {
-                    ui::caption(
-                        t,
-                        row.cells
-                            .get(*c)
-                            .cloned()
-                            .or_else(|| row.metrics.get(*c).map(metric_value))
-                            .unwrap_or_else(|| "Unavailable".into()),
-                    )
-                    .flex_1()
-                    .min_w(px(0.))
+                    ui::caption(t, cell(row, c))
+                        .flex_1()
+                        .min_w(px(0.))
+                        .overflow_hidden()
+                        .text_ellipsis()
+                        .whitespace_nowrap()
                 })),
         );
     }
@@ -121,7 +175,69 @@ pub(super) fn table(t: &AuroraTheme, data: &TableView, narrow: bool) -> Div {
         list =
             list.child(ui::row(t, true).child(ui::muted(t, "No measured samples in this scope.")));
     }
+    if data.rows.len() > 50 {
+        list = list.child(ui::row(t, true).child(ui::caption(
+            t,
+            format!(
+                "Showing 50 of {} rows. Full values are available in the existing report.",
+                data.rows.len()
+            ),
+        )));
+    }
     list
+}
+fn heatmap(t: &AuroraTheme, view: &ChartView) -> Div {
+    let peak = view
+        .series
+        .iter()
+        .flat_map(|s| &s.points)
+        .filter_map(|p| p.y)
+        .fold(1.0_f64, f64::max);
+    let mut grid = div().flex().flex_col().gap(px(2.)).max_w(px(300.));
+    for (r, series) in view.series.iter().enumerate() {
+        grid = grid.child(
+            div()
+                .flex()
+                .gap(px(2.))
+                .children(series.points.iter().enumerate().map(|(c, p)| {
+                    let label = p.label.clone();
+                    let tip = label.clone();
+                    let theme = t.clone();
+                    div()
+                        .id(format!("{}-{r}-{c}", view.id))
+                        .flex_1()
+                        .h(px(18.))
+                        .bg(p
+                            .y
+                            .filter(|n| *n > 0.)
+                            .map(|n| t.ring.opacity(0.2 + 0.8 * (n / peak) as f32))
+                            .unwrap_or(t.sunken))
+                        .role(Role::Image)
+                        .aria_label(label)
+                        .tooltip(move |_, cx| {
+                            cx.new(|_| super::charts::Readout {
+                                text: tip.clone(),
+                                theme: theme.clone(),
+                            })
+                            .into()
+                        })
+                })),
+        );
+    }
+    ui::card(t)
+        .child(ui::section_header(t, view.title.clone(), None))
+        .child(ui::caption(
+            t,
+            "Normalized face height: 1 at top, 0 at bottom ? horizontal position: 0 left, 1 right",
+        ))
+        .child(grid)
+        .child(ui::caption(
+            t,
+            format!(
+                "6 columns ? 12 rows ? cell unit: confirmed hits ? {}",
+                view.description
+            ),
+        ))
 }
 pub(super) fn chart(view: &ChartView) -> Chart {
     let kind = match view.kind.as_str() {
@@ -146,7 +262,11 @@ pub(super) fn chart(view: &ChartView) -> Chart {
         }
         samples.extend(s.points.iter().map(|p| Sample {
             x: p.x,
-            y: p.y,
+            y: if kind == Kind::Lanes {
+                p.y.map(|_| series as f64)
+            } else {
+                p.y
+            },
             label: format!(
                     "{}: {} - {} {}",
                     s.label,
@@ -155,9 +275,12 @@ pub(super) fn chart(view: &ChartView) -> Chart {
                         .unwrap_or_else(|| "Unavailable".into()),
                     view.y_definition.unit
                 ),
-            shape: if p.category.contains("SHIELD") {
+            shape: if p.category.contains("SHIELD") || p.category == "trade" {
                 Shape::Diamond
-            } else if p.category.contains("MISS") || p.category.contains("UNRESOLVED") {
+            } else if p.category.contains("MISS")
+                || p.category.contains("UNRESOLVED")
+                || p.category == "hollow"
+            {
                 Shape::Hollow
             } else if p.y.is_none() || p.category.contains("OPENER") {
                 Shape::Reset
@@ -171,13 +294,28 @@ pub(super) fn chart(view: &ChartView) -> Chart {
     let max_x = samples
         .iter()
         .map(|s| s.x)
+        .chain(
+            view.bands
+                .iter()
+                .filter(|b| b.lane != "yTolerance")
+                .map(|b| b.start.max(b.end)),
+        )
         .filter(|x| x.is_finite())
         .fold(1_f64, f64::max);
-    let min_x = samples
+    let mut min_x = samples
         .iter()
         .map(|s| s.x)
         .filter(|x| x.is_finite())
         .fold(0_f64, f64::min);
+    if kind == Kind::Histogram && view.x_unit == "m" {
+        min_x = samples
+            .iter()
+            .map(|s| s.x)
+            .filter(|x| x.is_finite())
+            .min_by(f64::total_cmp)
+            .unwrap_or(0.)
+            - 0.025;
+    }
     let max_y = samples
         .iter()
         .filter_map(|s| s.y)
@@ -196,7 +334,11 @@ pub(super) fn chart(view: &ChartView) -> Chart {
         let n = (max_y.abs().max(min_y.abs()).max(4.) + 1.).ceil().min(40.);
         (-n, n)
     } else {
-        (min_y, nice_peak(max_y))
+        if kind == Kind::Lanes {
+            (-0.5, view.series.len().max(1) as f64 - 0.5)
+        } else {
+            (min_y, nice_peak(max_y))
+        }
     };
     let y_band = view
         .bands
@@ -217,13 +359,22 @@ pub(super) fn chart(view: &ChartView) -> Chart {
             end: b.end,
             lane: match b.lane.as_str() {
                 "LOCAL" | "local" => Some(1.),
-                "OPPONENT" | "opponent" => Some(0.),
+                "OPPONENT" => Some(-1.),
+                "opponent" => Some(0.),
                 _ => None,
             },
             label: b.label.clone(),
             selected: false,
         })
         .collect();
+    let mut incomplete = Vec::new();
+    for series in &view.series {
+        for pair in series.points.windows(2) {
+            if pair[0].availability == Availability::Incomplete || pair[0].category == "C" {
+                incomplete.push((pair[0].x, pair[1].x));
+            }
+        }
+    }
     Chart {
         id: view.id.clone(),
         title: view.title.clone(),
@@ -233,7 +384,9 @@ pub(super) fn chart(view: &ChartView) -> Chart {
         kind,
         domain: (min_x, max_x),
         range,
-        band: y_band.or(reach_band),
+        band: y_band
+            .or(reach_band)
+            .or_else(|| (kind == Kind::Area).then_some((-0.2, 0.2))),
         target: if kind == Kind::Area {
             Some(0.)
         } else if let Some((a, b)) = reach_band {
@@ -245,7 +398,7 @@ pub(super) fn chart(view: &ChartView) -> Chart {
         },
         playhead: None,
         bands,
-        incomplete: vec![],
+        incomplete,
         note: view.description.clone(),
     }
 }
@@ -297,7 +450,16 @@ impl Pulsar {
             &filtered
         };
         if !tab.metrics.is_empty() {
-            body = body.child(metric_card(t, "Recorded measurements", &tab.metrics, &[]));
+            body = body.child(metric_card(
+                t,
+                if self.detail_request.is_some() && index == 1 {
+                    "Recording measurements ? all weapons"
+                } else {
+                    "Recorded measurements"
+                },
+                &tab.metrics,
+                &[],
+            ));
         }
         for notice in &tab.notices {
             body = body.child(ui::caption(t, notice.clone()));
@@ -306,6 +468,9 @@ impl Pulsar {
             if self.top_tab != 0 || index < 4 {
                 body = body.child(ui::muted(t, line.clone()));
             }
+        }
+        if self.detail_request.is_some() && (1..=3).contains(&index) {
+            body = body.child(self.advanced_body(t, narrow, cx));
         }
         if self.detail_request.is_none() && self.top_tab == 0 {
             let mut selectors = div().flex().flex_wrap().gap(px(4.));
@@ -332,6 +497,25 @@ impl Pulsar {
             body = body.child(selectors);
         }
         for view in &tab.charts {
+            // The detailed controls below replace these static projections.
+            if self.detail_request.is_some()
+                && matches!(
+                    view.id.as_str(),
+                    "reach_histogram"
+                        | "reach_scatter"
+                        | "aim_contacts"
+                        | "aim_density"
+                        | "timing_ordinal"
+                        | "combos"
+                        | "dominance"
+                )
+            {
+                continue;
+            }
+            if view.kind == "heatmap" {
+                body = body.child(heatmap(t, view));
+                continue;
+            }
             let id = view.id.to_lowercase();
             let trend = id.contains("trend");
             let key = ["accuracy", "reach", "critical", "interval"][self.trend_metric];
@@ -341,6 +525,11 @@ impl Pulsar {
             body = body.child(chart(view).render(t));
         }
         for data in &tab.tables {
+            if self.detail_request.is_some()
+                && matches!(data.id.as_str(), "incoming_latest" | "timing_latest")
+            {
+                continue;
+            }
             body = body.child(table(t, data, narrow));
         }
         body = body.child(
@@ -416,5 +605,126 @@ impl Pulsar {
             }
         }
         body
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn narrow_tables_keep_identity_and_measurement_units() {
+        let columns = ["deviation", "max", "mean", "name", "eligible"].map(String::from);
+        let ordered = table_columns(&columns);
+        assert_eq!(ordered[0], "name");
+        assert_eq!(ordered[1], "mean");
+        let row = TableRow {
+            cells: [
+                ("mean".into(), "2.777777".into()),
+                ("missing".into(), "-".into()),
+            ]
+            .into(),
+            metrics: [(
+                "mean".into(),
+                MetricValue {
+                    value: Some(2.777777),
+                    availability: Availability::Available,
+                    definition: MetricDef {
+                        unit: "m".into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                },
+            )]
+            .into(),
+            ..Default::default()
+        };
+        assert_eq!(cell(&row, "mean"), "2.78 m");
+        assert_eq!(cell(&row, "missing"), "Unavailable");
+    }
+    #[test]
+    fn reach_domain_retains_fine_bins_and_lanes_separate_subjects() {
+        let view = ChartView {
+            kind: "histogram".into(),
+            x_unit: "m".into(),
+            series: vec![ChartSeries {
+                points: vec![
+                    ChartPoint {
+                        x: 1.95,
+                        y: Some(0.),
+                        ..Default::default()
+                    },
+                    ChartPoint {
+                        x: 4.05,
+                        y: Some(1.),
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let projected = chart(&view);
+        assert!((projected.domain.0 - 1.925).abs() < 1e-9);
+        let lane = ChartView {
+            kind: "lanes".into(),
+            series: vec![
+                ChartSeries {
+                    label: "local".into(),
+                    points: vec![ChartPoint {
+                        y: Some(1.),
+                        ..Default::default()
+                    }],
+                },
+                ChartSeries {
+                    label: "opponent".into(),
+                    points: vec![ChartPoint {
+                        y: Some(1.),
+                        ..Default::default()
+                    }],
+                },
+            ],
+            ..Default::default()
+        };
+        let projected = chart(&lane);
+        assert_eq!(projected.samples[0].y, Some(0.));
+        assert_eq!(projected.samples[1].y, Some(1.));
+    }
+
+    #[test]
+    fn interval_only_charts_and_incomplete_dominance_keep_their_extents() {
+        let interval = ChartView {
+            kind: "timeline".into(),
+            bands: vec![ChartBand {
+                start: 4.,
+                end: 12.,
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        assert_eq!(chart(&interval).domain, (0., 12.));
+        let area = ChartView {
+            kind: "dominance".into(),
+            series: vec![ChartSeries {
+                points: vec![
+                    ChartPoint {
+                        x: 2.,
+                        y: None,
+                        category: "C".into(),
+                        ..Default::default()
+                    },
+                    ChartPoint {
+                        x: 3.,
+                        y: Some(0.5),
+                        ..Default::default()
+                    },
+                ],
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let projected = chart(&area);
+        assert_eq!(projected.incomplete, [(2., 3.)]);
+        assert_eq!(projected.band, Some((-0.2, 0.2)));
+        assert_eq!(projected.samples[0].y, None);
     }
 }
