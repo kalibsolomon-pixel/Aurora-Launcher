@@ -1,6 +1,6 @@
 //! Player-facing language. Wire identifiers and numerical values stay unchanged.
 use crate::ui::Tone;
-use aurora_launcher_lib::pulsar::view::{FightSummary, MetricValue};
+use aurora_launcher_lib::pulsar::view::{FightSummary, MetricValue, ResolutionView};
 pub fn text(input: &str) -> String {
     let clean = input
         .replace(" | ", " · ")
@@ -50,6 +50,17 @@ pub fn outcome(s: &FightSummary) -> Tone {
         "WIN" => Tone::Success,
         "LOSS" => Tone::Danger,
         _ => Tone::Neutral,
+    }
+}
+pub fn resolution(r: &ResolutionView) -> (&str, Tone) {
+    match r.classification.as_str() {
+        "CONFIRMED_WIN" if r.confidence.eq_ignore_ascii_case("confirmed") => {
+            ("Win (confirmed)", Tone::Success)
+        }
+        "CONFIRMED_LOSS" if r.confidence.eq_ignore_ascii_case("confirmed") => {
+            ("Loss (confirmed)", Tone::Danger)
+        }
+        _ => (r.label.as_str(), Tone::Neutral),
     }
 }
 pub fn count(n: usize, noun: &str) -> String {

@@ -88,7 +88,14 @@ impl Pulsar {
                 .child(
                     ui::page_header(
                         t,
-                        if s.manual {
+                        if s.manual
+                            && self
+                                .detail_request
+                                .as_ref()
+                                .is_some_and(|r| r.exchange_id.is_some())
+                        {
+                            format!("Exchange with {}", s.opponent)
+                        } else if s.manual {
                             "Manual session".to_owned()
                         } else {
                             format!("Fight against {}", s.opponent)
@@ -231,6 +238,7 @@ impl Pulsar {
                     ),
                 ));
                 for (i, e) in detail.exchanges.iter().enumerate() {
+                    let (label, tone) = super::presentation::resolution(&e.resolution);
                     list = list.child(
                         ui::row(t, i + 1 == detail.exchanges.len())
                             .id(("manual-exchange-row", i))
@@ -244,7 +252,11 @@ impl Pulsar {
                             ))
                             .child(ui::caption(t, format!("#{}", i + 1)).w(px(40.)))
                             .child(ui::muted(t, e.opponent.clone()).flex_1().min_w(px(0.)))
-                            .child(ui::caption(t, e.resolution.label.clone()).w(px(120.)))
+                            .child(div().w(px(150.)).flex().child(ui::badge(
+                                t,
+                                label.to_owned(),
+                                tone,
+                            )))
                             .child(
                                 ui::caption(t, format!("{:.1} s", e.duration_nanos as f64 / 1e9))
                                     .w(px(64.)),
