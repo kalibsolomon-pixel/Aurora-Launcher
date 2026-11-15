@@ -76,6 +76,8 @@ impl Pulsar {
             ));
         };
         let (left_name, right_name) = side_names(&data.left, &data.right);
+        // Sides keep selection order; their labels follow the recorded times.
+        let left_earlier = data.left.start_epoch_millis <= data.right.start_epoch_millis;
         page = page.child(
             ui::card(t).child(
                 div().flex().flex_wrap().gap(px(20.)).children(
@@ -93,7 +95,11 @@ impl Pulsar {
                                     t,
                                     format!(
                                         "{} fight \u{b7} {}",
-                                        if i == 0 { "Earlier" } else { "Later" },
+                                        if (i == 0) == left_earlier {
+                                            "Earlier"
+                                        } else {
+                                            "Later"
+                                        },
                                         if i == 0 { &left_name } else { &right_name }
                                     ),
                                 ))
@@ -224,7 +230,9 @@ impl Pulsar {
         }
         summary = summary.child(ui::caption(
             t,
-            "Change is the later fight minus the earlier one. Counts grow with fight length; hits per second allows for it.",
+            format!(
+                "Change is the {right_name} fight minus the {left_name} fight. Counts grow with fight length; hits per second allows for it."
+            ),
         ));
         page = page.child(summary);
         for group in ["Offense", "Defense", "Flow"] {
