@@ -578,8 +578,13 @@ impl Pulsar {
         };
         if let Some(host) = self.host.clone() {
             let tx = self.tx.clone();
+            let filters = DetailAnalysisRequest {
+                detail: request.clone(),
+                weapon: self.weapon.clone(),
+                timing_result: self.timing_result.clone(),
+            };
             self.runtime.spawn(async move {
-                let detail = guarded(api::pulsar_detail(host.clone(), request.clone())).await;
+                let detail = guarded(api::pulsar_detail_analysis(host.clone(), filters)).await;
                 let playback = guarded(api::pulsar_playback(
                     host,
                     PlaybackRequest {

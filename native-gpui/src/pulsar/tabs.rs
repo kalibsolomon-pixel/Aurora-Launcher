@@ -453,7 +453,7 @@ impl Pulsar {
             body = body.child(metric_card(
                 t,
                 if self.detail_request.is_some() && index == 1 {
-                    "Recording measurements ? all weapons"
+                    "Selected measurements"
                 } else {
                     "Recorded measurements"
                 },

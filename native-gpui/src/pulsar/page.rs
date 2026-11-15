@@ -744,7 +744,7 @@ impl Pulsar {
                 let mut results = div().flex().flex_wrap().gap(px(4.));
                 for (i, (label, result)) in [
                     ("All attempts", None),
-                    ("Hits", Some("HIT")),
+                    ("Hits", Some("HITS")),
                     ("No hit", Some("NO_HIT")),
                 ]
                 .into_iter()

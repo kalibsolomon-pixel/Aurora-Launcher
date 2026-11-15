@@ -106,7 +106,9 @@ impl Pulsar {
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.weapon = None;
                             this.aim_selection = None;
-                            cx.notify();
+                            if let Some(request) = this.detail_request.clone() {
+                                this.request_detail(request, cx);
+                            }
                         })),
                 );
                 for (i, w) in weapons.iter().enumerate() {
@@ -120,7 +122,9 @@ impl Pulsar {
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.weapon = Some(w.clone());
                             this.aim_selection = None;
-                            cx.notify();
+                            if let Some(request) = this.detail_request.clone() {
+                                this.request_detail(request, cx);
+                            }
                         })),
                     );
                 }
@@ -183,36 +187,6 @@ impl Pulsar {
                     histogram.band = target.zip(tolerance).map(|(a, b)| (a - b, a + b));
                     histogram.target = target;
                     body = body.child(histogram.render(t));
-                    let within = target.zip(tolerance).map(|(a, b)| {
-                        reaches
-                            .iter()
-                            .filter(|v| (**v - a).abs() <= b + 1e-9)
-                            .count()
-                    });
-                    let mean = (!reaches.is_empty())
-                        .then(|| reaches.iter().sum::<f64>() / reaches.len() as f64);
-                    body = body.child(
-                        ui::card(t).child(
-                            div()
-                                .flex()
-                                .flex_wrap()
-                                .gap(px(24.))
-                                .child(ui::stat(
-                                    t,
-                                    "Eligible reach samples",
-                                    reaches.len().to_string(),
-                                ))
-                                .child(ui::stat(
-                                    t,
-                                    "In target window",
-                                    within
-                                        .map(|n| format!("{n} / {}", reaches.len()))
-                                        .unwrap_or_else(|| "Unavailable".into()),
-                                ))
-                                .child(ui::stat(t, "Mean contact distance", format(mean, "m")))
-                                .child(ui::stat(t, "Frozen target", format(target, "m"))),
-                        ),
-                    );
                     let points = hits
                         .iter()
                         .filter_map(|h| {
@@ -251,7 +225,7 @@ impl Pulsar {
                         .filter(|s| self.weapon.as_ref().is_none_or(|w| text(s, "weapon") == w))
                         .filter(|s| {
                             self.timing_result.as_deref().is_none_or(|r| {
-                                if r == "HIT" {
+                                if r == "HITS" {
                                     text(s, "outcome") == "HIT"
                                 } else {
                                     text(s, "outcome") != "HIT"
@@ -262,7 +236,7 @@ impl Pulsar {
                     let mut timing_filters = div().flex().flex_wrap().gap(px(4.));
                     for (i, (label, result)) in [
                         ("All attempts", None),
-                        ("Hits", Some("HIT")),
+                        ("Hits", Some("HITS")),
                         ("No hit", Some("NO_HIT")),
                     ]
                     .into_iter()
@@ -273,7 +247,9 @@ impl Pulsar {
                                 .selected(self.timing_result.as_deref() == result)
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.timing_result = result.map(str::to_owned);
-                                    cx.notify();
+                                    if let Some(request) = this.detail_request.clone() {
+                                        this.request_detail(request, cx);
+                                    }
                                 })),
                         );
                     }
