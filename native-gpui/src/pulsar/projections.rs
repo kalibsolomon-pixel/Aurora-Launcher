@@ -355,7 +355,11 @@ impl Pulsar {
                                         "Show newest 50 samples"
                                     },
                                 )
-                                .selected(expanded)
+                                .icon(if expanded {
+                                    "expand_less"
+                                } else {
+                                    "expand_more"
+                                })
                                 .on_click(cx.listener(
                                     |this, _, _, cx| {
                                         if !this.table_expanded.remove("timing_latest") {

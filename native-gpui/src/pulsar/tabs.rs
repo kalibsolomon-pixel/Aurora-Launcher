@@ -704,7 +704,11 @@ impl Pulsar {
                     AuroraButton::new("pulsar-methods", "Definitions & evidence")
                         .variant(ButtonVariant::Ghost)
                         .size(ButtonSize::Small)
-                        .selected(self.show_methods)
+                        .icon(if self.show_methods {
+                            "expand_less"
+                        } else {
+                            "expand_more"
+                        })
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.show_methods = !this.show_methods;
                             cx.notify();
@@ -714,7 +718,11 @@ impl Pulsar {
                     AuroraButton::new("pulsar-chart-data", "Chart data")
                         .variant(ButtonVariant::Ghost)
                         .size(ButtonSize::Small)
-                        .selected(self.show_data)
+                        .icon(if self.show_data {
+                            "expand_less"
+                        } else {
+                            "expand_more"
+                        })
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.show_data = !this.show_data;
                             cx.notify();

@@ -386,7 +386,7 @@ impl Chart {
         } else if self.kind == Kind::Grid {
             240.
         } else if self.id.contains("trend") {
-            112.
+            96.
         } else {
             164.
         };

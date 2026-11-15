@@ -110,7 +110,7 @@ impl Pulsar {
         let mut body = div()
             .flex()
             .flex_col()
-            .gap(px(12.))
+            .gap(px(8.))
             .child(self.metrics_panel(t, "Recent performance", &primary, cx));
         let key = ["accuracy", "reach", "critical", "interval"][self.trend_metric];
         let mut selectors = div().flex().flex_wrap().gap(px(2.));
@@ -265,6 +265,7 @@ impl Pulsar {
             group = group.child(ui::caption(t, "No usable health-drop attribution was recorded. This measure is unavailable, rather than zero.").w_full());
         }
         let mut panel = ui::card(t)
+            .when(title == "Recent performance", |d| d.gap(px(8.)).p(px(16.)))
             .child(ui::section_header(t, title.to_owned(), None))
             .child(group);
         if let Some(metric) = self.metric_info.as_ref().and_then(|k| m.get(k)) {
@@ -319,7 +320,11 @@ impl Pulsar {
                             format!("Show all {} rows", data.rows.len())
                         },
                     )
-                    .selected(expanded)
+                    .icon(if expanded {
+                        "expand_less"
+                    } else {
+                        "expand_more"
+                    })
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if !this.table_expanded.remove(&id) {
                             this.table_expanded.insert(id.clone());

@@ -762,7 +762,6 @@ impl Pulsar {
                                 small(("record-info", i), "")
                                     .icon("info")
                                     .accessibility_label(format!("About {}", r.label))
-                                    .selected(open)
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         if !this.disclosures.remove(&record_id) {
                                             this.disclosures.insert(record_id.clone());
