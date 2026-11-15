@@ -1043,6 +1043,28 @@ fn saved_servers(
     }
 }
 
+pub fn get_server_list(
+    app: Host,
+    instance_id: String,
+) -> Result<crate::saved_servers::editor::ServerList, CommandError> {
+    let paths = managed_paths(&app)?;
+    let instance = saved_instance(&paths, instance_id)?;
+    crate::saved_servers::editor::load(&paths, &instance)
+        .map_err(|error| CommandError::new(error.code(), error.message()))
+}
+
+pub fn edit_server_list(
+    app: Host,
+    instance_id: String,
+    revision: String,
+    edit: crate::saved_servers::editor::Edit,
+) -> Result<crate::saved_servers::editor::ServerList, CommandError> {
+    let paths = managed_paths(&app)?;
+    let instance = saved_instance(&paths, instance_id)?;
+    crate::saved_servers::editor::apply(&paths, &instance, &revision, &edit)
+        .map_err(|error| CommandError::new(error.code(), error.message()))
+}
+
 pub fn get_saved_destinations(
     app: Host,
     instance_id: String,

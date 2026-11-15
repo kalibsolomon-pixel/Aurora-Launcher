@@ -20,6 +20,7 @@ mod instance_creator;
 mod instance_editor;
 mod media;
 mod pack_import;
+mod server_editor;
 mod settings;
 mod skin_preview;
 mod skins;

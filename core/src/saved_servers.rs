@@ -5,12 +5,15 @@
 //! the vanilla list. Existence here is *not* gameplay evidence: nothing in
 //! this module writes history, marks recency, or treats a saved address as
 //! visited. Online status stays a separate, explicitly requested enrichment.
+//! The [`editor`] submodule owns explicit, stopped-instance list mutations.
 
 use crate::gameplay_history::ServerTarget;
 use crate::instances::InstanceId;
 use crate::paths::ManagedPaths;
 use crate::{cosmetic_image, nbt};
 use base64ct::{Base64, Encoding};
+
+pub mod editor;
 
 /// `servers.dat` stays small; one mebibyte bounds hostile or corrupt input.
 const MAX_DOCUMENT: u64 = 1024 * 1024;
