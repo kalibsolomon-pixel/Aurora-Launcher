@@ -590,7 +590,7 @@ pub(super) fn scroll_target(key: &str, offset: f32, max: f32, page: f32) -> Opti
 
 impl gpui::Render for Pulsar {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.remember_scroll();
+        self.remember_scroll(window, cx);
         let body = self.page_body(window, cx);
         div()
             .id("pulsar-page")

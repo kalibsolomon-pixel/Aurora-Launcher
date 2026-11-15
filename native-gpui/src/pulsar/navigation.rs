@@ -17,7 +17,11 @@ impl ScrollMemory {
     }
 }
 impl super::Pulsar {
-    pub(super) fn remember_scroll(&mut self) {
+    pub(super) fn remember_scroll(
+        &mut self,
+        window: &mut gpui::Window,
+        cx: &mut gpui::Context<Self>,
+    ) {
         let Some(scroll) = &self.page_scroll else {
             return;
         };
@@ -36,6 +40,13 @@ impl super::Pulsar {
             .transition(key, scroll.offset().y.as_f32())
         {
             scroll.set_offset(gpui::point(gpui::px(0.), gpui::px(y)));
+            // A route can remove the currently focused row or playback panel.
+            // Move focus into the replacement view so keyboard navigation continues.
+            if self.detail_request.is_some() && self.detail_tab == 4 {
+                self.playback_focus.focus(window, cx);
+            } else {
+                self.root_focus.focus(window, cx);
+            }
         }
     }
 }
