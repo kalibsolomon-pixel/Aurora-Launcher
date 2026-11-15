@@ -88,6 +88,8 @@ impl Pulsar {
             ui::Tone::Neutral
         };
         ui::row(t, last)
+            .w_full()
+            .overflow_hidden()
             .min_w(px(0.))
             .when(chosen, |d| d.bg(t.accent_soft))
             .child(
@@ -124,28 +126,33 @@ impl Pulsar {
                     .gap(px(4.))
                     .flex_1()
                     .min_w(px(0.))
+                    .overflow_hidden()
                     .child(
-                        small(
-                            format!("pulsar-select-{index}"),
-                            if row.manual {
-                                "Manual session".to_owned()
-                            } else {
-                                short_label(&row.opponent, if narrow { 18 } else { 30 })
-                            },
-                        )
-                        .selected(chosen)
-                        .accessibility_label(format!(
-                            "Select {}. {}, {} hits, accuracy {}",
-                            row.opponent, row.result_label, hits, accuracy
-                        ))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            if this.selected.as_ref() == Some(&key) {
-                                this.open_detail(key.clone(), cx);
-                            } else {
-                                this.selected = Some(key.clone());
-                                cx.notify();
-                            }
-                        })),
+                        div().flex().child(
+                            small(
+                                format!("pulsar-select-{index}"),
+                                if row.manual {
+                                    "Manual session".to_owned()
+                                } else {
+                                    short_label(&row.opponent, if narrow { 18 } else { 30 })
+                                },
+                            )
+                            .selected(chosen)
+                            .accessibility_label(format!(
+                                "Select {}. {}, {} hits, accuracy {}",
+                                row.opponent, row.result_label, hits, accuracy
+                            ))
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    if this.selected.as_ref() == Some(&key) {
+                                        this.open_detail(key.clone(), cx);
+                                    } else {
+                                        this.selected = Some(key.clone());
+                                        cx.notify();
+                                    }
+                                },
+                            )),
+                        ),
                     )
                     .child(
                         ui::caption(t, {
@@ -168,13 +175,22 @@ impl Pulsar {
                             }
                             parts.join(" · ")
                         })
+                        .w_full()
                         .overflow_hidden()
                         .text_ellipsis()
                         .whitespace_nowrap(),
                     ),
             )
-            .child(ui::stat(t, "Hits", hits).w(px(55.)))
-            .child(ui::stat(t, "Accuracy", accuracy).w(px(85.)))
+            .child(
+                ui::stat(t, "Hits", hits)
+                    .w(px(if narrow { 40. } else { 55. }))
+                    .flex_shrink_0(),
+            )
+            .child(
+                ui::stat(t, "Accuracy", accuracy)
+                    .w(px(if narrow { 68. } else { 85. }))
+                    .flex_shrink_0(),
+            )
             .when(columns.reach, |d| {
                 d.child(
                     ui::stat(
@@ -192,12 +208,15 @@ impl Pulsar {
                 d.child(ui::badge(t, row.result_label.clone(), tone))
             })
             .child(
-                small(format!("pulsar-open-{index}"), "Open fight")
-                    .icon("arrow_forward")
-                    .accessibility_label(format!("Open fight against {}", row.opponent))
-                    .on_click(
-                        cx.listener(move |this, _, _, cx| this.open_detail(open_key.clone(), cx)),
-                    ),
+                small(
+                    format!("pulsar-open-{index}"),
+                    if narrow { "" } else { "Open fight" },
+                )
+                .icon("arrow_forward")
+                .accessibility_label(format!("Open fight against {}", row.opponent))
+                .on_click(
+                    cx.listener(move |this, _, _, cx| this.open_detail(open_key.clone(), cx)),
+                ),
             )
     }
     fn history(&self, t: &AuroraTheme, narrow: bool, cx: &mut Context<Self>) -> Div {
@@ -351,7 +370,10 @@ impl Pulsar {
                                     cx,
                                 ),
                             };
-                            row.h(px(if narrow { 92. } else { 80. })).into_any_element()
+                            row.w_full()
+                                .min_w(px(0.))
+                                .h(px(if narrow { 92. } else { 80. }))
+                                .into_any_element()
                         })
                         .collect::<Vec<_>>()
                 },
