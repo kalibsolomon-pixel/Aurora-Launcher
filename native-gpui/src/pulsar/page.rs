@@ -201,22 +201,35 @@ impl Pulsar {
                             .map(tabs::metric_value)
                             .unwrap_or_else(|| "Unavailable".into()),
                     )
-                    .w(px(76.)),
+                    .w(px(92.))
+                    .flex_shrink_0(),
                 )
             })
             .when(columns.result, |d| {
-                d.child(ui::badge(t, row.result_label.clone(), tone))
+                d.child(div().w(px(130.)).flex_shrink_0().flex().child(ui::badge(
+                    t,
+                    row.result_label.clone(),
+                    tone,
+                )))
             })
             .child(
-                small(
-                    format!("pulsar-open-{index}"),
-                    if narrow { "" } else { "Open fight" },
-                )
-                .icon("arrow_forward")
-                .accessibility_label(format!("Open fight against {}", row.opponent))
-                .on_click(
-                    cx.listener(move |this, _, _, cx| this.open_detail(open_key.clone(), cx)),
-                ),
+                div()
+                    .w(px(if narrow { 28. } else { 100. }))
+                    .flex_shrink_0()
+                    .flex()
+                    .child(
+                        small(
+                            format!("pulsar-open-{index}"),
+                            if narrow { "" } else { "Open fight" },
+                        )
+                        .icon("arrow_forward")
+                        .accessibility_label(format!("Open fight against {}", row.opponent))
+                        .on_click(
+                            cx.listener(move |this, _, _, cx| {
+                                this.open_detail(open_key.clone(), cx)
+                            }),
+                        ),
+                    ),
             )
     }
     fn history(&self, t: &AuroraTheme, narrow: bool, cx: &mut Context<Self>) -> Div {
