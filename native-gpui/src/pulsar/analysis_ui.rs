@@ -72,16 +72,21 @@ impl Pulsar {
             let key = metric.definition.key.clone();
             group = group.child(
                 div()
-                    .min_w(px(140.))
+                    .min_w(px(180.))
                     .flex_1()
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap(px(4.))
-                            .child(ui::caption(t, metric.definition.label.clone()))
                             .child(
-                                button(format!("metric-info-{key}"), "Info")
+                                ui::caption(t, metric.definition.label.clone())
+                                    .flex_1()
+                                    .min_w(px(0.)),
+                            )
+                            .child(
+                                button(format!("metric-info-{key}"), "")
+                                    .icon("info")
                                     .accessibility_label(format!(
                                         "About {}",
                                         metric.definition.label
@@ -200,7 +205,7 @@ impl Pulsar {
                 value(m, "criticalRate"),
                 format!(
                     "{} critical / confirmed hits",
-                    denominator(m, "criticalHits", "hits")
+                    denominator(m, "criticalConditions", "criticalDenominator")
                 ),
             ),
             (
@@ -281,7 +286,7 @@ impl Pulsar {
         div().flex().flex_wrap().gap(px(24.)).children(
             [
                 (
-                    "Duration / attempts",
+                    "Duration & attempts",
                     format!(
                         "{:.1} s | {} attempts",
                         s.duration_nanos as f64 / 1e9,
@@ -289,19 +294,19 @@ impl Pulsar {
                     ),
                 ),
                 (
-                    "Accuracy | hits / eligible attempts",
+                    "Accuracy ? hits / eligible attempts",
                     denominator(m, "hits", "accuracyDenominator"),
                 ),
                 (
-                    "Reach | within / eligible",
+                    "Reach window ? within / eligible",
                     denominator(m, "reachWithinCount", "reachEligible"),
                 ),
                 (
-                    "Combos | longest / count",
+                    "Combos ? longest / count",
                     denominator(m, "longestCombo", "comboCount"),
                 ),
                 (
-                    "Local dominance | availability",
+                    "Local dominance",
                     format!(
                         "{} | {}",
                         value(m, "dominanceShare"),

@@ -141,6 +141,8 @@ pub struct Pulsar {
     /// Showcase only: pick the first manual participant once the detail arrives.
     #[cfg(debug_assertions)]
     showcase_participant: bool,
+    #[cfg(debug_assertions)]
+    showcase_ready: bool,
 }
 
 impl Pulsar {
@@ -304,6 +306,8 @@ impl Pulsar {
             },
             #[cfg(debug_assertions)]
             showcase_participant: false,
+            #[cfg(debug_assertions)]
+            showcase_ready: false,
         };
         #[cfg(debug_assertions)]
         if let Some(state) = this.showcase_state.as_deref() {
@@ -408,9 +412,16 @@ impl Pulsar {
         payload: &serde_json::Value,
         cx: &mut Context<Self>,
     ) {
-        if name == "pulsar-changed"
-            || (name == "launch-state"
-                && matches!(payload["status"].as_str(), Some("exited" | "failed")))
+        if name == "pulsar-changed" {
+            // Refresh emits this event itself. Read the retained index here;
+            // importing again would echo indefinitely and invalidate every reply.
+            if self.active && !self.busy {
+                self.load(false, cx);
+            } else {
+                self.dirty = true;
+            }
+        } else if name == "launch-state"
+            && matches!(payload["status"].as_str(), Some("exited" | "failed"))
         {
             if self.active && !self.busy {
                 self.refresh(cx);
@@ -419,6 +430,7 @@ impl Pulsar {
             }
         }
     }
+
     fn load(&mut self, import: bool, cx: &mut Context<Self>) {
         self.revision = self.revision.wrapping_add(1);
         self.analysis_revision = self.analysis_revision.wrapping_add(1);
@@ -435,6 +447,7 @@ impl Pulsar {
         #[cfg(debug_assertions)]
         if self.showcase_state.as_deref() == Some("loading") {
             // Hold the first read open so the loading state can be captured.
+            eprintln!("[pulsar-showcase-ready] loading");
             return;
         }
         #[cfg(debug_assertions)]
@@ -444,6 +457,7 @@ impl Pulsar {
             if self.showcase_state.as_deref() == Some("error") {
                 self.error=Some("This recording could not be read. The source file was preserved. Refresh after the recording has finished saving.".into());
             }
+            eprintln!("[pulsar-showcase-ready] fixture");
             return;
         }
         let Some(host) = self.host.clone() else {
@@ -639,6 +653,8 @@ impl Pulsar {
             }
             _ => {}
         }
+        #[cfg(debug_assertions)]
+        self.report_showcase_ready();
     }
     fn open_detail(&mut self, key: FightKey, cx: &mut Context<Self>) {
         self.selected = Some(key.clone());
@@ -840,6 +856,36 @@ impl Pulsar {
                 let r = guarded(api::pulsar_view_report(host, key)).await;
                 let _ = tx.send(Reply::Action(r, false)).await;
             });
+        }
+    }
+    #[cfg(debug_assertions)]
+    fn report_showcase_ready(&mut self) {
+        if self.showcase_ready
+            || !crate::showcase()
+            || self.loading
+            || self.showcase_state.is_some()
+            || self.detail_loading
+        {
+            return;
+        }
+        let ready = if self.compare_open {
+            self.comparison.is_some()
+        } else if self.detail_request.is_some() {
+            self.detail.is_some() && (self.detail_tab != 4 || self.playback.is_some())
+        } else {
+            self.analysis.is_some()
+                && match self.top_tab {
+                    1 if self.sections[1] == 3 => self.focus_detail.is_some(),
+                    3 => self.focus_detail.is_some(),
+                    5 => !self.opponents.is_empty(),
+                    6 => !self.records.is_empty(),
+                    7 => self.settings.is_some(),
+                    _ => true,
+                }
+        };
+        if ready {
+            self.showcase_ready = true;
+            eprintln!("[pulsar-showcase-ready] loaded");
         }
     }
     #[cfg(debug_assertions)]

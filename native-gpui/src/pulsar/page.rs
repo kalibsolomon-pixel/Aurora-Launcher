@@ -596,7 +596,7 @@ impl Pulsar {
             return self.detail_body(&t, narrow, cx);
         }
         let mut page=div().flex().flex_col().gap(px(ui::PAGE_GAP)).min_w(px(0.))
-            .child(div().flex().items_start().justify_between().gap(px(16.)).child(ui::page_header(&t,"Pulsar",Some("Your fights, kept together. Find a recording and inspect the evidence.".into())))
+            .child(div().flex().flex_wrap().items_start().justify_between().gap(px(16.)).child(ui::page_header(&t,"Pulsar",Some("Your fights, kept together. Find a recording and inspect the evidence.".into())).flex_1().min_w(px(220.)))
                 .child(AuroraButton::new("pulsar-refresh",if self.loading{"Refreshing…"}else{"Refresh"}).icon("refresh").disabled(self.loading||self.busy).on_click(cx.listener(|this,_,_,cx|this.refresh(cx)))))
             .child(self.scope_bar(&t,cx));
         let mut strip = div()

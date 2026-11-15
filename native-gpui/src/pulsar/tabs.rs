@@ -482,6 +482,21 @@ impl Pulsar {
                 && (index == 3 || (index == 1 && self.sections[1] == 3)))
         {
             if self.detail_request.is_none() {
+                if let Some(d) = self.focus_detail.as_ref() {
+                    body = body.child(ui::section_header(
+                        t,
+                        format!("Focused recording | {}", d.summary.opponent),
+                        Some(
+                            format!(
+                                "{} | {} | {:.1} s",
+                                d.summary.provenance.instance_name,
+                                d.summary.date_group,
+                                d.summary.duration_nanos as f64 / 1e9
+                            )
+                            .into(),
+                        ),
+                    ));
+                }
                 body = body.child(self.focus_scopes(t, cx));
             }
             body = body.child(self.advanced_body(t, narrow, cx));

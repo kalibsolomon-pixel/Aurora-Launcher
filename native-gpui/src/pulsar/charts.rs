@@ -61,6 +61,7 @@ pub(super) struct Options {
     pub activate: Option<Activate>,
     /// Frozen region ellipses: center x/y, radii x/y, grade index; largest first.
     pub regions: Vec<(f64, f64, f64, f64, usize)>,
+    pub connectors: Vec<(f64, f64, f64, f64)>,
 }
 pub(super) fn grade_color(t: &AuroraTheme, label: &str) -> Hsla {
     if label.contains("PERIPHERAL") || label.contains("TOO_FAST") {
@@ -304,6 +305,7 @@ impl Chart {
         let chart = self.clone();
         let preferences = options.preferences;
         let regions = options.regions;
+        let connectors = options.connectors;
         let palette = t.clone();
         let available =
             !self.bands.is_empty() || self.samples.iter().any(|p| p.y.is_some_and(f64::is_finite));
@@ -368,7 +370,12 @@ impl Chart {
                             polygon(window, &coords, color.opacity(0.12));
                             stroke(window, &coords, color.opacity(0.55), 1.);
                         }
-                        for band in &chart.bands {
+                        for band in chart
+                            .bands
+                            .iter()
+                            .filter(|b| !b.selected)
+                            .chain(chart.bands.iter().filter(|b| b.selected))
+                        {
                             let (a, b) = if let Some(lane) = band.lane {
                                 (y(lane) - px(13.), y(lane) + px(13.))
                             } else {
@@ -385,7 +392,11 @@ impl Chart {
                                 if band.selected {
                                     palette.ring.opacity(0.25)
                                 } else {
-                                    palette.control
+                                    if band.lane.is_some() {
+                                        palette.control
+                                    } else {
+                                        palette.control.opacity(0.2)
+                                    }
                                 },
                             );
                             stroke(
@@ -399,6 +410,14 @@ impl Chart {
                                 &[(x(band.end), a), (x(band.end), b)],
                                 palette.border,
                                 1.,
+                            );
+                        }
+                        for &(a, b, c, d) in &connectors {
+                            stroke(
+                                window,
+                                &[(x(a), y(b)), (x(c), y(d))],
+                                palette.ring.opacity(0.65),
+                                1.5,
                             );
                         }
                         if let Some((a, b)) = chart.band {
@@ -652,6 +671,14 @@ impl Chart {
                     })
                     .aria_label(label)
                     .tab_index(0)
+                    .on_key_down(|e, w, cx| {
+                        match e.keystroke.key.as_str() {
+                            "left" | "up" => w.focus_prev(cx),
+                            "right" | "down" => w.focus_next(cx),
+                            _ => return,
+                        }
+                        cx.stop_propagation();
+                    })
                     .focus_visible(|s| s.border_1().border_color(t.ring))
                     .when_some(options.activate.clone(), |d, a| {
                         let k = a.clone();
@@ -692,6 +719,14 @@ impl Chart {
                     .role(Role::Image)
                     .aria_label(label.clone())
                     .tab_index(0)
+                    .on_key_down(|e, w, cx| {
+                        match e.keystroke.key.as_str() {
+                            "left" | "up" => w.focus_prev(cx),
+                            "right" | "down" => w.focus_next(cx),
+                            _ => return,
+                        }
+                        cx.stop_propagation();
+                    })
                     .focus_visible(|s| s.border_1().border_color(t.ring))
                     .when_some(options.activate.clone(), |d, a| {
                         let k = a.clone();
@@ -764,11 +799,7 @@ impl Chart {
                         .into_iter()
                         .flatten()
                         .map(|s| {
-                            let date = s
-                                .label
-                                .split(|c: char| !c.is_ascii_digit() && c != '-')
-                                .find(|s| s.len() == 10 && s.as_bytes().get(4) == Some(&b'-'))
-                                .unwrap_or("Date unavailable");
+                            let date = axis_date(&s.label);
                             ui::caption(t, date.to_owned())
                         }),
                     ),
@@ -807,5 +838,52 @@ mod tests {
         assert_eq!(fraction(20., (0., 10.)), 1.);
         assert_eq!(nice_peak(23.), 50.);
         assert_eq!(nice_peak(f64::NAN), 1.);
+    }
+}
+
+fn axis_date(label: &str) -> &str {
+    let part = label.split_once(": ").map(|(_, s)| s).unwrap_or(label);
+    let date = part.split(';').next().unwrap_or(part).trim();
+    if date.chars().filter(|c| c.is_ascii_digit()).count() >= 4 && date.contains('-') {
+        date
+    } else {
+        "Date unavailable"
+    }
+}
+
+#[cfg(test)]
+mod preference_tests {
+    use super::*;
+    use aurora_launcher_lib::pulsar::view::{SettingView, SettingsView};
+    #[test]
+    fn native_chart_options_follow_saved_flags_and_defaults() {
+        let settings = SettingsView {
+            settings: [
+                ("chartGrid", false),
+                ("chartPoints", false),
+                ("reducedMotion", true),
+            ]
+            .into_iter()
+            .map(|(k, v)| SettingView {
+                key: k.into(),
+                value: serde_json::json!(v),
+                ..Default::default()
+            })
+            .collect(),
+            ..Default::default()
+        };
+        let p = Preferences::from_settings(&settings);
+        assert!(!p.grid && !p.points && p.reduced_motion);
+        let p = Preferences::from_settings(&SettingsView::default());
+        assert!(p.grid && p.points && !p.reduced_motion);
+    }
+    #[test]
+    fn trend_axis_uses_the_recorded_date_label() {
+        assert_eq!(
+            axis_date("Accuracy: 10-26 12:00; 90.0% - 90 %"),
+            "10-26 12:00"
+        );
+        assert_eq!(axis_date("Accuracy: 2026-10-26; unavailable"), "2026-10-26");
+        assert_eq!(axis_date("Unavailable"), "Date unavailable");
     }
 }

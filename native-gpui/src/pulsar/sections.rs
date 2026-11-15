@@ -41,9 +41,26 @@ const DEFENSE: &[Section] = &[
 const FLOW: &[Section] = &[
     (
         "Combos",
-        &["combo", "Combo", "longest", "hit_marks", "Unanswered"],
+        &[
+            "combo",
+            "Combo",
+            "longestCombo",
+            "longestOpponentCombo",
+            "longestUnanswered",
+            "hit_marks",
+            "Unanswered",
+        ],
     ),
-    ("Dominance", &["dominance", "Dominance", "turning"]),
+    (
+        "Dominance",
+        &[
+            "dominance",
+            "Dominance",
+            "turning",
+            "longestAdvantage",
+            "largestSwing",
+        ],
+    ),
     ("Exchanges", &["exchange", "Exchange", "Seconds"]),
 ];
 

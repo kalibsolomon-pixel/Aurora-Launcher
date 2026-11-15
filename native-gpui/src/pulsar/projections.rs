@@ -395,54 +395,47 @@ impl Pulsar {
                             ..Default::default()
                         },
                     ));
-                    let lanes = rows(d, "incoming")
-                        .iter()
-                        .filter_map(|r| r.as_f64())
-                        .map(|v| {
-                            sample(
-                                v,
-                                Some(0.),
-                                format!("{v:.2} s · attributed incoming"),
-                                Shape::Square,
-                            )
-                        })
-                        .chain(rows(d, "jumps").iter().filter_map(|j| {
-                            num(j, "t").map(|time| {
-                                sample(
-                                    time,
-                                    Some(1.),
-                                    format!(
-                                        "{time:.2} s · actual jump · {} · {}",
-                                        text(j, "classification"),
-                                        format(num(j, "offsetTicks"), "ticks")
-                                    ),
-                                    Shape::Hollow,
-                                )
+                    if let Some(view) = detail.defense.charts.iter().find(|c| c.id == "jump_lanes")
+                    {
+                        let mut timeline = tabs::chart(view);
+                        let lo = timeline
+                            .samples
+                            .iter()
+                            .map(|s| s.x)
+                            .min_by(f64::total_cmp)
+                            .unwrap_or(0.);
+                        let hi = timeline
+                            .samples
+                            .iter()
+                            .map(|s| s.x)
+                            .max_by(f64::total_cmp)
+                            .unwrap_or(lo + 1.);
+                        let span = ((hi - lo) * self.jump_span / 100.).max(1.);
+                        let start = lo + (hi - lo - span).max(0.) * self.jump_start / 100.;
+                        timeline.domain = (start, start + span);
+                        timeline
+                            .samples
+                            .retain(|s| s.x >= start && s.x <= start + span);
+                        timeline.bands.clear();
+                        let connectors = view
+                            .bands
+                            .iter()
+                            .filter(|b| {
+                                b.lane == "jumpPair" && b.start >= start && b.start <= start + span
                             })
-                        }))
-                        .collect();
-                    let mut timeline = plot(
-                        "detail-jump-lanes",
-                        "Incoming hits & actual jumps",
-                        "Recording time (s)",
-                        "Bottom: incoming · top: actual jump",
-                        Kind::Lanes,
-                        lanes,
-                        (start, start + span),
-                        (-0.5, 1.5),
-                        "■ Incoming hit · ◇ outline Actual observed jump. Client tick timing is affected by network delay; this is not a world replay.",
-                    );
-                    timeline
-                        .samples
-                        .retain(|s| s.x >= start && s.x <= start + span);
-                    body = body.child(timeline.render_options(
-                        t,
-                        None,
-                        super::charts::Options {
-                            preferences: self.preferences,
-                            ..Default::default()
-                        },
-                    ));
+                            .map(|b| (b.start, 0., b.end, 1.))
+                            .collect();
+                        timeline.note.push_str(" Lines pair incoming ticks with actual jump ticks; signed offsets and ideal/candidate grades are shown above. Span and start select the visible client-tick window.");
+                        body = body.child(timeline.render_options(
+                            t,
+                            None,
+                            super::charts::Options {
+                                preferences: self.preferences,
+                                connectors,
+                                ..Default::default()
+                            },
+                        ));
+                    }
                 }
                 if section == 0 || section == 1 || section == 4 {
                     let incoming = rows(d, "incomingDetail");
@@ -537,6 +530,47 @@ impl Pulsar {
                         })
                         .collect();
                     let streak_count = combo.bands.len();
+                    for active in rows(d, "combatExchanges") {
+                        if let Some((start, end)) = num(active, "start").zip(num(active, "end")) {
+                            combo.bands.push(super::charts::Band {
+                                start,
+                                end,
+                                lane: None,
+                                label: format!(
+                                    "Combat-active interval | {}",
+                                    text(active, "endedBy")
+                                ),
+                                selected: false,
+                            });
+                        }
+                    }
+                    for table in &detail.summary_tab.tables {
+                        if table.id.contains("round") {
+                            for row in &table.rows {
+                                let time = |key: &str| {
+                                    row.metrics.get(key).and_then(|m| m.value).or_else(|| {
+                                        row.cells.get(key).and_then(|s| s.parse::<f64>().ok())
+                                    })
+                                };
+                                if let Some((start, end)) = time("start").zip(time("end")) {
+                                    combo.bands.push(super::charts::Band {
+                                        start,
+                                        end,
+                                        lane: None,
+                                        label: format!(
+                                            "Round boundary | {}",
+                                            row.cells
+                                                .values()
+                                                .cloned()
+                                                .collect::<Vec<_>>()
+                                                .join(" | ")
+                                        ),
+                                        selected: false,
+                                    });
+                                }
+                            }
+                        }
+                    }
                     for b in rows(d, "boundaries") {
                         if let Some(time) = num(b, "t").or_else(|| num(b, "time")) {
                             combo.bands.push(super::charts::Band {
@@ -940,7 +974,16 @@ impl Pulsar {
                 "Square: confirmed hit | Circle: other contact. Select a mark or use Tab and Enter. Background uses the selected contact's frozen ideal point and physical radii; it does not reconstruct occlusion.",
             );
             let regions = selected
-                .map(|pick| frozen_regions(d, pick, face))
+                .map(|pick| {
+                    let mut frozen = pick.clone();
+                    if let Some(region) = pick["seq"]
+                        .as_i64()
+                        .and_then(|seq| self.active_detail().and_then(|d| d.aim_regions.get(&seq)))
+                    {
+                        frozen["measurement"] = region.clone();
+                    }
+                    frozen_regions(d, &frozen, face)
+                })
                 .unwrap_or_default();
             if regions.is_empty() {
                 contact
@@ -967,6 +1010,7 @@ impl Pulsar {
                     preferences: self.preferences,
                     regions,
                     activate: Some(activate),
+                    ..Default::default()
                 },
             ));
             card = card.child(grade_legend(t, &["IDEAL", "GOOD", "PERIPHERAL", "POOR"]));
@@ -1093,5 +1137,21 @@ impl Pulsar {
         ui::card(t).child(ui::section_header(t,"Jump timeline window",Some(format!("{start:.2}-{:.2} s | {span:.2} s span | sliders use percent of the recording",start+span).into())))
    .child(crate::controls::AuroraSlider::new(&self.jump_span_slider,"Span (%)"))
    .child(crate::controls::AuroraSlider::new(&self.jump_start_slider,"Start (%)"))
+    }
+}
+
+#[cfg(test)]
+mod region_tests {
+    use super::*;
+    #[test]
+    fn frozen_region_plane_intersection_uses_box_scale_not_current_preferences() {
+        let d = serde_json::json!({"hits":[{"seq":1,"measurement":{"box":{"minX":0.,"minY":0.,"minZ":0.,"maxX":0.6,"maxY":1.8,"maxZ":0.6},"idealRegion":{"ideal":{"x":0.5,"y":0.5,"z":0.},"reachable":true,"idealRadius":0.06,"goodRadius":0.12,"peripheralRadius":0.24}}}]});
+        let pick = serde_json::json!({"seq":1,"x":0.5,"y":0.5,"z":0.});
+        let regions = frozen_regions(&d, &pick, "NORTH");
+        assert_eq!(regions.len(), 4);
+        let ideal = regions.last().unwrap();
+        assert!((ideal.2 - 0.1).abs() < 1e-9);
+        assert!((ideal.3 - 1. / 30.).abs() < 1e-9);
+        assert!(frozen_regions(&serde_json::Value::Null, &pick, "NORTH").is_empty());
     }
 }
