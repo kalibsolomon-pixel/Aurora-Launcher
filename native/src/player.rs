@@ -603,6 +603,7 @@ mod tests {
     use super::*;
     fn skin(model: &str, height: u32) -> HeadAvatar {
         HeadAvatar {
+            sha256: String::new(),
             rgba: vec![],
             skin_rgba: vec![255; 64 * height as usize * 4],
             skin_height: height,

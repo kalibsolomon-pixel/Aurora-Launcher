@@ -1576,6 +1576,7 @@ mod tests {
 
     fn head(bytes: Vec<u8>) -> api::HeadAvatar {
         api::HeadAvatar {
+            sha256: String::new(),
             rgba: bytes,
             skin_rgba: vec![],
             skin_height: 0,

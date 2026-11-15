@@ -443,6 +443,8 @@ pub struct AccountSummary {
 pub struct HeadAvatar {
     pub rgba: Vec<u8>,
     #[serde(default)]
+    pub sha256: String,
+    #[serde(default)]
     pub skin_rgba: Vec<u8>,
     #[serde(default)]
     pub skin_height: u32,
@@ -749,6 +751,8 @@ pub struct SkinPreset {
     pub id: String,
     pub name: String,
     pub model: String,
+    #[serde(default)]
+    pub sha256: String,
     #[serde(default)]
     pub favorite: bool,
 }
@@ -2011,12 +2015,22 @@ mod tests {
     #[test]
     fn full_skin_pixels_and_model_survive_the_camel_case_contract() {
         let avatar: HeadAvatar = serde_json::from_value(
-            json!({"rgba":[1,2,3,255],"skinRgba":[9,8,7,255],"skinHeight":64,"model":"slim"}),
+            json!({"rgba":[1,2,3,255],"skinRgba":[9,8,7,255],"skinHeight":64,"model":"slim","sha256":"skin-content"}),
         )
         .unwrap();
         assert_eq!(avatar.skin_rgba, vec![9, 8, 7, 255]);
         assert_eq!(avatar.skin_height, 64);
         assert_eq!(avatar.model, "slim");
+        assert_eq!(avatar.sha256, "skin-content");
+    }
+
+    #[test]
+    fn library_content_identity_survives_the_native_boundary() {
+        let preset: SkinPreset = serde_json::from_value(
+            json!({"id":"skin", "name":"Coat", "model":"slim", "sha256":"skin-content"}),
+        )
+        .unwrap();
+        assert_eq!(preset.sha256, "skin-content");
     }
 
     #[test]
