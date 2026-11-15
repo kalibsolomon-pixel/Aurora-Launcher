@@ -859,7 +859,18 @@ impl Chart {
         ui::card(t)
             .when(self.id.contains("trend"), |d| d.gap(px(8.)))
             .min_w(px(0.))
-            .child(ui::section_header(t, self.title.clone(), None))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(8.))
+                    .child(ui::section_header(t, self.title.clone(), None))
+                    .when(self.id.contains("trend"), |d| {
+                        d.child(ui::caption(t, self.x_label.clone()))
+                    }),
+            )
             .when(self.id.contains("trend"), |d| {
                 d.child(ui::caption(t, self.note.clone()))
             })
@@ -947,7 +958,9 @@ impl Chart {
                         ui::caption(t, label)
                     })),
             )
-            .child(ui::caption(t, self.x_label.clone()).text_center())
+            .when(!self.id.contains("trend"), |d| {
+                d.child(ui::caption(t, self.x_label.clone()).text_center())
+            })
             .when(!self.id.contains("trend"), |d| {
                 d.child(ui::caption(t, self.note.clone()))
             })
