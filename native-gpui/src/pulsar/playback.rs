@@ -231,14 +231,14 @@ impl Pulsar {
         let lane_chart = Chart {
             id: "playback-lanes".into(), title: "Recorded event lanes".into(),
             x_label: "Recording time (s)".into(),
-            y_label: lanes.iter().map(|s|super::analysis_ui::display_label(s)).collect::<Vec<_>>().join("\n"),
+            y_label: lanes.iter().map(|s| if s == "activeExchanges" { "Combat".into() } else {super::analysis_ui::display_label(s)}).collect::<Vec<_>>().join("\n"),
             samples, kind: Kind::Lanes, domain: (0., duration.max(1.)),
             range: (-0.5, lanes.len() as f64 - 0.5), band: None, target: None,
             playhead: Some(self.playhead),
             bands: p.boundaries.iter().map(|b| super::charts::Band {
-                start: b.start, end: b.end, lane: None, label: b.label.clone(), selected: false,
+                start: b.start, end: b.end, lane: lanes.iter().position(|l| l == &b.lane).map(|i| i as f64), label: b.label.clone(), selected: false,
             }).collect(), incomplete: vec![],
-            note: "? Attack   · Shield or trade   · Jump   · Incoming   + Critical   · Death   · Sprint or boundary. Click to seek. Space plays; comma and period step between events.".into(),
+            note: "■ Attack · ◆ Shield or trade · ○ Jump · ▲ Incoming · + Hit evidence or critical · × Death · Tick: sprint or boundary. Click to seek. Space plays; comma and period step between events.".into(),
         };
         page = page.child(
             lane_chart
@@ -435,8 +435,8 @@ fn event_shape(e: &EventView) -> Shape {
     match e.kind.as_str() {
         "SHIELD" => Shape::Diamond,
         "JUMP" => Shape::Hollow,
-        "DAMAGE_IN" | "HURT" => Shape::Triangle,
-        "CRIT" => Shape::Plus,
+        "DAMAGE_IN" => Shape::Triangle,
+        "HURT" | "CRIT" => Shape::Plus,
         "DEATH" => Shape::Cross,
         "SPRINT" | "ROUND" | "COMBAT_EXCHANGE" => Shape::Tick,
         _ => Shape::Square,

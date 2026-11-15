@@ -160,7 +160,13 @@ impl Pulsar {
             let key = metric.definition.key.clone();
             group = group.child(
                 div()
-                    .w(px(if self.width < 950. { 180. } else { 210. }))
+                    .w(px(if m.len() == 4 && self.width >= 950. {
+                        170.
+                    } else if self.width < 950. {
+                        180.
+                    } else {
+                        210.
+                    }))
                     .child(
                         div()
                             .flex()

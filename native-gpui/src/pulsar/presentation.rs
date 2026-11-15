@@ -6,8 +6,6 @@ pub fn text(input: &str) -> String {
         .replace(" | ", " · ")
         .replace(" / ", " · ")
         .replace("play/pause", "play or pause")
-        .replace("true", "Yes")
-        .replace("false", "No")
         .replace("inactive/incomplete", "inactive and incomplete")
         .replace("Tab/Shift", "Tab or Shift");
     clean
@@ -16,10 +14,17 @@ pub fn text(input: &str) -> String {
         })
         .map(|part| {
             let end = part.trim_end_matches(|c: char| {
-                c.is_whitespace() || matches!(c, '·' | '(' | ')' | ',' | '|' | ';')
+                c.is_whitespace() || matches!(c, '·' | '(' | ')' | ',' | '|' | ';' | '.' | ':')
             });
             let suffix = &part[end.len()..];
             let word = end.strip_prefix("minecraft:").unwrap_or(end);
+            if word == "true" || word == "false" {
+                return format!("{}{suffix}", if word == "true" { "Yes" } else { "No" });
+            }
+            // Source paths, player identifiers and units retain their spelling.
+            if word.contains(['\\', '/']) {
+                return format!("{word}{suffix}");
+            }
             if word.contains('_')
                 || (word.len() > 1
                     && word.chars().any(|c| c.is_ascii_alphabetic())
@@ -114,6 +119,14 @@ mod tests {
         assert_eq!(
             text("OPPONENT_DIRECT | SHIELD_BLOCK / minecraft:diamond_sword"),
             "Opponent direct · Shield block · Diamond sword"
+        );
+        assert_eq!(
+            text("true false untrue falsehood UTC"),
+            "Yes No untrue falsehood UTC"
+        );
+        assert_eq!(
+            text("C:\\some_path\\report.json"),
+            "C:\\some_path\\report.json"
         );
         assert_eq!(count(1, "fight"), "1 fight");
         assert_eq!(count(2, "fight"), "2 fights");

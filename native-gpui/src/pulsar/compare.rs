@@ -97,14 +97,7 @@ impl Pulsar {
                                     },
                                 ))
                                 .child(ui::section_header(t, f.opponent.clone(), None))
-                                .child(ui::caption(
-                                    t,
-                                    format!(
-                                        "{} · {}",
-                                        f.date_group,
-                                        super::page::utc_time(f.start_epoch_millis)
-                                    ),
-                                ))
+                                .child(ui::caption(t, super::page::utc_time(f.start_epoch_millis)))
                                 .child(ui::caption(
                                     t,
                                     format!(

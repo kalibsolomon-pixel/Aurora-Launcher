@@ -927,6 +927,9 @@ impl Pulsar {
                             self.table_expanded.extend(ids);
                         }
                     }
+                    "record-info" => {
+                        self.disclosures.insert("record-definition-0".into());
+                    }
                     "info" => self.metric_info = Some("accuracy".into()),
                     "opponent" => {
                         if let Some(d) = self.active_detail() {

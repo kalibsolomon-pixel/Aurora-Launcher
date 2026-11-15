@@ -197,7 +197,7 @@ impl Pulsar {
                         ui::caption(t, {
                             let mut parts = vec![row.provenance.instance_name.clone()];
                             parts.push(utc_time(row.start_epoch_millis));
-                            parts.push(format!("{:.1} s", row.duration_nanos as f64 / 1e9));
+                            parts.push(format!("{:.1}\u{a0}s", row.duration_nanos as f64 / 1e9));
 
                             parts.extend(row.server.clone());
                             if row.stale {
@@ -641,6 +641,9 @@ impl Pulsar {
             ));
         for (i, r) in self.records.iter().enumerate() {
             let key = r.key.clone();
+            let source = key
+                .as_ref()
+                .and_then(|k| self.library.rows.iter().find(|f| &f.key == k));
             let record_id = format!("record-definition-{i}");
             let open = self.disclosures.contains(&record_id);
             list = list.child(
@@ -670,6 +673,13 @@ impl Pulsar {
                                     .text_color(t.foreground)
                                     .child(tabs::metric_value(&r.metric)),
                             )
+                            .when_some(source, |d, f| {
+                                d.child(div().flex().child(ui::badge(
+                                    t,
+                                    f.result_label.clone(),
+                                    super::presentation::outcome(f),
+                                )))
+                            })
                             .child(
                                 small(("record-info", i), "")
                                     .icon("info")
@@ -717,13 +727,6 @@ impl Pulsar {
                 .map(|i| i.instance_name.clone())
                 .unwrap_or_else(|| "Selected instance preferences".into()),
             None,
-        ));
-        body = body.child(self.disclosure(
-            t,
-            "shortcuts",
-            "Keyboard shortcuts",
-            self.shortcut_guide(t),
-            cx,
         ));
         body = body.child(ui::caption(
             t,
@@ -788,6 +791,14 @@ impl Pulsar {
 
             body = body.child(list);
         }
+
+        body = body.child(self.disclosure(
+            t,
+            "shortcuts",
+            "Keyboard shortcuts",
+            self.shortcut_guide(t),
+            cx,
+        ));
 
         for warning in &s.warnings {
             body = body.child(ui::caption(t, warning.clone()));

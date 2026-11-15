@@ -335,6 +335,15 @@ impl Chart {
             },
             self.note
         );
+        let plot_height = if self.kind == Kind::Lanes {
+            (self.y_label.lines().count() as f32 * 24.).max(164.)
+        } else if self.kind == Kind::Grid {
+            240.
+        } else if self.id.contains("trend") {
+            140.
+        } else {
+            164.
+        };
         let mut plot = div()
             .id(format!("{}-plot", self.id))
             .role(Role::Image)
@@ -342,7 +351,7 @@ impl Chart {
             .relative()
             .overflow_hidden()
             .w_full()
-            .h(px(if self.kind == Kind::Grid { 240. } else { 164. }))
+            .h(px(plot_height))
             .child(
                 canvas(
                     move |bounds, _, _| {
@@ -567,7 +576,7 @@ impl Chart {
                                         match s.shape {
                                             Shape::Square => palette.ring,
                                             Shape::Diamond => palette.warning,
-                                            Shape::Hollow => palette.success,
+                                            Shape::Hollow | Shape::Plus => palette.success,
                                             Shape::Triangle | Shape::Cross => palette.danger,
                                             _ => palette.muted_foreground,
                                         }
@@ -792,21 +801,22 @@ impl Chart {
                         div()
                             .w(px(92.))
                             .flex_shrink_0()
-                            .h(px(164.))
+                            .h(px(plot_height))
                             .flex()
                             .flex_col()
-                            .justify_around()
-                            .children(
-                                self.y_label
-                                    .lines()
-                                    .rev()
-                                    .map(|label| ui::caption(t, label.to_owned())),
-                            )
+                            .children(self.y_label.lines().rev().map(|label| {
+                                div()
+                                    .h(px(24.))
+                                    .flex_shrink_0()
+                                    .flex()
+                                    .items_center()
+                                    .child(ui::caption(t, label.to_owned()))
+                            }))
                     } else {
                         div()
                             .w(px(36.))
                             .flex_shrink_0()
-                            .h(px(if self.kind == Kind::Grid { 240. } else { 164. }))
+                            .h(px(plot_height))
                             .flex()
                             .flex_col()
                             .justify_between()
@@ -830,31 +840,32 @@ impl Chart {
                     .pl(px(if self.kind == Kind::Lanes { 104. } else { 48. }))
                     .flex()
                     .justify_between()
-                    .child(ui::caption(t, format!("{:.1}", self.domain.0)))
+                    .child(ui::caption(
+                        t,
+                        if self.id.contains("trend") {
+                            self.samples
+                                .first()
+                                .map(|s| axis_date(&s.label))
+                                .unwrap_or("Unavailable")
+                                .to_owned()
+                        } else {
+                            format!("{:.1}", self.domain.0)
+                        },
+                    ))
                     .child(ui::caption(t, self.x_label.clone()))
-                    .child(ui::caption(t, format!("{:.1}", self.domain.1))),
+                    .child(ui::caption(
+                        t,
+                        if self.id.contains("trend") {
+                            self.samples
+                                .last()
+                                .map(|s| axis_date(&s.label))
+                                .unwrap_or("Unavailable")
+                                .to_owned()
+                        } else {
+                            format!("{:.1}", self.domain.1)
+                        },
+                    )),
             )
-            .when(self.id.contains("trend"), |d| {
-                d.child(
-                    div()
-                        .flex()
-                        .justify_between()
-                        .pl(px(if self.kind == Kind::Lanes { 104. } else { 48. }))
-                        .children(
-                            [
-                                self.samples.first(),
-                                self.samples.get(self.samples.len() / 2),
-                                self.samples.last(),
-                            ]
-                            .into_iter()
-                            .flatten()
-                            .map(|s| {
-                                let date = axis_date(&s.label);
-                                ui::caption(t, date.to_owned())
-                            }),
-                        ),
-                )
-            })
             .child(ui::caption(t, self.note.clone()))
     }
 }
