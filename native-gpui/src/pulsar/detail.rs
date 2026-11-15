@@ -296,10 +296,43 @@ impl Pulsar {
             4 => page = page.child(self.playback_body(t, cx)),
             5 => {
                 let r = &detail.summary.resolution;
-                page=page.child(ui::card(t).child(ui::section_header(t,"Why this result was recorded",None))
-                    .child(ui::muted(t,format!("{} · {}",detail.summary.result_label,super::presentation::result_source(&r.source))))
-                    .children(r.notes.iter().map(|n|ui::muted(t,n.clone())))
-                    .child(ui::caption(t,format!("Recorded in {} on {}. Your launcher retains this snapshot independently of the instance.",detail.summary.provenance.instance_name,super::page::utc_time(detail.summary.start_epoch_millis)))));
+                let (observation, why) = decisive_evidence(detail);
+                page = page.child(
+                    ui::card(t)
+                        .child(ui::section_header(t, "Why this result was recorded", None))
+                        .child(ui::muted(
+                            t,
+                            format!(
+                                "{} \u{b7} {}",
+                                detail.summary.result_label,
+                                super::presentation::result_source(&r.source)
+                            ),
+                        ))
+                        .child(
+                            div()
+                                .border_l_2()
+                                .border_color(t.ring)
+                                .pl(px(12.))
+                                .flex()
+                                .flex_col()
+                                .gap(px(2.))
+                                .child(
+                                    ui::muted(t, observation)
+                                        .text_color(t.foreground)
+                                        .font_weight(gpui::FontWeight::MEDIUM),
+                                )
+                                .child(ui::caption(t, why)),
+                        )
+                        .children(r.notes.iter().map(|n| ui::muted(t, n.clone())))
+                        .child(ui::caption(
+                            t,
+                            format!(
+                                "Recorded in {} on {}. Aurora keeps its own copy, so this fight stays here even if the instance is deleted.",
+                                detail.summary.provenance.instance_name,
+                                super::page::utc_time(detail.summary.start_epoch_millis)
+                            ),
+                        )),
+                );
                 let full_path = detail.summary.provenance.source_path.clone();
                 let copy_path = full_path.clone();
                 let diagnostics=ui::card(t).child(ui::section_header(t,"Recording diagnostics",None))
@@ -308,8 +341,8 @@ impl Pulsar {
                     .child(ui::caption(t,format!("Source: …/{}",full_path.rsplit(['/', '\\']).next().unwrap_or("recording.json"))))
                     .child(div().flex().flex_wrap().gap(px(8.)).child(button("copy-recording-path","Copy full path").on_click(move|_,_,cx|cx.write_to_clipboard(gpui::ClipboardItem::new_string(copy_path.clone()))))
                         .child(button("open-recording-source","Open recordings folder").on_click(cx.listener(|this,_,_,cx|this.folder(FolderKind::Recordings,cx)))))
-                    .children(detail.summary.provenance.conflicts.iter().map(|c|ui::caption(t,format!("Conflicting snapshot: {c}"))))
-                    .child(ui::caption(t,if detail.summary.stale{"The source changed after import. This view shows the retained snapshot."}else{"The retained snapshot matches the imported source."}));
+                    .children(detail.summary.provenance.conflicts.iter().map(|c|ui::caption(t,format!("Conflicting copy: {c}"))))
+                    .child(ui::caption(t,if detail.summary.stale{"The original file changed after Aurora copied it. This view shows Aurora's copy."}else{"Aurora's copy matches the original file."}));
                 let diagnostics = diagnostics
                     .child(self.table_view(t, &detail.evidence, narrow, cx))
                     .child(ui::section_header(t, "Original event details", None))
@@ -359,7 +392,13 @@ impl Pulsar {
             }
         }
         if let Some(termination) = &detail.termination {
-            page = page.child(ui::caption(t, format!("Finalization: {termination}")));
+            page = page.child(ui::caption(
+                t,
+                format!(
+                    "How the recording ended: {}",
+                    super::presentation::text(termination)
+                ),
+            ));
         }
         let view = cx.entity();
         let changed = view.clone();
@@ -436,4 +475,71 @@ impl Pulsar {
                 .popup(panel),
         )
     }
+}
+
+/// The observation that settled the result, its time, and why it decides it.
+fn decisive_evidence(detail: &FightDetailView) -> (String, String) {
+    let confirmed = detail
+        .summary
+        .resolution
+        .confidence
+        .eq_ignore_ascii_case("confirmed");
+    let settled = if confirmed {
+        "so the result is confirmed"
+    } else {
+        "so the result is inferred rather than confirmed"
+    };
+    let Some(row) = detail
+        .evidence
+        .rows
+        .iter()
+        .find(|r| r.cells.get("Establishing").is_some_and(|v| v == "true"))
+    else {
+        return (
+            "No single server message settled this result.".into(),
+            format!("It was worked out from the fight as a whole, {settled}."),
+        );
+    };
+    let time = row
+        .metrics
+        .get("time")
+        .and_then(|m| m.value)
+        .map(|s| format!("At {s:.1} s"))
+        .unwrap_or_else(|| "During the fight".into());
+    let kind = row.cells.get("kind").map(String::as_str).unwrap_or("");
+    let message = row
+        .cells
+        .get("text")
+        .and_then(|text| text.lines().map(str::trim).find(|l| !l.is_empty()))
+        .map(|line| {
+            let short: String = line.chars().take(60).collect();
+            if short.len() < line.len() {
+                format!(": \u{201c}{short}\u{2026}\u{201d}")
+            } else {
+                format!(": \u{201c}{short}\u{201d}")
+            }
+        })
+        .unwrap_or_default();
+    let (what, why) = match kind {
+        "RESULT" => (
+            "the server announced the match result",
+            "A match result from the server is the strongest evidence Pulsar records",
+        ),
+        "ROUND_RESULT" | "ROUND_END" => (
+            "the server announced the round result",
+            "The server's own round result decides this fight",
+        ),
+        "KILL" | "DEATH" => (
+            "a death ended the fight",
+            "A recorded death decides who won",
+        ),
+        _ => (
+            "the last accepted server message arrived",
+            "It was the final accepted server message before the fight ended",
+        ),
+    };
+    (
+        format!("{time}, {what}{message}"),
+        format!("{why}, {settled}."),
+    )
 }

@@ -250,7 +250,7 @@ fn heatmap(t: &AuroraTheme, view: &ChartView) -> Div {
         .child(ui::section_header(t, view.title.clone(), None))
         .child(ui::caption(
             t,
-            "Normalized face height: 1 at top, 0 at bottom · horizontal position: 0 left, 1 right",
+            "Height on the hitbox: 1 at the top, 0 at the bottom · across: 0 left, 1 right",
         ))
         .child(grid)
         .child(ui::caption(
@@ -378,8 +378,9 @@ pub(super) fn chart(view: &ChartView) -> Chart {
         (-n, n)
     } else {
         if combo_distribution {
-            // Four equal integer intervals keep both count axes truthful.
-            (0., (max_y / 4.).ceil().max(1.) * 4.)
+            // Clean 1-2-5 integer steps (0/10/20/30) keep the count axis readable.
+            let step = super::charts::count_step(max_y, 4.);
+            (0., (max_y / step).ceil().max(1.) * step)
         } else if kind == Kind::Lanes {
             (-0.5, view.series.len().max(1) as f64 - 0.5)
         } else {
@@ -425,10 +426,11 @@ pub(super) fn chart(view: &ChartView) -> Chart {
     Chart {
         id: view.id.clone(),
         title: view.title.clone(),
-        x_label: if kind == Kind::Stacked && view.x_unit.is_empty() {
-            "observations".into()
-        } else {
-            view.x_unit.clone()
+        x_label: match view.x_unit.as_str() {
+            "" if kind == Kind::Stacked => "observations".into(),
+            "m" => "Distance (m)".into(),
+            "s" => "Recording time (s)".into(),
+            unit => unit.into(),
         },
         y_label: if view.y_definition.unit.is_empty() {
             view.y_definition.label.clone()
@@ -474,7 +476,6 @@ impl Pulsar {
         };
         let sections = super::sections::for_tab(index);
         let filtered;
-        let mut flow_selector = None;
         let tab = if sections.is_empty() {
             tab
         } else {
@@ -501,11 +502,7 @@ impl Pulsar {
                         })),
                 );
             }
-            if index == 3 {
-                flow_selector = Some(strip);
-            } else {
-                body = body.child(strip);
-            }
+            body = body.child(strip);
             filtered = super::sections::filter(tab, sections, selected);
             &filtered
         };
@@ -526,6 +523,7 @@ impl Pulsar {
         };
         let summary = index == 0 && self.detail_request.is_some();
         let mut summary_disclosures = div().flex().flex_wrap().gap(px(4.));
+        let mut notes = div().flex().flex_col().gap(px(12.));
         let accuracy = index == 1 && self.sections[1] == 1;
         let dominance = index == 3 && self.sections[3] == 2;
         let primary_dominance = |k: &str| {
@@ -572,7 +570,7 @@ impl Pulsar {
                 )
             } else if self.sections[3] == 3 {
                 format!(
-                    "{} of active combat was recorded; {} lacks enough evidence for the dominance model.",
+                    "{} of active combat was recorded; {} of it had too little evidence to tell who was ahead.",
                     metric("combatActiveSeconds"),
                     metric("dominanceInsufficientSeconds")
                 )
@@ -586,6 +584,16 @@ impl Pulsar {
             };
             body = body.child(ui::muted(t, line));
         }
+        let outcomes = (index == 1 && matches!(self.sections[1], 0 | 1))
+            .then(|| super::analysis_ui::outcome_counts(tab))
+            .flatten();
+        if let Some(o) = outcomes {
+            body = body.child(
+                ui::muted(t, super::analysis_ui::accuracy_insight(&tab.metrics, o))
+                    .font_weight(gpui::FontWeight::MEDIUM),
+            );
+        }
+        let pooled_flow = index == 3 && self.detail_request.is_none();
         if !main.is_empty() && !(index == 0 && self.detail_request.is_none()) {
             if summary {
                 if let Some(insight) = super::presentation::summary_insight(
@@ -600,7 +608,7 @@ impl Pulsar {
                     body = body.child(ui::muted(t, insight.clone()));
                 }
             }
-            body = body.child(self.metrics_panel(
+            let mut panel = self.metrics_panel(
                 t,
                 if summary {
                     "At a glance"
@@ -611,53 +619,66 @@ impl Pulsar {
                 },
                 &main,
                 cx,
-            ));
-        }
-        if index == 1 && matches!(self.sections[1], 0 | 1) {
-            let eligible = tab.metrics.get("accuracyDenominator").and_then(|v| v.value);
-            let observed = tab
-                .charts
-                .iter()
-                .find(|c| c.id == "attack_outcomes")
-                .map(|c| {
-                    c.series
-                        .iter()
-                        .flat_map(|s| &s.points)
-                        .filter_map(|p| p.y)
-                        .sum::<f64>()
-                });
-            if let (Some(eligible), Some(observed)) = (eligible, observed) {
-                body = body.child(ui::caption(t, format!("{eligible:.0} eligible = {observed:.0} observed - {:.0} confirmed shield blocks. Accuracy excludes confirmed blocks.", (observed - eligible).max(0.))));
+            );
+            if pooled_flow && matches!(self.sections[3], 0 | 1) {
+                if let Some(c) = tab
+                    .charts
+                    .iter()
+                    .find(|c| c.id == "pooled_combo_distribution")
+                {
+                    let mut histogram = chart(c);
+                    histogram.title = format!(
+                        "Your combo lengths, pooled across {}",
+                        super::presentation::count(
+                            self.analysis
+                                .as_ref()
+                                .map(|a| a.coverage.timeline_recordings)
+                                .unwrap_or(0),
+                            "recording"
+                        )
+                    );
+                    histogram.x_label = "Hits per combo".into();
+                    panel = panel.child(div().h(px(1.)).bg(t.border_subtle)).child(
+                        histogram.render_options(
+                            t,
+                            None,
+                            super::charts::Options {
+                                preferences: self.preferences,
+                                embedded: true,
+                                ..Default::default()
+                            },
+                        ),
+                    );
+                }
             }
-        }
-        if index == 3 && self.detail_request.is_none() {
-            body = body.child(self.focus_navigation(t, cx));
-            if let Some(c) = tab
-                .charts
-                .iter()
-                .find(|c| c.id == "pooled_combo_distribution")
-            {
-                body = body.child(chart(c).render_options(
-                    t,
-                    None,
-                    super::charts::Options {
-                        preferences: self.preferences,
-                        ..Default::default()
-                    },
-                ));
-            }
-        }
-        if let Some(strip) = flow_selector {
-            body = body.child(strip);
+            body = body.child(panel);
         }
         // Accuracy starts with the outcome breakdown; counters remain inspectable.
         if index == 1 && matches!(self.sections[1], 0 | 1) {
+            let eligible = tab.metrics.get("accuracyDenominator").and_then(|v| v.value);
             for c in tab.charts.iter().filter(|c| c.id == "attack_outcomes") {
-                body = body.child(chart(c).render(t));
+                let observed = c
+                    .series
+                    .iter()
+                    .flat_map(|s| &s.points)
+                    .filter_map(|p| p.y)
+                    .sum::<f64>();
+                body = body.child(chart(c).render(t).when_some(eligible, |d, eligible| {
+                    d.child(
+                        ui::caption(
+                            t,
+                            format!(
+                                "Eligible attempts: {observed:.0} recorded \u{2212} {:.0} confirmed shield blocks = {eligible:.0}. Blocked attacks do not count against your accuracy.",
+                                (observed - eligible).max(0.)
+                            ),
+                        )
+                        .text_color(t.muted_foreground.opacity(0.8)),
+                    )
+                }));
             }
         }
         if index == 2 {
-            body = body.child(self.compositions(t, tab, index));
+            body = body.child(self.compositions(t, tab, index, cx));
         }
         let diagnostics: BTreeMap<_, _> = tab
             .metrics
@@ -682,17 +703,17 @@ impl Pulsar {
                 if summary {
                     "Supporting measurements"
                 } else if dominance {
-                    "Model measurements"
+                    "Dominance details"
                 } else {
                     "How this is counted"
                 },
-                div().flex().flex_col().gap(px(8.)).when(index == 1 && matches!(self.sections[1], 0 | 1), |d| d.child(ui::caption(t, "Accuracy counts confirmed hits out of eligible attempts. Confirmed shield blocks are excluded; uncertain attempts remain in the denominator. Zero-count outcomes stay in the legend and have no bar width."))).child(self.metrics_panel(t, "Counting details", &diagnostics, cx)),
+                div().flex().flex_col().gap(px(8.)).when(index == 1 && matches!(self.sections[1], 0 | 1), |d| d.child(ui::caption(t, "Accuracy counts confirmed hits out of eligible attempts. Attacks a shield confirmed it blocked are left out; attacks without a confirmed result still count. Outcomes with zero attacks stay in the key."))).child(self.metrics_panel(t, "Counting details", &diagnostics, cx)),
                 cx,
             );
             if summary {
                 summary_disclosures = summary_disclosures.child(control);
             } else {
-                body = body.child(control);
+                notes = notes.child(control);
             }
         }
         let mut context = div().flex().flex_col().gap(px(12.));
@@ -705,7 +726,11 @@ impl Pulsar {
         if !tab.notices.is_empty() || !tab.interpretations.is_empty() {
             let control = self.disclosure(
                 t,
-                "interpretation",
+                if self.detail_request.is_some() {
+                    "fight-interpretation"
+                } else {
+                    "interpretation"
+                },
                 "Interpretation and limitations",
                 context,
                 cx,
@@ -713,26 +738,36 @@ impl Pulsar {
             if summary {
                 summary_disclosures = summary_disclosures.child(control);
             } else {
-                body = body.child(control);
+                notes = notes.child(control);
             }
         }
         if summary {
             body = body.child(summary_disclosures);
+        }
+        let flow_detail = index == 3 && self.detail_request.is_some();
+        if !flow_detail {
+            body = body.child(notes);
+            notes = div();
         }
         if (self.detail_request.is_some() && (1..=3).contains(&index))
             || (self.detail_request.is_none()
                 && (index == 3 || (index == 1 && self.sections[1] == 3)))
         {
             if self.detail_request.is_none() {
-                if index != 3 {
-                    body = body.child(self.focus_navigation(t, cx));
-                }
-                body = body.child(self.focus_scopes(t, cx));
+                body = body
+                    .child(self.focus_navigation(t, cx))
+                    .child(self.focus_scopes(t, cx));
             }
-            body = body.child(self.advanced_body(t, narrow, cx));
+            body = body.child(self.advanced_body(
+                t,
+                narrow,
+                flow_detail.then(|| std::mem::replace(&mut notes, div())),
+                cx,
+            ));
         }
+        body = body.child(notes);
         if index != 2 {
-            body = body.child(self.compositions(t, tab, index));
+            body = body.child(self.compositions(t, tab, index, cx));
         }
         if self.detail_request.is_none() && self.top_tab == 0 {
             let mut selectors = div().flex().flex_wrap().gap(px(4.));
@@ -1027,8 +1062,8 @@ mod tests {
         };
         let p = chart(&view);
         assert_eq!(p.domain, (1.5, 6.5));
-        assert_eq!(p.range, (0., 36.));
-        assert_eq!((p.range.1 / 4.).fract(), 0.);
+        assert_eq!(p.range, (0., 40.));
+        assert_eq!(p.y_ticks(), [0., 10., 20., 30., 40.]);
         for s in &p.samples {
             assert!((0.09..0.91).contains(&super::super::charts::fraction(s.x, p.domain)));
         }

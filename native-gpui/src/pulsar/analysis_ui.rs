@@ -29,6 +29,120 @@ fn denominator(m: &BTreeMap<String, MetricValue>, n: &str, d: &str) -> String {
     format!("{} of {}", value(m, n), value(m, d))
 }
 
+/// Attack outcomes exactly as the outcome bar shows them.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub(super) struct Outcomes {
+    pub hit: f64,
+    pub blocked: f64,
+    /// No confirmed result, including estimated blocks.
+    pub uncertain: f64,
+    pub miss: f64,
+}
+
+pub(super) fn outcome_counts(tab: &TabView) -> Option<Outcomes> {
+    let chart = tab.charts.iter().find(|c| c.id == "attack_outcomes")?;
+    let mut o = Outcomes::default();
+    for p in chart.series.iter().flat_map(|s| &s.points) {
+        let n = p.y.filter(|v| v.is_finite()).unwrap_or(0.);
+        match p.category.as_str() {
+            "HIT" => o.hit += n,
+            "SHIELD_BLOCK" => o.blocked += n,
+            "MISS" => o.miss += n,
+            _ => o.uncertain += n,
+        }
+    }
+    Some(o)
+}
+
+/// One evidence-qualified sentence above the accuracy breakdown.
+pub(super) fn accuracy_insight(m: &BTreeMap<String, MetricValue>, o: Outcomes) -> String {
+    let eligible = o.hit + o.uncertain + o.miss;
+    let mut line = format!(
+        "{} of your eligible attacks were confirmed hits ({:.0} of {eligible:.0}).",
+        value(m, "accuracy"),
+        o.hit
+    );
+    let misses = match o.miss {
+        0. => String::new(),
+        1. => " and 1 was a likely miss".into(),
+        n => format!(" and {n:.0} were likely misses"),
+    };
+    if o.uncertain > 0. {
+        line.push_str(&format!(
+            " {:.0} had no confirmed result{misses}, so your real accuracy may be higher.",
+            o.uncertain
+        ));
+    } else if o.miss > 0. {
+        line.push_str(&format!(
+            " Every other attack was a likely miss ({:.0}).",
+            o.miss
+        ));
+    }
+    line
+}
+
+/// Compact Summary version of the outcome breakdown, linking to Offense.
+fn outcome_strip(t: &AuroraTheme, o: Outcomes, cx: &mut Context<Pulsar>) -> Div {
+    let total = (o.hit + o.blocked + o.uncertain + o.miss).max(1.);
+    let mut bar = div()
+        .flex()
+        .w_full()
+        .h(px(8.))
+        .rounded_full()
+        .overflow_hidden()
+        .bg(t.sunken);
+    for (n, color) in [
+        (o.hit, t.ring),
+        (o.blocked, t.success.opacity(0.8)),
+        (o.uncertain, t.muted_foreground.opacity(0.55)),
+        (o.miss, t.warning.opacity(0.85)),
+    ] {
+        if n > 0. {
+            bar = bar.child(
+                div()
+                    .h_full()
+                    .w(px(0.))
+                    .flex_grow((n / total) as f32)
+                    .min_w(px(3.))
+                    .bg(color),
+            );
+        }
+    }
+    ui::card(t)
+        .p(px(16.))
+        .gap(px(8.))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(px(8.))
+                .child(ui::section_header(t, "Attack outcomes", None))
+                .child(
+                    button("summary-outcomes-offense", "Full breakdown in Offense")
+                        .icon("arrow_forward")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.detail_tab = 1;
+                            this.sections[1] = 1;
+                            cx.notify();
+                        })),
+                ),
+        )
+        .child(bar)
+        .child(ui::caption(
+            t,
+            format!(
+                "{:.0} confirmed {} \u{b7} {:.0} blocked by a shield \u{b7} {:.0} without a confirmed result \u{b7} {:.0} likely {}",
+                o.hit,
+                if o.hit == 1. { "hit" } else { "hits" },
+                o.blocked,
+                o.uncertain,
+                o.miss,
+                if o.miss == 1. { "miss" } else { "misses" }
+            ),
+        ))
+}
+
 pub(super) fn stack(
     t: &AuroraTheme,
     id: &str,
@@ -73,7 +187,8 @@ impl Pulsar {
         content: Div,
         cx: &mut Context<Self>,
     ) -> Div {
-        let open = self.disclosures.contains(id);
+        // Per-fight explanations (ids prefixed "fight-") start open.
+        let open = self.disclosures.contains(id) != id.starts_with("fight-");
         let key = id.to_owned();
         div()
             .flex()
@@ -108,54 +223,98 @@ impl Pulsar {
             .filter(|(k, _)| matches!(k.as_str(), "accuracy" | "averageReach" | "longestCombo"))
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
-        let mut performance = self.metrics_panel(t, "Recent performance", &primary, cx);
+        let mut deltas = BTreeMap::new();
+        let mut note = "No earlier recordings in this scope to compare.".to_owned();
         let mut insight = "Review your recent fights to choose a focus.".to_owned();
+        let mut evidence = None;
         if let Some(a) = &self.analysis {
             if let Some(previous) = &a.previous_period {
-                let comparisons = ["accuracy", "averageReach", "longestCombo"]
-                    .into_iter()
-                    .filter_map(|k| {
-                        let now = tab.metrics.get(k)?;
-                        let before = previous.metrics.get(k)?;
-                        Some(format!(
-                            "{}: {}",
-                            now.definition.label,
-                            super::presentation::comparison_delta(before, now)
-                        ))
-                    })
-                    .collect::<Vec<_>>()
-                    .join("; ");
-                performance = performance.child(ui::caption(
-                    t,
+                for k in ["accuracy", "averageReach", "longestCombo"] {
+                    if let (Some(now), Some(before)) = (tab.metrics.get(k), previous.metrics.get(k))
+                    {
+                        deltas.insert(
+                            k.to_owned(),
+                            super::presentation::comparison_delta(before, now),
+                        );
+                    }
+                }
+                note = format!(
+                    "vs previous {}{}",
+                    super::presentation::count(a.previous_recordings, "recording"),
+                    if a.previous_recordings < 5 {
+                        " (small baseline)"
+                    } else {
+                        ""
+                    }
+                );
+                let outcomes = outcome_counts(&a.offense);
+                evidence = outcomes.map(|o| {
                     format!(
-                        "Last {} vs previous {} recordings{}; {comparisons}",
-                        a.coverage.recordings,
-                        a.previous_recordings,
-                        if a.previous_recordings < 5 {
-                            " (small baseline)"
+                        "{}: {:.0} likely {}, {:.0} unconfirmed",
+                        if o.uncertain > o.miss.max(1.) * 2. || a.previous_recordings < 5 {
+                            "Limited evidence"
                         } else {
-                            ""
-                        }
-                    ),
-                ));
+                            "Good evidence"
+                        },
+                        o.miss,
+                        if o.miss == 1. { "miss" } else { "misses" },
+                        o.uncertain,
+                    )
+                });
                 if let (Some(now), Some(before)) = (
                     tab.metrics.get("accuracy").and_then(|m| m.value),
                     previous.metrics.get("accuracy").and_then(|m| m.value),
                 ) {
-                    insight = if now > before { "Your confirmed-hit accuracy improved. Review the remaining misses to find your next focus." } else if now < before { "Your confirmed-hit accuracy fell. Review the misses in your recent fights." } else { "Your confirmed-hit accuracy held steady. Review recent misses for your next focus." }.into();
+                    let change = deltas
+                        .get("accuracy")
+                        .map(|d| super::presentation::delta_display(d))
+                        .unwrap_or_default();
+                    insight = match (now.partial_cmp(&before), outcomes) {
+                        (Some(std::cmp::Ordering::Less), Some(o)) if o.uncertain > o.miss => {
+                            format!(
+                                "Accuracy {change}, mostly from attacks with no recorded result, not clear misses."
+                            )
+                        }
+                        (Some(std::cmp::Ordering::Less), _) => {
+                            format!("Accuracy {change}. Review the misses in your weakest fight.")
+                        }
+                        (Some(std::cmp::Ordering::Greater), _) => {
+                            format!(
+                                "Accuracy {change}. Your weakest fight shows what is left to fix."
+                            )
+                        }
+                        _ => "Accuracy held steady. Your weakest fight shows where to focus next."
+                            .to_owned(),
+                    };
                 }
-            } else {
-                performance = performance.child(ui::caption(
-                    t,
-                    "No earlier recordings in this scope to compare.",
-                ));
             }
         }
-        let mut body = div()
-            .flex()
-            .flex_col()
-            .gap(px(12.))
-            .child(performance)
+        // The action opens the fight that drives the recommendation.
+        let target = self
+            .analysis
+            .as_ref()
+            .map(|a| a.coverage.recordings)
+            .and_then(|n| {
+                self.library
+                    .rows
+                    .iter()
+                    .take(n)
+                    .filter_map(|r| {
+                        r.metrics
+                            .get("accuracy")
+                            .and_then(|m| m.value)
+                            .filter(|v| v.is_finite())
+                            .map(|v| (v, r))
+                    })
+                    .min_by(|a, b| a.0.total_cmp(&b.0))
+                    .map(|(_, r)| (r.key.clone(), r.start_epoch_millis))
+            });
+        let evidence = Some(match evidence {
+            Some(e) => format!("{note} \u{b7} {e}"),
+            None => note,
+        });
+        let performance = self
+            .metrics_panel_with(t, "Recent performance", &primary, &deltas, cx)
             .child(
                 div()
                     .border_l_2()
@@ -166,22 +325,37 @@ impl Pulsar {
                     .items_center()
                     .gap(px(8.))
                     .child(
-                        ui::muted(t, insight)
+                        div()
                             .flex_1()
                             .min_w(px(220.))
-                            .font_weight(gpui::FontWeight::MEDIUM),
+                            .flex()
+                            .flex_col()
+                            .gap(px(2.))
+                            .child(ui::muted(t, insight).font_weight(gpui::FontWeight::MEDIUM))
+                            .when_some(evidence, |d, e| d.child(ui::caption(t, e))),
                     )
-                    .child(
-                        button("overview-review-misses", "Review recent misses")
+                    .when_some(target, |d, (key, start)| {
+                        d.child(
+                            button(
+                                "overview-review-misses",
+                                format!(
+                                    "Open weakest fight \u{b7} {}",
+                                    super::presentation::short_stamp(&super::page::utc_time(start))
+                                ),
+                            )
                             .icon("arrow_forward")
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.top_tab = 1;
-                                this.sections[1] = 1;
-                                this.load_sections();
-                                cx.notify();
-                            })),
-                    ),
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| {
+                                    this.open_detail(key.clone(), cx);
+                                    this.detail_tab = 1;
+                                    this.sections[1] = 1;
+                                    cx.notify();
+                                },
+                            )),
+                        )
+                    }),
             );
+        let mut body = div().flex().flex_col().gap(px(12.)).child(performance);
         let key = ["accuracy", "reach", "critical", "interval"][self.trend_metric];
         let mut selectors = div().flex().flex_wrap().gap(px(2.));
         for (i, label) in ["Accuracy", "Reach", "Critical hits", "Hit interval"]
@@ -203,7 +377,23 @@ impl Pulsar {
             .find(|c| c.id.contains("trend") && c.id.to_lowercase().contains(key))
         {
             let mut chart = tabs::chart(c);
-            chart.x_label = "Recording date (UTC)".into();
+            let years = c
+                .series
+                .iter()
+                .flat_map(|s| &s.points)
+                .filter_map(|p| {
+                    self.library
+                        .rows
+                        .iter()
+                        .find(|f| Some(&f.key) == p.key.as_ref())
+                })
+                .map(|f| super::page::utc_time(f.start_epoch_millis)[..4].to_owned())
+                .collect::<std::collections::BTreeSet<_>>();
+            chart.x_label = match (years.first(), years.last()) {
+                (Some(a), Some(b)) if a != b => format!("Recording time (UTC, {a}\u{2013}{b})"),
+                (Some(a), _) => format!("Recording time (UTC, {a})"),
+                _ => "Recording time (UTC)".into(),
+            };
             chart.note = "\u{25cf} Measured   \u{25cb} Genuine zero   \u{2014} Unavailable. Select a point to open its fight.".into();
             let points = c.series.iter().flat_map(|s| &s.points).collect::<Vec<_>>();
             let keys = points.iter().map(|p| p.key.clone()).collect::<Vec<_>>();
@@ -251,6 +441,18 @@ impl Pulsar {
         m: &BTreeMap<String, MetricValue>,
         cx: &mut Context<Self>,
     ) -> Div {
+        self.metrics_panel_with(t, title, m, &BTreeMap::new(), cx)
+    }
+
+    /// `deltas` adds a change chip under each headline value.
+    pub(super) fn metrics_panel_with(
+        &self,
+        t: &AuroraTheme,
+        title: &str,
+        m: &BTreeMap<String, MetricValue>,
+        deltas: &BTreeMap<String, String>,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let five_columns = m.len() == 5 && self.width >= 950.;
         let mut group = div()
             .flex()
@@ -295,14 +497,15 @@ impl Pulsar {
                                 ui::caption(
                                     t,
                                     match key.as_str() {
+                                        "accuracyDenominator" => "Eligible attempts".into(),
                                         "incoming" => "Incoming hits".into(),
                                         "incomingCritical" | "criticalOnLocal"
                                         | "opponentCrits" => "Incoming crits".into(),
-                                        "thirdPartyIncoming" => "Third-party hits".into(),
-                                        "unattributedIncoming" => "Unattributed hits".into(),
-                                        "unexplainedHealthDrops" => "Health-drop gaps".into(),
+                                        "thirdPartyIncoming" => "Other attackers".into(),
+                                        "unattributedIncoming" => "Unknown source".into(),
+                                        "unexplainedHealthDrops" => "Unexplained damage".into(),
                                         "emptyMisses" => "Aimed swings without a hit".into(),
-                                        "eligibleMisses" => "Canonical miss classifications".into(),
+                                        "eligibleMisses" => "Counted misses".into(),
                                         _ => display_label(&metric.definition.label),
                                     },
                                 )
@@ -346,7 +549,16 @@ impl Pulsar {
                                     tabs::metric_value(metric)
                                 },
                             ),
-                    ),
+                    )
+                    .when_some(deltas.get(&metric.definition.key), |d, delta| {
+                        let change = super::presentation::delta_display(delta);
+                        let tone = match (metric.definition.key.as_str(), delta.chars().next()) {
+                            ("accuracy", Some('+')) => ui::Tone::Success,
+                            ("accuracy", Some('-')) => ui::Tone::Danger,
+                            _ => ui::Tone::Neutral,
+                        };
+                        d.child(div().flex().mt(px(4.)).child(ui::badge(t, change, tone)))
+                    }),
             );
         }
 
@@ -362,7 +574,7 @@ impl Pulsar {
             panel = panel.child(
                 ui::caption(
                     t,
-                    "Health-drop attribution was not recorded; the dash means unavailable.",
+                    "Health loss and knockback may not have been recorded; a dash means unavailable.",
                 )
                 .w_full(),
             );
@@ -376,7 +588,7 @@ impl Pulsar {
                 ("averageReach", "Reach: distance at confirmed contact."),
                 (
                     "longestCombo",
-                    "Combo: consecutive hits before retaliation or a break.",
+                    "Combo: hits in a row before your opponent hits back or the fight pauses.",
                 ),
             ]
             .into_iter()
@@ -476,7 +688,7 @@ impl Pulsar {
             (
                 "Confirmed hits",
                 value(m, "hits"),
-                format!("{} attempts | confirmed evidence", value(m, "attempts")),
+                format!("{} attack attempts", value(m, "attempts")),
             ),
             (
                 "Average eligible reach",
@@ -506,7 +718,7 @@ impl Pulsar {
                     value(m, "averageCombo"),
                     value(m, "longestCombo")
                 ),
-                format!("{} multi-hit streaks", value(m, "comboCount")),
+                format!("{} combos of 2+ hits", value(m, "comboCount")),
             ),
             (
                 "Dominance shares",
@@ -516,7 +728,7 @@ impl Pulsar {
                     value(m, "opponentDominanceShare")
                 ),
                 format!(
-                    "{} observed active time; inactive/incomplete excluded",
+                    "{} of active combat; pauses and unclear periods left out",
                     value(m, "dominanceActiveSeconds")
                 ),
             ),
@@ -540,7 +752,7 @@ impl Pulsar {
                     self.library.total
                 ),
                 format!(
-                    "{} timelines | {} with context",
+                    "{} with a full timeline | {} with shield and health context",
                     self.analysis
                         .as_ref()
                         .map(|a| a.coverage.timeline_recordings)
@@ -623,7 +835,7 @@ impl Pulsar {
                     ),
                 ),
                 (
-                    "Local dominance",
+                    "Your advantage share",
                     format!(
                         "{} · {}",
                         value(m, "dominanceShare"),
@@ -718,7 +930,13 @@ impl Pulsar {
         group
     }
 
-    pub(super) fn compositions(&self, t: &AuroraTheme, tab: &TabView, index: usize) -> Div {
+    pub(super) fn compositions(
+        &self,
+        t: &AuroraTheme,
+        tab: &TabView,
+        index: usize,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let mut body = div().flex().flex_col().gap(px(24.));
         let section = if index < 4 { self.sections[index] } else { 0 };
         let get = |key: &str| {
@@ -735,11 +953,13 @@ impl Pulsar {
                 })
                 .and_then(|m| m.value)
         };
+        // Summary keeps a compact strip; the full breakdown lives on Offense.
         if index == 0 && self.detail_request.is_some() {
-            if let Some(d) = self.active_detail() {
-                if let Some(c) = d.offense.charts.iter().find(|c| c.id == "attack_outcomes") {
-                    body = body.child(tabs::chart(c).render(t));
-                }
+            if let Some(o) = self
+                .active_detail()
+                .and_then(|d| outcome_counts(&d.offense))
+            {
+                body = body.child(outcome_strip(t, o, cx));
             }
         }
 
@@ -760,11 +980,21 @@ impl Pulsar {
                     (k, count)
                 })
                 .collect();
-            body=body.child(stack(t,"aim-grade-distribution","Aim grade distribution",entries,"Confirmed measured contacts | grades use the recording's frozen ideal region. Unavailable grades remain unavailable."));
+            body=body.child(stack(t,"aim-grade-distribution","Aim grade distribution",entries,"Confirmed hits with a measured contact point, graded by where they landed on the hitbox."));
         }
 
         if index == 2 && matches!(section, 0 | 1) {
-            body=body.child(stack(t,"incoming-attribution","Incoming attribution",vec![("Tracked opponent",get("incoming")),("Unattributed",get("unattributedIncoming")),("Third party",get("thirdPartyIncoming"))],"Counts are observed incoming events; third-party and unknown damage do not extend opponent combos."));
+            body = body.child(stack(
+                t,
+                "incoming-attribution",
+                "Who hit you",
+                vec![
+                    ("Your opponent", get("incoming")),
+                    ("Unknown source", get("unattributedIncoming")),
+                    ("Other attackers", get("thirdPartyIncoming")),
+                ],
+                "Hits on you, by who the server said caused them.",
+            ));
         }
 
         if index == 2 && matches!(section, 0 | 2) {
@@ -774,7 +1004,7 @@ impl Pulsar {
             body=body.child(stack(t,"shield-offense","Attack outcomes and shield interactions",vec![
                 ("Confirmed hit",get("hits")),("Block only",block_only),("Shield disable",get("shieldDisables")),
                 ("Estimated block",get("estimatedShieldBlocks")),("Unknown result",get("uncertain").zip(get("estimatedShieldBlocks")).map(|(u,e)|(u-e).max(0.))),
-                ("Empty swing",get("emptyMisses"))],"Block only excludes disables, so a disable is counted once. Estimated blocks remain uncertain."));
+                ("Empty swing",get("emptyMisses"))],"A disable is counted once, not also as a block. Estimated blocks are still uncertain."));
             body = body.child(stack(
                 t,
                 "shield-block-disable",
@@ -783,7 +1013,7 @@ impl Pulsar {
                     ("Block only", block_only),
                     ("Disable", get("shieldDisables")),
                 ],
-                "Block only = confirmed blocks minus disables; estimated blocks are excluded.",
+                "Block only means a confirmed block that did not disable the shield. Estimated blocks are not included.",
             ));
             body = body.child(stack(
                 t,
@@ -793,7 +1023,7 @@ impl Pulsar {
                     ("Confirmed blocks", get("localShieldBlocks")),
                     ("Disabled", get("localShieldDisabled")),
                 ],
-                "Subject is your shield. No prevented-damage estimate is inferred.",
+                "Blocks made with your shield. Damage prevented is not estimated.",
             ));
         }
 
@@ -816,92 +1046,63 @@ impl Pulsar {
             return div();
         }
         let request = self.scope_request();
-        let scope_label = request
+        let whole = request
             .as_ref()
-            .and_then(|r| {
-                r.exchange_id
-                    .as_ref()
-                    .and_then(|id| {
-                        detail.exchanges.iter().position(|e| &e.id == id).map(|i| {
-                            format!("Exchange {} with {}", i + 1, detail.exchanges[i].opponent)
-                        })
-                    })
-                    .or_else(|| {
-                        r.participant.as_ref().and_then(|id| {
-                            detail
-                                .participants
-                                .iter()
-                                .find(|p| &p.id == id)
-                                .map(|p| format!("{}; first exchange", p.label))
-                        })
-                    })
-            })
+            .is_some_and(|r| r.participant.is_none() && r.exchange_id.is_none());
+        let selected = (!whole)
+            .then(|| detail.selected_exchange.as_ref())
+            .flatten();
+        let name = |e: &ExchangeScope| {
+            detail
+                .participants
+                .iter()
+                .find(|p| e.participant_id.as_ref() == Some(&p.id))
+                .map(|p| p.label.clone())
+                .unwrap_or_else(|| e.opponent.clone())
+        };
+        let scope_label = selected
+            .and_then(|id| detail.exchanges.iter().position(|e| &e.id == id))
+            .map(|i| format!("{}, exchange {}", name(&detail.exchanges[i]), i + 1))
             .unwrap_or_else(|| "Entire manual session".into());
-        let mut list =
-            ui::list_card(t).child(
-                ui::row(t, false)
-                    .py(px(6.))
-                    .flex_wrap()
-                    .child(ui::caption(t, format!("Scope: {scope_label}")).flex_1())
-                    .child(
-                        button("scope-entire-session", "Entire session")
-                            .variant(ButtonVariant::Default)
-                            .selected(request.as_ref().is_some_and(|r| {
-                                r.participant.is_none() && r.exchange_id.is_none()
-                            }))
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if let Some(mut r) = this.scope_request() {
-                                    r.participant = None;
-                                    r.exchange_id = None;
-                                    this.select_scope(r, cx);
-                                }
-                            })),
-                    ),
-            );
-        for (i, participant) in detail.participants.iter().enumerate() {
-            let id = participant.id.clone();
-            list = list.child(
-                ui::row(t, false)
-                    .py(px(6.))
-                    .flex_wrap()
-                    .child(ui::caption(t, "Participant").w(px(80.)))
-                    .child(
-                        button(
-                            ("scope-participant", i),
-                            format!("{}: first exchange", participant.label),
-                        )
+        let mut list = ui::list_card(t).child(
+            ui::row(t, false)
+                .py(px(6.))
+                .flex_wrap()
+                .child(ui::caption(t, format!("Showing: {scope_label}")).flex_1())
+                .child(
+                    button("scope-entire-session", "Entire session")
                         .variant(ButtonVariant::Default)
-                        .icon("person")
-                        .selected(request.as_ref().is_some_and(|r| {
-                            r.participant.as_ref() == Some(&id) && r.exchange_id.is_none()
-                        }))
-                        .on_click(cx.listener(move |this, _, _, cx| {
+                        .selected(whole)
+                        .on_click(cx.listener(|this, _, _, cx| {
                             if let Some(mut r) = this.scope_request() {
-                                r.participant = Some(id.clone());
+                                r.participant = None;
                                 r.exchange_id = None;
                                 this.select_scope(r, cx);
                             }
                         })),
-                    ),
-            );
-            for (j, exchange) in detail
-                .exchanges
-                .iter()
-                .enumerate()
-                .filter(|(_, e)| e.participant_id.as_ref() == Some(&participant.id))
-            {
-                let id = exchange.id.clone();
-                let (label, tone) = super::presentation::resolution(&exchange.resolution);
-                list = list.child(
-                    ui::row(t, false)
-                        .py(px(4.))
-                        .pl(px(32.))
-                        .flex_wrap()
-                        .child(
-                            button(("scope-exchange", j), format!("Exchange {}", j + 1))
+                ),
+        );
+        // One compact row per exchange: who, which exchange, how long, result.
+        let count = detail.exchanges.len();
+        for (j, exchange) in detail.exchanges.iter().enumerate() {
+            let id = exchange.id.clone();
+            let chosen = selected == Some(&exchange.id);
+            let (label, tone) = super::presentation::resolution(&exchange.resolution);
+            list = list.child(
+                ui::row(t, j + 1 == count)
+                    .py(px(4.))
+                    .when(chosen, |d| d.bg(t.accent_soft))
+                    .child(
+                        div().w(px(220.)).flex_shrink_0().flex().child(
+                            button(("scope-exchange", j), name(exchange))
                                 .variant(ButtonVariant::Default)
-                                .icon("subdirectory_arrow_right")
-                                .selected(detail.selected_exchange.as_ref() == Some(&id))
+                                .icon("person")
+                                .selected(chosen)
+                                .accessibility_label(format!(
+                                    "Show exchange {} with {}",
+                                    j + 1,
+                                    name(exchange)
+                                ))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     if let Some(mut r) = this.scope_request() {
                                         r.participant = None;
@@ -909,40 +1110,23 @@ impl Pulsar {
                                         this.select_scope(r, cx);
                                     }
                                 })),
-                        )
-                        .child(ui::caption(
+                        ),
+                    )
+                    .child(ui::caption(t, format!("Exchange {}", j + 1)).w(px(96.)))
+                    .child(
+                        ui::numeric(ui::caption(
                             t,
                             super::page::duration_text(exchange.duration_nanos),
                         ))
-                        .child(ui::badge(t, label.to_owned(), tone)),
-                );
-            }
-        }
-        // Older sources can omit participant ids; keep those exchanges selectable.
-        for (j, exchange) in detail.exchanges.iter().enumerate().filter(|(_, e)| {
-            !detail
-                .participants
-                .iter()
-                .any(|p| e.participant_id.as_ref() == Some(&p.id))
-        }) {
-            let id = exchange.id.clone();
-            list = list.child(
-                ui::row(t, false).py(px(4.)).child(
-                    button(
-                        ("scope-exchange", j),
-                        format!("Exchange {} with {}", j + 1, exchange.opponent),
+                        .w(px(64.)),
                     )
-                    .variant(ButtonVariant::Default)
-                    .icon("subdirectory_arrow_right")
-                    .selected(detail.selected_exchange.as_ref() == Some(&id))
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        if let Some(mut r) = this.scope_request() {
-                            r.participant = None;
-                            r.exchange_id = Some(id.clone());
-                            this.select_scope(r, cx);
-                        }
-                    })),
-                ),
+                    .child(
+                        div()
+                            .pl(px(12.))
+                            .child(ui::badge(t, label.to_owned(), tone)),
+                    )
+                    .child(div().flex_1())
+                    .when(chosen, |d| d.child(ui::caption(t, "Selected"))),
             );
         }
 
@@ -988,4 +1172,30 @@ pub(super) fn explanation(
         .gap(px(4.))
         .child(ui::section_header(t, title, None))
         .when_some(detail, |d, text| d.child(ui::caption(t, text)))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accuracy_insight_qualifies_unconfirmed_attacks() {
+        let mut accuracy = MetricValue::default();
+        accuracy.value = Some(77.5);
+        accuracy.definition.unit = "%".into();
+        let m = [("accuracy".to_owned(), accuracy)].into_iter().collect();
+        let o = Outcomes {
+            hit: 317.,
+            blocked: 8.,
+            uncertain: 90.,
+            miss: 2.,
+        };
+        let line = accuracy_insight(&m, o);
+        assert!(
+            line.starts_with("77.5% of your eligible attacks were confirmed hits (317 of 409).")
+        );
+        assert!(line.contains("90 had no confirmed result and 2 were likely misses"));
+        let line = accuracy_insight(&m, Outcomes { miss: 0., ..o });
+        assert!(line.contains("90 had no confirmed result, so"), "{line}");
+    }
 }

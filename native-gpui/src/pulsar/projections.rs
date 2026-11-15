@@ -82,15 +82,18 @@ pub(super) fn face_axes(face: &str, x: f64, y: f64, z: f64) -> (f64, f64) {
 }
 
 impl Pulsar {
+    /// `notes` (interpretation and counting disclosures) follow the first key
+    /// visual so the timeline stays in the first viewport.
     pub(super) fn advanced_body(
         &self,
         t: &AuroraTheme,
         narrow: bool,
+        mut notes: Option<Div>,
         cx: &mut Context<Self>,
     ) -> Div {
         let mut body = div().flex().flex_col().gap(px(24.)).min_w(px(0.));
         let Some(detail) = self.active_detail() else {
-            return body;
+            return body.children(notes);
         };
         let d = &detail.derived;
         let tab = if self.detail_request.is_some() {
@@ -187,7 +190,7 @@ impl Pulsar {
                         samples,
                         (1.925, 4.075),
                         (0., peak),
-                        "0.05 m bins · target band and line use this recording’s frozen policy. Creative distances are unavailable for survival comparison.",
+                        "0.05 m bins · the shaded band and line are the reach target saved with this fight. Creative-mode distances are not compared with survival.",
                     );
                     histogram.band = target.zip(tolerance).map(|(a, b)| (a - b, a + b));
                     histogram.target = target;
@@ -219,14 +222,14 @@ impl Pulsar {
                                 num(h, "t")?,
                                 num(h, "estimatedReach"),
                                 format!(
-                                    "{:.2} s · estimated no-hit distance, not a confirmed hit",
+                                    "{:.2} s · estimated distance of a swing that did not hit",
                                     num(h, "t")?
                                 ),
                                 Shape::Hollow,
                             ))
                         }))
                         .collect();
-                    body=body.child(plot("detail-reach-strip","Individual contacts","Recording time (s)","Distance (m)",Kind::Scatter,points,(0.,self.analysis_duration().max(1.)),(0.,nice_peak(reaches.iter().copied().fold(4.,f64::max))),"■ Confirmed hit · ◇ outline Estimated no-hit contact. Geometry is observed, not a server verdict.").render_options(t,None,super::charts::Options{preferences:self.preferences,..Default::default()}));
+                    body=body.child(plot("detail-reach-strip","Individual contacts","Recording time (s)","Distance (m)",Kind::Scatter,points,(0.,self.analysis_duration().max(1.)),(0.,nice_peak(reaches.iter().copied().fold(4.,f64::max))),"■ Confirmed hit · ○ Estimated distance of a swing that did not hit. Measured by your game, not the server.").render_options(t,None,super::charts::Options{preferences:self.preferences,..Default::default()}));
                 }
                 if section == 0 || section == 3 {
                     body = body.child(self.aim_view(t, d, cx));
@@ -306,13 +309,13 @@ impl Pulsar {
                     let mut timing = plot(
                         "detail-timing",
                         "Weapon timing",
-                        "Attempt ordinal",
-                        "Interval − expected cooldown (ticks)",
+                        "Attack number",
+                        "Time between attacks minus weapon cooldown (ticks)",
                         Kind::Scatter,
                         points,
                         (0., samples.len().max(1) as f64 + 1.),
                         (-range, range),
-                        "■ Hit · ◆ Shield · ◇ outline No hit · — Opener/reset/unavailable. Mechanical cooldown matching is not tactical timing.",
+                        "■ Hit · ◆ Shield · ○ No hit · — first swing or reset. Matching the cooldown shows readiness, not tactical timing.",
                     );
                     timing.target = Some(0.);
                     timing.band = detail
@@ -333,7 +336,7 @@ impl Pulsar {
                             ..Default::default()
                         },
                     ));
-                    let mut list=ui::list_card(t).child(ui::row(t,false).child(ui::section_header(t,"Latest timing samples",Some("Newest 50 · values are frozen per weapon; opener intervals remain unavailable.".into()))));
+                    let mut list=ui::list_card(t).child(ui::row(t,false).child(ui::section_header(t,"Latest timing samples",Some("Newest 50 · cooldowns are those of each weapon; a first swing has no interval.".into()))));
                     let expanded = self.table_expanded.contains("timing_latest");
                     let shown = if expanded { 50 } else { 8 };
                     for (i, s) in samples
@@ -406,12 +409,12 @@ impl Pulsar {
                         "detail-jump-offset",
                         "Jump timing offsets",
                         "Incoming hit time (s)",
-                        "Jump − incoming (client ticks)",
+                        "Jump time minus hit time (game ticks)",
                         Kind::Scatter,
                         points,
                         (start, start + span),
                         (-10., 10.),
-                        "◆ Same tick · ■ Other measured offset. Candidate timing does not establish knockback reduction. Display clamps to ±10 ticks; hover gives the exact offset.",
+                        "◆ Same tick · ■ Before or after the hit. A well-timed jump does not prove it reduced knockback. Offsets beyond 10 ticks are drawn at the edge; hover for the exact value.",
                     );
                     jump.samples.retain(|s| s.x >= start && s.x <= start + span);
                     jump.target = Some(0.);
@@ -454,7 +457,7 @@ impl Pulsar {
                             })
                             .map(|b| (b.start, 0., b.end, 1.))
                             .collect();
-                        timeline.note.push_str(" Lines pair incoming ticks with actual jump ticks; signed offsets and ideal/candidate grades are shown above. Span and start select the visible client-tick window.");
+                        timeline.note.push_str(" Lines join each hit on you to the nearest jump. Span and Start choose the visible part of the fight.");
                         body = body.child(timeline.render_options(
                             t,
                             None,
@@ -468,7 +471,7 @@ impl Pulsar {
                 }
                 if section == 0 || section == 1 || section == 4 {
                     let incoming = rows(d, "incomingDetail");
-                    let mut list=ui::list_card(t).child(ui::row(t,false).child(ui::section_header(t,"Incoming evidence",Some("Observed health loss and velocity are nullable. Other-entity damage is separate from opponent retaliation.".into()))));
+                    let mut list=ui::list_card(t).child(ui::row(t,false).child(ui::section_header(t,"Incoming evidence",Some("Health loss and knockback may not have been recorded for every hit. Damage from other attackers is shown separately and does not count as your opponent hitting back.".into()))));
                     for (i, r) in incoming.iter().enumerate() {
                         list = list.child(
                             ui::row(t, i + 1 == incoming.len()).child(ui::title_block(
@@ -497,7 +500,7 @@ impl Pulsar {
                             )),
                         );
                     }
-                    body=body.child(list).child(ui::caption(t,"Jump reset success: Not measured. Experimental speed comparison requires at least three qualified samples in each group and remains confounded by movement, armor and knockback context."));
+                    body=body.child(list).child(ui::caption(t,"Whether a jump reset worked is not measured. A speed comparison needs at least three samples in each group, and movement, armor and knockback still affect it."));
                 }
             }
             3 => {
@@ -532,13 +535,13 @@ impl Pulsar {
                     let mut combo = plot(
                         "detail-combo-lanes",
                         "Combo timeline",
-                        "Evidence time (s)",
-                        "Bottom: opponent · top: you",
+                        "Recording time (s)",
+                        "",
                         Kind::Timeline,
                         points,
                         (0., self.analysis_duration().max(1.)),
                         (-0.5, 1.5),
-                        "■ Confirmed hit · ◆ Same-tick trade, extends neither streak. Combo bands use server-evidence time.",
+                        "■ Confirmed hit · ◆ Hits traded on the same tick (extends neither combo) · shaded band: a combo. Select a band for its hits.",
                     );
                     combo.bands = streaks
                         .iter()
@@ -565,10 +568,7 @@ impl Pulsar {
                                 start,
                                 end,
                                 lane: None,
-                                label: format!(
-                                    "Combat-active interval | {}",
-                                    text(active, "endedBy")
-                                ),
+                                label: format!("Active combat | {}", text(active, "endedBy")),
                                 selected: false,
                             });
                         }
@@ -637,15 +637,17 @@ impl Pulsar {
                             });
                         },
                     );
-                    body = body.child(combo.render_options(
-                        t,
-                        None,
-                        super::charts::Options {
-                            preferences: self.preferences,
-                            activate: Some(activate),
-                            ..Default::default()
-                        },
-                    ));
+                    body = body
+                        .child(combo.render_options(
+                            t,
+                            None,
+                            super::charts::Options {
+                                preferences: self.preferences,
+                                activate: Some(activate),
+                                ..Default::default()
+                            },
+                        ))
+                        .children(notes.take());
                     let mut selectors = div().flex().flex_wrap().gap(px(4.));
                     selectors = selectors
                         .child(
@@ -736,12 +738,12 @@ impl Pulsar {
                         "detail-dominance",
                         "Encounter dominance",
                         "Recording time (s)",
-                        "Signed evidence balance (−1 to +1)",
+                        "Who was ahead (−1 opponent to +1 you)",
                         Kind::Area,
                         points,
                         (0., self.analysis_duration().max(1.)),
                         (-1., 1.),
-                        "Above zero: you · below: opponent · ±0.2 neutral band · gaps: inactive / insufficient. Incomplete periods are excluded from shares. Decay τ = 3 s; no accuracy, aim or reach input.",
+                        "Above zero: you were landing more hits · below: your opponent was · shaded band: even · gaps: no combat or too little evidence. Accuracy, aim and reach do not affect it.",
                     );
                     chart.band = Some((-0.2, 0.2));
                     chart.target = Some(0.);
@@ -795,7 +797,7 @@ impl Pulsar {
                                 ui::card(t)
                                     .flex_1()
                                     .min_w(px(210.))
-                                    .child(ui::section_header(t, "Largest <=3 s swing", None))
+                                    .child(ui::section_header(t, "Biggest swing within 3 s", None))
                                     .child(ui::muted(
                                         t,
                                         format!(
@@ -814,21 +816,23 @@ impl Pulsar {
                                     )),
                             ),
                     );
-                    body = body.child(chart.render_options(
-                        t,
-                        None,
-                        super::charts::Options {
-                            preferences: self.preferences,
-                            ..Default::default()
-                        },
-                    ));
-                    body=body.child(super::analysis_ui::explanation(t,"How dominance is measured",Some("D = (P - Q) / (P + Q + 1). Confirmed hits weigh 1; subsequent streak hits add 0.25. Blocking an opponent attack adds 0.25; an opponent shield block subtracts 0.25. Shield disables weigh +/-0.5. Evidence decays exponentially with tau = 3 s. Advantage starts at +/-0.2; mass below 0.35 is insufficient, unattributed mass at 0.5 is incomplete. Shares exclude inactive and incomplete time and pool by observed active duration. Current exchange boundaries reset the model. This heuristic measures observed evidence, not damage, skill or a server verdict; aim, reach and accuracy do not enter the model.".into())));
+                    body = body
+                        .child(chart.render_options(
+                            t,
+                            None,
+                            super::charts::Options {
+                                preferences: self.preferences,
+                                ..Default::default()
+                            },
+                        ))
+                        .children(notes.take());
+                    body=body.child(super::analysis_ui::explanation(t,"How dominance is measured",Some("Each confirmed hit counts for you or your opponent, and older hits fade over about 3 seconds. Hits within a combo, blocks and shield disables add a little extra. A side holds the advantage once the balance passes 0.2. When too few hits were recorded, or some damage came from an unknown source, that stretch is left out of the shares. Dominance describes who was landing hits; it is not damage dealt, skill or a server result.".into())));
                 }
             }
             _ => {}
         }
         let _ = (narrow, tabs::metric_value);
-        body
+        body.children(notes)
     }
     fn aim_view(&self, t: &AuroraTheme, d: &Value, cx: &mut Context<Self>) -> Div {
         let all = rows(&d["aim"], "samples");
@@ -871,12 +875,7 @@ impl Pulsar {
         let mut card = ui::card(t).child(ui::section_header(
             t,
             "Contact & aim",
-            Some(
-                format!(
-                    "Selected face: {face} · normalized face coordinates · geometry is not damage"
-                )
-                .into(),
-            ),
+            Some(format!("Selected face: {face} · position on the hitbox, not damage").into()),
         ));
         let mut filters = div().flex().flex_wrap().gap(px(4.)).child(
             button(
@@ -934,7 +933,7 @@ impl Pulsar {
                         })),
                 );
             }
-            card=card.child(cells).child(ui::caption(t,"6 columns × 12 rows · top = high contact · left to right = normalized horizontal face axis. Only measured confirmed contacts contribute."));
+            card=card.child(cells).child(ui::caption(t,"6 columns × 12 rows · top = high on the hitbox · left to right across its face. Only confirmed hits with a measured contact point count."));
         } else {
             let points = contacts
                 .iter()
@@ -965,13 +964,13 @@ impl Pulsar {
             let mut contact = plot(
                 "aim-face",
                 "Measured face contacts",
-                "Normalized horizontal face axis (0-1)",
-                "Normalized vertical face axis (0-1)",
+                "Across the hitbox face (left 0 to right 1)",
+                "Up the hitbox face (bottom 0 to top 1)",
                 Kind::Grid,
                 points,
                 (0., 1.),
                 (0., 1.),
-                "Square: confirmed hit | Circle: other contact. Select a mark or use Tab and Enter. Background uses the selected contact's frozen ideal point and physical radii; it does not reconstruct occlusion.",
+                "Square: confirmed hit | Circle: other contact. Select a mark or use Tab and Enter. The shaded rings show the ideal and good areas for the selected hit.",
             );
             let regions = selected
                 .map(|pick| {
@@ -988,7 +987,7 @@ impl Pulsar {
             if regions.is_empty() {
                 contact
                     .note
-                    .push_str(" Frozen region unavailable for this sample.");
+                    .push_str(" Aim areas unavailable for this hit.");
             }
             let seqs: Vec<_> = contacts.iter().filter_map(|s| s["seq"].as_i64()).collect();
             let entity = cx.entity().downgrade();
