@@ -99,6 +99,8 @@ minisign-verify = "0.2.5"
 # platform install lifecycle. >= 2.12 required (CVE-2026-95624 fixed there);
 # only the Rust API is used, so no frontend capability is granted.
 image-webp = "0.2.4"
+# Local screenshots: bounded PNG/JPEG decoding and thumbnail resampling.
+image = { version = "=0.25.10", default-features = false, features = ["png", "jpeg"] }
 # Real Modrinth GIF icons normalize to one static PNG in the existing isolated
 # cosmetic worker. No animation, quantizer or general image framework is needed.
 gif = { version = "0.14.2", default-features = false, features = ["std"] }
@@ -134,8 +136,11 @@ windows = { version = "0.61", default-features = false, features = [
     "std",
     "Win32_Foundation",
     "Win32_Storage_FileSystem",
+    "Win32_System_DataExchange",
+    "Win32_System_Memory",
     "Win32_System_Com",
     "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
     "Win32_UI_WindowsAndMessaging",
 ] }
 

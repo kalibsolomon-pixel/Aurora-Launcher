@@ -19,6 +19,7 @@ pub mod local_pack;
 pub(crate) mod nbt;
 pub mod saved_servers;
 pub mod saved_worlds;
+pub mod screenshots;
 
 pub use cosmetic_image::run_artwork_decoder_if_requested;
 pub mod cosmetics;

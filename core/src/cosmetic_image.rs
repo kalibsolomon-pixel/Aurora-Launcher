@@ -131,20 +131,43 @@ pub(crate) fn validate(bytes: &[u8], policy: Policy) -> Option<ValidatedPng> {
 /// Decode one bounded static PNG directly to a small RGBA thumbnail.
 /// Used for installed mod icons; no original-size image reaches the UI.
 pub(crate) fn thumbnail_rgba(bytes: &[u8], side: u32) -> Option<(u32, u32, Vec<u8>)> {
-    thumbnail_rgba_impl(bytes, side, false)
+    thumbnail_rgba_impl(bytes, side, false, ARTWORK, 64)
 }
 
 /// High-DPI content artwork. Area filtering uses premultiplied alpha so small
 /// transparent logos do not acquire dark fringes. Never enlarge source pixels.
 pub(crate) fn artwork_thumbnail_rgba(bytes: &[u8], side: u32) -> Option<(u32, u32, Vec<u8>)> {
-    thumbnail_rgba_impl(bytes, side, true)
+    thumbnail_rgba_impl(bytes, side, true, ARTWORK, 96)
 }
 
-fn thumbnail_rgba_impl(bytes: &[u8], side: u32, quality: bool) -> Option<(u32, u32, Vec<u8>)> {
+/// Local screenshots need larger input bounds than provider icons, but share
+/// the strict static PNG parser, checksum/metadata policy and alpha filtering.
+pub(crate) fn screenshot_thumbnail_rgba(bytes: &[u8], side: u32) -> Option<(u32, u32, Vec<u8>)> {
+    thumbnail_rgba_impl(
+        bytes,
+        side,
+        true,
+        Policy {
+            max_encoded_bytes: 64 * 1024 * 1024,
+            max_dimension: 16_384,
+            max_pixels: 32 * 1024 * 1024,
+            max_decoded_bytes: 256 * 1024 * 1024,
+        },
+        1920,
+    )
+}
+
+fn thumbnail_rgba_impl(
+    bytes: &[u8],
+    side: u32,
+    quality: bool,
+    policy: Policy,
+    max_side: u32,
+) -> Option<(u32, u32, Vec<u8>)> {
     if bytes.is_empty()
-        || bytes.len() > ARTWORK.max_encoded_bytes
+        || bytes.len() > policy.max_encoded_bytes
         || !bytes.starts_with(b"\x89PNG\r\n\x1a\n")
-        || !(1..=if quality { 96 } else { 64 }).contains(&side)
+        || !(1..=max_side).contains(&side)
     {
         return None;
     }
@@ -154,17 +177,17 @@ fn thumbnail_rgba_impl(bytes: &[u8], side: u32, quality: bool) -> Option<(u32, u
     options.set_ignore_iccp_chunk(true);
     let mut decoder = png::Decoder::new_with_options(Cursor::new(bytes), options);
     decoder.set_limits(png::Limits {
-        bytes: ARTWORK.max_decoded_bytes,
+        bytes: policy.max_decoded_bytes,
     });
     decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::STRIP_16);
     let mut reader = decoder.read_info().ok()?;
     let info = reader.info();
-    ARTWORK.surface_bound(info.width, info.height)?;
+    policy.surface_bound(info.width, info.height)?;
     if info.animation_control.is_some() || info.frame_control.is_some() {
         return None;
     }
     let size = reader.output_buffer_size();
-    if size > ARTWORK.max_decoded_bytes {
+    if size > policy.max_decoded_bytes {
         return None;
     }
     let mut pixels = vec![0; size];

@@ -212,6 +212,75 @@ async fn blocking<T: Send + 'static>(work: impl FnOnce() -> T + Send + 'static) 
 
 // ---------------------------------------------------------------- mirrors
 
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Screenshot {
+    pub name: String,
+    pub bytes: u64,
+    pub modified_ns: u128,
+}
+#[derive(Clone, Deserialize)]
+pub struct ScreenshotBitmap {
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
+}
+pub async fn screenshots(host: Host, instance_id: String) -> ApiResult<Vec<Screenshot>> {
+    blocking(move || {
+        convert(app::get_screenshots(
+            host,
+            request(json!({"instanceId":instance_id}))?,
+        ))
+    })
+    .await?
+}
+pub async fn screenshot_image(
+    host: Host,
+    instance_id: String,
+    screenshot: Screenshot,
+    preview: bool,
+) -> ApiResult<ScreenshotBitmap> {
+    blocking(move || {
+        match app::get_screenshot_image(
+            host,
+            request(json!({"instanceId":instance_id,"screenshot":screenshot,"preview":preview}))?,
+        ) {
+            // Pixel buffers do not go through a JSON Value per channel. Preserve
+            // the typed boundary without millions of temporary numeric values.
+            Ok(bitmap) => Ok(ScreenshotBitmap {
+                width: bitmap.width,
+                height: bitmap.height,
+                rgba: bitmap.rgba,
+            }),
+            Err(error) => convert::<(), ScreenshotBitmap>(Err(error)),
+        }
+    })
+    .await?
+}
+pub async fn screenshot_rename(
+    host: Host,
+    instance_id: String,
+    screenshot: Screenshot,
+    name: String,
+) -> ApiResult<()> {
+    blocking(move || {
+        convert(app::rename_screenshot(
+            host,
+            request(json!({"instanceId":instance_id,"screenshot":screenshot,"name":name}))?,
+        ))
+    })
+    .await?
+}
+pub async fn screenshot_action(
+    host: Host,
+    instance_id: String,
+    screenshot: Screenshot,
+    action: String,
+    confirmed: bool,
+) -> ApiResult<()> {
+    blocking(move || convert(app::screenshot_action(host, request(json!({"instanceId":instance_id,"screenshot":screenshot,"action":action,"confirmed":confirmed}))?))).await?
+}
+
 #[derive(Debug, Clone, Deserialize, Default)]
 #[serde(rename_all = "camelCase")]
 pub struct ApplicationStatus {
