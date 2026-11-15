@@ -498,7 +498,7 @@ impl Pulsar {
                                     t,
                                     match key.as_str() {
                                         "accuracyDenominator" => "Eligible attempts".into(),
-                                        "incoming" => "Incoming hits".into(),
+                                        "incoming" => "Hits from opponent".into(),
                                         "incomingCritical" | "criticalOnLocal"
                                         | "opponentCrits" => "Incoming crits".into(),
                                         "thirdPartyIncoming" => "Other attackers".into(),

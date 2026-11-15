@@ -525,13 +525,23 @@ pub fn text(input: &str) -> String {
         })
         .collect()
 }
+/// Accepts the recorded source identifier or the label core derives from it.
 pub fn result_source(source: &str) -> &str {
     match source {
         "local-melee-source" => "Confirmed by recorded melee contact",
-        "SERVER_MATCH_RESULT" => "Reported by the server at the end of the match",
-        "SERVER_ROUND_RESULT" => "Reported by the server at the end of the round",
-        "SERVER_KILL_MESSAGE" => "Supported by the server's elimination message",
-        "MANUAL" => "Captured during a manual recording",
+        "SERVER_MATCH_RESULT" | "Server match result" => {
+            "Reported by the server at the end of the match"
+        }
+        "SERVER_ROUND_RESULT" | "Server round result" => {
+            "Reported by the server at the end of the round"
+        }
+        "SERVER_KILL_MESSAGE" | "Server kill message" => {
+            "Supported by the server's elimination message"
+        }
+        "LOCAL_DEATH" | "Local death observed" => "Your death was recorded",
+        "OPPONENT_DEATH" | "Opponent death observed" => "Your opponent's death was recorded",
+        "MANUAL" | "Ended by you" => "Captured during a manual recording",
+        "LEGACY" | "Older recording" => "Saved by an older Aurora Client",
         _ => "Supported by the recording's result evidence",
     }
 }
@@ -756,6 +766,10 @@ mod tests {
     #[test]
     fn event_source_identifiers_have_player_facing_descriptions() {
         assert_eq!(event_detail("local-melee-source"), "Recorded melee contact");
+        assert_eq!(
+            result_source("Server match result"),
+            result_source("SERVER_MATCH_RESULT")
+        );
         assert_eq!(
             event_detail("synthetic melee attempt"),
             "Recorded attack attempt"

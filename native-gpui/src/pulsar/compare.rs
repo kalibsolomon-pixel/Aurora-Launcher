@@ -264,7 +264,7 @@ impl Pulsar {
                                     })
                                     .into()
                                 })
-                                .child(ui::muted(t, m.left.definition.label.clone()))
+                                .child(ui::muted(t, player_label(&m.key, &m.left.definition.label)))
                                 .when(
                                     !matches!(
                                         m.key.as_str(),
@@ -380,6 +380,17 @@ fn metric_group(key: &str) -> &'static str {
         "Offense"
     }
 }
+/// Player names for measurements whose recorded labels describe capture mechanics.
+fn player_label(key: &str, recorded: &str) -> String {
+    match key {
+        "incoming" => "Hits from your opponent",
+        "unattributedIncoming" => "Damage from unknown sources",
+        "jumpCandidates" => "Well-timed jumps",
+        "attacks" | "attempts" => "Attack attempts",
+        _ => recorded,
+    }
+    .into()
+}
 fn brief_definition(key: &str) -> &'static str {
     match key {
         "averageReach" => "Distance at confirmed contact",
@@ -387,7 +398,7 @@ fn brief_definition(key: &str) -> &'static str {
         "aimDistance" => "Distance from the ideal contact point",
         "accuracyDenominator" => "Attempts eligible for confirmed-hit accuracy",
         "dominanceShare" => "Share of measured active combat with an advantage",
-        "averageCombo" => "Confirmed hits per multi-hit streak",
+        "averageCombo" => "Average hits per combo",
         "emptyMisses" => "Aimed swings without a confirmed hit",
         "uncertain" => "Attempts with no confirmed result",
         "maxReach" => "Farthest confirmed contact",
@@ -395,7 +406,8 @@ fn brief_definition(key: &str) -> &'static str {
         "sprintRate" => "Confirmed hits while sprinting",
         "averageInterval" => "Time between eligible attacks",
         "intervalDeviation" => "Spread of attack intervals",
-        "jumpCandidates" => "Jumps paired with incoming hits",
+        "jumpCandidates" => "Jumps close in time to a hit on you",
+        "incoming" => "Hits the server credited to your opponent",
         "unattributedIncoming" => "Incoming damage with no known attacker",
         "attacksIntoShield" => "Attempts against a raised shield",
         "shieldBlocks" => "Confirmed block evidence",
@@ -404,7 +416,7 @@ fn brief_definition(key: &str) -> &'static str {
         "hitsAfterDisable" => "Confirmed hits after a shield disable",
         "localShieldBlocks" => "Confirmed blocks by your shield",
         "serverCrits" => "Server critical animation on the opponent",
-        "comboCount" => "Recorded multi-hit streaks",
+        "comboCount" => "Combos of 2+ hits",
         "comboHits" => "Confirmed hits inside combos",
         "longestOpponentCombo" => "Opponent's longest run of hits on you",
         "longestUnanswered" => "Hits before confirmed retaliation",

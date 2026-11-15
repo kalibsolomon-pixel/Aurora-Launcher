@@ -522,7 +522,11 @@ impl Pulsar {
                     .gap(px(24.))
                     .child(ui::stat(t, "Confirmed hits", count(|c| c.hits)))
                     .child(ui::stat(t, "Eligible attempts", count(|c| c.attempts)))
-                    .child(ui::stat(t, "Attributed incoming", count(|c| c.incoming)))
+                    .child(ui::stat(
+                        t,
+                        "Hits from your opponent",
+                        count(|c| c.incoming),
+                    ))
                     .child(ui::stat(t, "Current streak", count(|c| c.local_streak)))
                     .child(ui::stat(
                         t,
