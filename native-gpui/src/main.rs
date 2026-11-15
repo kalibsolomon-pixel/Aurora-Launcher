@@ -23,6 +23,7 @@ mod pack_import;
 mod settings;
 mod skin_preview;
 mod skins;
+mod skins_showcase;
 mod symbols;
 mod syncing;
 mod theme;
@@ -658,7 +659,11 @@ impl Launcher {
                 }
             } else {
                 let launcher = guarded(api::launcher_state(host.clone())).await;
-                let accounts = guarded(api::accounts(host.clone())).await;
+                let accounts = if showcase() {
+                    Ok(skins_showcase::accounts())
+                } else {
+                    guarded(api::accounts(host.clone())).await
+                };
                 let appearance = guarded(api::appearance(host)).await;
                 Snapshot {
                     status,
@@ -2543,7 +2548,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             .as_ref()
             .filter(|_| !showcase())
             .map(|d| size(d.bounds().size.width * 0.8, d.bounds().size.height * 0.8))
-            .unwrap_or_else(chrome::default_size);
+            .unwrap_or_else(|| {
+                if showcase() && skins_showcase::state() == "narrow" {
+                    chrome::min_size()
+                } else {
+                    chrome::default_size()
+                }
+            });
         let display_id = display.as_ref().map(|d| d.id());
         let bounds = Bounds::centered(display_id, window_size, cx);
         cx.open_window(

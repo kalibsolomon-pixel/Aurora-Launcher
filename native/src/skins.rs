@@ -253,6 +253,7 @@ pub fn probe_scene() {
         }
     }
     let skin = Arc::new(HeadAvatar {
+        sha256: String::new(),
         rgba: vec![],
         skin_rgba: rgba,
         skin_height: 64,
