@@ -71,15 +71,56 @@ pub fn resolution(r: &ResolutionView) -> (&str, Tone) {
 pub fn count(n: usize, noun: &str) -> String {
     format!("{n} {noun}{}", if n == 1 { "" } else { "s" })
 }
-pub fn delta(m: &MetricValue, n: Option<f64>) -> String {
-    let Some(n) = n.filter(|v| v.is_finite()) else {
+/// Compare the same rounded operands the player sees; never print a signed zero.
+pub fn comparison_delta(left: &MetricValue, right: &MetricValue) -> String {
+    let (Some(a), Some(b)) = (
+        left.value.filter(|v| v.is_finite()),
+        right.value.filter(|v| v.is_finite()),
+    ) else {
         return "Unavailable".into();
     };
-    match m.definition.unit.as_str() {
-        "%" => format!("{n:+.1} pp"),
-        "count" | "" if n.fract() == 0. => format!("{n:+.0}"),
-        unit => format!("{n:+.1} {unit}"),
+    let unit = left.definition.unit.as_str();
+    let precision = if unit == "count" {
+        0
+    } else if matches!(unit, "" | "dimensionless") {
+        3
+    } else {
+        1
+    };
+    let round = |v: f64| format!("{v:.precision$}").parse::<f64>().unwrap_or(v);
+    let n = round(b) - round(a);
+    let suffix = if unit == "%" {
+        "pp"
+    } else if matches!(unit, "count" | "dimensionless") {
+        ""
+    } else {
+        unit
+    };
+    if n.abs() < 10_f64.powi(-(precision as i32)) / 2. {
+        if a != b {
+            return format!(
+                "{}<{} {}",
+                if b > a { "+" } else { "-" },
+                10_f64.powi(-(precision as i32)),
+                suffix
+            )
+            .trim()
+            .into();
+        }
+        return format!("0 {suffix}").trim().into();
     }
+    format!("{n:+.precision$} {suffix}").trim().into()
+}
+/// Session statistics and opponent-specific streak analysis have different scopes.
+pub fn summary_insight(
+    manual_session: bool,
+    metrics: &std::collections::BTreeMap<String, MetricValue>,
+    derived: Option<&String>,
+) -> Option<String> {
+    if manual_session {
+        return metrics.get("longestCombo").and_then(|m| m.value).map(|n| format!("Entire manual session \u{b7} Longest recorded combo: {n:.0} hits. Select a participant or exchange for opponent-specific analysis."));
+    }
+    derived.cloned()
 }
 /// Same launcher components, with one consistent presentation boundary.
 pub mod ui {
@@ -148,14 +189,35 @@ mod tests {
         assert_eq!(count(2, "fight"), "2 fights");
     }
     #[test]
-    fn comparison_preserves_units_direction_and_missing() {
+    fn comparisons_match_visible_operands_without_signed_zero() {
+        let mut a = MetricValue::default();
+        a.definition.unit = "m".into();
+        a.value = Some(0.24);
+        let mut b = a.clone();
+        b.value = Some(0.26);
+        assert_eq!(comparison_delta(&a, &b), "+0.1 m");
+        b.value = Some(0.245);
+        assert_eq!(comparison_delta(&a, &b), "+<0.1 m");
+        assert_eq!(comparison_delta(&b, &a), "-<0.1 m");
+        assert_eq!(comparison_delta(&a, &a), "0 m");
+        b.value = None;
+        assert_eq!(comparison_delta(&a, &b), "Unavailable");
+    }
+    #[test]
+    fn manual_session_insight_uses_recorded_scope() {
         let mut m = MetricValue::default();
-        m.definition.unit = "%".into();
-        assert_eq!(delta(&m, Some(-2.5)), "-2.5 pp");
-        m.definition.unit = "m".into();
-        assert_eq!(delta(&m, Some(0.25)), "+0.2 m");
-        m.definition.unit = "count".into();
-        assert_eq!(delta(&m, Some(3.)), "+3");
-        assert_eq!(delta(&m, None), "Unavailable");
+        m.value = Some(5.);
+        let metrics = [("longestCombo".into(), m)].into_iter().collect();
+        let derived = "No two of your confirmed hits landed consecutively.".to_owned();
+        assert!(
+            summary_insight(true, &metrics, Some(&derived))
+                .unwrap()
+                .contains("5 hits")
+        );
+        assert_eq!(
+            summary_insight(false, &metrics, Some(&derived)),
+            Some(derived)
+        );
+        assert_eq!(summary_insight(true, &Default::default(), None), None);
     }
 }

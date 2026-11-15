@@ -302,7 +302,9 @@ pub(super) fn chart(view: &ChartView) -> Chart {
                     p.category
                 )
             },
-            shape: if p.category.contains("SHIELD") || p.category == "trade" {
+            shape: if view.id.contains("trend") && p.y == Some(0.) {
+                Shape::Hollow
+            } else if p.category.contains("SHIELD") || p.category == "trade" {
                 Shape::Diamond
             } else if p.category.contains("MISS")
                 || p.category.contains("UNRESOLVED")
@@ -529,7 +531,15 @@ impl Pulsar {
             .collect();
         if !main.is_empty() && !(index == 0 && self.detail_request.is_none()) {
             if summary {
-                if let Some(insight) = tab.interpretations.first() {
+                if let Some(insight) = super::presentation::summary_insight(
+                    self.detail.as_ref().is_some_and(|d| d.summary.manual)
+                        && self
+                            .detail_request
+                            .as_ref()
+                            .is_some_and(|r| r.participant.is_none() && r.exchange_id.is_none()),
+                    &tab.metrics,
+                    tab.interpretations.first(),
+                ) {
                     body = body.child(ui::muted(t, insight.clone()));
                 }
             }
@@ -551,7 +561,6 @@ impl Pulsar {
             for c in tab.charts.iter().filter(|c| c.id == "attack_outcomes") {
                 body = body.child(chart(c).render(t));
             }
-            body=body.child(ui::caption(t,"Accuracy counts confirmed hits out of eligible attempts. Confirmed shield blocks are excluded; uncertain results stay in the denominator."));
         }
         if index == 2 {
             body = body.child(self.compositions(t, tab, index));

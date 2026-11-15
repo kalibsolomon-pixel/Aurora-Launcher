@@ -142,7 +142,8 @@ impl Pulsar {
                             .min_w(px(0.)),
                     )
                     .child(
-                        ui::caption(t, super::presentation::delta(&m.left, m.delta)).w(px(130.)),
+                        ui::caption(t, super::presentation::comparison_delta(&m.left, &m.right))
+                            .w(px(130.)),
                     ),
             );
         }
