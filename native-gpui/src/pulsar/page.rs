@@ -550,6 +550,8 @@ impl Pulsar {
                 } else {
                     row.value.to_string()
                 };
+                let value_theme = t.clone();
+                let full_value = value.clone();
                 list = list.child(
                     ui::row(t, i + 1 == count)
                         .flex_wrap()
@@ -562,7 +564,23 @@ impl Pulsar {
                             .flex_1()
                             .min_w(px(200.)),
                         )
-                        .child(ui::muted(t, value))
+                        .child(
+                            ui::muted(t, value)
+                                .id(format!("setting-value-{group}-{i}"))
+                                .min_w(px(0.))
+                                .max_w(px(320.))
+                                .overflow_hidden()
+                                .text_ellipsis()
+                                .whitespace_nowrap()
+                                .aria_label(full_value.clone())
+                                .tooltip(move |_, cx| {
+                                    cx.new(|_| super::charts::Readout {
+                                        text: full_value.clone(),
+                                        theme: value_theme.clone(),
+                                    })
+                                    .into()
+                                }),
+                        )
                         .child(ui::badge(t, "Change in game", ui::Tone::Neutral)),
                 );
             }
