@@ -135,7 +135,12 @@ impl Pulsar {
             .iter()
             .find(|c| c.id.contains("trend") && c.id.to_lowercase().contains(key))
         {
-            body = body.child(tabs::chart(c).render_options(
+            let mut chart = tabs::chart(c);
+            chart.x_label = "Recording date (UTC)".into();
+            chart.note =
+                "Each point is one recording, in time order. Missing measurements leave a gap."
+                    .into();
+            body = body.child(chart.render_options(
                 t,
                 None,
                 super::charts::Options {
@@ -433,7 +438,11 @@ impl Pulsar {
                 ),
                 (
                     "Longest combo and combo count",
-                    denominator(m, "longestCombo", "comboCount"),
+                    format!(
+                        "{} hits · {} combos",
+                        value(m, "longestCombo"),
+                        value(m, "comboCount")
+                    ),
                 ),
                 (
                     "Local dominance",

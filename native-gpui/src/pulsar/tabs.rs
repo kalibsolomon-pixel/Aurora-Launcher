@@ -40,7 +40,7 @@ pub(super) fn metric_value(metric: &MetricValue) -> String {
             .trim_end_matches('.')
             .to_owned(),
         "" | "dimensionless" => format!("{n:.0}"),
-        unit => format!("{n:.2} {unit}"),
+        unit => format!("{n:.1} {unit}"),
     }
 }
 pub(super) fn stats(
@@ -791,6 +791,10 @@ mod tests {
         metric.definition.unit = "dimensionless".into();
         metric.value = Some(0.075);
         assert_eq!(metric_value(&metric), "0.075");
+        metric.definition.key = "meanHorizontalKnockback".into();
+        metric.definition.unit = "blocks/tick".into();
+        metric.value = Some(0.37);
+        assert_eq!(metric_value(&metric), "0.4 blocks/tick");
     }
     #[test]
     fn narrow_tables_keep_identity_and_measurement_units() {

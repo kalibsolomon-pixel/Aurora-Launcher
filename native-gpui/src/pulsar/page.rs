@@ -756,17 +756,27 @@ impl Pulsar {
                 };
                 let value_theme = t.clone();
                 let full_value = value.clone();
+                let help_id = format!("setting-help-{group}-{i}");
+                let help_open = self.disclosures.contains(&help_id);
                 list = list.child(
                     ui::row(t, i + 1 == count)
                         .flex_wrap()
                         .child(
-                            ui::title_block(
-                                t,
-                                super::analysis_ui::display_label(&row.label),
-                                Some(row.help.clone().into()),
-                            )
-                            .flex_1()
-                            .min_w(px(200.)),
+                            ui::title_block(t, super::analysis_ui::display_label(&row.label), None)
+                                .flex_1()
+                                .min_w(px(200.)),
+                        )
+                        .child(
+                            small(format!("setting-info-{group}-{i}"), "")
+                                .icon("info")
+                                .accessibility_label(format!("About {}", row.label))
+                                .selected(help_open)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    if !this.disclosures.remove(&help_id) {
+                                        this.disclosures.insert(help_id.clone());
+                                    }
+                                    cx.notify();
+                                })),
                         )
                         .child(
                             ui::muted(t, value)
@@ -785,7 +795,10 @@ impl Pulsar {
                                     .into()
                                 }),
                         )
-                        .child(ui::badge(t, "Change in game", ui::Tone::Neutral)),
+                        .child(ui::badge(t, "Change in game", ui::Tone::Neutral))
+                        .when(help_open, |d| {
+                            d.child(ui::caption(t, row.help.clone()).w_full())
+                        }),
                 );
             }
 
