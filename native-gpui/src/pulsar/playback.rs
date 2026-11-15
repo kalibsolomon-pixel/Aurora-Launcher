@@ -101,7 +101,7 @@ impl Pulsar {
                 e.time,
                 e.kind,
                 e.confidence,
-                e.detail,
+                super::presentation::event_detail(&e.detail),
                 e.outcome
                     .as_ref()
                     .map(|s| format!(" · {s}"))
@@ -136,7 +136,11 @@ impl Pulsar {
                             ))
                             .child(ui::caption(
                                 t,
-                                format!("{} \u{b7} {}", e.confidence, e.detail),
+                                format!(
+                                    "{} \u{b7} {}",
+                                    e.confidence,
+                                    super::presentation::event_detail(&e.detail)
+                                ),
                             )),
                     )
                     .role(Role::Group)
@@ -278,7 +282,14 @@ impl Pulsar {
             div().flex_1().min_w(px(180.)).child(ui::caption(
                 t,
                 selected
-                    .map(|e| format!("{:.2} s \u{b7} {} \u{b7} {}", e.time, e.kind, e.detail))
+                    .map(|e| {
+                        format!(
+                            "{:.2} s \u{b7} {} \u{b7} {}",
+                            e.time,
+                            e.kind,
+                            super::presentation::event_detail(&e.detail)
+                        )
+                    })
                     .unwrap_or_else(|| "Start of recording; no event selected yet.".into()),
             )),
         );
@@ -317,7 +328,13 @@ impl Pulsar {
             .map(|e| Sample {
                 x: e.time,
                 y: Some(lanes.iter().position(|l| l == &e.lane).unwrap_or(0) as f64),
-                label: format!("{:.2} s · {} · {} · {}", e.time, e.lane, e.kind, e.detail),
+                label: format!(
+                    "{:.2} s · {} · {} · {}",
+                    e.time,
+                    e.lane,
+                    e.kind,
+                    super::presentation::event_detail(&e.detail)
+                ),
                 shape: event_shape(e),
             })
             .collect();

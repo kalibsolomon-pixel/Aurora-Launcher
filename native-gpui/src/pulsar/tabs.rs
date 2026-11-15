@@ -322,7 +322,7 @@ pub(super) fn chart(view: &ChartView) -> Chart {
             },
         }));
     }
-    let max_x = samples
+    let mut max_x = samples
         .iter()
         .map(|s| s.x)
         .chain(
@@ -347,6 +347,16 @@ pub(super) fn chart(view: &ChartView) -> Chart {
             .unwrap_or(0.)
             - 0.025;
     }
+    let combo_distribution = view.id == "pooled_combo_distribution";
+    if combo_distribution {
+        min_x = samples
+            .iter()
+            .map(|s| s.x)
+            .min_by(f64::total_cmp)
+            .unwrap_or(2.)
+            - 0.5;
+        max_x += 0.5;
+    }
     let max_y = samples
         .iter()
         .filter_map(|s| s.y)
@@ -367,7 +377,10 @@ pub(super) fn chart(view: &ChartView) -> Chart {
         let n = (max_y.abs().max(min_y.abs()).max(4.) + 1.).ceil().min(40.);
         (-n, n)
     } else {
-        if kind == Kind::Lanes {
+        if combo_distribution {
+            // Four equal integer intervals keep both count axes truthful.
+            (0., (max_y / 4.).ceil().max(1.) * 4.)
+        } else if kind == Kind::Lanes {
             (-0.5, view.series.len().max(1) as f64 - 0.5)
         } else {
             (min_y, nice_peak(max_y))
@@ -544,7 +557,7 @@ impl Pulsar {
             })
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
-        if index == 3 && self.detail_request.is_none() {
+        if index == 3 && self.detail_request.is_none() && matches!(self.sections[3], 2 | 3) {
             let metric = |key: &str| {
                 tab.metrics
                     .get(key)
@@ -992,6 +1005,33 @@ mod tests {
         let projected = chart(&lane);
         assert_eq!(projected.samples[0].y, Some(0.));
         assert_eq!(projected.samples[1].y, Some(1.));
+    }
+
+    #[test]
+    fn combo_distribution_centers_integer_lengths_inside_plot() {
+        let view = ChartView {
+            id: "pooled_combo_distribution".into(),
+            kind: "histogram".into(),
+            series: vec![ChartSeries {
+                points: [(2., 33.), (6., 27.)]
+                    .into_iter()
+                    .map(|(x, y)| ChartPoint {
+                        x,
+                        y: Some(y),
+                        ..Default::default()
+                    })
+                    .collect(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let p = chart(&view);
+        assert_eq!(p.domain, (1.5, 6.5));
+        assert_eq!(p.range, (0., 36.));
+        assert_eq!((p.range.1 / 4.).fract(), 0.);
+        for s in &p.samples {
+            assert!((0.09..0.91).contains(&super::super::charts::fraction(s.x, p.domain)));
+        }
     }
 
     #[test]

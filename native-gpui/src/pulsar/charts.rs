@@ -425,7 +425,9 @@ impl Chart {
             (self.y_label.lines().count() as f32 * 24.).max(164.)
         } else if self.kind == Kind::Grid {
             240.
-        } else if self.id.contains("trend") || self.id == "pooled_combo_distribution" {
+        } else if self.id == "pooled_combo_distribution" {
+            64.
+        } else if self.id.contains("trend") {
             96.
         } else {
             164.
@@ -435,7 +437,8 @@ impl Chart {
             .role(Role::Image)
             .aria_label(description.clone())
             .relative()
-            .overflow_hidden()
+            // Trend endpoints (including a genuine zero) need their full outline.
+            .when(!self.id.contains("trend"), |d| d.overflow_hidden())
             .w_full()
             .h(px(plot_height))
             .child(
@@ -899,6 +902,9 @@ impl Chart {
         }
         ui::card(t)
             .when(self.id.contains("trend"), |d| d.gap(px(8.)))
+            .when(self.id == "pooled_combo_distribution", |d| {
+                d.p(px(16.)).gap(px(8.))
+            })
             .min_w(px(0.))
             .child(
                 div()
@@ -957,6 +963,8 @@ impl Chart {
                                         - (self.range.1 - self.range.0) * i as f64 / 4.;
                                     if percent {
                                         format!("{v:.0}%")
+                                    } else if self.id == "pooled_combo_distribution" {
+                                        format!("{v:.0}")
                                     } else {
                                         format!("{v:.1}")
                                     }
@@ -996,23 +1004,35 @@ impl Chart {
             .child(
                 div()
                     .pl(px(if self.kind == Kind::Lanes { 104. } else { 56. }))
-                    .flex()
-                    .justify_between()
-                    .children((0..=4).map(|i| {
-                        let label = if self.id.contains("trend") {
-                            self.samples
-                                .get((self.samples.len().saturating_sub(1) * i) / 4)
-                                .map(|s| axis_date(&s.label))
-                                .unwrap_or("Unavailable")
-                                .to_owned()
-                        } else {
-                            format!(
-                                "{:.1}",
-                                self.domain.0 + (self.domain.1 - self.domain.0) * i as f64 / 4.
-                            )
-                        };
-                        ui::caption(t, label)
-                    })),
+                    .child(if self.id == "pooled_combo_distribution" {
+                        div()
+                            .relative()
+                            .h(px(16.))
+                            .children(self.samples.iter().map(|s| {
+                                ui::caption(t, format!("{:.0}", s.x))
+                                    .absolute()
+                                    .left(relative(fraction(s.x, self.domain)))
+                                    .ml(px(-12.))
+                                    .w(px(24.))
+                                    .text_center()
+                            }))
+                    } else {
+                        div().flex().justify_between().children((0..=4).map(|i| {
+                            let label = if self.id.contains("trend") {
+                                self.samples
+                                    .get((self.samples.len().saturating_sub(1) * i) / 4)
+                                    .map(|s| axis_date(&s.label))
+                                    .unwrap_or("Unavailable")
+                                    .to_owned()
+                            } else {
+                                format!(
+                                    "{:.1}",
+                                    self.domain.0 + (self.domain.1 - self.domain.0) * i as f64 / 4.
+                                )
+                            };
+                            ui::caption(t, label)
+                        }))
+                    }),
             )
             .when(!self.id.contains("trend"), |d| {
                 d.child(ui::caption(t, self.x_label.clone()).text_center())

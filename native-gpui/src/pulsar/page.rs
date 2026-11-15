@@ -332,7 +332,7 @@ impl Pulsar {
             .items_center()
             .child(
                 small("history-sort", format!("Sort: {}", sorts[sort_index]))
-                    .variant(ButtonVariant::Subtle)
+                    .variant(ButtonVariant::Default)
                     .icon("swap_vert")
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.query.sort = match (sort_index + 1) % 6 {
@@ -348,7 +348,7 @@ impl Pulsar {
             )
             .child(
                 small("history-hits", "Hits only")
-                    .variant(ButtonVariant::Subtle)
+                    .variant(ButtonVariant::Default)
                     .icon("filter_list")
                     .selected(self.query.hits_only)
                     .on_click(cx.listener(|this, _, _, cx| {
@@ -361,7 +361,7 @@ impl Pulsar {
             "history-compare",
             format!("Compare ({} of 2)", self.compare_keys.len()),
         )
-        .variant(ButtonVariant::Subtle)
+        .variant(ButtonVariant::Default)
         .icon("compare_arrows")
         .disabled(self.compare_keys.len() != 2)
         .on_click(cx.listener(|this, _, _, cx| this.open_compare(cx)));
@@ -424,7 +424,7 @@ impl Pulsar {
                 ["All", "Win", "Loss", "Draw", "Unknown", "Interrupted"][outcome_index]
             ),
         )
-        .variant(ButtonVariant::Subtle)
+        .variant(ButtonVariant::Default)
         .icon("filter_alt")
         .selected(outcome_index != 0)
         .on_click(cx.listener(move |this, _, _, cx| {
@@ -786,7 +786,7 @@ impl Pulsar {
                             .w(px(145.))
                             .child(ui::muted(t, r.label.clone()))
                             .when_some(r.minimum_attempts, |d, n| {
-                                d.child(ui::caption(t, format!("At least {n} eligible attempts")))
+                                d.child(ui::caption(t, format!("{n}+ eligible attempts")))
                             }),
                     )
                     .child(

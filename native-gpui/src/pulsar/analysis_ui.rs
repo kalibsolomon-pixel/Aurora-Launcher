@@ -845,7 +845,7 @@ impl Pulsar {
                     .child(ui::caption(t, format!("Scope: {scope_label}")).flex_1())
                     .child(
                         button("scope-entire-session", "Entire session")
-                            .variant(ButtonVariant::Subtle)
+                            .variant(ButtonVariant::Default)
                             .selected(request.as_ref().is_some_and(|r| {
                                 r.participant.is_none() && r.exchange_id.is_none()
                             }))
@@ -870,7 +870,7 @@ impl Pulsar {
                             ("scope-participant", i),
                             format!("{}: first exchange", participant.label),
                         )
-                        .variant(ButtonVariant::Subtle)
+                        .variant(ButtonVariant::Default)
                         .icon("person")
                         .selected(request.as_ref().is_some_and(|r| {
                             r.participant.as_ref() == Some(&id) && r.exchange_id.is_none()
@@ -899,7 +899,7 @@ impl Pulsar {
                         .flex_wrap()
                         .child(
                             button(("scope-exchange", j), format!("Exchange {}", j + 1))
-                                .variant(ButtonVariant::Subtle)
+                                .variant(ButtonVariant::Default)
                                 .icon("subdirectory_arrow_right")
                                 .selected(detail.selected_exchange.as_ref() == Some(&id))
                                 .on_click(cx.listener(move |this, _, _, cx| {
@@ -932,7 +932,7 @@ impl Pulsar {
                         ("scope-exchange", j),
                         format!("Exchange {} with {}", j + 1, exchange.opponent),
                     )
-                    .variant(ButtonVariant::Subtle)
+                    .variant(ButtonVariant::Default)
                     .icon("subdirectory_arrow_right")
                     .selected(detail.selected_exchange.as_ref() == Some(&id))
                     .on_click(cx.listener(move |this, _, _, cx| {

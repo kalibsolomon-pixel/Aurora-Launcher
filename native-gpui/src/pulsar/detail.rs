@@ -310,8 +310,19 @@ impl Pulsar {
                         .child(button("open-recording-source","Open recordings folder").on_click(cx.listener(|this,_,_,cx|this.folder(FolderKind::Recordings,cx)))))
                     .children(detail.summary.provenance.conflicts.iter().map(|c|ui::caption(t,format!("Conflicting snapshot: {c}"))))
                     .child(ui::caption(t,if detail.summary.stale{"The source changed after import. This view shows the retained snapshot."}else{"The retained snapshot matches the imported source."}));
-                let diagnostics =
-                    diagnostics.child(self.table_view(t, &detail.evidence, narrow, cx));
+                let diagnostics = diagnostics
+                    .child(self.table_view(t, &detail.evidence, narrow, cx))
+                    .child(ui::section_header(t, "Original event details", None))
+                    .children(
+                        detail
+                            .timeline
+                            .iter()
+                            .map(|e| e.detail.as_str())
+                            .filter(|s| !s.is_empty())
+                            .collect::<std::collections::BTreeSet<_>>()
+                            .into_iter()
+                            .map(|s| ui::caption(t, s.to_owned())),
+                    );
                 page =
                     page.child(self.disclosure(t, "diagnostics", "Diagnostics", diagnostics, cx));
                 let mut evidence = detail.evidence.clone();

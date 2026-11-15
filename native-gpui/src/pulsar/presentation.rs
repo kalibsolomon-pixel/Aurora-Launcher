@@ -57,6 +57,16 @@ pub fn result_source(source: &str) -> &str {
         _ => "Supported by the recording's result evidence",
     }
 }
+/// Describe event evidence without exposing capture-engine identifiers.
+/// Original details remain available in the Evidence diagnostics.
+pub fn event_detail(detail: &str) -> String {
+    match detail {
+        "local-melee-source" => "Recorded melee contact".into(),
+        "synthetic melee attempt" => "Recorded attack attempt".into(),
+        "empty-swing" => "Swing without a target".into(),
+        _ => text(detail),
+    }
+}
 pub fn outcome(s: &FightSummary) -> Tone {
     if !s.resolution.confidence.eq_ignore_ascii_case("confirmed") {
         return Tone::Neutral;
@@ -202,6 +212,16 @@ mod tests {
         assert_eq!(count(1, "fight"), "1 fight");
         assert_eq!(count(2, "fight"), "2 fights");
     }
+    #[test]
+    fn event_source_identifiers_have_player_facing_descriptions() {
+        assert_eq!(event_detail("local-melee-source"), "Recorded melee contact");
+        assert_eq!(
+            event_detail("synthetic melee attempt"),
+            "Recorded attack attempt"
+        );
+        assert_eq!(event_detail("shield sound"), "shield sound");
+    }
+
     #[test]
     fn comparisons_match_visible_operands_without_signed_zero() {
         let mut a = MetricValue::default();
