@@ -32,7 +32,12 @@ pub(super) fn metric_value(metric: &MetricValue) -> String {
         "s" => format!("{n:.2} s"),
         "HP" => format!("{n:.1} HP"),
         "ticks" => format!("{n:.2} ticks"),
-        "count" | "" | "dimensionless" => format!("{n:.0}"),
+        "count" => format!("{n:.0}"),
+        "" | "dimensionless" if n.fract() != 0. => format!("{n:.3}")
+            .trim_end_matches('0')
+            .trim_end_matches('.')
+            .to_owned(),
+        "" | "dimensionless" => format!("{n:.0}"),
         unit => format!("{n:.2} {unit}"),
     }
 }
@@ -694,6 +699,12 @@ mod tests {
         metric.definition.key = "hits".into();
         metric.value = Some(13.);
         assert_eq!(metric_value(&metric), "13");
+        metric.definition.key = "x".into();
+        metric.value = Some(0.34);
+        assert_eq!(metric_value(&metric), "0.34");
+        metric.definition.unit = "dimensionless".into();
+        metric.value = Some(0.075);
+        assert_eq!(metric_value(&metric), "0.075");
     }
     #[test]
     fn narrow_tables_keep_identity_and_measurement_units() {
