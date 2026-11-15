@@ -676,34 +676,8 @@ impl Pulsar {
                                 .into(),
                             ),
                         ));
-                        for seq in rows(s, "seqs") {
-                            if let Some(h) = rows(d, "hits").iter().find(|h| h["seq"] == *seq) {
-                                card = card.child(ui::caption(
-                                    t,
-                                    format!(
-                                        "Hit {} · evidence {} · {} · {} · critical conditions {}",
-                                        seq,
-                                        format(num(h, "evidenceT"), "s"),
-                                        format(num(h, "reach"), "m"),
-                                        text(h, "weapon"),
-                                        h["critical"].as_bool().unwrap_or(false)
-                                    ),
-                                ));
-                            } else {
-                                let incoming = rows(d, "incomingDetail")
-                                    .iter()
-                                    .find(|h| h["sequence"] == *seq || h["seq"] == *seq);
-                                let event = detail
-                                    .timeline
-                                    .iter()
-                                    .find(|e| Some(e.sequence) == seq.as_i64());
-                                card=card.child(ui::caption(t,format!("Opponent hit {} | evidence {} | attribution {} | damage {} | knockback {} | critical {}",seq,
-                                    incoming.map(|h|format(num(h,"time"),"s")).or_else(||event.map(|e|format!("{:.2} s",e.time))).unwrap_or_else(||"Unavailable".into()),
-                                    incoming.map(|h|text(h,"attribution")).unwrap_or("Tracked opponent evidence"),
-                                    format(incoming.and_then(|h|num(h,"damage")),"HP"),format(incoming.and_then(|h|num(h,"knockback")),"blocks/tick"),
-                                    incoming.and_then(|h|h["crit"].as_bool()).map(|v|v.to_string()).unwrap_or_else(||"Unavailable".into()))));
-                            }
-                        }
+                        let table = combo_hit_table(d, rows(s, "seqs"));
+                        card = card.child(tabs::table(t, &table, narrow));
                         body = body.child(card);
                     }
                 }
@@ -822,7 +796,7 @@ impl Pulsar {
                             ..Default::default()
                         },
                     ));
-                    body=body.child(ui::title_block(t,"How dominance is measured",Some("D = (P - Q) / (P + Q + 1). Confirmed hits weigh 1; subsequent streak hits add 0.25. Blocking an opponent attack adds 0.25; an opponent shield block subtracts 0.25. Shield disables weigh +/-0.5. Evidence decays exponentially with | = 3 s. Advantage starts at +/-0.2; mass below 0.35 is insufficient, unattributed mass at 0.5 is incomplete. Shares exclude inactive and incomplete time and pool by observed active duration. Current exchange boundaries reset the model. This heuristic measures observed evidence, not damage, skill or a server verdict; aim, reach and accuracy do not enter the model.".into())));
+                    body=body.child(ui::title_block(t,"How dominance is measured",Some("D = (P - Q) / (P + Q + 1). Confirmed hits weigh 1; subsequent streak hits add 0.25. Blocking an opponent attack adds 0.25; an opponent shield block subtracts 0.25. Shield disables weigh +/-0.5. Evidence decays exponentially with tau = 3 s. Advantage starts at +/-0.2; mass below 0.35 is insufficient, unattributed mass at 0.5 is incomplete. Shares exclude inactive and incomplete time and pool by observed active duration. Current exchange boundaries reset the model. This heuristic measures observed evidence, not damage, skill or a server verdict; aim, reach and accuracy do not enter the model.".into())));
                 }
             }
             _ => {}
@@ -1008,6 +982,8 @@ impl Pulsar {
                 None,
                 super::charts::Options {
                     preferences: self.preferences,
+                    selected_sample:
+                        selected.and_then(|s| contacts.iter().position(|p| p["seq"] == s["seq"])),
                     regions,
                     activate: Some(activate),
                     ..Default::default()
@@ -1153,5 +1129,120 @@ mod region_tests {
         assert!((ideal.2 - 0.1).abs() < 1e-9);
         assert!((ideal.3 - 1. / 30.).abs() < 1e-9);
         assert!(frozen_regions(&serde_json::Value::Null, &pick, "NORTH").is_empty());
+    }
+}
+
+/// A projection of frozen outgoing and incoming evidence; missing opponent geometry stays unavailable.
+fn combo_hit_table(d: &Value, sequences: &[Value]) -> aurora_launcher_lib::pulsar::view::TableView {
+    use aurora_launcher_lib::pulsar::view::{TableRow, TableView};
+    let columns = [
+        "#",
+        "Evidence time",
+        "Side",
+        "Reach",
+        "Weapon / type",
+        "Critical",
+        "Attribution",
+        "Damage",
+        "Knockback",
+    ]
+    .map(String::from)
+    .to_vec();
+    let result = sequences
+        .iter()
+        .enumerate()
+        .map(|(i, seq)| {
+            let hit = rows(d, "hits").iter().find(|h| h["seq"] == *seq);
+            let incoming = rows(d, "incomingDetail")
+                .iter()
+                .find(|h| h["sequence"] == *seq || h["seq"] == *seq);
+            let critical = if let Some(h) = hit {
+                if h["serverCrit"] == true {
+                    "Server critical animation"
+                } else if h["critical"] == true {
+                    "Critical conditions"
+                } else {
+                    "None observed"
+                }
+            } else if incoming.is_some_and(|h| h["crit"] == true) {
+                "Critical animation on you"
+            } else {
+                "None observed"
+            };
+            let cells = [
+                ("#".into(), format!("{} (event {})", i + 1, seq)),
+                (
+                    "Evidence time".into(),
+                    format(
+                        hit.and_then(|h| num(h, "evidenceT"))
+                            .or_else(|| incoming.and_then(|h| num(h, "time"))),
+                        "s",
+                    ),
+                ),
+                (
+                    "Side".into(),
+                    if hit.is_some() {
+                        "Your hit".into()
+                    } else {
+                        "Opponent hit".into()
+                    },
+                ),
+                (
+                    "Reach".into(),
+                    format(hit.and_then(|h| num(h, "reach")), "m"),
+                ),
+                (
+                    "Weapon / type".into(),
+                    hit.map(|h| text(h, "weapon"))
+                        .or_else(|| incoming.map(|h| text(h, "damageType")))
+                        .unwrap_or("Unavailable")
+                        .to_owned(),
+                ),
+                ("Critical".into(), critical.into()),
+                (
+                    "Attribution".into(),
+                    incoming
+                        .map(|h| text(h, "attribution"))
+                        .unwrap_or("Confirmed outgoing")
+                        .to_owned(),
+                ),
+                (
+                    "Damage".into(),
+                    format(incoming.and_then(|h| num(h, "damage")), "HP"),
+                ),
+                (
+                    "Knockback".into(),
+                    format(incoming.and_then(|h| num(h, "knockback")), "blocks/tick"),
+                ),
+            ]
+            .into();
+            TableRow {
+                cells,
+                sequence: seq.as_i64(),
+                ..Default::default()
+            }
+        })
+        .collect();
+    TableView {
+        id: "selected-combo-hits".into(),
+        title: "Hits in selected combo".into(),
+        columns,
+        rows: result,
+    }
+}
+#[cfg(test)]
+mod combo_tests {
+    use super::*;
+    #[test]
+    fn opponent_combo_rows_use_incoming_sequence_and_do_not_invent_reach() {
+        let d = serde_json::json!({"incomingDetail":[{"sequence":42,"time":2.5,"damageType":"minecraft:player_attack","attribution":"OPPONENT_DIRECT","damage":3.,"crit":true}]});
+        let table = combo_hit_table(&d, &[serde_json::json!(42)]);
+        assert_eq!(table.rows[0].cells["Evidence time"], "2.50 s");
+        assert_eq!(table.rows[0].cells["Reach"], "Unavailable");
+        assert_eq!(
+            table.rows[0].cells["Weapon / type"],
+            "minecraft:player_attack"
+        );
+        assert_eq!(table.rows[0].cells["Critical"], "Critical animation on you");
     }
 }

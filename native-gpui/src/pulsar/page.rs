@@ -849,7 +849,21 @@ impl Pulsar {
                                                     )),
                                             ),
                                     )
-                                    .child(self.latest_denominators(&t, latest)),
+                                    .child(ui::caption(
+                                        &t,
+                                        format!(
+                                            "{} | {} | {}{}",
+                                            latest.resolution.source,
+                                            latest.resolution.confidence,
+                                            latest.resolution.scope,
+                                            if latest.resolution.derived {
+                                                " | older recording"
+                                            } else {
+                                                ""
+                                            }
+                                        ),
+                                    ))
+                                    .child(self.latest_denominators(&t, latest, cx)),
                             );
                         }
                     }

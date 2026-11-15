@@ -455,7 +455,7 @@ impl Pulsar {
             &filtered
         };
         if index == 0 && self.detail_request.is_none() {
-            body = body.child(self.overview_groups(t, &tab.metrics));
+            body = body.child(self.overview_groups(t, &tab.metrics, cx));
         }
         if !tab.metrics.is_empty() && !(index == 0 && self.detail_request.is_none()) {
             body = body.child(self.metrics_panel(

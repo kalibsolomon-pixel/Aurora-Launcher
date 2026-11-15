@@ -275,49 +275,6 @@ impl Pulsar {
                 page = page.child(list);
             }
         }
-        if detail.summary.manual
-            && self.detail_tab == 0
-            && !detail
-                .summary_tab
-                .tables
-                .iter()
-                .any(|t| t.id == "manual_announcements")
-        {
-            let rows = detail
-                .timeline
-                .iter()
-                .filter(|e| {
-                    e.kind.contains("ANNOUNC")
-                        || e.kind.contains("RESULT")
-                        || e.kind.contains("ROUND")
-                })
-                .map(|e| TableRow {
-                    cells: [
-                        ("Time (s)".into(), format!("{:.2}", e.time)),
-                        ("Kind".into(), e.kind.clone()),
-                        (
-                            "Rule".into(),
-                            e.outcome.clone().unwrap_or_else(|| "Unavailable".into()),
-                        ),
-                        (
-                            "Evidence".into(),
-                            format!("{} ? {}", e.confidence, e.detail),
-                        ),
-                    ]
-                    .into(),
-                    ..Default::default()
-                })
-                .collect();
-            let table = TableView {
-                id: "manual_announcements".into(),
-                title: "Manual announcements".into(),
-                columns: ["Time (s)", "Kind", "Rule", "Evidence"]
-                    .map(String::from)
-                    .to_vec(),
-                rows,
-            };
-            page = page.child(self.table_view(t, &table, narrow, cx));
-        }
         match self.detail_tab {
             4 => page = page.child(self.playback_body(t, cx)),
             5 => {

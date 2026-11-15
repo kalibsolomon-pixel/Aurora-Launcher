@@ -143,6 +143,8 @@ pub struct Pulsar {
     showcase_participant: bool,
     #[cfg(debug_assertions)]
     showcase_ready: bool,
+    #[cfg(debug_assertions)]
+    showcase_options: Vec<String>,
 }
 
 impl Pulsar {
@@ -308,9 +310,16 @@ impl Pulsar {
             showcase_participant: false,
             #[cfg(debug_assertions)]
             showcase_ready: false,
+            #[cfg(debug_assertions)]
+            showcase_options: Vec::new(),
         };
         #[cfg(debug_assertions)]
         if let Some(state) = this.showcase_state.as_deref() {
+            let state = state.to_owned();
+            let mut parts = state.split('@');
+            let state = parts.next().unwrap_or_default();
+            this.showcase_options = parts.map(str::to_owned).collect();
+            this.showcase_state = Some(state.to_owned());
             // `<tab>[:<section>]`, e.g. `offense:aim`.
             let (tab, section) = state.split_once(':').unwrap_or((state, ""));
             this.top_tab = TOP_TABS
@@ -884,6 +893,40 @@ impl Pulsar {
                 }
         };
         if ready {
+            for option in self.showcase_options.clone() {
+                match option.as_str() {
+                    "density" => self.aim_density = true,
+                    "methods" => self.show_methods = true,
+                    "data" => self.show_data = true,
+                    "tables" => {
+                        if let Some(d) = self.active_detail() {
+                            let ids = d
+                                .summary_tab
+                                .tables
+                                .iter()
+                                .chain(&d.offense.tables)
+                                .chain(&d.defense.tables)
+                                .chain(&d.flow.tables)
+                                .map(|t| t.id.clone())
+                                .collect::<Vec<_>>();
+                            self.table_expanded.extend(ids);
+                        }
+                    }
+                    "info" => self.metric_info = Some("accuracy".into()),
+                    "opponent" => {
+                        if let Some(d) = self.active_detail() {
+                            if let Some(i) = d.derived["combos"]["streaks"]
+                                .as_array()
+                                .and_then(|s| s.iter().position(|s| s["side"] == "OPPONENT"))
+                            {
+                                self.combo_selection = i;
+                            }
+                        }
+                    }
+                    "mid" => self.playhead = self.duration() / 2.,
+                    _ => {}
+                }
+            }
             self.showcase_ready = true;
             eprintln!("[pulsar-showcase-ready] loaded");
         }

@@ -80,7 +80,7 @@ impl Pulsar {
                             .items_center()
                             .gap(px(4.))
                             .child(
-                                ui::caption(t, metric.definition.label.clone())
+                                ui::caption(t, display_label(&metric.definition.label))
                                     .flex_1()
                                     .min_w(px(0.)),
                             )
@@ -172,6 +172,7 @@ impl Pulsar {
         &self,
         t: &AuroraTheme,
         m: &BTreeMap<String, MetricValue>,
+        cx: &mut Context<Self>,
     ) -> Div {
         let groups = [
             (
@@ -272,16 +273,33 @@ impl Pulsar {
                     .flex()
                     .flex_wrap()
                     .gap(px(24.))
-                    .children(groups.into_iter().map(|(label, v, caption)| {
-                        div()
-                            .min_w(px(210.))
-                            .flex_1()
-                            .child(ui::stat(t, label, v))
-                            .child(ui::caption(t, caption))
-                    })),
+                    .children(
+                        groups
+                            .into_iter()
+                            .enumerate()
+                            .map(|(i, (label, v, caption))| {
+                                let key = [
+                                    "accuracy",
+                                    "hits",
+                                    "averageReach",
+                                    "reachWithin",
+                                    "criticalRate",
+                                    "averageCombo",
+                                    "dominanceShare",
+                                    "averageInterval",
+                                    "recordings",
+                                ][i];
+                                self.measurement_group(t, m, key, label, v, caption, cx)
+                            }),
+                    ),
             )
     }
-    pub(super) fn latest_denominators(&self, t: &AuroraTheme, s: &FightSummary) -> Div {
+    pub(super) fn latest_denominators(
+        &self,
+        t: &AuroraTheme,
+        s: &FightSummary,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let m = &s.metrics;
         div().flex().flex_wrap().gap(px(24.)).children(
             [
@@ -294,15 +312,15 @@ impl Pulsar {
                     ),
                 ),
                 (
-                    "Accuracy ? hits / eligible attempts",
+                    "Accuracy / hits / eligible attempts",
                     denominator(m, "hits", "accuracyDenominator"),
                 ),
                 (
-                    "Reach window ? within / eligible",
+                    "Reach window / within / eligible",
                     denominator(m, "reachWithinCount", "reachEligible"),
                 ),
                 (
-                    "Combos ? longest / count",
+                    "Combos / longest / count",
                     denominator(m, "longestCombo", "comboCount"),
                 ),
                 (
@@ -317,8 +335,81 @@ impl Pulsar {
                 ),
             ]
             .into_iter()
-            .map(|(k, v)| div().min_w(px(170.)).flex_1().child(ui::stat(t, k, v))),
+            .enumerate()
+            .map(|(i, (label, v))| {
+                self.measurement_group(
+                    t,
+                    m,
+                    [
+                        "duration",
+                        "accuracy",
+                        "reachWithin",
+                        "longestCombo",
+                        "dominanceShare",
+                    ][i],
+                    label,
+                    v,
+                    String::new(),
+                    cx,
+                )
+            }),
         )
+    }
+    fn measurement_group(
+        &self,
+        t: &AuroraTheme,
+        m: &BTreeMap<String, MetricValue>,
+        key: &str,
+        label: &str,
+        value: String,
+        caption: String,
+        cx: &mut Context<Self>,
+    ) -> Div {
+        let selected = self.metric_info.as_deref() == Some(key);
+        let id = key.to_owned();
+        let mut group = div()
+            .min_w(px(210.))
+            .flex_1()
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(4.))
+                    .child(ui::caption(t, label.to_owned()).flex_1().min_w(px(0.)))
+                    .child(
+                        button(format!("group-info-{key}"), "")
+                            .icon("info")
+                            .accessibility_label(format!("About {label}"))
+                            .selected(selected)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.metric_info = if this.metric_info.as_ref() == Some(&id) {
+                                    None
+                                } else {
+                                    Some(id.clone())
+                                };
+                                cx.notify();
+                            })),
+                    ),
+            )
+            .child(ui::muted(t, value));
+        if !caption.is_empty() {
+            group = group.child(ui::caption(t, caption));
+        }
+        if selected {
+            if let Some(metric) = m.get(key) {
+                group = group.child(ui::caption(
+                    t,
+                    format!(
+                        "{} | {} | {} {}",
+                        metric.definition.unit,
+                        metric.definition.confidence,
+                        metric.definition.help,
+                        metric.reason.as_deref().unwrap_or("")
+                    ),
+                ));
+            }
+        }
+        group
     }
     pub(super) fn compositions(&self, t: &AuroraTheme, tab: &TabView, index: usize) -> Div {
         let mut body = div().flex().flex_col().gap(px(24.));
@@ -487,4 +578,15 @@ impl Pulsar {
    ("Space | comma / period","Play or pause; step to the previous / next recorded event. Reduced motion uses event stepping.")
   ].into_iter().map(|(label,help)|ui::title_block(t,label,Some(help.into()))))
     }
+}
+
+fn display_label(label: &str) -> String {
+    let mut out = String::new();
+    for (i, c) in label.chars().enumerate() {
+        if c.is_uppercase() && i > 0 {
+            out.push(' ');
+        }
+        out.push(if i == 0 { c.to_ascii_uppercase() } else { c });
+    }
+    out
 }

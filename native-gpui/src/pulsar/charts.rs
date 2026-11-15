@@ -62,6 +62,7 @@ pub(super) struct Options {
     /// Frozen region ellipses: center x/y, radii x/y, grade index; largest first.
     pub regions: Vec<(f64, f64, f64, f64, usize)>,
     pub connectors: Vec<(f64, f64, f64, f64)>,
+    pub selected_sample: Option<usize>,
 }
 pub(super) fn grade_color(t: &AuroraTheme, label: &str) -> Hsla {
     if label.contains("PERIPHERAL") || label.contains("TOO_FAST") {
@@ -297,7 +298,14 @@ impl Chart {
                         .flex()
                         .justify_between()
                         .child(ui::caption(t, "0"))
-                        .child(ui::caption(t, format!("{total:.0} {}", self.x_label))),
+                        .child(ui::caption(
+                            t,
+                            if self.samples.iter().any(|s| s.y.is_some()) {
+                                format!("{total:.0} {}", self.x_label)
+                            } else {
+                                "Unavailable".into()
+                            },
+                        )),
                 )
                 .child(labels)
                 .child(ui::caption(t, self.note.clone()));
@@ -306,6 +314,7 @@ impl Chart {
         let preferences = options.preferences;
         let regions = options.regions;
         let connectors = options.connectors;
+        let selected_sample = options.selected_sample;
         let palette = t.clone();
         let available =
             !self.bands.is_empty() || self.samples.iter().any(|p| p.y.is_some_and(f64::is_finite));
@@ -493,7 +502,7 @@ impl Chart {
                             }
                         }
                         let bar = width / (chart.samples.len().max(1) as f32);
-                        for s in &chart.samples {
+                        for (sample_index, s) in chart.samples.iter().enumerate() {
                             let Some(v) = s.y.filter(|v| v.is_finite()) else {
                                 if s.shape == Shape::Reset && s.x.is_finite() {
                                     let xx = x(s.x);
@@ -511,6 +520,16 @@ impl Chart {
                             };
                             let xx = x(s.x);
                             let yy = y(v);
+                            if selected_sample == Some(sample_index) {
+                                let r = px(7.);
+                                let outline = (0..=24)
+                                    .map(|i| {
+                                        let a = i as f32 * std::f32::consts::TAU / 24.;
+                                        (xx + r * a.cos(), yy + r * a.sin())
+                                    })
+                                    .collect::<Vec<_>>();
+                                stroke(window, &outline, palette.foreground, 2.);
+                            }
                             let color = if chart.kind == Kind::Histogram
                                 && chart.band.is_some_and(|(a, b)| s.x >= a && s.x <= b)
                             {
