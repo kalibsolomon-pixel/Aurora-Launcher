@@ -20,6 +20,7 @@ mod instance_creator;
 mod instance_editor;
 mod media;
 mod pack_import;
+mod screenshots;
 mod settings;
 mod skin_preview;
 mod skins;
@@ -1136,6 +1137,11 @@ impl Launcher {
     fn open_page(&mut self, page: u8, window: &mut Window, cx: &mut Context<Self>) {
         if !navigation_accepted(self.page, page, self.client_update_running(cx)) {
             return;
+        }
+        if page == 3 && self.page != 3 {
+            if let Some(editor) = &self.instance_editor {
+                editor.update(cx, |editor, cx| editor.on_page_open(cx));
+            }
         }
         // An unreleased Motion draft and an open accent picker never outlive a
         // navigation, including the one that leaves Settings.

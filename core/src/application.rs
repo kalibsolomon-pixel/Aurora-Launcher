@@ -3024,6 +3024,72 @@ fn registered_instance(
     Ok(instance)
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ScreenshotsRequest {
+    instance_id: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ScreenshotImageRequest {
+    instance_id: String,
+    screenshot: crate::screenshots::Screenshot,
+    preview: bool,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ScreenshotRenameRequest {
+    instance_id: String,
+    screenshot: crate::screenshots::Screenshot,
+    name: String,
+}
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct ScreenshotActionRequest {
+    instance_id: String,
+    screenshot: crate::screenshots::Screenshot,
+    action: crate::screenshots::Action,
+    confirmed: bool,
+}
+fn screenshot_error(error: std::io::Error) -> CommandError {
+    CommandError::new("screenshot_operation_failed", error.to_string())
+}
+pub fn get_screenshots(
+    app: Host,
+    request: ScreenshotsRequest,
+) -> Result<Vec<crate::screenshots::Screenshot>, CommandError> {
+    let paths = managed_paths(&app)?;
+    let instance = registered_instance(&paths, &request.instance_id)?;
+    crate::screenshots::list(&paths, &instance).map_err(screenshot_error)
+}
+pub fn get_screenshot_image(
+    app: Host,
+    request: ScreenshotImageRequest,
+) -> Result<crate::screenshots::Bitmap, CommandError> {
+    let paths = managed_paths(&app)?;
+    let instance = registered_instance(&paths, &request.instance_id)?;
+    crate::screenshots::bitmap(&paths, &instance, &request.screenshot, request.preview)
+        .map_err(screenshot_error)
+}
+pub fn rename_screenshot(app: Host, request: ScreenshotRenameRequest) -> Result<(), CommandError> {
+    let paths = managed_paths(&app)?;
+    let instance = registered_instance(&paths, &request.instance_id)?;
+    crate::screenshots::rename(&paths, &instance, &request.screenshot, &request.name)
+        .map_err(screenshot_error)
+}
+pub fn screenshot_action(app: Host, request: ScreenshotActionRequest) -> Result<(), CommandError> {
+    let paths = managed_paths(&app)?;
+    let instance = registered_instance(&paths, &request.instance_id)?;
+    crate::screenshots::action(
+        &paths,
+        &instance,
+        &request.screenshot,
+        request.action,
+        request.confirmed,
+    )
+    .map_err(screenshot_error)
+}
+
 /// Scans one registered instance's actual mods directory on a blocking worker.
 /// Search/filter/sort in the presentation layer operates on this snapshot and
 /// never triggers another filesystem scan per keystroke.
