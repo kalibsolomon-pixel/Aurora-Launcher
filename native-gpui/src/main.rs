@@ -2094,6 +2094,7 @@ impl Render for Launcher {
             .downloads
             .as_ref()
             .map_or(0, |downloads| downloads.read(cx).active_count());
+        let compact_pulsar = self.page == 9 && window.viewport_size().width < px(950.);
         let nav = [
             ("Home", 0, "home"),
             ("Instances", 3, "grid_view"),
@@ -2113,7 +2114,8 @@ impl Render for Launcher {
             // count badge. It only reads the shared queue's count.
             let active = if page == 8 { downloads_active } else { 0 };
             let button = self
-                .button(label, label)
+                .button(label, if compact_pulsar { "" } else { label })
+                .accessibility_label(label)
                 .variant(ButtonVariant::Nav)
                 .icon(icon)
                 .selected(self.page == page)
@@ -2123,7 +2125,14 @@ impl Render for Launcher {
                     cx.notify();
                 }));
             if page != 8 {
-                return button.into_any_element();
+                if !compact_pulsar {
+                    return button.into_any_element();
+                }
+                return div()
+                    .id(("launcher-nav-tip", page as usize))
+                    .child(button)
+                    .tooltip(move |_, cx| cx.new(|_| NavHint(label.into())).into())
+                    .into_any_element();
             }
             div()
                 .id("downloads-nav")
@@ -2133,6 +2142,9 @@ impl Render for Launcher {
                 .flex()
                 .flex_col()
                 .child(button)
+                .when(compact_pulsar, |d| {
+                    d.tooltip(|_, cx| cx.new(|_| NavHint("Downloads".into())).into())
+                })
                 .when(active > 0, |item| {
                     item.child(
                         div()
@@ -2161,7 +2173,7 @@ impl Render for Launcher {
                 .flex()
                 .flex_col()
                 .gap(px(2.))
-                .when_some(title, |group, title| {
+                .when_some(title.filter(|_| !compact_pulsar), |group, title| {
                     group.child(
                         ui::eyebrow(&palette, title)
                             .px(px(10.))
@@ -2184,25 +2196,27 @@ impl Render for Launcher {
             .items_center()
             .gap(px(10.))
             .h(px(52.))
-            .px(px(6.))
+            .px(px(if compact_pulsar { 0. } else { 6. }))
             .child(
                 gpui::img(images::aurora_logo())
-                    .w(px(44.))
-                    .h(px(35.2))
+                    .w(px(if compact_pulsar { 32. } else { 44. }))
+                    .h(px(if compact_pulsar { 25.6 } else { 35.2 }))
                     .flex_shrink_0(),
             )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .child(
-                        div()
-                            .text_size(px(14.))
-                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                            .child("Aurora"),
-                    )
-                    .child(ui::caption(&palette, "Launcher")),
-            );
+            .when(!compact_pulsar, |brand| {
+                brand.child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .child(
+                            div()
+                                .text_size(px(14.))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .child("Aurora"),
+                        )
+                        .child(ui::caption(&palette, "Launcher")),
+                )
+            });
         let page_scroll = window
             .use_keyed_state(("page-scroll", self.page as usize), cx, |_, _| {
                 gpui::ScrollHandle::new()
@@ -2216,7 +2230,7 @@ impl Render for Launcher {
             .flex()
             .flex_col()
             .gap(px(ui::PAGE_GAP))
-            .px(px(32.))
+            .px(px(if compact_pulsar { 20. } else { 32. }))
             .pt(px(4.))
             .pb(px(40.))
             .flex_1()
@@ -2388,10 +2402,10 @@ impl Render for Launcher {
             .children(self.borealis.clone())
             .child(
                 div()
-                    .w(px(212.))
+                    .w(px(if compact_pulsar { 60. } else { 212. }))
                     .flex_shrink_0()
                     .h_full()
-                    .px(px(12.))
+                    .px(px(if compact_pulsar { 6. } else { 12. }))
                     .pt(px(6.))
                     .pb(px(12.))
                     .bg(palette.sidebar)
@@ -2414,61 +2428,69 @@ impl Render for Launcher {
                             .bg(palette.border_subtle),
                     )
                     .child(
-                        self.button("refresh", "Refresh launcher")
-                            .variant(ButtonVariant::Subtle)
-                            .size(ButtonSize::Small)
-                            .icon("refresh")
-                            .disabled(
-                                self.busy
-                                    || self.account_busy
-                                    || self.skin_busy
-                                    || self.client_update_running(cx)
-                                    || self.load_in_flight
-                                    || self.host.is_none(),
-                            )
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.reload_guarded(cx);
-                                if this.page == 0 {
-                                    if let Some(home) = &this.home_widgets {
-                                        home.update(cx, |home, cx| home.refresh(cx));
-                                    }
+                        self.button(
+                            "refresh",
+                            if compact_pulsar {
+                                ""
+                            } else {
+                                "Refresh launcher"
+                            },
+                        )
+                        .accessibility_label("Refresh launcher")
+                        .variant(ButtonVariant::Subtle)
+                        .size(ButtonSize::Small)
+                        .icon("refresh")
+                        .disabled(
+                            self.busy
+                                || self.account_busy
+                                || self.skin_busy
+                                || self.client_update_running(cx)
+                                || self.load_in_flight
+                                || self.host.is_none(),
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.reload_guarded(cx);
+                            if this.page == 0 {
+                                if let Some(home) = &this.home_widgets {
+                                    home.update(cx, |home, cx| home.refresh(cx));
                                 }
-                                if let Some(updates) = &this.client_updates {
-                                    updates.update(cx, |updates, cx| updates.refresh(cx));
+                            }
+                            if let Some(updates) = &this.client_updates {
+                                updates.update(cx, |updates, cx| updates.refresh(cx));
+                            }
+                            if this.page == 2 {
+                                if let Some(settings) = &this.settings {
+                                    settings.update(cx, |settings, cx| settings.refresh(cx));
                                 }
-                                if this.page == 2 {
-                                    if let Some(settings) = &this.settings {
-                                        settings.update(cx, |settings, cx| settings.refresh(cx));
-                                    }
+                            }
+                            if this.page == 4 {
+                                if let Some(content) = &this.content {
+                                    content.update(cx, |content, cx| content.refresh(cx));
                                 }
-                                if this.page == 4 {
-                                    if let Some(content) = &this.content {
-                                        content.update(cx, |content, cx| content.refresh(cx));
-                                    }
+                            }
+                            if this.page == 9 {
+                                if let Some(pulsar) = &this.pulsar {
+                                    pulsar.update(cx, |pulsar, cx| pulsar.refresh(cx));
                                 }
-                                if this.page == 9 {
-                                    if let Some(pulsar) = &this.pulsar {
-                                        pulsar.update(cx, |pulsar, cx| pulsar.refresh(cx));
-                                    }
+                            }
+                            if this.page == 5 {
+                                if let Some(discover) = &this.discover {
+                                    discover.update(cx, |discover, cx| discover.refresh(cx));
                                 }
-                                if this.page == 5 {
-                                    if let Some(discover) = &this.discover {
-                                        discover.update(cx, |discover, cx| discover.refresh(cx));
-                                    }
+                            }
+                            if this.page == 6 {
+                                if let Some(syncing) = &this.syncing {
+                                    syncing.update(cx, |syncing, cx| syncing.refresh(cx));
                                 }
-                                if this.page == 6 {
-                                    if let Some(syncing) = &this.syncing {
-                                        syncing.update(cx, |syncing, cx| syncing.refresh(cx));
-                                    }
+                            }
+                            if this.page == 7 {
+                                if let Some(skins) = &this.skins {
+                                    skins.update(cx, |skins, cx| skins.refresh(cx));
                                 }
-                                if this.page == 7 {
-                                    if let Some(skins) = &this.skins {
-                                        skins.update(cx, |skins, cx| skins.refresh(cx));
-                                    }
-                                }
-                                this.sync_mutation_guards(cx);
-                                cx.notify();
-                            })),
+                            }
+                            this.sync_mutation_guards(cx);
+                            cx.notify();
+                        })),
                     ),
             )
             .child(
@@ -3605,5 +3627,20 @@ mod tests {
         assert!(!navigation_accepted(2, 0, true));
         assert!(!navigation_accepted(0, 2, true));
         assert!(navigation_accepted(2, 2, true));
+    }
+}
+
+struct NavHint(gpui::SharedString);
+impl Render for NavHint {
+    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        let t = theme::theme(cx);
+        div()
+            .px(px(10.))
+            .py(px(6.))
+            .rounded(t.radius)
+            .bg(t.card)
+            .text_color(t.foreground)
+            .text_size(px(ui::TEXT_BODY))
+            .child(self.0.clone())
     }
 }
