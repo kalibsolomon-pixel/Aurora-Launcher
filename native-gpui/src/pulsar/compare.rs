@@ -119,7 +119,8 @@ impl Pulsar {
             ui::card(t)
                 .p(px(16.))
                 .gap(px(8.))
-                .child(ui::section_header(t, "What changed", None));
+                .child(ui::section_header(t, "What changed", None))
+                .child(ui::caption(t, "Second fight compared with the first. Only accuracy uses evaluative color. Counts depend on recording length; compare the hit rates below."));
         for key in ["accuracy", "hits", "averageReach", "longestCombo"] {
             if let Some(m) = data.metrics.iter().find(|m| m.key == key) {
                 let delta = super::presentation::comparison_delta(&m.left, &m.right);
@@ -143,7 +144,23 @@ impl Pulsar {
                 );
             }
         }
-        page = page.child(summary).child(ui::caption(t, "Changes compare the second fight with the first. Green and red mark accuracy or confirmed-hit changes only; all other changes are neutral."));
+        let rate = |f: &FightSummary| {
+            hit_rate(f)
+                .map(|v| format!("{v:.2} hits/s"))
+                .unwrap_or_else(|| "Unavailable".into())
+        };
+        summary = summary.child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .child(ui::muted(t, "Confirmed-hit rate").flex_1())
+                .child(ui::muted(
+                    t,
+                    format!("{} to {}", rate(&data.left), rate(&data.right)),
+                )),
+        );
+        page = page.child(summary);
         for group in ["Offense", "Defense", "Flow"] {
             let metrics = data
                 .metrics
@@ -223,6 +240,10 @@ impl Pulsar {
     }
 }
 
+fn hit_rate(f: &FightSummary) -> Option<f64> {
+    let hits = f.metrics.get("hits")?.value.filter(|v| v.is_finite())?;
+    (f.duration_nanos > 0).then(|| hits / (f.duration_nanos as f64 / 1e9))
+}
 fn change_direction(delta: &str) -> i8 {
     if delta.starts_with('+') {
         1
@@ -247,7 +268,7 @@ fn change_word(change: i8) -> &'static str {
     }
 }
 fn delta_color(t: &AuroraTheme, key: &str, change: i8) -> gpui::Hsla {
-    if matches!(key, "accuracy" | "hits") {
+    if key == "accuracy" {
         match change {
             1 => t.success,
             -1 => t.danger,
@@ -324,6 +345,23 @@ fn brief_definition(key: &str) -> &'static str {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn hit_rates_account_for_duration_and_raw_counts_stay_neutral() {
+        let mut fight = FightSummary {
+            duration_nanos: 25_000_000_000,
+            ..Default::default()
+        };
+        fight.metrics.insert(
+            "hits".into(),
+            MetricValue {
+                value: Some(10.),
+                ..Default::default()
+            },
+        );
+        assert_eq!(hit_rate(&fight), Some(0.4));
+        fight.duration_nanos = 0;
+        assert_eq!(hit_rate(&fight), None);
+    }
     #[test]
     fn displayed_delta_direction_and_groups_are_consistent() {
         assert_eq!(change_direction("+0.1 m"), 1);

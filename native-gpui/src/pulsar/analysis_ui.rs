@@ -80,6 +80,7 @@ impl Pulsar {
             .flex_col()
             .gap(px(12.))
             .min_w(px(0.))
+            .when(open, |d| d.w_full())
             .child(
                 div().flex().child(
                     button(format!("disclosure-{id}"), label.to_owned())
@@ -107,11 +108,80 @@ impl Pulsar {
             .filter(|(k, _)| matches!(k.as_str(), "accuracy" | "averageReach" | "longestCombo"))
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
+        let mut performance = self.metrics_panel(t, "Recent performance", &primary, cx);
+        let mut insight = "Review your recent fights to choose a focus.".to_owned();
+        if let Some(a) = &self.analysis {
+            if let Some(previous) = &a.previous_period {
+                let comparisons = ["accuracy", "averageReach", "longestCombo"]
+                    .into_iter()
+                    .filter_map(|k| {
+                        let now = tab.metrics.get(k)?;
+                        let before = previous.metrics.get(k)?;
+                        Some(format!(
+                            "{}: {}",
+                            now.definition.label,
+                            super::presentation::comparison_delta(before, now)
+                        ))
+                    })
+                    .collect::<Vec<_>>()
+                    .join("; ");
+                performance = performance.child(ui::caption(
+                    t,
+                    format!(
+                        "Last {} vs previous {} recordings{}; {comparisons}",
+                        a.coverage.recordings,
+                        a.previous_recordings,
+                        if a.previous_recordings < 5 {
+                            " (small baseline)"
+                        } else {
+                            ""
+                        }
+                    ),
+                ));
+                if let (Some(now), Some(before)) = (
+                    tab.metrics.get("accuracy").and_then(|m| m.value),
+                    previous.metrics.get("accuracy").and_then(|m| m.value),
+                ) {
+                    insight = if now > before { "Your confirmed-hit accuracy improved. Review the remaining misses to find your next focus." } else if now < before { "Your confirmed-hit accuracy fell. Review the misses in your recent fights." } else { "Your confirmed-hit accuracy held steady. Review recent misses for your next focus." }.into();
+                }
+            } else {
+                performance = performance.child(ui::caption(
+                    t,
+                    "No earlier recordings in this scope to compare.",
+                ));
+            }
+        }
         let mut body = div()
             .flex()
             .flex_col()
-            .gap(px(8.))
-            .child(self.metrics_panel(t, "Recent performance", &primary, cx));
+            .gap(px(12.))
+            .child(performance)
+            .child(
+                div()
+                    .border_l_2()
+                    .border_color(t.ring)
+                    .pl(px(12.))
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(
+                        ui::muted(t, insight)
+                            .flex_1()
+                            .min_w(px(220.))
+                            .font_weight(gpui::FontWeight::MEDIUM),
+                    )
+                    .child(
+                        button("overview-review-misses", "Review recent misses")
+                            .icon("arrow_forward")
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                this.top_tab = 1;
+                                this.sections[1] = 1;
+                                this.load_sections();
+                                cx.notify();
+                            })),
+                    ),
+            );
         let key = ["accuracy", "reach", "critical", "interval"][self.trend_metric];
         let mut selectors = div().flex().flex_wrap().gap(px(2.));
         for (i, label) in ["Accuracy", "Reach", "Critical hits", "Hit interval"]
@@ -127,46 +197,6 @@ impl Pulsar {
                     })),
             );
         }
-
-        if let Some(a) = &self.analysis {
-            if let Some(previous) = &a.previous_period {
-                let comparisons = ["accuracy", "averageReach", "longestCombo"]
-                    .into_iter()
-                    .filter_map(|k| {
-                        let now = tab.metrics.get(k)?;
-                        let before = previous.metrics.get(k)?;
-                        Some(format!(
-                            "{}: {}",
-                            now.definition.label,
-                            super::presentation::comparison_delta(before, now)
-                        ))
-                    })
-                    .collect::<Vec<_>>()
-                    .join(" \u{b7} ");
-                body = body.child(ui::caption(
-                    t,
-                    format!(
-                        "Last {} vs previous {} recordings{} \u{b7} {comparisons}",
-                        a.coverage.recordings,
-                        a.previous_recordings,
-                        if a.previous_recordings < 5 {
-                            " (small baseline)"
-                        } else {
-                            ""
-                        }
-                    ),
-                ));
-                if let (Some(now), Some(before)) = (
-                    tab.metrics.get("accuracy").and_then(|m| m.value),
-                    previous.metrics.get("accuracy").and_then(|m| m.value),
-                ) {
-                    body = body.child(ui::muted(t, if now > before { "Your confirmed-hit accuracy improved over the preceding recordings." } else if now < before { "Your confirmed-hit accuracy fell; inspect the misses in your recent fights." } else { "Your confirmed-hit accuracy held steady over the preceding recordings." }));
-                }
-            } else {
-                body = body.child(ui::caption(t, "No earlier period in this scope. Review individual points to find your next focus."));
-            }
-        }
-        body = body.child(selectors);
         if let Some(c) = tab
             .charts
             .iter()
@@ -174,14 +204,38 @@ impl Pulsar {
         {
             let mut chart = tabs::chart(c);
             chart.x_label = "Recording date (UTC)".into();
-            chart.note =
-                "Hollow points show genuine 0% accuracy. Missing or ineligible measurements leave gaps."
-                    .into();
+            chart.note = "\u{25cf} Measured   \u{25cb} Genuine zero   \u{2014} Unavailable. Select a point to open its fight.".into();
+            let points = c.series.iter().flat_map(|s| &s.points).collect::<Vec<_>>();
+            let keys = points.iter().map(|p| p.key.clone()).collect::<Vec<_>>();
+            for (sample, point) in chart.samples.iter_mut().zip(&points) {
+                if let Some(fight) = self
+                    .library
+                    .rows
+                    .iter()
+                    .find(|f| Some(&f.key) == point.key.as_ref())
+                {
+                    sample.label = format!(
+                        "{}; {}; {}; Open fight (click or Enter)",
+                        point.label, fight.opponent, fight.result_label
+                    );
+                }
+            }
+            let selected = points.iter().rposition(|p| p.y.is_some());
+            let view = cx.entity();
             body = body.child(chart.render_options(
                 t,
                 None,
                 super::charts::Options {
                     preferences: self.preferences,
+                    header: Some(selectors),
+                    selected_sample: selected,
+                    activate: Some(std::rc::Rc::new(move |target, _, cx| {
+                        if let super::charts::Target::Sample(i) = target {
+                            if let Some(Some(key)) = keys.get(i) {
+                                view.update(cx, |this, cx| this.open_detail(key.clone(), cx));
+                            }
+                        }
+                    })),
                     ..Default::default()
                 },
             ));
@@ -276,7 +330,11 @@ impl Pulsar {
                     )
                     .child(
                         div()
-                            .text_size(px(ui::TEXT_SECTION))
+                            .text_size(px(if title == "At a glance" {
+                                ui::TEXT_TITLE
+                            } else {
+                                ui::TEXT_SECTION
+                            }))
                             .font_weight(gpui::FontWeight::SEMIBOLD)
                             .text_color(t.foreground)
                             .child(
@@ -758,22 +816,62 @@ impl Pulsar {
             return div();
         }
         let request = self.scope_request();
-        let mut list = ui::list_card(t).child(ui::row(t, false).py(px(6.)).flex_wrap()
-            .child(ui::caption(t, "Results belong to individual exchanges; the full session has no single opponent.").flex_1())
-            .child(button("scope-entire-session", "Entire session").selected(request.as_ref().is_some_and(|r| r.participant.is_none() && r.exchange_id.is_none())).on_click(cx.listener(|this, _, _, cx| {
-                if let Some(mut r) = this.scope_request() { r.participant = None; r.exchange_id = None; this.select_scope(r, cx); }
-            }))));
+        let scope_label = request
+            .as_ref()
+            .and_then(|r| {
+                r.exchange_id
+                    .as_ref()
+                    .and_then(|id| {
+                        detail.exchanges.iter().position(|e| &e.id == id).map(|i| {
+                            format!("Exchange {} with {}", i + 1, detail.exchanges[i].opponent)
+                        })
+                    })
+                    .or_else(|| {
+                        r.participant.as_ref().and_then(|id| {
+                            detail
+                                .participants
+                                .iter()
+                                .find(|p| &p.id == id)
+                                .map(|p| format!("{}; first exchange", p.label))
+                        })
+                    })
+            })
+            .unwrap_or_else(|| "Entire manual session".into());
+        let mut list =
+            ui::list_card(t).child(
+                ui::row(t, false)
+                    .py(px(6.))
+                    .flex_wrap()
+                    .child(ui::caption(t, format!("Scope: {scope_label}")).flex_1())
+                    .child(
+                        button("scope-entire-session", "Entire session")
+                            .variant(ButtonVariant::Subtle)
+                            .selected(request.as_ref().is_some_and(|r| {
+                                r.participant.is_none() && r.exchange_id.is_none()
+                            }))
+                            .on_click(cx.listener(|this, _, _, cx| {
+                                if let Some(mut r) = this.scope_request() {
+                                    r.participant = None;
+                                    r.exchange_id = None;
+                                    this.select_scope(r, cx);
+                                }
+                            })),
+                    ),
+            );
         for (i, participant) in detail.participants.iter().enumerate() {
             let id = participant.id.clone();
             list = list.child(
                 ui::row(t, false)
-                    .py(px(2.))
+                    .py(px(6.))
+                    .flex_wrap()
                     .child(ui::caption(t, "Participant").w(px(80.)))
                     .child(
                         button(
                             ("scope-participant", i),
-                            format!("{} (first exchange)", participant.label),
+                            format!("{}: first exchange", participant.label),
                         )
+                        .variant(ButtonVariant::Subtle)
+                        .icon("person")
                         .selected(request.as_ref().is_some_and(|r| {
                             r.participant.as_ref() == Some(&id) && r.exchange_id.is_none()
                         }))
@@ -786,54 +884,68 @@ impl Pulsar {
                         })),
                     ),
             );
+            for (j, exchange) in detail
+                .exchanges
+                .iter()
+                .enumerate()
+                .filter(|(_, e)| e.participant_id.as_ref() == Some(&participant.id))
+            {
+                let id = exchange.id.clone();
+                let (label, tone) = super::presentation::resolution(&exchange.resolution);
+                list = list.child(
+                    ui::row(t, false)
+                        .py(px(4.))
+                        .pl(px(32.))
+                        .flex_wrap()
+                        .child(
+                            button(("scope-exchange", j), format!("Exchange {}", j + 1))
+                                .variant(ButtonVariant::Subtle)
+                                .icon("subdirectory_arrow_right")
+                                .selected(detail.selected_exchange.as_ref() == Some(&id))
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    if let Some(mut r) = this.scope_request() {
+                                        r.participant = None;
+                                        r.exchange_id = Some(id.clone());
+                                        this.select_scope(r, cx);
+                                    }
+                                })),
+                        )
+                        .child(ui::caption(
+                            t,
+                            super::page::duration_text(exchange.duration_nanos),
+                        ))
+                        .child(ui::badge(t, label.to_owned(), tone)),
+                );
+            }
         }
-        for (i, exchange) in detail.exchanges.iter().enumerate() {
+        // Older sources can omit participant ids; keep those exchanges selectable.
+        for (j, exchange) in detail.exchanges.iter().enumerate().filter(|(_, e)| {
+            !detail
+                .participants
+                .iter()
+                .any(|p| e.participant_id.as_ref() == Some(&p.id))
+        }) {
             let id = exchange.id.clone();
-            let keyboard_id = id.clone();
-            let (label, tone) = super::presentation::resolution(&exchange.resolution);
             list = list.child(
-                ui::row(t, i + 1 == detail.exchanges.len())
-                    .py(px(7.))
-                    .id(("scope-exchange", i))
-                    .role(gpui::Role::Button)
-                    .tab_index(0)
-                    .cursor_pointer()
-                    .aria_label(format!(
-                        "Select exchange {} with {}, {}",
-                        i + 1,
-                        exchange.opponent,
-                        label
-                    ))
-                    .when(detail.selected_exchange.as_ref() == Some(&id), |d| {
-                        d.bg(t.accent_soft)
-                    })
-                    .focus_visible(|d| d.border_1().border_color(t.ring))
-                    .child(ui::caption(t, format!("Exchange {}", i + 1)).w(px(80.)))
-                    .child(ui::muted(t, exchange.opponent.clone()).flex_1())
-                    .child(ui::badge(t, label.to_owned(), tone))
-                    .child(
-                        ui::caption(t, super::page::duration_text(exchange.duration_nanos))
-                            .w(px(70.)),
+                ui::row(t, false).py(px(4.)).child(
+                    button(
+                        ("scope-exchange", j),
+                        format!("Exchange {} with {}", j + 1, exchange.opponent),
                     )
+                    .variant(ButtonVariant::Subtle)
+                    .icon("subdirectory_arrow_right")
+                    .selected(detail.selected_exchange.as_ref() == Some(&id))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(mut r) = this.scope_request() {
                             r.participant = None;
                             r.exchange_id = Some(id.clone());
                             this.select_scope(r, cx);
                         }
-                    }))
-                    .on_key_down(cx.listener(move |this, e: &gpui::KeyDownEvent, _, cx| {
-                        if matches!(e.keystroke.key.as_str(), "enter" | "space" | " ") {
-                            if let Some(mut r) = this.scope_request() {
-                                r.participant = None;
-                                r.exchange_id = Some(keyboard_id.clone());
-                                this.select_scope(r, cx);
-                            }
-                            cx.stop_propagation();
-                        }
                     })),
+                ),
             );
         }
+
         div().child(list)
     }
 

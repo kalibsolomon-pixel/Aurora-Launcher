@@ -135,15 +135,6 @@ impl Pulsar {
                     .flex_wrap()
                     .gap(px(4.))
                     .child(
-                        button("fight-report", "Open HTML report")
-                            .icon("open_in_new")
-                            .disabled(!s.report_available)
-                            .on_click({
-                                let key = s.key.clone();
-                                cx.listener(move |this, _, _, _| this.view_report(key.clone()))
-                            }),
-                    )
-                    .child(
                         button("fight-export", "Export\u{2026}")
                             .icon("download")
                             .disabled(!s.report_available || self.busy)
@@ -174,7 +165,7 @@ impl Pulsar {
                                         .absolute()
                                         .right_0()
                                         .top(px(34.))
-                                        .w(px(170.))
+                                        .w(px(195.))
                                         .p(px(4.))
                                         .rounded(t.radius)
                                         .bg(t.raised)
@@ -197,6 +188,20 @@ impl Pulsar {
                                                 }
                                             },
                                         ))
+                                        .child(
+                                            button("fight-report", "Open HTML report")
+                                                .full_width()
+                                                .icon("open_in_new")
+                                                .disabled(!s.report_available)
+                                                .on_click({
+                                                    let key = s.key.clone();
+                                                    cx.listener(move |this, _, _, cx| {
+                                                        this.disclosures.remove("fight-more");
+                                                        this.view_report(key.clone());
+                                                        cx.notify();
+                                                    })
+                                                }),
+                                        )
                                         .child(
                                             button("fight-delete", "Delete fight")
                                                 .full_width()
@@ -292,14 +297,14 @@ impl Pulsar {
             5 => {
                 let r = &detail.summary.resolution;
                 page=page.child(ui::card(t).child(ui::section_header(t,"Why this result was recorded",None))
-                    .child(ui::muted(t,format!("{} · {}",detail.summary.result_label,r.source)))
+                    .child(ui::muted(t,format!("{} · {}",detail.summary.result_label,super::presentation::result_source(&r.source))))
                     .children(r.notes.iter().map(|n|ui::muted(t,n.clone())))
                     .child(ui::caption(t,format!("Recorded in {} on {}. Your launcher retains this snapshot independently of the instance.",detail.summary.provenance.instance_name,super::page::utc_time(detail.summary.start_epoch_millis)))));
                 let full_path = detail.summary.provenance.source_path.clone();
                 let copy_path = full_path.clone();
                 let diagnostics=ui::card(t).child(ui::section_header(t,"Recording diagnostics",None))
                     .child(ui::caption(t,format!("Recording identifier: {}",detail.summary.key.fight_id)))
-                    .child(ui::caption(t,format!("Classification: {}. Confidence: {}. Scope: {}.",r.classification,r.confidence,r.scope)))
+                    .child(ui::caption(t,format!("Classification: {}. Confidence: {}. Scope: {}. Source identifier: {}.",r.classification,r.confidence,r.scope,r.source)))
                     .child(ui::caption(t,format!("Source: …/{}",full_path.rsplit(['/', '\\']).next().unwrap_or("recording.json"))))
                     .child(div().flex().flex_wrap().gap(px(8.)).child(button("copy-recording-path","Copy full path").on_click(move|_,_,cx|cx.write_to_clipboard(gpui::ClipboardItem::new_string(copy_path.clone()))))
                         .child(button("open-recording-source","Open recordings folder").on_click(cx.listener(|this,_,_,cx|this.folder(FolderKind::Recordings,cx)))))

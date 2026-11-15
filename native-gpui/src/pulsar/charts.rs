@@ -59,6 +59,7 @@ type Activate = std::rc::Rc<dyn Fn(Target, &mut Window, &mut gpui::App)>;
 #[derive(Default)]
 pub(super) struct Options {
     pub preferences: Preferences,
+    pub header: Option<Div>,
     pub activate: Option<Activate>,
     /// Frozen region ellipses: center x/y, radii x/y, grade index; largest first.
     pub regions: Vec<(f64, f64, f64, f64, usize)>,
@@ -301,22 +302,38 @@ impl Chart {
                 } else {
                     stack_color(t, &s.label, i)
                 };
-                labels = labels.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .child(div().w(px(10.)).h(px(10.)).rounded(px(2.)).bg(color))
-                        .child(ui::caption(
-                            t,
-                            format!(
-                                "{}: {}",
-                                s.label,
-                                n.map(|n| format!("{n:.0}"))
-                                    .unwrap_or_else(|| "Unavailable".into())
+                labels =
+                    labels.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(6.))
+                            .child(div().w(px(10.)).h(px(10.)).rounded(px(2.)).bg(
+                                if n == Some(0.) {
+                                    color.opacity(0.35)
+                                } else {
+                                    color
+                                },
+                            ))
+                            .child(
+                                ui::caption(
+                                    t,
+                                    format!(
+                                        "{}: {}",
+                                        s.label,
+                                        n.map(|n| if total > 0. {
+                                            format!("{n:.0} ({:.1}%)", n / total * 100.)
+                                        } else {
+                                            format!("{n:.0}")
+                                        })
+                                        .unwrap_or_else(|| "Unavailable".into())
+                                    ),
+                                )
+                                .when(n == Some(0.), |d| {
+                                    d.text_color(t.muted_foreground.opacity(0.7))
+                                }),
                             ),
-                        )),
-                );
+                    );
                 if let Some(n) = n.filter(|n| *n > 0.) {
                     bar = bar.child(
                         div()
@@ -324,13 +341,16 @@ impl Chart {
                             .h_full()
                             .w(px(0.))
                             .flex_grow((n / total.max(1.)) as f32)
-                            .min_w(px(0.))
+                            .min_w(px(3.))
                             .bg(color)
                             .role(Role::Image)
                             .aria_label(format!("{}: {n:.0}", s.label))
                             .tooltip(move |_, cx| {
                                 cx.new(|_| Readout {
-                                    text: super::presentation::text(&format!("{label}: {n:.0}")),
+                                    text: super::presentation::text(&format!(
+                                        "{label}: {n:.0} ({:.1}%)",
+                                        n / total.max(1.) * 100.
+                                    )),
                                     theme: theme.clone(),
                                 })
                                 .into()
@@ -405,7 +425,7 @@ impl Chart {
             (self.y_label.lines().count() as f32 * 24.).max(164.)
         } else if self.kind == Kind::Grid {
             240.
-        } else if self.id.contains("trend") {
+        } else if self.id.contains("trend") || self.id == "pooled_combo_distribution" {
             96.
         } else {
             164.
@@ -646,6 +666,7 @@ impl Chart {
                                             Shape::Diamond => palette.warning,
                                             Shape::Hollow | Shape::Plus => palette.success,
                                             Shape::Triangle | Shape::Cross => palette.danger,
+                                            Shape::Tick => palette.foreground,
                                             _ => palette.muted_foreground,
                                         }
                                     } else {
@@ -788,10 +809,10 @@ impl Chart {
                     .top(relative(
                         1. - fraction(s.y.unwrap_or(self.range.0), self.range),
                     ))
-                    .w(px(12.))
-                    .h(px(12.))
-                    .mt(px(-6.))
-                    .ml(px(-6.))
+                    .w(px(24.))
+                    .h(px(24.))
+                    .mt(px(-12.))
+                    .ml(px(-12.))
                     .role(if options.activate.is_some() {
                         Role::Button
                     } else {
@@ -887,6 +908,7 @@ impl Chart {
                     .justify_between()
                     .gap(px(8.))
                     .child(ui::section_header(t, self.title.clone(), None))
+                    .when_some(options.header, |d, controls| d.child(controls))
                     .when(self.kind == Kind::Lanes, |d| {
                         d.child(ui::caption(
                             t,

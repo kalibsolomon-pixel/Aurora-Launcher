@@ -69,7 +69,32 @@ fn button(id: impl Into<gpui::ElementId>, label: impl Into<gpui::SharedString>) 
 
 impl Pulsar {
     pub(super) fn event_table(&self, t: &AuroraTheme, events: &[&EventView]) -> Div {
-        let mut list=ui::list_card(t).child(ui::row(t,false).child(ui::section_header(t,format!("Events · {}",events.len()),Some("Time in seconds · frozen results · newest 200 matching observations, chronological".into()))));
+        let total = self
+            .active_detail()
+            .map(|d| {
+                d.timeline
+                    .iter()
+                    .filter(|e| {
+                        self.event_filter
+                            .as_deref()
+                            .map(|kind| e.kind == kind)
+                            .unwrap_or(e.kind != "MOTION")
+                    })
+                    .count()
+            })
+            .unwrap_or(events.len());
+        let mut list = ui::list_card(t)
+            .child(ui::row(t, false).child(ui::section_header(
+                t,
+                format!("Showing {} of {total} events", events.len()),
+                Some("Time in seconds; recorded observations in chronological order".into()),
+            )))
+            .child(
+                ui::row(t, false)
+                    .py(px(5.))
+                    .child(ui::caption(t, "Time").w(px(64.)).flex_shrink_0())
+                    .child(ui::caption(t, "Event and supporting evidence").flex_1()),
+            );
         for (i, e) in events.iter().enumerate() {
             let line = format!(
                 "{:.2} s · {} · {} · {}{}",
@@ -224,8 +249,16 @@ impl Pulsar {
                 t,
                 format!("{:.1} of {:.1} s", self.playhead, duration),
             ));
+        let mut speeds = div()
+            .flex()
+            .items_center()
+            .gap(px(2.))
+            .p(px(2.))
+            .rounded(t.radius)
+            .bg(t.sunken)
+            .child(ui::caption(t, "Speed").px(px(6.)));
         for (i, speed) in [0.25, 0.5, 1., 2., 4.].into_iter().enumerate() {
-            controls = controls.child(
+            speeds = speeds.child(
                 button(("playback-speed", i), format!("{speed}×"))
                     .selected(self.speed == speed)
                     .on_click(cx.listener(move |this, _, _, cx| {
@@ -234,6 +267,7 @@ impl Pulsar {
                     })),
             );
         }
+        controls = controls.child(speeds);
 
         let selected = p
             .events
@@ -248,7 +282,7 @@ impl Pulsar {
                     .unwrap_or_else(|| "Start of recording; no event selected yet.".into()),
             )),
         );
-        page = page.child(controls);
+        page = page.child(ui::card(t).p(px(12.)).gap(px(4.)).child(controls));
         // The seek rail is keyboard accessible and pointer seeking uses its actual layout bounds.
         let bounds = self.seek_bounds.clone();
         let recorded = bounds.clone();
@@ -287,6 +321,13 @@ impl Pulsar {
                 shape: event_shape(e),
             })
             .collect();
+        let event_times = p
+            .events
+            .iter()
+            .filter(|e| e.kind != "MOTION")
+            .map(|e| e.time)
+            .collect::<Vec<_>>();
+        let view = cx.entity();
         let lane_bounds = std::rc::Rc::new(std::cell::Cell::new(None));
         let measured = lane_bounds.clone();
         let lane_chart = Chart {
@@ -298,6 +339,10 @@ impl Pulsar {
                 .map(|s| {
                     if s == "activeExchanges" {
                         "Combat".into()
+                    } else if s == "events" {
+                        "Other events".into()
+                    } else if s == "attacks" {
+                        "Attacks".into()
                     } else {
                         super::analysis_ui::display_label(s)
                     }
@@ -323,32 +368,27 @@ impl Pulsar {
                 })
                 .collect(),
             incomplete: vec![],
-            note: "Click the lanes to seek. The vertical marker shows the current playback time."
+            note: "Attacks includes attack attempts and confirming hit evidence. Other events includes deaths and critical animations. Select a marker to seek."
                 .into(),
         };
         let keys = [
-            ("\u{25a0}", "Attack", t.ring),
-            ("\u{25c6}", "Shield or trade", t.warning),
+            ("\u{25a0}", "Attack attempt", t.ring),
+            ("\u{25c6}", "Shield", t.warning),
             ("\u{25cb}", "Jump", t.success),
-            ("\u{25b2}", "Incoming", t.danger),
-            ("+", "Hit evidence or critical", t.success),
+            ("\u{25b2}", "Incoming hit", t.danger),
+            ("+", "Hit evidence", t.success),
+            ("+", "Critical animation", t.success),
             ("\u{00d7}", "Death", t.danger),
-            ("|", "Sprint or boundary", t.muted_foreground),
+            ("|", "Sprint change", t.foreground),
         ];
-        page = page.child(
-            div()
-                .flex()
-                .flex_wrap()
-                .gap(px(16.))
+        page = page.child(div().flex().flex_col().gap(px(6.))
+            .child(div().flex().flex_wrap().items_center().gap(px(12.))
+                .child(ui::caption(t, "Events").font_weight(gpui::FontWeight::MEDIUM))
                 .children(keys.into_iter().map(|(shape, label, color)| {
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(6.))
-                        .child(div().text_color(color).child(shape))
-                        .child(ui::caption(t, label))
-                })),
-        );
+                    div().flex().items_center().gap(px(4.))
+                        .child(div().text_color(color).child(shape)).child(ui::caption(t, label))
+                })))
+            .child(ui::caption(t, "Lane state: shaded bands show rounds and active exchanges; the vertical line is the playhead. Hit evidence and critical animations share a plus; a diamond on the Attacks lane marks a simultaneous trade.")));
         let shortcuts = ui::caption(
             t,
             "Space: play or pause \u{b7} Comma: previous event \u{b7} Period: next event \u{b7} Arrow keys: seek one second",
@@ -360,6 +400,17 @@ impl Pulsar {
                     Some(measured),
                     super::charts::Options {
                         preferences: self.preferences,
+                        activate: Some(std::rc::Rc::new(move |target, _, cx| {
+                            if let super::charts::Target::Sample(i) = target {
+                                if let Some(time) = event_times.get(i) {
+                                    view.update(cx, |this, cx| {
+                                        this.playhead = *time;
+                                        this.pause();
+                                        cx.notify();
+                                    });
+                                }
+                            }
+                        })),
                         ..Default::default()
                     },
                 )

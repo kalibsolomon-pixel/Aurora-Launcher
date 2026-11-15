@@ -47,6 +47,16 @@ pub fn text(input: &str) -> String {
         })
         .collect()
 }
+pub fn result_source(source: &str) -> &str {
+    match source {
+        "local-melee-source" => "Confirmed by recorded melee contact",
+        "SERVER_MATCH_RESULT" => "Reported by the server at the end of the match",
+        "SERVER_ROUND_RESULT" => "Reported by the server at the end of the round",
+        "SERVER_KILL_MESSAGE" => "Supported by the server's elimination message",
+        "MANUAL" => "Captured during a manual recording",
+        _ => "Supported by the recording's result evidence",
+    }
+}
 pub fn outcome(s: &FightSummary) -> Tone {
     if !s.resolution.confidence.eq_ignore_ascii_case("confirmed") {
         return Tone::Neutral;

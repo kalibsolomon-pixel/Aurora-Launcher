@@ -453,7 +453,7 @@ impl Pulsar {
         narrow: bool,
         cx: &mut Context<Self>,
     ) -> Div {
-        let mut body = div().flex().flex_col().gap(px(ui::PAGE_GAP)).min_w(px(0.));
+        let mut body = div().flex().flex_col().gap(px(12.)).min_w(px(0.));
         let index = if self.detail_request.is_some() {
             self.detail_tab
         } else {
@@ -461,6 +461,7 @@ impl Pulsar {
         };
         let sections = super::sections::for_tab(index);
         let filtered;
+        let mut flow_selector = None;
         let tab = if sections.is_empty() {
             tab
         } else {
@@ -487,7 +488,11 @@ impl Pulsar {
                         })),
                 );
             }
-            body = body.child(strip);
+            if index == 3 {
+                flow_selector = Some(strip);
+            } else {
+                body = body.child(strip);
+            }
             filtered = super::sections::filter(tab, sections, selected);
             &filtered
         };
@@ -507,6 +512,7 @@ impl Pulsar {
             )
         };
         let summary = index == 0 && self.detail_request.is_some();
+        let mut summary_disclosures = div().flex().flex_wrap().gap(px(4.));
         let accuracy = index == 1 && self.sections[1] == 1;
         let dominance = index == 3 && self.sections[3] == 2;
         let primary_dominance = |k: &str| {
@@ -515,12 +521,19 @@ impl Pulsar {
                 "dominanceShare" | "opponentDominanceShare" | "dominanceActiveSeconds"
             )
         };
+        let compact_flow =
+            index == 3 && self.detail_request.is_none() && matches!(self.sections[3], 0 | 1);
         let primary_accuracy = |k: &str| matches!(k, "hits" | "accuracy" | "accuracyDenominator");
         let main: BTreeMap<_, _> = tab
             .metrics
             .iter()
             .filter(|(k, _)| {
                 !diagnostic(k)
+                    && (!compact_flow
+                        || matches!(
+                            k.as_str(),
+                            "averageCombo" | "longestCombo" | "longestOpponentCombo" | "comboCount"
+                        ))
                     && (!accuracy || primary_accuracy(k))
                     && (!dominance || primary_dominance(k))
                     && (!summary
@@ -587,6 +600,43 @@ impl Pulsar {
                 cx,
             ));
         }
+        if index == 1 && matches!(self.sections[1], 0 | 1) {
+            let eligible = tab.metrics.get("accuracyDenominator").and_then(|v| v.value);
+            let observed = tab
+                .charts
+                .iter()
+                .find(|c| c.id == "attack_outcomes")
+                .map(|c| {
+                    c.series
+                        .iter()
+                        .flat_map(|s| &s.points)
+                        .filter_map(|p| p.y)
+                        .sum::<f64>()
+                });
+            if let (Some(eligible), Some(observed)) = (eligible, observed) {
+                body = body.child(ui::caption(t, format!("{eligible:.0} eligible = {observed:.0} observed - {:.0} confirmed shield blocks. Accuracy excludes confirmed blocks.", (observed - eligible).max(0.))));
+            }
+        }
+        if index == 3 && self.detail_request.is_none() {
+            body = body.child(self.focus_navigation(t, cx));
+            if let Some(c) = tab
+                .charts
+                .iter()
+                .find(|c| c.id == "pooled_combo_distribution")
+            {
+                body = body.child(chart(c).render_options(
+                    t,
+                    None,
+                    super::charts::Options {
+                        preferences: self.preferences,
+                        ..Default::default()
+                    },
+                ));
+            }
+        }
+        if let Some(strip) = flow_selector {
+            body = body.child(strip);
+        }
         // Accuracy starts with the outcome breakdown; counters remain inspectable.
         if index == 1 && matches!(self.sections[1], 0 | 1) {
             for c in tab.charts.iter().filter(|c| c.id == "attack_outcomes") {
@@ -600,12 +650,14 @@ impl Pulsar {
             .metrics
             .iter()
             .filter(|(k, _)| {
-                diagnostic(k) || ((summary || accuracy || dominance) && !main.contains_key(*k))
+                diagnostic(k)
+                    || ((summary || accuracy || dominance || compact_flow)
+                        && !main.contains_key(*k))
             })
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
         if !diagnostics.is_empty() {
-            body = body.child(self.disclosure(
+            let control = self.disclosure(
                 t,
                 if summary {
                     "supporting-metrics"
@@ -623,7 +675,12 @@ impl Pulsar {
                 },
                 div().flex().flex_col().gap(px(8.)).when(index == 1 && matches!(self.sections[1], 0 | 1), |d| d.child(ui::caption(t, "Accuracy counts confirmed hits out of eligible attempts. Confirmed shield blocks are excluded; uncertain attempts remain in the denominator. Zero-count outcomes stay in the legend and have no bar width."))).child(self.metrics_panel(t, "Counting details", &diagnostics, cx)),
                 cx,
-            ));
+            );
+            if summary {
+                summary_disclosures = summary_disclosures.child(control);
+            } else {
+                body = body.child(control);
+            }
         }
         let mut context = div().flex().flex_col().gap(px(12.));
         for notice in &tab.notices {
@@ -633,20 +690,30 @@ impl Pulsar {
             context = context.child(ui::muted(t, line.clone()));
         }
         if !tab.notices.is_empty() || !tab.interpretations.is_empty() {
-            body = body.child(self.disclosure(
+            let control = self.disclosure(
                 t,
                 "interpretation",
                 "Interpretation and limitations",
                 context,
                 cx,
-            ));
+            );
+            if summary {
+                summary_disclosures = summary_disclosures.child(control);
+            } else {
+                body = body.child(control);
+            }
+        }
+        if summary {
+            body = body.child(summary_disclosures);
         }
         if (self.detail_request.is_some() && (1..=3).contains(&index))
             || (self.detail_request.is_none()
                 && (index == 3 || (index == 1 && self.sections[1] == 3)))
         {
             if self.detail_request.is_none() {
-                body = body.child(self.focus_navigation(t, cx));
+                if index != 3 {
+                    body = body.child(self.focus_navigation(t, cx));
+                }
                 body = body.child(self.focus_scopes(t, cx));
             }
             body = body.child(self.advanced_body(t, narrow, cx));
@@ -679,6 +746,10 @@ impl Pulsar {
             body = body.child(selectors);
         }
         for view in &tab.charts {
+            if index == 3 && self.detail_request.is_none() && view.id == "pooled_combo_distribution"
+            {
+                continue;
+            }
             if index == 1 && view.id == "attack_outcomes" && matches!(self.sections[1], 0 | 1) {
                 continue;
             }

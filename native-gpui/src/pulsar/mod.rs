@@ -953,6 +953,14 @@ impl Pulsar {
                             self.table_expanded.extend(ids);
                         }
                     }
+                    "compare-one" => {
+                        self.compare_keys = self
+                            .library
+                            .rows
+                            .first()
+                            .map(|f| vec![f.key.clone()])
+                            .unwrap_or_default();
+                    }
                     "record-info" => {
                         self.disclosures.insert("record-definition-0".into());
                     }
