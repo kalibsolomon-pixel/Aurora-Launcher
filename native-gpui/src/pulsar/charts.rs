@@ -226,6 +226,29 @@ fn polygon(window: &mut Window, coords: &[(gpui::Pixels, gpui::Pixels)], color: 
     }
 }
 
+fn stack_color(t: &AuroraTheme, label: &str, index: usize) -> Hsla {
+    let label = label.to_ascii_uppercase();
+    if label.contains("HIT") && !label.contains("NO_HIT") {
+        return t.ring;
+    }
+    if label.contains("BLOCK") {
+        return t.success.opacity(0.8);
+    }
+    if label.contains("MISS") || label.contains("EMPTY") {
+        return t.warning.opacity(0.85);
+    }
+    if label.contains("UNRESOLVED") || label.contains("UNCERTAIN") {
+        return t.muted_foreground.opacity(0.55);
+    }
+    [
+        t.ring,
+        t.warning.opacity(0.85),
+        t.success.opacity(0.8),
+        t.danger.opacity(0.75),
+        t.muted_foreground.opacity(0.55),
+    ][index % 5]
+}
+
 impl Chart {
     pub fn render(&self, t: &AuroraTheme) -> Div {
         self.render_with_bounds(t, None)
@@ -256,29 +279,34 @@ impl Chart {
                 let theme = t.clone();
                 let label = s.label.clone();
                 let n = s.y.filter(|n| n.is_finite() && *n >= 0.);
-                labels = labels.child(ui::caption(
-                    t,
-                    format!(
-                        "{}: {}",
-                        s.label,
-                        n.map(|n| format!("{n:.0}"))
-                            .unwrap_or_else(|| "Unavailable".into())
-                    ),
-                ));
+                let color = if self.id.contains("aim-grade") {
+                    grade_color(t, &s.label)
+                } else {
+                    stack_color(t, &s.label, i)
+                };
+                labels = labels.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .child(div().w(px(10.)).h(px(10.)).rounded(px(2.)).bg(color))
+                        .child(ui::caption(
+                            t,
+                            format!(
+                                "{}: {}",
+                                s.label,
+                                n.map(|n| format!("{n:.0}"))
+                                    .unwrap_or_else(|| "Unavailable".into())
+                            ),
+                        )),
+                );
                 if let Some(n) = n.filter(|n| *n > 0.) {
                     bar = bar.child(
                         div()
                             .id(format!("{}-stack-{i}", self.id))
                             .h_full()
                             .w(relative((n / total.max(1.)) as f32))
-                            .bg(if self.id.contains("aim-grade") {
-                                grade_color(t, &s.label)
-                            } else if i == 0 {
-                                t.ring
-                            } else {
-                                t.muted_foreground
-                                    .opacity((0.85 - i as f32 * 0.13).max(0.3))
-                            })
+                            .bg(color)
                             .role(Role::Image)
                             .aria_label(format!("{}: {n:.0}", s.label))
                             .tooltip(move |_, cx| {
@@ -309,7 +337,13 @@ impl Chart {
                         )),
                 )
                 .child(labels)
-                .child(ui::caption(t, self.note.clone()));
+                .child(ui::caption(
+                    t,
+                    format!(
+                        "{} Zero-count categories stay in the key and occupy no bar width.",
+                        self.note
+                    ),
+                ));
         }
         let chart = self.clone();
         let preferences = options.preferences;
@@ -340,7 +374,7 @@ impl Chart {
         } else if self.kind == Kind::Grid {
             240.
         } else if self.id.contains("trend") {
-            140.
+            112.
         } else {
             164.
         };
@@ -412,7 +446,7 @@ impl Chart {
                                     palette.ring.opacity(0.25)
                                 } else {
                                     if band.lane.is_some() {
-                                        palette.ring.opacity(0.15)
+                                        palette.ring.opacity(0.28)
                                     } else {
                                         palette.control.opacity(0.2)
                                     }
@@ -421,13 +455,13 @@ impl Chart {
                             stroke(
                                 window,
                                 &[(x(band.start), a), (x(band.start), b)],
-                                palette.border,
+                                palette.ring.opacity(0.65),
                                 1.,
                             );
                             stroke(
                                 window,
                                 &[(x(band.end), a), (x(band.end), b)],
-                                palette.border,
+                                palette.ring.opacity(0.65),
                                 1.,
                             );
                         }
@@ -571,6 +605,8 @@ impl Chart {
                                     {
                                         continue;
                                     }
+                                    let xx = xx.clamp(left + px(4.), left + width - px(4.));
+                                    let yy = yy.clamp(top + px(4.), top + height - px(4.));
                                     let r = px(3.5);
                                     let ink = if chart.kind == Kind::Lanes {
                                         match s.shape {
@@ -679,15 +715,36 @@ impl Chart {
                                 window,
                                 &[(x(head), top), (x(head), top + height)],
                                 palette.foreground,
-                                2.,
+                                3.,
                             );
                         }
                     },
                 )
                 .size_full(),
             );
+        if let Some(head) = self.playhead {
+            plot = plot.child(
+                div()
+                    .absolute()
+                    .left(relative(fraction(head, self.domain).min(0.85)))
+                    .top_0()
+                    .px(px(6.))
+                    .py(px(2.))
+                    .rounded(t.radius)
+                    .bg(t.foreground)
+                    .text_color(t.background)
+                    .text_size(px(ui::TEXT_CAPTION))
+                    .child(format!("{head:.1} s")),
+            );
+        }
         // Each measured point has a native hover readout and exposed text. Paths do no I/O.
-        for (i, s) in self.samples.iter().enumerate().take(2048) {
+        for (i, s) in self
+            .samples
+            .iter()
+            .enumerate()
+            .take(2048)
+            .filter(|(_, s)| s.y.is_some())
+        {
             let theme = t.clone();
             let label = s.label.clone();
             let tip = label.clone();
@@ -813,15 +870,32 @@ impl Chart {
                                     .child(ui::caption(t, label.to_owned()))
                             }))
                     } else {
+                        let percent = self.y_label.contains('%');
+                        let combo = self.kind == Kind::Timeline && self.range == (-0.5, 1.5);
+                        let labels = if combo {
+                            vec!["You".into(), "Opponent".into()]
+                        } else {
+                            (0..=4)
+                                .map(|i| {
+                                    let v = self.range.1
+                                        - (self.range.1 - self.range.0) * i as f64 / 4.;
+                                    if percent {
+                                        format!("{v:.0}%")
+                                    } else {
+                                        format!("{v:.1}")
+                                    }
+                                })
+                                .collect()
+                        };
                         div()
-                            .w(px(36.))
+                            .w(px(if combo { 64. } else { 44. }))
                             .flex_shrink_0()
                             .h(px(plot_height))
                             .flex()
                             .flex_col()
                             .justify_between()
-                            .child(ui::caption(t, format!("{:.1}", self.range.1)))
-                            .child(ui::caption(t, format!("{:.1}", self.range.0)))
+                            .when(combo, |d| d.py(px(plot_height / 4. - 8.)))
+                            .children(labels.into_iter().map(|v| ui::caption(t, v)))
                     })
                     .child(plot.flex_1().when(!available, |d| {
                         d.child(
@@ -837,35 +911,26 @@ impl Chart {
             )
             .child(
                 div()
-                    .pl(px(if self.kind == Kind::Lanes { 104. } else { 48. }))
+                    .pl(px(if self.kind == Kind::Lanes { 104. } else { 56. }))
                     .flex()
                     .justify_between()
-                    .child(ui::caption(
-                        t,
-                        if self.id.contains("trend") {
+                    .children((0..=4).map(|i| {
+                        let label = if self.id.contains("trend") {
                             self.samples
-                                .first()
+                                .get((self.samples.len().saturating_sub(1) * i) / 4)
                                 .map(|s| axis_date(&s.label))
                                 .unwrap_or("Unavailable")
                                 .to_owned()
                         } else {
-                            format!("{:.1}", self.domain.0)
-                        },
-                    ))
-                    .child(ui::caption(t, self.x_label.clone()))
-                    .child(ui::caption(
-                        t,
-                        if self.id.contains("trend") {
-                            self.samples
-                                .last()
-                                .map(|s| axis_date(&s.label))
-                                .unwrap_or("Unavailable")
-                                .to_owned()
-                        } else {
-                            format!("{:.1}", self.domain.1)
-                        },
-                    )),
+                            format!(
+                                "{:.1}",
+                                self.domain.0 + (self.domain.1 - self.domain.0) * i as f64 / 4.
+                            )
+                        };
+                        ui::caption(t, label)
+                    })),
             )
+            .child(ui::caption(t, self.x_label.clone()).text_center())
             .child(ui::caption(t, self.note.clone()))
     }
 }

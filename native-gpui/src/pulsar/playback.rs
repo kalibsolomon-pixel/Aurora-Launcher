@@ -120,6 +120,43 @@ impl Pulsar {
         list
     }
 
+    pub(super) fn event_filters(&self, cx: &mut Context<Self>) -> Div {
+        let mut filters = div().flex().flex_wrap().gap(px(4.));
+        for (i, kind) in [
+            "All",
+            "ATTACK",
+            "HURT",
+            "DAMAGE_IN",
+            "SHIELD",
+            "CRIT",
+            "JUMP",
+            "SPRINT",
+            "HEALTH",
+            "VELOCITY",
+            "DEATH",
+            "MOTION",
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let selected =
+                self.event_filter.as_deref() == if kind == "All" { None } else { Some(kind) };
+            filters = filters.child(
+                button(("event-filter", i), super::presentation::text(kind))
+                    .selected(selected)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.event_filter = if kind == "All" {
+                            None
+                        } else {
+                            Some(kind.into())
+                        };
+                        cx.notify();
+                    })),
+            );
+        }
+
+        filters
+    }
     pub(super) fn playback_body(&self, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
         let mut page = div()
             .id("pulsar-playback")
@@ -198,10 +235,17 @@ impl Pulsar {
             .aria_label(format!("Playback position {:.2} seconds of {:.2}. Left and right seek one second; Home and End jump.",self.playhead,duration))
             .track_focus(&self.seek_focus).tab_index(0)
             .child(gpui::canvas(move|b,_,_|{recorded.set(Some(b));},|_,_,_,_|{}).absolute().size_full())
-            .child(div().absolute().left_0().top(px(12.)).h(px(6.)).w(gpui::relative((self.playhead/duration.max(0.001))as f32)).rounded_full().bg(t.accent))
+            .focus_visible(|s| s.border_1().border_color(t.ring))
+            .child(div().absolute().left_0().right_0().top(px(12.)).h(px(6.)).rounded_full().bg(t.muted_foreground.opacity(0.45)))
+            .child(div().absolute().left_0().top(px(12.)).h(px(6.)).w(gpui::relative((self.playhead/duration.max(0.001))as f32)).rounded_full().bg(t.ring))
+            .child(div().absolute().left(gpui::relative((self.playhead/duration.max(0.001))as f32)).ml(px(-7.)).top(px(8.)).w(px(14.)).h(px(14.)).rounded_full().bg(t.foreground))
             .on_mouse_down(MouseButton::Left,cx.listener(move|this,e:&gpui::MouseDownEvent,_,cx|{if let Some(b)=bounds.get(){let f=((e.position.x-b.origin.x)/b.size.width).clamp(0.,1.);this.playhead=f as f64*this.duration();this.pause();cx.notify();}}))
             .on_key_down(cx.listener(|this,e:&KeyDownEvent,_,cx|{let head=match e.keystroke.key.as_str(){"left"=>this.playhead-1.,"right"=>this.playhead+1.,"home"=>0.,"end"=>this.duration(),_=>return};this.playhead=head.clamp(0.,this.duration());this.pause();cx.stop_propagation();cx.notify();}));
-        page = page.child(rail);
+        page = page
+            .child(rail)
+            .child(div().flex().justify_between().children(
+                (0..=4).map(|i| ui::caption(t, format!("{:.1} s", duration * i as f64 / 4.))),
+            ));
         let lanes = if p.lanes.is_empty() {
             vec![
                 "rounds".into(),
@@ -229,16 +273,41 @@ impl Pulsar {
         let lane_bounds = std::rc::Rc::new(std::cell::Cell::new(None));
         let measured = lane_bounds.clone();
         let lane_chart = Chart {
-            id: "playback-lanes".into(), title: "Recorded event lanes".into(),
+            id: "playback-lanes".into(),
+            title: "Recorded event lanes".into(),
             x_label: "Recording time (s)".into(),
-            y_label: lanes.iter().map(|s| if s == "activeExchanges" { "Combat".into() } else {super::analysis_ui::display_label(s)}).collect::<Vec<_>>().join("\n"),
-            samples, kind: Kind::Lanes, domain: (0., duration.max(1.)),
-            range: (-0.5, lanes.len() as f64 - 0.5), band: None, target: None,
+            y_label: lanes
+                .iter()
+                .map(|s| {
+                    if s == "activeExchanges" {
+                        "Combat".into()
+                    } else {
+                        super::analysis_ui::display_label(s)
+                    }
+                })
+                .collect::<Vec<_>>()
+                .join("\n"),
+            samples,
+            kind: Kind::Lanes,
+            domain: (0., duration.max(1.)),
+            range: (-0.5, lanes.len() as f64 - 0.5),
+            band: None,
+            target: None,
             playhead: Some(self.playhead),
-            bands: p.boundaries.iter().map(|b| super::charts::Band {
-                start: b.start, end: b.end, lane: lanes.iter().position(|l| l == &b.lane).map(|i| i as f64), label: b.label.clone(), selected: false,
-            }).collect(), incomplete: vec![],
-            note: "■ Attack · ◆ Shield or trade · ○ Jump · ▲ Incoming · + Hit evidence or critical · × Death · Tick: sprint or boundary. Click to seek. Space plays; comma and period step between events.".into(),
+            bands: p
+                .boundaries
+                .iter()
+                .map(|b| super::charts::Band {
+                    start: b.start,
+                    end: b.end,
+                    lane: lanes.iter().position(|l| l == &b.lane).map(|i| i as f64),
+                    label: b.label.clone(),
+                    selected: false,
+                })
+                .collect(),
+            incomplete: vec![],
+            note: "Click the lanes to seek. The vertical marker shows the current playback time."
+                .into(),
         };
         page = page.child(
             lane_chart
@@ -263,6 +332,17 @@ impl Pulsar {
                     }),
                 ),
         );
+        let keys = [
+            ("\u{25a0}", "Attack", t.ring),
+            ("\u{25c6}", "Shield or trade", t.warning),
+            ("\u{25cb}", "Jump", t.success),
+            ("\u{25b2}", "Incoming", t.danger),
+            ("+", "Hit evidence or critical", t.success),
+            ("\u{00d7}", "Death", t.danger),
+            ("|", "Sprint or boundary", t.muted_foreground),
+        ];
+        page = page.child(div().flex().flex_wrap().gap(px(16.)).children(keys.into_iter().map(|(shape, label, color)| div().flex().items_center().gap(px(6.)).child(div().text_color(color).child(shape)).child(ui::caption(t, label)))))
+            .child(ui::caption(t, "Space: play or pause \u{b7} Comma: previous event \u{b7} Period: next event \u{b7} Arrow keys: seek one second"));
         let mut jumps =
             div()
                 .flex()
@@ -323,40 +403,7 @@ impl Pulsar {
                     )),
             ),
         );
-        let mut filters = div().flex().flex_wrap().gap(px(4.));
-        for (i, kind) in [
-            "All",
-            "ATTACK",
-            "HURT",
-            "DAMAGE_IN",
-            "SHIELD",
-            "CRIT",
-            "JUMP",
-            "SPRINT",
-            "HEALTH",
-            "VELOCITY",
-            "DEATH",
-            "MOTION",
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            let selected =
-                self.event_filter.as_deref() == if kind == "All" { None } else { Some(kind) };
-            filters = filters.child(
-                button(("event-filter", i), super::presentation::text(kind))
-                    .selected(selected)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.event_filter = if kind == "All" {
-                            None
-                        } else {
-                            Some(kind.into())
-                        };
-                        cx.notify();
-                    })),
-            );
-        }
-
+        let filters = self.event_filters(cx);
         page = page.child(filters).child(self.event_table(
             t,
             &visible(&p.events, self.playhead, self.event_filter.as_deref()),
