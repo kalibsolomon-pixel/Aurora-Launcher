@@ -675,10 +675,15 @@ impl Pulsar {
                         ("Wins", 34.),
                         ("Losses", 40.),
                         ("Draws", 38.),
-                        ("Unknown", 54.),
+                        ("Unknown", 62.),
                     ]
                     .into_iter()
-                    .map(|(v, width)| ui::caption(t, v).w(px(width)).flex_shrink_0()),
+                    .map(|(v, width)| {
+                        ui::caption(t, v)
+                            .w(px(width))
+                            .flex_shrink_0()
+                            .whitespace_nowrap()
+                    }),
                 )
                 .child(ui::caption(t, "Accuracy").w(px(68.)))
                 .child(ui::caption(t, "Reach").w(px(56.)))
@@ -709,7 +714,7 @@ impl Pulsar {
                             (o.wins, t.success, 34.),
                             (o.losses, t.danger, 40.),
                             (o.draws, t.foreground, 38.),
-                            (o.unknown, t.foreground, 54.),
+                            (o.unknown, t.foreground, 62.),
                         ]
                         .into_iter()
                         .map(|(n, color, width)| {
@@ -980,6 +985,8 @@ impl Pulsar {
                 } else {
                     full_value.clone()
                 };
+                let expanded_value =
+                    matches!(row.key.as_str(), "analytics" | "direction" | "alert");
                 let value_theme = t.clone();
                 let help_id = format!("setting-help-{group}-{i}");
                 let help_open = self.disclosures.contains(&help_id);
@@ -1010,12 +1017,15 @@ impl Pulsar {
                         .child(
                             ui::muted(t, value)
                                 .id(format!("setting-value-{group}-{i}"))
-                                .w(px(180.))
                                 .flex_shrink_0()
-                                .text_right()
-                                .overflow_hidden()
-                                .text_ellipsis()
-                                .whitespace_nowrap()
+                                .when(expanded_value, |d| d.w_full())
+                                .when(!expanded_value, |d| {
+                                    d.w(px(180.))
+                                        .text_right()
+                                        .overflow_hidden()
+                                        .text_ellipsis()
+                                        .whitespace_nowrap()
+                                })
                                 .aria_label(full_value.clone())
                                 .tooltip(move |_, cx| {
                                     cx.new(|_| super::charts::Readout {
