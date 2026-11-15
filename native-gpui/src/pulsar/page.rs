@@ -25,14 +25,18 @@ impl Pulsar {
                     .map(|i| Some(i.instance_id.clone())),
             )
             .collect();
-        let options = std::iter::once("All instances".into())
-            .chain(
-                self.library
-                    .instances
-                    .iter()
-                    .map(|i| i.instance_name.clone().into()),
-            )
-            .collect();
+        let options = std::iter::once(if self.top_tab == 7 {
+            "Choose an instance".into()
+        } else {
+            "All instances".into()
+        })
+        .chain(
+            self.library
+                .instances
+                .iter()
+                .map(|i| i.instance_name.clone().into()),
+        )
+        .collect();
         let selected = ids.iter().position(|id| id == &self.query.instance_id);
         let view = cx.entity();
         let highlight = view.clone();
@@ -85,7 +89,10 @@ impl Pulsar {
             .when(self.width >= 1100., |d| {
                 d.child(ui::caption(
                     t,
-                    super::presentation::count(self.library.total, "recording"),
+                    format!(
+                        "{} in library",
+                        super::presentation::count(self.library.total, "recording")
+                    ),
                 ))
             })
     }
@@ -115,6 +122,24 @@ impl Pulsar {
             .get("hits")
             .map(tabs::metric_value)
             .unwrap_or_else(|| "Unavailable".into());
+        let mut row_readout = format!(
+            "{} \u{b7} {} \u{b7} {} \u{b7} {} \u{b7} {}",
+            row.opponent,
+            utc_time(row.start_epoch_millis),
+            row.provenance.instance_name,
+            duration_text(row.duration_nanos),
+            row.result_label
+        );
+        if let Some(server) = &row.server {
+            row_readout.push_str(&format!(" \u{b7} Server: {server}"));
+        }
+        if row.stale {
+            row_readout.push_str(" \u{b7} Source changed since import");
+        }
+        if !row.provenance.conflicts.is_empty() {
+            row_readout.push_str(" \u{b7} Conflicting snapshot");
+        }
+        let row_theme = t.clone();
         let confirmed = row.resolution.confidence.eq_ignore_ascii_case("confirmed");
         let tone = if confirmed {
             match row.outcome.as_str() {
@@ -125,161 +150,172 @@ impl Pulsar {
         } else {
             ui::Tone::Neutral
         };
-        ui::row(t, last)
-            .py(px(8.))
-            .w_full()
-            .overflow_hidden()
-            .min_w(px(0.))
-            .when(chosen, |d| d.bg(t.accent_soft))
-            .child(
-                AuroraCheckbox::new(
-                    format!("pulsar-compare-{index}"),
-                    format!(
-                        "Compare {} from {}",
-                        row.opponent, row.provenance.instance_name
-                    ),
-                )
-                .checked(checked)
-                .disabled(!checked && self.compare_keys.len() >= 2)
-                .on_change({
-                    let view = cx.entity();
-                    move |checked, _, _, cx| {
-                        view.update(cx, |this, cx| {
-                            if checked
-                                && !this.compare_keys.contains(&compare_key)
-                                && this.compare_keys.len() < 2
-                            {
-                                this.compare_keys.push(compare_key.clone());
-                            } else if !checked {
-                                this.compare_keys.retain(|k| k != &compare_key);
-                            }
-
-                            cx.notify();
-                        });
-                    }
-                }),
-            )
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(4.))
-                    .flex_1()
-                    .min_w(px(0.))
-                    .overflow_hidden()
-                    .child(
-                        div().flex().child(
-                            small(
-                                format!("pulsar-select-{index}"),
-                                if row.manual {
-                                    "Manual session".to_owned()
-                                } else {
-                                    short_label(&row.opponent, if narrow { 18 } else { 30 })
-                                },
-                            )
-                            .selected(chosen)
-                            .accessibility_label(format!(
-                                "Select {}. {}, {} hits, accuracy {}",
-                                row.opponent, row.result_label, hits, accuracy
-                            ))
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    if this.selected.as_ref() == Some(&key) {
-                                        this.open_detail(key.clone(), cx);
-                                    } else {
-                                        this.selected = Some(key.clone());
-                                        cx.notify();
-                                    }
-                                },
-                            )),
+        div().child(
+            ui::row(t, last)
+                .py(px(2.))
+                .w_full()
+                .overflow_hidden()
+                .min_w(px(0.))
+                .when(chosen, |d| d.bg(t.accent_soft))
+                .id(format!("history-row-readout-{index}"))
+                .tooltip(move |_, cx| {
+                    cx.new(|_| super::charts::Readout {
+                        text: row_readout.clone(),
+                        theme: row_theme.clone(),
+                    })
+                    .into()
+                })
+                .child(
+                    AuroraCheckbox::new(
+                        format!("pulsar-compare-{index}"),
+                        format!(
+                            "Compare {} from {}",
+                            row.opponent, row.provenance.instance_name
                         ),
                     )
-                    .child(
-                        ui::caption(t, {
-                            let mut parts = vec![row.provenance.instance_name.clone()];
-                            parts.push(utc_time(row.start_epoch_millis));
-                            parts.push(format!("{:.1}\u{a0}s", row.duration_nanos as f64 / 1e9));
+                    .checked(checked)
+                    .disabled(!checked && self.compare_keys.len() >= 2)
+                    .on_change({
+                        let view = cx.entity();
+                        move |checked, _, _, cx| {
+                            view.update(cx, |this, cx| {
+                                if checked
+                                    && !this.compare_keys.contains(&compare_key)
+                                    && this.compare_keys.len() < 2
+                                {
+                                    this.compare_keys.push(compare_key.clone());
+                                } else if !checked {
+                                    this.compare_keys.retain(|k| k != &compare_key);
+                                }
 
-                            parts.extend(row.server.clone());
-                            if row.stale {
-                                parts.push("Source changed since import".into());
-                            }
-
-                            if !row.provenance.conflicts.is_empty() {
-                                parts.push("Conflicting snapshot".into());
-                            }
-
-                            parts.join(" · ")
-                        })
-                        .w_full()
+                                cx.notify();
+                            });
+                        }
+                    }),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .gap(px(0.))
+                        .flex_1()
+                        .min_w(px(0.))
                         .overflow_hidden()
-                        .text_ellipsis()
-                        .whitespace_nowrap(),
-                    )
-                    .when(narrow, |d| {
-                        d.child(
+                        .child(
+                            div().flex().child(
+                                small(
+                                    format!("pulsar-select-{index}"),
+                                    if row.manual {
+                                        "Manual session".to_owned()
+                                    } else {
+                                        short_label(&row.opponent, if narrow { 18 } else { 30 })
+                                    },
+                                )
+                                .selected(chosen)
+                                .accessibility_label(format!(
+                                    "Select {}. {}, {} hits, accuracy {}",
+                                    row.opponent, row.result_label, hits, accuracy
+                                ))
+                                .on_click(cx.listener(
+                                    move |this, _, _, cx| {
+                                        if this.selected.as_ref() == Some(&key) {
+                                            this.open_detail(key.clone(), cx);
+                                        } else {
+                                            this.selected = Some(key.clone());
+                                            cx.notify();
+                                        }
+                                    },
+                                )),
+                            ),
+                        )
+                        .child(
                             div()
                                 .flex()
-                                .flex_wrap()
                                 .items_center()
-                                .gap(px(6.))
-                                .child(ui::badge(t, row.result_label.clone(), tone))
-                                .child(ui::caption(
-                                    t,
-                                    format!("{hits} hits \u{b7} {accuracy} accuracy"),
-                                )),
+                                .gap(px(8.))
+                                .child(
+                                    ui::caption(t, clock_time(row.start_epoch_millis))
+                                        .line_height(px(16.))
+                                        .flex_shrink_0(),
+                                )
+                                .child(
+                                    ui::caption(t, row.provenance.instance_name.clone())
+                                        .line_height(px(16.))
+                                        .flex_1()
+                                        .min_w(px(0.))
+                                        .overflow_hidden()
+                                        .text_ellipsis()
+                                        .whitespace_nowrap(),
+                                )
+                                .child(
+                                    ui::caption(t, duration_text(row.duration_nanos))
+                                        .line_height(px(16.))
+                                        .flex_shrink_0(),
+                                ),
                         )
-                    }),
-            )
-            .when(!narrow, |d| {
-                d.child(
-                    ui::muted(t, hits)
-                        .w(px(if narrow { 40. } else { 55. }))
-                        .flex_shrink_0(),
+                        .when(narrow, |d| {
+                            d.child(
+                                div()
+                                    .flex()
+                                    .flex_wrap()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .child(ui::badge(t, row.result_label.clone(), tone))
+                                    .child(ui::caption(
+                                        t,
+                                        format!("{hits} hits \u{b7} {accuracy} accuracy"),
+                                    )),
+                            )
+                        }),
                 )
-            })
-            .when(!narrow, |d| {
-                d.child(ui::muted(t, accuracy).w(px(85.)).flex_shrink_0())
-            })
-            .when(columns.reach && !narrow, |d| {
-                d.child(
-                    ui::muted(
-                        t,
-                        row.metrics
-                            .get("averageReach")
-                            .map(tabs::metric_value)
-                            .unwrap_or_else(|| "Unavailable".into()),
+                .when(!narrow, |d| {
+                    d.child(
+                        ui::muted(t, hits)
+                            .w(px(if narrow { 40. } else { 55. }))
+                            .flex_shrink_0(),
                     )
-                    .w(px(92.))
-                    .flex_shrink_0(),
-                )
-            })
-            .when(!narrow, |d| {
-                d.child(div().w(px(130.)).flex_shrink_0().flex().child(ui::badge(
-                    t,
-                    row.result_label.clone(),
-                    tone,
-                )))
-            })
-            .child(
-                div()
-                    .w(px(if narrow { 75. } else { 100. }))
-                    .flex_shrink_0()
-                    .flex()
-                    .child(
-                        small(
-                            format!("pulsar-open-{index}"),
-                            if narrow { "Open" } else { "Open fight" },
+                })
+                .when(!narrow, |d| {
+                    d.child(ui::muted(t, accuracy).w(px(85.)).flex_shrink_0())
+                })
+                .when(columns.reach && !narrow, |d| {
+                    d.child(
+                        ui::muted(
+                            t,
+                            row.metrics
+                                .get("averageReach")
+                                .map(tabs::metric_value)
+                                .unwrap_or_else(|| "Unavailable".into()),
                         )
-                        .icon("arrow_forward")
-                        .accessibility_label(format!("Open fight against {}", row.opponent))
-                        .on_click(
-                            cx.listener(move |this, _, _, cx| {
-                                this.open_detail(open_key.clone(), cx)
-                            }),
+                        .w(px(92.))
+                        .flex_shrink_0(),
+                    )
+                })
+                .when(!narrow, |d| {
+                    d.child(div().w(px(130.)).flex_shrink_0().flex().child(ui::badge(
+                        t,
+                        row.result_label.clone(),
+                        tone,
+                    )))
+                })
+                .child(
+                    div()
+                        .w(px(if narrow { 75. } else { 100. }))
+                        .flex_shrink_0()
+                        .flex()
+                        .child(
+                            small(
+                                format!("pulsar-open-{index}"),
+                                if narrow { "Open" } else { "Open fight" },
+                            )
+                            .icon("arrow_forward")
+                            .accessibility_label(format!("Open fight against {}", row.opponent))
+                            .on_click(cx.listener(
+                                move |this, _, _, cx| this.open_detail(open_key.clone(), cx),
+                            )),
                         ),
-                    ),
-            )
+                ),
+        )
     }
 
     fn history(&self, t: &AuroraTheme, narrow: bool, cx: &mut Context<Self>) -> Div {
@@ -508,7 +544,7 @@ impl Pulsar {
                             grouped
                                 .w_full()
                                 .min_w(px(0.))
-                                .h(px(if narrow { 140. } else { 88. }))
+                                .h(px(if narrow { 84. } else { 64. }))
                                 .into_any_element()
                         })
                         .collect::<Vec<_>>()
@@ -559,14 +595,31 @@ impl Pulsar {
             .and_then(|k| self.library.rows.iter().position(|r| &r.key == k))
             .unwrap_or(0);
         let mut controls = div().flex().flex_wrap().gap(px(8.));
-        for (newer, label) in [(true, "Newer recording"), (false, "Older recording")] {
+        for newer in [true, false] {
+            let target = if newer {
+                index.checked_sub(1)
+            } else {
+                Some(index + 1)
+            }
+            .and_then(|i| self.library.rows.get(i));
+            let label = target
+                .map(|f| {
+                    format!(
+                        "{} fight: {}, {}",
+                        if newer { "Next" } else { "Previous" },
+                        f.opponent,
+                        utc_time(f.start_epoch_millis).trim_end_matches(" UTC")
+                    )
+                })
+                .unwrap_or_else(|| format!("No {} fight", if newer { "newer" } else { "earlier" }));
             controls = controls.child(
                 small(if newer { "flow-newer" } else { "flow-older" }, label)
-                    .disabled(if newer {
-                        index == 0
+                    .variant(if target.is_none() {
+                        ButtonVariant::Subtle
                     } else {
-                        index + 1 >= self.library.rows.len()
+                        ButtonVariant::Ghost
                     })
+                    .disabled(target.is_none())
                     .on_click(cx.listener(move |this, _, _, cx| {
                         let i = if newer {
                             index.saturating_sub(1)
@@ -612,36 +665,31 @@ impl Pulsar {
     }
 
     fn opponents_body(&self, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
-        let mut list = ui::list_card(t).child(ui::row(t, false).child(ui::section_header(
-            t,
-            "Opponents",
-            Some("Results from your recorded fights".into()),
-        )));
+        let mut list = ui::list_card(t).min_w(px(840.)).w_full().child(
+            ui::row(t, false)
+                .py(px(6.))
+                .gap(px(8.))
+                .child(ui::caption(t, "Opponent").flex_1().min_w(px(120.)))
+                .children(
+                    ["Wins", "Losses", "Draws", "Unknown"]
+                        .into_iter()
+                        .map(|v| ui::caption(t, v).w(px(34.))),
+                )
+                .child(ui::caption(t, "Accuracy").w(px(60.)))
+                .child(ui::caption(t, "Reach").w(px(52.)))
+                .child(ui::caption(t, "Latest fight").w(px(140.)))
+                .child(div().w(px(140.))),
+        );
         for (i, o) in self.opponents.iter().enumerate() {
             let latest = o.latest.as_ref();
             let key = latest
                 .map(|f| f.key.clone())
                 .or_else(|| o.fights.first().cloned());
             let opponent = o.label.clone();
-            let mut record = div().flex().gap(px(16.));
-            for (label, n, tone) in [
-                ("Wins", o.wins, ui::Tone::Success),
-                ("Losses", o.losses, ui::Tone::Danger),
-                ("Draws", o.draws, ui::Tone::Neutral),
-                ("Unknown", o.unknown, ui::Tone::Neutral),
-            ] {
-                record = record.child(div().min_w(px(44.)).child(ui::caption(t, label)).child(
-                    ui::badge(
-                        t,
-                        n.to_string(),
-                        if n == 0 { ui::Tone::Neutral } else { tone },
-                    ),
-                ));
-            }
-
             list = list.child(
                 ui::row(t, i + 1 == self.opponents.len())
-                    .flex_wrap()
+                    .py(px(8.))
+                    .gap(px(8.))
                     .child(
                         ui::title_block(
                             t,
@@ -649,128 +697,72 @@ impl Pulsar {
                             Some(super::presentation::count(o.fights.len(), "fight").into()),
                         )
                         .flex_1()
-                        .min_w(px(180.)),
+                        .min_w(px(120.)),
                     )
-                    .child(record)
-                    .child(tabs::stats(t, &o.metrics, &["accuracy", "averageReach"]))
-                    .when_some(latest, |d, f| {
-                        d.child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(6.))
-                                .child(ui::caption(t, utc_time(f.start_epoch_millis)))
-                                .child(div().flex().child(ui::badge(
-                                    t,
-                                    f.result_label.clone(),
-                                    super::presentation::outcome(f),
-                                ))),
-                        )
-                    })
-                    .child(
-                        small(("opponent-history", i), "View fights").on_click(cx.listener(
-                            move |this, _, window, cx| {
-                                this.query.search = opponent.clone();
-                                this.query.offset = 0;
-                                this.top_tab = 4;
-                                this.search.update(cx, |input, cx| {
-                                    input.set_value(opponent.clone(), window, cx)
-                                });
-                                this.load(false, cx);
-                                cx.notify();
-                            },
-                        )),
+                    .children(
+                        [
+                            (o.wins, t.success),
+                            (o.losses, t.danger),
+                            (o.draws, t.foreground),
+                            (o.unknown, t.foreground),
+                        ]
+                        .into_iter()
+                        .map(|(n, color)| {
+                            ui::muted(t, n.to_string())
+                                .w(px(34.))
+                                .text_color(if n == 0 {
+                                    t.muted_foreground.opacity(0.5)
+                                } else {
+                                    color
+                                })
+                        }),
                     )
-                    .child(
-                        small(("opponent-open", i), "Open latest")
-                            .icon("arrow_forward")
-                            .disabled(key.is_none())
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                if let Some(k) = &key {
-                                    this.open_detail(k.clone(), cx);
-                                }
-                            })),
-                    ),
-            );
-        }
-        list
-    }
-
-    fn records_body(&self, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
-        let mut list = div()
-            .flex()
-            .flex_col()
-            .gap(px(16.))
-            .child(ui::section_header(
-                t,
-                "Personal records",
-                Some("Your best recorded performances".into()),
-            ));
-        for (i, r) in self.records.iter().enumerate() {
-            let key = r.key.clone();
-            let source = r.source.as_ref();
-            let record_id = format!("record-definition-{i}");
-            let open = self.disclosures.contains(&record_id);
-            list = list.child(
-                ui::card(t)
+                    .children([("accuracy", 60.), ("averageReach", 52.)].into_iter().map(
+                        |(key, width)| {
+                            ui::muted(
+                                t,
+                                o.metrics
+                                    .get(key)
+                                    .map(tabs::metric_value)
+                                    .unwrap_or_else(|| "Unavailable".into()),
+                            )
+                            .w(px(width))
+                        },
+                    ))
+                    .child(div().w(px(140.)).flex().flex_col().gap(px(2.)).when_some(
+                        latest,
+                        |d, f| {
+                            d.child(
+                                ui::caption(t, utc_time(f.start_epoch_millis)).whitespace_nowrap(),
+                            )
+                            .child(div().flex().child(ui::badge(
+                                t,
+                                f.result_label.clone(),
+                                super::presentation::outcome(f),
+                            )))
+                        },
+                    ))
                     .child(
                         div()
+                            .w(px(140.))
                             .flex()
-                            .items_center()
-                            .gap(px(16.))
                             .flex_wrap()
+                            .gap(px(2.))
+                            .child(small(("opponent-history", i), "View fights").on_click(
+                                cx.listener(move |this, _, window, cx| {
+                                    this.query.search = opponent.clone();
+                                    this.query.offset = 0;
+                                    this.top_tab = 4;
+                                    this.search.update(cx, |input, cx| {
+                                        input.set_value(opponent.clone(), window, cx)
+                                    });
+                                    this.load(false, cx);
+                                    cx.notify();
+                                }),
+                            ))
                             .child(
-                                div()
-                                    .flex_1()
-                                    .min_w(px(160.))
-                                    .child(ui::section_header(t, r.label.clone(), None))
-                                    .when_some(source, |d, f| {
-                                        d.child(ui::caption(
-                                            t,
-                                            format!(
-                                                "{} \u{b7} {}",
-                                                f.opponent,
-                                                utc_time(f.start_epoch_millis)
-                                            ),
-                                        ))
-                                    })
-                                    .child(ui::caption(
-                                        t,
-                                        r.minimum_attempts
-                                            .map(|n| format!("Requires {n} eligible attempts"))
-                                            .unwrap_or_else(|| "Best measured performance".into()),
-                                    )),
-                            )
-                            .child(
-                                div()
-                                    .w(px(130.))
-                                    .flex_shrink_0()
-                                    .text_right()
-                                    .text_size(px(ui::TEXT_TITLE))
-                                    .font_weight(gpui::FontWeight::SEMIBOLD)
-                                    .text_color(t.foreground)
-                                    .child(tabs::metric_value(&r.metric)),
-                            )
-                            .when_some(source, |d, f| {
-                                d.child(div().w(px(150.)).flex().child(ui::badge(
-                                    t,
-                                    f.result_label.clone(),
-                                    super::presentation::outcome(f),
-                                )))
-                            })
-                            .child(
-                                small(("record-info", i), "")
-                                    .icon("info")
-                                    .accessibility_label(format!("About {}", r.label))
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        if !this.disclosures.remove(&record_id) {
-                                            this.disclosures.insert(record_id.clone());
-                                        }
-                                        cx.notify();
-                                    })),
-                            )
-                            .child(
-                                small(("record-open", i), "Open fight")
+                                small(("opponent-open", i), "Open latest")
+                                    .icon("arrow_forward")
                                     .disabled(key.is_none())
                                     .on_click(cx.listener(move |this, _, _, cx| {
                                         if let Some(k) = &key {
@@ -778,13 +770,120 @@ impl Pulsar {
                                         }
                                     })),
                             ),
+                    ),
+            );
+        }
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .child(ui::section_header(
+                t,
+                "Opponents",
+                Some("Results from your recorded fights".into()),
+            ))
+            .when(self.width < 1100., |d| {
+                d.child(ui::caption(
+                    t,
+                    "Scroll horizontally for all measurements and actions.",
+                ))
+            })
+            .child(
+                div()
+                    .id("opponent-table")
+                    .min_w(px(0.))
+                    .w_full()
+                    .overflow_x_scroll()
+                    .child(list),
+            )
+    }
+
+    fn records_body(&self, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
+        let mut rows = ui::list_card(t);
+        for (i, r) in self.records.iter().enumerate() {
+            let key = r.key.clone();
+            let source = r.source.as_ref();
+            let record_id = format!("record-definition-{i}");
+            let open = self.disclosures.contains(&record_id);
+            let value = if r.metric.definition.unit == "s" {
+                r.metric
+                    .value
+                    .map(|v| duration_text((v * 1e9) as i64))
+                    .unwrap_or_else(|| "Unavailable".into())
+            } else {
+                tabs::metric_value(&r.metric)
+            };
+            rows = rows.child(
+                ui::row(t, i + 1 == self.records.len())
+                    .py(px(8.))
+                    .flex_wrap()
+                    .child(
+                        div()
+                            .w(px(170.))
+                            .child(ui::muted(t, r.label.clone()))
+                            .when_some(r.minimum_attempts, |d, n| {
+                                d.child(ui::caption(t, format!("At least {n} eligible attempts")))
+                            }),
+                    )
+                    .child(
+                        div()
+                            .w(px(120.))
+                            .text_size(px(ui::TEXT_SECTION))
+                            .font_weight(gpui::FontWeight::SEMIBOLD)
+                            .child(value),
+                    )
+                    .child(div().flex_1().min_w(px(160.)).when_some(source, |d, f| {
+                        d.child(ui::caption(
+                            t,
+                            format!("{} \u{b7} {}", f.opponent, utc_time(f.start_epoch_millis)),
+                        ))
+                    }))
+                    .child(div().w(px(125.)).flex().when_some(source, |d, f| {
+                        d.child(ui::badge(
+                            t,
+                            f.result_label.clone(),
+                            super::presentation::outcome(f),
+                        ))
+                    }))
+                    .child(
+                        small(("record-info", i), "")
+                            .icon("info")
+                            .accessibility_label(format!("About {}", r.label))
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if !this.disclosures.remove(&record_id) {
+                                    this.disclosures.insert(record_id.clone());
+                                }
+                                cx.notify();
+                            })),
+                    )
+                    .child(
+                        small(("record-open", i), "Open fight")
+                            .icon("arrow_forward")
+                            .disabled(key.is_none())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                if let Some(k) = &key {
+                                    this.open_detail(k.clone(), cx);
+                                }
+                            })),
                     )
                     .when(open, |d| {
-                        d.child(ui::muted(t, r.metric.definition.help.clone()))
+                        d.child(ui::caption(t, r.metric.definition.help.clone()).w_full())
                     }),
             );
         }
-        list
+        div()
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .child(ui::section_header(
+                t,
+                "Personal records",
+                Some(
+                    "Records measure performance; a fight can qualify without a recorded result."
+                        .into(),
+                ),
+            ))
+            .child(rows)
     }
 
     fn settings_body(&self, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
@@ -796,7 +895,7 @@ impl Pulsar {
             t,
             "Settings inspector",
             Some(
-                "Saved preferences and recording policies. Live controls are available in game."
+                "Choose an instance above to inspect its saved preferences. Live controls are available in game."
                     .into(),
             ),
         ));
@@ -812,8 +911,8 @@ impl Pulsar {
                 .instances
                 .iter()
                 .find(|i| i.instance_id == s.instance_id)
-                .map(|i| i.instance_name.clone())
-                .unwrap_or_else(|| "Selected instance preferences".into()),
+                .map(|i| format!("Inspecting: {}", i.instance_name))
+                .unwrap_or_else(|| "Inspecting selected instance".into()),
             None,
         ));
         let mut groups = std::collections::BTreeMap::<&str, Vec<&SettingView>>::new();
@@ -848,7 +947,7 @@ impl Pulsar {
             let mut list = ui::list_card(t).child(
                 ui::row(t, false)
                     .child(ui::section_header(t, group.to_owned(), None).flex_1())
-                    .child(ui::caption(t, "Change in game")),
+                    .child(ui::badge(t, "Change in game", ui::Tone::Neutral)),
             );
             if group == "Diagnostics" {
                 list = list.child(
@@ -876,6 +975,7 @@ impl Pulsar {
                 let help_open = self.disclosures.contains(&help_id);
                 list = list.child(
                     ui::row(t, i + 1 == count)
+                        .py(px(3.))
                         .flex_wrap()
                         .child(
                             div()
@@ -1125,7 +1225,7 @@ impl Pulsar {
         let mut page = div()
             .flex()
             .flex_col()
-            .gap(px(16.))
+            .gap(px(if self.width < 950. { 8. } else { 16. }))
             .min_w(px(0.))
             .child(
                 div()
@@ -1196,6 +1296,9 @@ impl Pulsar {
             );
         }
 
+        if self.width < 900. {
+            strip = strip.bg(gpui::transparent_black()).border_0().p(px(0.));
+        }
         if narrow {
             let view = cx.entity();
             let hi = view.clone();
@@ -1220,7 +1323,11 @@ impl Pulsar {
                 .selected(self.top_tab.checked_sub(first))
                 .open(self.tab_open)
                 .highlight(self.tab_highlight)
-                .width(px(132.))
+                .width(px(if self.width < 900. {
+                    (self.width - 100.).max(200.)
+                } else {
+                    132.
+                }))
                 .on_open_change(move |v, _, cx| {
                     view.update(cx, |this, cx| {
                         this.tab_open = v;
@@ -1270,8 +1377,12 @@ impl Pulsar {
         }
 
         if self.library.total == 0 && self.error.is_none() {
-            return page.child(ui::empty_state(&t,"swords","Your first fight starts in game","Enable Pulsar in Aurora Client settings, then play a fight or start a manual recording. Return here and refresh to keep it in your library."))
-                .child(div().flex().child(AuroraButton::new("pulsar-setup","Open Instances").variant(ButtonVariant::Primary).on_click(cx.listener(|_,_,_,cx|cx.emit(super::PulsarEvent::OpenInstances)))));
+            let setup = ui::empty_state(&t, "swords", "Your first fight starts in game", "Enable Pulsar in Aurora Client, then play a fight or start a manual recording.")
+                .child(div().flex().flex_wrap().justify_center().gap(px(8.))
+                    .child(AuroraButton::new("pulsar-setup", "Open Instances").variant(ButtonVariant::Primary).on_click(cx.listener(|_, _, _, cx| cx.emit(super::PulsarEvent::OpenInstances))))
+                    .child(small("pulsar-enable-help", "How to enable Pulsar").on_click(cx.listener(|this, _, _, cx| { if !this.disclosures.remove("enable-help") { this.disclosures.insert("enable-help".into()); } cx.notify(); }))))
+                .when(self.disclosures.contains("enable-help"), |d| d.child(ui::muted(&t, "Launch an instance with Aurora Client installed. Open Aurora settings in game, find Pulsar and enable fight tracking and recording. Play a fight, then return here and select Refresh.")));
+            return page.child(setup);
         }
 
         if self.top_tab < 4 {
@@ -1301,10 +1412,8 @@ impl Pulsar {
                 window_bar = window_bar.child(ui::caption(
                     &t,
                     format!(
-                        "{} recordings · {} timelines · {} with context",
-                        a.coverage.recordings,
-                        a.coverage.timeline_recordings,
-                        a.coverage.context_recordings
+                        "Showing {} of {} recordings",
+                        a.coverage.recordings, self.library.total
                     ),
                 ));
             }
@@ -1603,6 +1712,14 @@ mod tests {
     use super::*;
 
     #[test]
+    fn history_fields_keep_time_and_duration_independent_of_instance_length() {
+        assert_eq!(clock_time(0), "00:00");
+        assert_eq!(duration_text(303_400_000_000), "5 min 3 s");
+        assert_eq!(duration_text(18_000_000_000), "18 s");
+        assert_eq!(duration_text(-1), "0 s");
+    }
+
+    #[test]
     fn saved_setting_values_use_player_units_and_preserve_layout_flags() {
         let mut row = SettingView {
             key: "accent".into(),
@@ -1714,4 +1831,20 @@ pub(super) fn utc_time(epoch_millis: i64) -> String {
         clock / 3600,
         clock / 60 % 60
     )
+}
+
+pub(super) fn clock_time(epoch_millis: i64) -> String {
+    utc_time(epoch_millis)
+        .split_whitespace()
+        .nth(1)
+        .unwrap_or("Time unavailable")
+        .to_owned()
+}
+pub(super) fn duration_text(nanos: i64) -> String {
+    let seconds = (nanos.max(0) as f64 / 1e9).round() as u64;
+    if seconds >= 60 {
+        format!("{} min {} s", seconds / 60, seconds % 60)
+    } else {
+        format!("{seconds} s")
+    }
 }

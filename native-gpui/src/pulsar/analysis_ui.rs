@@ -146,8 +146,14 @@ impl Pulsar {
                 body = body.child(ui::caption(
                     t,
                     format!(
-                        "Against the previous {} recordings \u{b7} {comparisons}",
-                        a.previous_recordings
+                        "Last {} vs previous {} recordings{} \u{b7} {comparisons}",
+                        a.coverage.recordings,
+                        a.previous_recordings,
+                        if a.previous_recordings < 5 {
+                            " (small baseline)"
+                        } else {
+                            ""
+                        }
                     ),
                 ));
                 if let (Some(now), Some(before)) = (
@@ -169,7 +175,7 @@ impl Pulsar {
             let mut chart = tabs::chart(c);
             chart.x_label = "Recording date (UTC)".into();
             chart.note =
-                "Each point is one recording. A hollow 0% point means eligible attempts with no confirmed hits; missing or ineligible measurements leave a gap. Hover a point for the fight and counts."
+                "Hollow points show genuine 0% accuracy. Missing or ineligible measurements leave gaps."
                     .into();
             body = body.child(chart.render_options(
                 t,
@@ -191,11 +197,21 @@ impl Pulsar {
         m: &BTreeMap<String, MetricValue>,
         cx: &mut Context<Self>,
     ) -> Div {
-        let mut group = div().flex().flex_wrap().gap(px(24.));
+        let mut group = div().flex().flex_wrap().gap(px(16.));
         for metric in m.values() {
             let key = metric.definition.key.clone();
+            let metric_tip = format!("{}: {}", metric.definition.label, metric.definition.help);
+            let metric_theme = t.clone();
             group = group.child(
                 div()
+                    .id(format!("metric-readout-{key}"))
+                    .tooltip(move |_, cx| {
+                        cx.new(|_| super::charts::Readout {
+                            text: metric_tip.clone(),
+                            theme: metric_theme.clone(),
+                        })
+                        .into()
+                    })
                     .w(px(if m.len() == 4 && self.width >= 950. {
                         170.
                     } else if self.width < 950. {
@@ -203,17 +219,23 @@ impl Pulsar {
                     } else {
                         210.
                     }))
-                    .when(m.len() == 5, |d| d.w(px(0.)).flex_1().min_w(px(120.)))
+                    .when(m.len() == 5, |d| d.w(gpui::relative(0.30)).min_w(px(130.)))
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap(px(4.))
-                            .when(m.len() == 5, |d| d.h(px(64.)))
+                            .h(px(if m.len() == 5 { 32. } else { 20. }))
                             .child(
                                 ui::caption(
                                     t,
                                     match key.as_str() {
+                                        "incoming" => "Incoming hits".into(),
+                                        "incomingCritical" | "criticalOnLocal"
+                                        | "opponentCrits" => "Incoming crits".into(),
+                                        "thirdPartyIncoming" => "Third-party hits".into(),
+                                        "unattributedIncoming" => "Unattributed hits".into(),
+                                        "unexplainedHealthDrops" => "Health-drop gaps".into(),
                                         "emptyMisses" => "Aimed swings without a hit".into(),
                                         "eligibleMisses" => "Canonical miss classifications".into(),
                                         _ => display_label(&metric.definition.label),
@@ -262,12 +284,40 @@ impl Pulsar {
         if m.get("unexplainedHealthDrops")
             .is_some_and(|v| v.value.is_none())
         {
-            group = group.child(ui::caption(t, "No usable health-drop attribution was recorded. This measure is unavailable, rather than zero.").w_full());
+            group = group.child(
+                ui::caption(
+                    t,
+                    "Health-drop attribution was not recorded; the dash means unavailable.",
+                )
+                .w_full(),
+            );
         }
         let mut panel = ui::card(t)
+            .p(px(16.))
+            .gap(px(12.))
             .when(title == "Recent performance", |d| d.gap(px(8.)).p(px(16.)))
             .child(ui::section_header(t, title.to_owned(), None))
             .child(group);
+        if title == "Performance" || title == "Pooled performance" {
+            let definitions = [
+                (
+                    "accuracy",
+                    "Accuracy: confirmed hits out of eligible attempts.",
+                ),
+                ("averageReach", "Reach: distance at confirmed contact."),
+                (
+                    "longestCombo",
+                    "Combo: consecutive hits before retaliation or a break.",
+                ),
+            ]
+            .into_iter()
+            .filter(|(key, _)| m.contains_key(*key))
+            .map(|(_, text)| text)
+            .collect::<Vec<_>>();
+            if !definitions.is_empty() {
+                panel = panel.child(ui::caption(t, definitions.join(" ")));
+            }
+        }
         if let Some(metric) = self.metric_info.as_ref().and_then(|k| m.get(k)) {
             panel = panel.child(explanation(
                 t,
@@ -690,79 +740,90 @@ impl Pulsar {
     }
 
     pub(super) fn focus_scopes(&self, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
-        let mut body = div().flex().flex_col().gap(px(8.));
         let Some(detail) = self.active_detail() else {
-            return body;
+            return div();
         };
         if !detail.summary.manual && detail.exchanges.is_empty() {
-            return body;
+            return div();
         }
-
         let request = self.scope_request();
-        body = body.child(ui::section_header(
-            t,
-            "Manual session scope",
-            Some(
-                "Select a participant or exchange. The entire session has no tracked opponent."
-                    .into(),
-            ),
-        ));
-        let mut participants = div().flex().flex_wrap().gap(px(4.)).child(
-            button("focus-all", "All participants")
-                .selected(request.as_ref().is_some_and(|r| r.participant.is_none()))
-                .on_click(cx.listener(|this, _, _, cx| {
-                    if let Some(mut r) = this.scope_request() {
-                        r.participant = None;
-                        r.exchange_id = None;
-                        this.select_scope(r, cx);
-                    }
-                })),
-        );
-        for (i, p) in detail.participants.iter().enumerate() {
-            let id = p.id.clone();
-            participants = participants.child(
-                button(("focus-participant", i), p.label.clone())
-                    .selected(request.as_ref().and_then(|r| r.participant.as_ref()) == Some(&id))
+        let mut list = ui::list_card(t).child(ui::row(t, false).py(px(6.)).flex_wrap()
+            .child(ui::caption(t, "Results belong to individual exchanges; the full session has no single opponent.").flex_1())
+            .child(button("scope-entire-session", "Entire session").selected(request.as_ref().is_some_and(|r| r.participant.is_none() && r.exchange_id.is_none())).on_click(cx.listener(|this, _, _, cx| {
+                if let Some(mut r) = this.scope_request() { r.participant = None; r.exchange_id = None; this.select_scope(r, cx); }
+            }))));
+        for (i, participant) in detail.participants.iter().enumerate() {
+            let id = participant.id.clone();
+            list = list.child(
+                ui::row(t, false)
+                    .py(px(2.))
+                    .child(ui::caption(t, "Participant").w(px(80.)))
+                    .child(
+                        button(
+                            ("scope-participant", i),
+                            format!("All exchanges with {}", participant.label),
+                        )
+                        .selected(request.as_ref().is_some_and(|r| {
+                            r.participant.as_ref() == Some(&id) && r.exchange_id.is_none()
+                        }))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if let Some(mut r) = this.scope_request() {
+                                r.participant = Some(id.clone());
+                                r.exchange_id = None;
+                                this.select_scope(r, cx);
+                            }
+                        })),
+                    ),
+            );
+        }
+        for (i, exchange) in detail.exchanges.iter().enumerate() {
+            let id = exchange.id.clone();
+            let keyboard_id = id.clone();
+            let (label, tone) = super::presentation::resolution(&exchange.resolution);
+            list = list.child(
+                ui::row(t, i + 1 == detail.exchanges.len())
+                    .py(px(7.))
+                    .id(("scope-exchange", i))
+                    .role(gpui::Role::Button)
+                    .tab_index(0)
+                    .cursor_pointer()
+                    .aria_label(format!(
+                        "Select exchange {} with {}, {}",
+                        i + 1,
+                        exchange.opponent,
+                        label
+                    ))
+                    .when(detail.selected_exchange.as_ref() == Some(&id), |d| {
+                        d.bg(t.accent_soft)
+                    })
+                    .focus_visible(|d| d.border_1().border_color(t.ring))
+                    .child(ui::caption(t, format!("Exchange {}", i + 1)).w(px(80.)))
+                    .child(ui::muted(t, exchange.opponent.clone()).flex_1())
+                    .child(ui::badge(t, label.to_owned(), tone))
+                    .child(
+                        ui::caption(t, super::page::duration_text(exchange.duration_nanos))
+                            .w(px(70.)),
+                    )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(mut r) = this.scope_request() {
-                            r.participant = Some(id.clone());
-                            r.exchange_id = None;
+                            r.participant = None;
+                            r.exchange_id = Some(id.clone());
                             this.select_scope(r, cx);
+                        }
+                    }))
+                    .on_key_down(cx.listener(move |this, e: &gpui::KeyDownEvent, _, cx| {
+                        if matches!(e.keystroke.key.as_str(), "enter" | "space" | " ") {
+                            if let Some(mut r) = this.scope_request() {
+                                r.participant = None;
+                                r.exchange_id = Some(keyboard_id.clone());
+                                this.select_scope(r, cx);
+                            }
+                            cx.stop_propagation();
                         }
                     })),
             );
         }
-
-        body = body.child(participants);
-        let mut exchanges = div().flex().flex_wrap().gap(px(4.)).child(
-            button("focus-entire", "Entire manual session")
-                .selected(detail.selected_exchange.is_none())
-                .on_click(cx.listener(|this, _, _, cx| {
-                    if let Some(mut r) = this.scope_request() {
-                        r.participant = None;
-                        r.exchange_id = None;
-                        this.select_scope(r, cx);
-                    }
-                })),
-        );
-        for (i, e) in detail.exchanges.iter().enumerate() {
-            let id = e.id.clone();
-            exchanges = exchanges.child(
-                button(
-                    ("focus-exchange", i),
-                    format!("{} | {:.1} s", e.opponent, e.duration_nanos as f64 / 1e9),
-                )
-                .selected(detail.selected_exchange.as_ref() == Some(&id))
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if let Some(mut r) = this.scope_request() {
-                        r.exchange_id = Some(id.clone());
-                        this.select_scope(r, cx);
-                    }
-                })),
-            );
-        }
-
-        body.child(exchanges)
+        div().child(list)
     }
 
     pub(super) fn shortcut_guide(&self, t: &AuroraTheme) -> Div {
