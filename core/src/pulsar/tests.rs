@@ -1326,6 +1326,19 @@ fn card_denominators_frozen_regions_rounds_and_focused_flow_are_source_supported
     };
     let detail = service::detail(&lab.paths, request(0)).unwrap();
     assert_eq!(
+        detail.offense.metrics["accuracyDenominator"].value,
+        Some(14.)
+    );
+    assert_eq!(detail.evidence.rows[0].metrics["time"].definition.unit, "s");
+    let source = fight(0);
+    let origin = source.evidence().timeline_start_nanos.unwrap();
+    assert_eq!(
+        detail.evidence.rows[0].metrics["time"].value,
+        Some((source.evidence().entries[0].nano_time - origin) as f64 / 1e9)
+    );
+    assert!(detail.evidence.columns.contains(&"nanoTime".to_owned()));
+
+    assert_eq!(
         detail.summary.metrics["accuracyDenominator"].value,
         Some(14.0)
     );

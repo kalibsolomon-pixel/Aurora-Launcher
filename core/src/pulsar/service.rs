@@ -450,7 +450,28 @@ pub fn detail_analysis(
         &serde_json::to_value(&record.evidence().entries).unwrap(),
         None,
     );
+    let evidence_base = record
+        .evidence()
+        .timeline_start_nanos
+        .or_else(|| record.events.first().map(|e| e.nano_time));
+    if !evidence.columns.contains(&"time".to_owned()) {
+        evidence.columns.insert(0, "time".into());
+    }
     for (i, row) in evidence.rows.iter_mut().enumerate() {
+        let seconds = evidence_base
+            .zip(record.evidence().entries.get(i))
+            .map(|(base, e)| (e.nano_time - base) as f64 / 1e9);
+        row.metrics.insert(
+            "time".into(),
+            metrics::extra(
+                "time",
+                "Recording time",
+                "s",
+                "Elapsed time from the frozen recording timeline origin.",
+                seconds,
+            ),
+        );
+
         row.cells.insert(
             "Establishing".into(),
             (summary.resolution.evidence_index == Some(i as i32)).to_string(),

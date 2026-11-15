@@ -285,6 +285,20 @@ fn tabs_value(
         offense.metrics.insert(key.into(),metrics::extra(key,key,"","Frozen canonical input policy. Historical recordings retain their original classification.",field(&d["summary"],key)));
     }
     let s = &d["summary"];
+    offense.metrics.insert(
+        "accuracyDenominator".into(),
+        metrics::extra(
+            "accuracyDenominator",
+            "Eligible accuracy attempts",
+            "count",
+            "Attack attempts minus confirmed shield blocks. Uncertain results remain eligible.",
+            Some(analytics::num(s, "attempts") - analytics::num(&d["shields"], "confirmedBlocks")),
+        ),
+    );
+    if let Some(m) = offense.metrics.get_mut("eligibleMisses") {
+        m.definition.label = "Canonical miss classifications".into();
+        m.definition.help="MISS classifications under the current frozen input policy. Unavailable for older recording policies; this diagnostic can differ from the historical aimed-swing counter.".into();
+    }
     let outcomes = json!([{"category":"HIT","count":s["hits"]},{"category":"SHIELD_BLOCK","count":d["shields"]["confirmedBlocks"]},{"category":"ESTIMATED_BLOCK","count":d["shields"]["estimatedBlocks"]},{"category":"UNCERTAIN","count":(analytics::num(s,"uncertain")-analytics::num(&d["shields"],"estimatedBlocks")).max(0.0)},{"category":"MISS","count":s["emptyMisses"]}]);
     offense.charts.push(chart("attack_outcomes","Attack outcomes","stackedBar","","attempts",vec![ChartSeries{label:"Outcome counts".into(),points:outcomes.as_array().unwrap().iter().enumerate().map(|(i,r)|{let mut p=point(i as f64,field(r,"count"),r,r["category"].as_str().unwrap().into());p.category=r["category"].as_str().unwrap().into();p}).collect()}],vec![],"Confirmed shield blocks are excluded from the accuracy denominator; estimated blocks remain uncertain."));
     let mut bins = [0usize; 42];
