@@ -18,6 +18,14 @@ pub(super) fn metric_value(metric: &MetricValue) -> String {
     let Some(n) = metric.value.filter(|v| v.is_finite()) else {
         return "Unavailable".into();
     };
+    // These are continuous model balances, although the contract carries no
+    // physical unit. Preserve their precision instead of treating them as counts.
+    if matches!(
+        metric.definition.key.as_str(),
+        "largestSwingFromValue" | "largestSwingToValue" | "largestSwingDifference"
+    ) {
+        return format!("{n:.2}");
+    }
     match metric.definition.unit.as_str() {
         "%" => format!("{n:.1}%"),
         "m" => format!("{n:.2} m"),
@@ -666,6 +674,27 @@ impl Pulsar {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn dominance_balances_keep_precision_without_turning_missing_into_zero() {
+        let mut metric = MetricValue {
+            value: Some(-0.04),
+            availability: Availability::Available,
+            definition: MetricDef {
+                key: "largestSwingToValue".into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
+        assert_eq!(metric_value(&metric), "-0.04");
+        metric.definition.key = "largestSwingDifference".into();
+        metric.value = Some(0.94);
+        assert_eq!(metric_value(&metric), "0.94");
+        metric.value = None;
+        assert_eq!(metric_value(&metric), "Unavailable");
+        metric.definition.key = "hits".into();
+        metric.value = Some(13.);
+        assert_eq!(metric_value(&metric), "13");
+    }
     #[test]
     fn narrow_tables_keep_identity_and_measurement_units() {
         let columns = ["deviation", "max", "mean", "name", "eligible"].map(String::from);
