@@ -1344,6 +1344,10 @@ fn card_denominators_frozen_regions_rounds_and_focused_flow_are_source_supported
     );
     assert_eq!(detail.summary.metrics["reachEligible"].value, Some(13.0));
     assert_eq!(detail.summary.metrics["reachWithinCount"].value, Some(7.0));
+    assert_eq!(
+        detail.summary.metrics["reachWithin"].value,
+        Some(100.0 * 7.0 / 13.0)
+    );
     assert_eq!(detail.summary.metrics["comboCount"].value, Some(3.0));
     for sample in detail.derived["aim"]["samples"].as_array().unwrap() {
         let region = &detail.aim_regions[&sample["seq"].as_i64().unwrap()];

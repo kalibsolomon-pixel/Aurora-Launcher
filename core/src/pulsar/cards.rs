@@ -75,6 +75,12 @@ pub(crate) fn summary(f: &FightRecord, a: Option<&Analytics>) -> Metrics {
             a.and_then(|a| a.derived["reach"]["within"].as_f64()),
         ),
         (
+            "reachWithin",
+            "Reach in target window",
+            "%",
+            a.and_then(|a| a.derived["reach"]["withinPercent"].as_f64()),
+        ),
+        (
             "dominanceActiveSeconds",
             "Complete observed dominance time",
             "s",
