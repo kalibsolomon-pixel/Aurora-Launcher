@@ -487,6 +487,7 @@ impl Pulsar {
                                         "unexplainedHealthDrops" => "Unexplained damage".into(),
                                         "emptyMisses" => "Aimed swings without a hit".into(),
                                         "eligibleMisses" => "Counted misses".into(),
+                                        "uniqueAttacks" => "Distinct inputs".into(),
                                         _ => display_label(&metric.definition.label),
                                     },
                                 )
@@ -941,6 +942,9 @@ impl Pulsar {
                 .and_then(|d| outcome_counts(&d.offense))
             {
                 body = body.child(outcome_strip(t, o, cx));
+                if let Some(stuns) = get("stuns") {
+                    body = body.child(ui::caption(t, format!("Stuns: {stuns:.0} of {:.0} Disabled. Follow-ups add no hit or attempt.", o.disabled)));
+                }
             }
         }
 
@@ -993,6 +997,14 @@ impl Pulsar {
                 ],
                 "Blocked and Disabled are excluded from accuracy.",
             ));
+            body = body.child(ui::caption(
+                t,
+                format!(
+                    "Stuns: {:.0} of {:.0} Disabled. A stun follow-up adds no hit or attempt.",
+                    get("stuns").unwrap_or(0.),
+                    get("shieldDisables").unwrap_or(0.)
+                ),
+            ));
             body = body.child(stack(
                 t,
                 "shield-block-disable",
@@ -1011,6 +1023,7 @@ impl Pulsar {
                 ],
                 "Opponent melee attacks into your raised shield. Damage prevented is not measured.",
             ));
+            body = body.child(ui::caption(t, format!("Stuns against you: {:.0} of {:.0} Disabled. Only a follow-up confirmed by damage counts.", get("localStuns").unwrap_or(0.), get("localShieldDisabled").unwrap_or(0.))));
         }
 
         body

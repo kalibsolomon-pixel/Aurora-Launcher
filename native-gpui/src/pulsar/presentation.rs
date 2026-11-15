@@ -4,6 +4,34 @@ use aurora_launcher_lib::pulsar::view::{FightSummary, MetricValue, ResolutionVie
 /// Core copy that names capture mechanics, rewritten for players. Core strings
 /// stay unchanged because interpretations are part of the analytics oracles.
 const PLAIN: &[(&str, &str)] = &[
+    ("uniqueAttacks", "Distinct inputs"),
+    ("totalInputs", "Raw inputs"),
+    ("deduplicatedAttacks", "Repeated observations"),
+    ("excludedSwings", "Swings away"),
+    (
+        "Every real attack packet is a distinct input. Stun follow-ups and no-response spam clicks are not counted as attempts.",
+        "Each attack you send is a separate input. Stun follow-ups and no-response spam clicks do not add attempts.",
+    ),
+    (
+        "No-response real packets below 50% cooldown or within 10 ticks after your confirmed hit. This rule does not establish why the server ignored a click.",
+        "Clicks with no response below 50% cooldown or within 10 ticks after your confirmed hit. This does not tell us why the server ignored them.",
+    ),
+    (
+        "No-response packets below 50% cooldown or within 10 ticks after your confirmed hit. Diagnostic only.",
+        "Clicks with no response below 50% cooldown or within 10 ticks after your confirmed hit. They do not add attacks or misses.",
+    ),
+    (
+        "Real packets with no response, sent below 50% cooldown or within 10 ticks after your confirmed hit on that opponent. Not attacks or misses.",
+        "Clicks with no response, sent below 50% cooldown or within 10 ticks after your confirmed hit on that opponent. They do not add attacks or misses.",
+    ),
+    (
+        "A subset of Disabled: one follow-up within 150 ms and 3 ticks is absorbed. It adds no attempt, hit or miss.",
+        "Part of Disabled: one follow-up within 150 ms and 3 ticks belongs to that disable. It adds no attempt, hit or miss.",
+    ),
+    (
+        "A subset of your shield being Disabled, with a damage-proven follow-up within 150 ms and 3 ticks.",
+        "Part of your shield being Disabled, with a follow-up confirmed by damage within 150 ms and 3 ticks.",
+    ),
     (
         "Hits / (hits + misses). Blocked and Disabled attacks are excluded.",
         "Hits divided by hits plus misses. Blocked and Disabled do not count against accuracy.",

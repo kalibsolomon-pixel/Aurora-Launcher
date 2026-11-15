@@ -514,6 +514,8 @@ impl Pulsar {
                     | "deduplicatedAttacks"
                     | "excludedSwings"
                     | "eligibleMisses"
+                    | "spamClicks"
+                    | "notCountedIncomingSwings"
             )
         };
         let summary = index == 0 && self.detail_request.is_some();
@@ -587,6 +589,15 @@ impl Pulsar {
                 ui::muted(t, super::analysis_ui::accuracy_insight(&tab.metrics, o))
                     .font_weight(gpui::FontWeight::MEDIUM),
             );
+            if let Some(stuns) = tab.metrics.get("stuns").and_then(|m| m.value) {
+                body = body.child(ui::caption(
+                    t,
+                    format!(
+                        "Stuns: {stuns:.0} of {:.0} Disabled. Follow-ups add no hit or attempt.",
+                        o.disabled
+                    ),
+                ));
+            }
         }
         let pooled_flow = index == 3 && self.detail_request.is_none();
         if !main.is_empty() && !(index == 0 && self.detail_request.is_none()) {

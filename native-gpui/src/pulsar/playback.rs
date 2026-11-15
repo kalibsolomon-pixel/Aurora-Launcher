@@ -325,6 +325,7 @@ impl Pulsar {
             .events
             .iter()
             .filter(|e| e.kind != "MOTION")
+            .filter(|e| !e.detail.starts_with("Not counted:") && e.detail != "Stun follow-up")
             .map(|e| Sample {
                 x: e.time,
                 y: Some(lanes.iter().position(|l| l == &e.lane).unwrap_or(0) as f64),
