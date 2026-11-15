@@ -668,13 +668,16 @@ impl Pulsar {
                             )
                             .child(
                                 div()
+                                    .w(px(130.))
+                                    .flex_shrink_0()
+                                    .text_right()
                                     .text_size(px(ui::TEXT_TITLE))
                                     .font_weight(gpui::FontWeight::SEMIBOLD)
                                     .text_color(t.foreground)
                                     .child(tabs::metric_value(&r.metric)),
                             )
                             .when_some(source, |d, f| {
-                                d.child(div().flex().child(ui::badge(
+                                d.child(div().w(px(150.)).flex().child(ui::badge(
                                     t,
                                     f.result_label.clone(),
                                     super::presentation::outcome(f),
@@ -781,8 +784,9 @@ impl Pulsar {
                         .child(
                             ui::muted(t, value)
                                 .id(format!("setting-value-{group}-{i}"))
-                                .min_w(px(0.))
-                                .max_w(px(320.))
+                                .w(px(180.))
+                                .flex_shrink_0()
+                                .text_right()
                                 .overflow_hidden()
                                 .text_ellipsis()
                                 .whitespace_nowrap()
@@ -1137,6 +1141,9 @@ impl Pulsar {
                                                     )),
                                             ),
                                     )
+                                    .when_some(a.overview.interpretations.first(), |d, insight| {
+                                        d.child(ui::muted(&t, insight.clone()))
+                                    })
                                     .child(self.latest_denominators(&t, latest, cx)),
                             );
                         }
@@ -1162,6 +1169,32 @@ impl Pulsar {
                             self.overview_groups(&t, &a.overview.metrics, cx),
                             cx,
                         ));
+                        let context = div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(12.))
+                            .children(
+                                a.overview
+                                    .notices
+                                    .iter()
+                                    .map(|s| ui::caption(&t, s.clone())),
+                            )
+                            .children(
+                                a.overview
+                                    .interpretations
+                                    .iter()
+                                    .skip(1)
+                                    .map(|s| ui::muted(&t, s.clone())),
+                            );
+                        if !a.overview.notices.is_empty() || a.overview.interpretations.len() > 1 {
+                            page = page.child(self.disclosure(
+                                &t,
+                                "interpretation",
+                                "Interpretation and limitations",
+                                context,
+                                cx,
+                            ));
+                        }
                         page = page.child(ui::caption(
                             &t,
                             "Live capture and recording controls: Change in game.",

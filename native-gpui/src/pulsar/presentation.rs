@@ -6,6 +6,11 @@ pub fn text(input: &str) -> String {
         .replace(" | ", " · ")
         .replace(" / ", " · ")
         .replace("play/pause", "play or pause")
+        .replace("Opener/reset/unavailable", "Opener, reset or unavailable")
+        .replace("ideal/candidate", "ideal and candidate")
+        .replace("Same-tick/nearby", "Same-tick and nearby")
+        .replace("participant/session", "participant or session")
+        .replace("target/tolerance", "target and tolerance")
         .replace("inactive/incomplete", "inactive and incomplete")
         .replace("Tab/Shift", "Tab or Shift");
     clean

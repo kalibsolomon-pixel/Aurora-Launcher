@@ -92,7 +92,7 @@ impl Pulsar {
                             && self
                                 .detail_request
                                 .as_ref()
-                                .is_some_and(|r| r.exchange_id.is_some())
+                                .is_some_and(|r| r.exchange_id.is_some() || r.participant.is_some())
                         {
                             format!("Exchange with {}", s.opponent)
                         } else if s.manual {

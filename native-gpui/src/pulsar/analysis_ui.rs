@@ -429,12 +429,20 @@ impl Pulsar {
                     ),
                 ),
                 (
-                    "Accuracy / hits from eligible attempts",
-                    denominator(m, "hits", "accuracyDenominator"),
+                    "Accuracy",
+                    format!(
+                        "{} · {} hits",
+                        value(m, "accuracy"),
+                        denominator(m, "hits", "accuracyDenominator")
+                    ),
                 ),
                 (
-                    "Reach window / contacts within the target window",
-                    denominator(m, "reachWithinCount", "reachEligible"),
+                    "Within reach window",
+                    format!(
+                        "{} · {} contacts",
+                        value(m, "reachWithin"),
+                        denominator(m, "reachWithinCount", "reachEligible")
+                    ),
                 ),
                 (
                     "Longest combo and combo count",
