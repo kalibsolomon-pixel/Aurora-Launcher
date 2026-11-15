@@ -52,6 +52,7 @@ pub mod pack_merge;
 pub mod pack_state;
 pub mod pack_update;
 pub mod paths;
+pub mod pulsar;
 mod performance;
 pub mod runtime;
 pub mod server_enrichment;

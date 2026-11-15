@@ -1954,3 +1954,45 @@ pub async fn apply_recovery(
     )?;
     convert(app::apply_instance_recovery(host, request).await)
 }
+
+// Pulsar uses the shared, serde camelCase presentation contract.
+pub use aurora_launcher_lib::pulsar::view::*;
+pub async fn pulsar_library(host: Host, request: LibraryQuery) -> ApiResult<LibraryView> {
+    convert(app::list_pulsar_library(host, request).await)
+}
+pub async fn pulsar_refresh(host: Host, request: LibraryQuery) -> ApiResult<LibraryView> {
+    convert(app::refresh_pulsar_library(host, request).await)
+}
+pub async fn pulsar_analysis(host: Host, request: AnalysisRequest) -> ApiResult<AnalysisView> {
+    convert(app::analyze_pulsar(host, request).await)
+}
+pub async fn pulsar_detail(host: Host, request: DetailRequest) -> ApiResult<FightDetailView> {
+    convert(app::get_pulsar_fight(host, request).await)
+}
+pub async fn pulsar_playback(host: Host, request: PlaybackRequest) -> ApiResult<PlaybackView> {
+    convert(app::get_pulsar_playback(host, request).await)
+}
+pub async fn pulsar_settings(host: Host, request: FolderRequest) -> ApiResult<SettingsView> {
+    convert(app::get_pulsar_settings(host, request).await)
+}
+pub async fn pulsar_opponents(host: Host, request: LibraryQuery) -> ApiResult<Vec<OpponentView>> {
+    convert(app::get_pulsar_opponents(host, request).await)
+}
+pub async fn pulsar_records(host: Host, request: LibraryQuery) -> ApiResult<Vec<RecordView>> {
+    convert(app::get_pulsar_records(host, request).await)
+}
+pub async fn pulsar_compare(host: Host, request: CompareRequest) -> ApiResult<CompareView> {
+    convert(app::compare_pulsar_fights(host, request).await)
+}
+pub async fn pulsar_open_folder(host: Host, request: FolderRequest) -> ApiResult<ActionReceipt> {
+    convert(app::open_pulsar_folder(host, request).await)
+}
+pub async fn pulsar_view_report(host: Host, request: FightKey) -> ApiResult<ActionReceipt> {
+    convert(app::view_pulsar_report(host, request).await)
+}
+pub async fn pulsar_export(host: Host, request: ExportRequest) -> ApiResult<ActionReceipt> {
+    convert(app::export_pulsar_report(host, request).await)
+}
+pub async fn pulsar_delete(host: Host, request: DeleteRequest) -> ApiResult<ActionReceipt> {
+    convert(app::delete_pulsar_fight(host, request).await)
+}

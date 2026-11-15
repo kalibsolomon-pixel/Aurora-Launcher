@@ -8753,3 +8753,239 @@ mod tests {
         }
     }
 }
+
+// Pulsar operations: all filesystem and analysis work runs on a blocking worker.
+pub async fn list_pulsar_library(
+    _app: Host,
+    _request: crate::pulsar::view::LibraryQuery,
+) -> Result<crate::pulsar::view::LibraryView, CommandError> {
+    tokio::task::spawn_blocking(move || {
+        Err(CommandError::new(
+            "pulsar_not_ready",
+            "Pulsar library implementation is being initialized.",
+        ))
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "pulsar_worker_failed",
+            "The Pulsar worker did not complete.",
+        )
+    })?
+}
+pub async fn refresh_pulsar_library(
+    _app: Host,
+    _request: crate::pulsar::view::LibraryQuery,
+) -> Result<crate::pulsar::view::LibraryView, CommandError> {
+    tokio::task::spawn_blocking(move || {
+        Err(CommandError::new(
+            "pulsar_not_ready",
+            "Pulsar library implementation is being initialized.",
+        ))
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "pulsar_worker_failed",
+            "The Pulsar worker did not complete.",
+        )
+    })?
+}
+pub async fn analyze_pulsar(
+    _app: Host,
+    _request: crate::pulsar::view::AnalysisRequest,
+) -> Result<crate::pulsar::view::AnalysisView, CommandError> {
+    tokio::task::spawn_blocking(move || {
+        Err(CommandError::new(
+            "pulsar_not_ready",
+            "Pulsar library implementation is being initialized.",
+        ))
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "pulsar_worker_failed",
+            "The Pulsar worker did not complete.",
+        )
+    })?
+}
+pub async fn get_pulsar_fight(
+    _app: Host,
+    _request: crate::pulsar::view::DetailRequest,
+) -> Result<crate::pulsar::view::FightDetailView, CommandError> {
+    tokio::task::spawn_blocking(move || {
+        Err(CommandError::new(
+            "pulsar_not_ready",
+            "Pulsar library implementation is being initialized.",
+        ))
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "pulsar_worker_failed",
+            "The Pulsar worker did not complete.",
+        )
+    })?
+}
+pub async fn get_pulsar_playback(
+    _app: Host,
+    _request: crate::pulsar::view::PlaybackRequest,
+) -> Result<crate::pulsar::view::PlaybackView, CommandError> {
+    tokio::task::spawn_blocking(move || {
+        Err(CommandError::new(
+            "pulsar_not_ready",
+            "Pulsar library implementation is being initialized.",
+        ))
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "pulsar_worker_failed",
+            "The Pulsar worker did not complete.",
+        )
+    })?
+}
+pub async fn get_pulsar_settings(
+    _app: Host,
+    _request: crate::pulsar::view::FolderRequest,
+) -> Result<crate::pulsar::view::SettingsView, CommandError> {
+    tokio::task::spawn_blocking(move || {
+        Err(CommandError::new(
+            "pulsar_not_ready",
+            "Pulsar library implementation is being initialized.",
+        ))
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "pulsar_worker_failed",
+            "The Pulsar worker did not complete.",
+        )
+    })?
+}
+pub async fn get_pulsar_opponents(
+    _app: Host,
+    _request: crate::pulsar::view::LibraryQuery,
+) -> Result<Vec<crate::pulsar::view::OpponentView>, CommandError> {
+    tokio::task::spawn_blocking(move || {
+        Err(CommandError::new(
+            "pulsar_not_ready",
+            "Pulsar library implementation is being initialized.",
+        ))
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "pulsar_worker_failed",
+            "The Pulsar worker did not complete.",
+        )
+    })?
+}
+pub async fn get_pulsar_records(
+    _app: Host,
+    _request: crate::pulsar::view::LibraryQuery,
+) -> Result<Vec<crate::pulsar::view::RecordView>, CommandError> {
+    tokio::task::spawn_blocking(move || {
+        Err(CommandError::new(
+            "pulsar_not_ready",
+            "Pulsar library implementation is being initialized.",
+        ))
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "pulsar_worker_failed",
+            "The Pulsar worker did not complete.",
+        )
+    })?
+}
+pub async fn compare_pulsar_fights(
+    _app: Host,
+    _request: crate::pulsar::view::CompareRequest,
+) -> Result<crate::pulsar::view::CompareView, CommandError> {
+    tokio::task::spawn_blocking(move || {
+        Err(CommandError::new(
+            "pulsar_not_ready",
+            "Pulsar library implementation is being initialized.",
+        ))
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "pulsar_worker_failed",
+            "The Pulsar worker did not complete.",
+        )
+    })?
+}
+pub async fn open_pulsar_folder(
+    _app: Host,
+    _request: crate::pulsar::view::FolderRequest,
+) -> Result<crate::pulsar::view::ActionReceipt, CommandError> {
+    tokio::task::spawn_blocking(move || {
+        Err(CommandError::new(
+            "pulsar_not_ready",
+            "Pulsar library implementation is being initialized.",
+        ))
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "pulsar_worker_failed",
+            "The Pulsar worker did not complete.",
+        )
+    })?
+}
+pub async fn view_pulsar_report(
+    _app: Host,
+    _request: crate::pulsar::view::FightKey,
+) -> Result<crate::pulsar::view::ActionReceipt, CommandError> {
+    tokio::task::spawn_blocking(move || {
+        Err(CommandError::new(
+            "pulsar_not_ready",
+            "Pulsar library implementation is being initialized.",
+        ))
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "pulsar_worker_failed",
+            "The Pulsar worker did not complete.",
+        )
+    })?
+}
+pub async fn export_pulsar_report(
+    _app: Host,
+    _request: crate::pulsar::view::ExportRequest,
+) -> Result<crate::pulsar::view::ActionReceipt, CommandError> {
+    tokio::task::spawn_blocking(move || {
+        Err(CommandError::new(
+            "pulsar_not_ready",
+            "Pulsar library implementation is being initialized.",
+        ))
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "pulsar_worker_failed",
+            "The Pulsar worker did not complete.",
+        )
+    })?
+}
+pub async fn delete_pulsar_fight(
+    _app: Host,
+    _request: crate::pulsar::view::DeleteRequest,
+) -> Result<crate::pulsar::view::ActionReceipt, CommandError> {
+    tokio::task::spawn_blocking(move || {
+        Err(CommandError::new(
+            "pulsar_not_ready",
+            "Pulsar library implementation is being initialized.",
+        ))
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "pulsar_worker_failed",
+            "The Pulsar worker did not complete.",
+        )
+    })?
+}
