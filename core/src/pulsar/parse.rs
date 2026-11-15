@@ -184,7 +184,7 @@ fn validate(value: &Value, rule: &Value, key: &str, depth: usize) -> Result<(), 
             if !object
                 .get("schemaVersion")
                 .and_then(Value::as_i64)
-                .is_some_and(|v| (1..=5).contains(&v))
+                .is_some_and(|v| (1..=6).contains(&v))
             {
                 return Err(Error::new(
                     "pulsar_unsupported_schema",
@@ -365,11 +365,12 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<FightRecord, Error> {
         )
     })?;
     validate_fight(&mut fight, 0)?;
+    super::strict::normalize(&mut fight);
     Ok(fight)
 }
 
 fn validate_fight(f: &mut FightRecord, depth: usize) -> Result<(), Error> {
-    if !(1..=5).contains(&f.schema_version) {
+    if !(1..=6).contains(&f.schema_version) {
         return Err(Error::new(
             "pulsar_unsupported_schema",
             "Unsupported recording schema; source preserved.",
@@ -428,8 +429,34 @@ fn validate_fight(f: &mut FightRecord, depth: usize) -> Result<(), Error> {
             ));
         }
     }
-    if f.statistics.shield_blocks > f.statistics.attempts
-        || f.statistics.hits > f.statistics.attempts
+    let stats = &f.statistics;
+    if stats.strict_version == 0
+        && stats.unattributed_incoming as i64 + stats.third_party_incoming as i64 > i32::MAX as i64
+    {
+        return Err(Error::new(
+            "pulsar_invalid_statistics",
+            "Metric totals exceed the supported integer range.",
+        ));
+    }
+    if stats.attack_classifications.is_empty() && stats.strict_version == 0 {
+        let extra = stats.estimated_shield_blocks.max(stats.uncertain_shield) as i64;
+        let blocked = (stats.shield_blocks as i64 + extra).max(stats.shield_disables as i64);
+        let misses = (stats.attempts as i64 - stats.hits as i64 - blocked)
+            .max(0)
+            .max(stats.empty_misses as i64 + (stats.uncertain as i64 - extra).max(0));
+        if blocked + misses + stats.hits as i64 > i32::MAX as i64
+            || stats.unattributed_incoming as i64 + stats.third_party_incoming as i64
+                > i32::MAX as i64
+        {
+            return Err(Error::new(
+                "pulsar_invalid_statistics",
+                "Metric totals exceed the supported integer range.",
+            ));
+        }
+    }
+    if f.statistics.attack_classifications.is_empty()
+        && (f.statistics.shield_blocks > f.statistics.attempts
+            || f.statistics.hits > f.statistics.attempts)
     {
         return Err(Error::new(
             "pulsar_invalid_statistics",
@@ -517,4 +544,39 @@ impl FightRecord {
             }
         }
     }
+}
+
+/// Report format and recording schema are independent. Reports remain presentation copies;
+/// imported analytics always derive from the finalized source recording.
+pub(crate) fn decode_report(bytes: &[u8]) -> Result<FightRecord, Error> {
+    let v: Value = serde_json::from_slice(bytes)
+        .map_err(|_| Error::new("pulsar_malformed", "Invalid report JSON."))?;
+    if v.get("format").is_none() {
+        return decode(bytes);
+    }
+    fn envelope(v: &Value, depth: usize) -> Result<FightRecord, Error> {
+        if depth > 1
+            || v["format"] != "phenomena-report"
+            || !matches!(v["version"].as_u64(), Some(6 | 7))
+        {
+            return Err(Error::new(
+                "pulsar_report_version",
+                "Unsupported report format; report preserved.",
+            ));
+        }
+        let f = decode(
+            &serde_json::to_vec(&v["fight"])
+                .map_err(|_| Error::new("pulsar_malformed", "Invalid report fight."))?,
+        )?;
+        if let Some(scopes) = v["scopes"].as_array() {
+            if scopes.len() > 10_000 {
+                return Err(Error::new("pulsar_event_limit", "Too many report scopes."));
+            }
+            for scope in scopes {
+                envelope(scope, depth + 1)?;
+            }
+        }
+        Ok(f)
+    }
+    envelope(&v, 0)
 }

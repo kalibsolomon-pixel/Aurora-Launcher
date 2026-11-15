@@ -1,38 +1,31 @@
 [
   {
     "key": "accuracy",
-    "label": "Combat accuracy",
+    "label": "Accuracy",
     "unit": "%",
-    "confidence": "Inferred",
-    "help": "Confirmed hits / (attempts minus confirmed shield blocks). Uncertain attempts stay in the denominator."
+    "confidence": "Observed",
+    "help": "Hits / (hits + misses). Blocked and Disabled attacks are excluded."
   },
   {
     "key": "hits",
-    "label": "Confirmed hits",
+    "label": "Hits",
     "unit": "",
-    "confidence": "Confirmed source",
-    "help": "Server melee damage events from the local player, matched to an attack."
+    "confidence": "Observed",
+    "help": "Your direct melee damage confirmed by the server within the attack window."
   },
   {
     "key": "attempts",
-    "label": "Attack attempts",
+    "label": "Attacks",
     "unit": "",
     "confidence": "Observed",
-    "help": "Unique eligible combat attempts. Noncombat inputs and duplicates are excluded; older recordings keep their original policy."
+    "help": "Unique attacks aimed at the opponent. Swings away and duplicates are excluded."
   },
   {
     "key": "emptyMisses",
-    "label": "Eligible misses",
+    "label": "Misses",
     "unit": "",
     "confidence": "Observed",
-    "help": "Aimed empty swings with opponent geometry and no server confirmation in the confirmation window. Inferred misses, not proof of server rejection. Historical empty-swing counts retain their older policy."
-  },
-  {
-    "key": "uncertain",
-    "label": "Uncertain attacks",
-    "unit": "",
-    "confidence": "Inferred",
-    "help": "Entity attacks with no matching server report. Not proven misses."
+    "help": "Every eligible attack with no damage or shield block, including invulnerability clicks."
   },
   {
     "key": "averageReach",
@@ -106,17 +99,10 @@
   },
   {
     "key": "incoming",
-    "label": "Attributed incoming hits",
-    "unit": "",
-    "confidence": "Confirmed source",
-    "help": "Server damage events whose cause entity is the tracked opponent. Only these break your combos or move dominance."
-  },
-  {
-    "key": "unattributedIncoming",
-    "label": "Unattributed damage",
+    "label": "Hits taken",
     "unit": "",
     "confidence": "Observed",
-    "help": "Damage whose cause the server did not report (fall, fire, environment). Third-party damage is shown separately. Neither counts as opponent retaliation."
+    "help": "Only the tracked opponent's direct melee damage. Projectiles and remaining damage are listed by cause."
   },
   {
     "key": "attacksIntoShield",
@@ -127,24 +113,17 @@
   },
   {
     "key": "shieldBlocks",
-    "label": "Confirmed shield blocks",
+    "label": "Blocked attacks",
     "unit": "",
-    "confidence": "Confirmed source / inferred match",
-    "help": "Attack into a blocking target followed by the server's shield sound at the target and no damage event. Removed from the accuracy denominator."
-  },
-  {
-    "key": "estimatedShieldBlocks",
-    "label": "Estimated shield blocks",
-    "unit": "",
-    "confidence": "Estimated",
-    "help": "Attack into a raised, facing shield with no damage event and no shield sound. Stays uncertain and in the accuracy denominator."
+    "confidence": "Observed",
+    "help": "Blocked plus Disabled attacks. A block sound or a raised facing shield with no damage counts as blocked."
   },
   {
     "key": "shieldDisables",
-    "label": "Shield disables",
+    "label": "Disabled",
     "unit": "",
-    "confidence": "Confirmed source / inferred match",
-    "help": "Your attack followed by the shield-disable sound at the opponent."
+    "confidence": "Observed",
+    "help": "Attacks followed by a shield-disable sound. Included in blocked attacks, excluded from accuracy."
   },
   {
     "key": "hitsAfterDisable",
@@ -155,10 +134,10 @@
   },
   {
     "key": "localShieldBlocks",
-    "label": "Your shield blocks",
+    "label": "Blocked",
     "unit": "",
     "confidence": "Observed",
-    "help": "Shield-block sounds at your position. The blocked attacker is not reported."
+    "help": "Opponent swings blocked by your raised shield, with no damage."
   },
   {
     "key": "serverCrits",
@@ -183,10 +162,10 @@
   },
   {
     "key": "longestOpponentCombo",
-    "label": "Longest opp. combo",
+    "label": "Longest opponent combo",
     "unit": "",
-    "confidence": "Inferred",
-    "help": "Same rule using attributed incoming hits. Estimated or unavailable when some incoming damage is unattributed."
+    "confidence": "Observed",
+    "help": "Consecutive direct melee hits from the tracked opponent."
   },
   {
     "key": "longestUnanswered",
@@ -197,17 +176,17 @@
   },
   {
     "key": "dominance",
-    "label": "Encounter dominance",
+    "label": "Combat advantage",
     "unit": "",
-    "confidence": "Inferred",
-    "help": "Decayed share of confirmed evidence: (P - N) / (P + N + 1), 3 s time constant. Neutral or not drawn when evidence is thin or incoming damage is unattributed."
+    "confidence": "Observed",
+    "help": "Decaying melee hit and shield evidence. Non-melee damage is excluded. Not a win probability."
   },
   {
     "key": "dominanceShare",
     "label": "Advantage share",
     "unit": "%",
-    "confidence": "Inferred",
-    "help": "Share of observed active combat time with dominance above +0.2 (you) or below -0.2 (opponent). Inactive and incomplete periods are excluded."
+    "confidence": "Observed",
+    "help": "Share of active samples at or above +0.2 for you or at or below -0.2 for the opponent. Inactive samples are excluded."
   },
   {
     "key": "reachWithin",

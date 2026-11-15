@@ -60,19 +60,17 @@ pub(crate) fn build(f: &FightRecord, events: &[CombatEvent]) -> Incoming {
             }
         }
     }
+    let mut damage_counts: BTreeMap<i64, usize> = BTreeMap::new();
+    for d in &damage {
+        if let Some(t) = d.client_tick {
+            *damage_counts.entry(t).or_default() += 1;
+        }
+    }
     let mut rows = Vec::new();
-    for d in damage {
+    for d in &damage {
         let ctx = d.context.as_ref();
         let att = attributed(d, f.opponent.as_deref());
-        let attribution = ctx
-            .and_then(|c| c.attribution.as_deref())
-            .unwrap_or(if att {
-                "OPPONENT_LEGACY"
-            } else if d.actor.is_none() {
-                "UNATTRIBUTED"
-            } else {
-                "OTHER_ENTITY"
-            });
+        let attribution = if att { "OPPONENT_MELEE" } else { "NON_MELEE" };
         let (mut drop, mut kb, mut after, mut offset) = (None, None, None, None);
         let mut jump_class = if !att {
             "NOT_APPLICABLE"
@@ -99,7 +97,13 @@ pub(crate) fn build(f: &FightRecord, events: &[CombatEvent]) -> Incoming {
                 .filter(|h| !(h.sequence < d.sequence && h.client_tick.is_some_and(|ht| ht <= t)))
                 .map(|h| value(h))
                 .reduce(f64::min);
-            if let (Some(before), Some(minimum)) = (before, minimum) {
+            if let Some((before, minimum)) = before.zip(minimum).filter(|_| {
+                damage_counts
+                    .range(t.saturating_sub(2)..=t.saturating_add(2))
+                    .map(|(_, n)| *n)
+                    .sum::<usize>()
+                    == 1
+            }) {
                 if before - minimum > 1e-6 {
                     drop = Some(before - minimum);
                 }
@@ -113,6 +117,14 @@ pub(crate) fn build(f: &FightRecord, events: &[CombatEvent]) -> Incoming {
                     let c = e.context.as_ref()?;
                     Some(c.vx?.hypot(c.vz?))
                 });
+            if damage_counts
+                .range(t.saturating_sub(1)..=t.saturating_add(1))
+                .map(|(_, n)| *n)
+                .sum::<usize>()
+                != 1
+            {
+                kb = None;
+            }
             let speeds: Vec<_> = motions
                 .range(t.saturating_add(2)..=t.saturating_add(8))
                 .flat_map(|(_, v)| v)
@@ -141,7 +153,7 @@ pub(crate) fn build(f: &FightRecord, events: &[CombatEvent]) -> Incoming {
         let crit = d.client_tick.is_some_and(|t| {
             (-1..=1).any(|v| t.checked_add(v).is_some_and(|tick| crits.contains(&tick)))
         });
-        rows.push(json!({"sequence":d.sequence,"time":f.seconds(d.nano_time),"tick":d.client_tick,"attribution":attribution,"attributed":att,"damageType":ctx.and_then(|c|c.damage_type.as_deref()),"damage":drop,"knockback":kb,"ground":ctx.and_then(|c|c.ground),"sprinting":ctx.and_then(|c|c.sprinting),"movementValid":ctx.and_then(|c|c.movement_valid),"jumpClass":jump_class,"jumpOffsetTicks":offset,"crit":crit,"speedAfter":after}));
+        rows.push(json!({"sequence":d.sequence,"time":f.seconds(d.nano_time),"tick":d.client_tick,"attribution":attribution,"attributed":att,"sourceName":ctx.and_then(|c|c.extra.get("sourceName")),"cause":damage_cause(d,f.opponent.as_deref()),"damageType":ctx.and_then(|c|c.damage_type.as_deref()),"damage":drop,"knockback":kb,"ground":ctx.and_then(|c|c.ground),"sprinting":ctx.and_then(|c|c.sprinting),"movementValid":ctx.and_then(|c|c.movement_valid),"jumpClass":jump_class,"jumpOffsetTicks":offset,"crit":crit,"speedAfter":after}));
     }
     let mut unexplained = Vec::new();
     let mut previous = None;
@@ -229,4 +241,46 @@ pub(crate) fn jump_effect(rows: &[Value]) -> Value {
     } else {
         json!({"candidates":candidates.len(),"candidateSpeed":mean(&candidates),"others":others.len(),"otherSpeed":mean(&others)})
     }
+}
+
+pub(crate) fn damage_cause(e: &CombatEvent, opponent: Option<&str>) -> String {
+    let c = e.context.as_ref();
+    let name = c
+        .and_then(|c| c.extra.get("sourceName"))
+        .and_then(Value::as_str)
+        .filter(|s| !s.trim().is_empty())
+        .or(e.actor.as_deref());
+    if c.and_then(|c| c.attribution.as_deref())
+        .is_some_and(|a| matches!(a, "UNATTRIBUTED" | "UNKNOWN_CAUSE"))
+    {
+        return "Unknown cause".into();
+    }
+    let Some(t) = c.and_then(|c| c.damage_type.as_deref()) else {
+        return if attributed(e, opponent) {
+            format!("Melee from {}", name.unwrap_or("null"))
+        } else {
+            "Unknown cause".into()
+        };
+    };
+    let id = t.rsplit(':').next().unwrap_or(t);
+    let cause = match id {
+        "player_attack" | "mob_attack" | "mob_attack_no_aggro" => "Melee".into(),
+        "mace_smash" => "Mace smash".into(),
+        "arrow" => "Arrow".into(),
+        "trident" => "Trident".into(),
+        "fall" => "Fall".into(),
+        "on_fire" | "in_fire" => "Fire".into(),
+        "lava" => "Lava".into(),
+        "out_of_world" | "fell_out_of_world" => "Void".into(),
+        "drown" => "Drowning".into(),
+        "explosion" | "player_explosion" => "Explosion".into(),
+        _ => {
+            let mut chars = id.chars();
+            chars
+                .next()
+                .map(|c| c.to_uppercase().collect::<String>() + &chars.as_str().replace('_', " "))
+                .unwrap_or_else(|| "Unknown cause".into())
+        }
+    };
+    name.map(|n| format!("{cause} from {n}")).unwrap_or(cause)
 }

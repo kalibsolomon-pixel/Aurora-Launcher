@@ -56,7 +56,7 @@ pub(crate) fn values(derived: &Value) -> BTreeMap<String, MetricValue> {
     let grades = aim["grades"].as_array().map(Vec::as_slice).unwrap_or(&[]);
     let sum: f64 = grades.iter().filter_map(Value::as_f64).sum();
     let central: f64 = grades.iter().take(2).filter_map(Value::as_f64).sum();
-    definitions()
+    let mut result: BTreeMap<_, _> = definitions()
         .iter()
         .map(|d| {
             let v = match d.key.as_str() {
@@ -79,7 +79,8 @@ pub(crate) fn values(derived: &Value) -> BTreeMap<String, MetricValue> {
                 }),
                 "attacksIntoShield" => shields["attacksIntoShield"].as_f64(),
                 "shieldBlocks" => shields["confirmedBlocks"].as_f64(),
-                "estimatedShieldBlocks" => shields["estimatedBlocks"].as_f64(),
+                "localShieldNotBlocked" => shields["localNotBlocked"].as_f64(),
+                "localShieldDisabled" => shields["localDisabled"].as_f64(),
                 "shieldDisables" => shields["disables"].as_f64(),
                 "hitsAfterDisable" => shields["hitsAfterDisable"].as_f64(),
                 "localShieldBlocks" => shields["localBlocks"].as_f64(),
@@ -101,12 +102,7 @@ pub(crate) fn values(derived: &Value) -> BTreeMap<String, MetricValue> {
                     Some("Unavailable") => {
                         m.value = None;
                         m.availability = Availability::Unavailable;
-                        m.reason =
-                            Some("No tracked opponent or incomplete incoming attribution.".into());
-                    }
-                    Some("Estimated") => {
-                        m.availability = Availability::Estimated;
-                        m.reason = Some("Some incoming damage could not be attributed.".into());
+                        m.reason = Some("No single tracked opponent.".into());
                     }
                     _ => {}
                 }
@@ -115,7 +111,8 @@ pub(crate) fn values(derived: &Value) -> BTreeMap<String, MetricValue> {
                 d.key.as_str(),
                 "attacksIntoShield"
                     | "shieldBlocks"
-                    | "estimatedShieldBlocks"
+                    | "localShieldNotBlocked"
+                    | "localShieldDisabled"
                     | "shieldDisables"
                     | "hitsAfterDisable"
                     | "localShieldBlocks"
@@ -127,14 +124,42 @@ pub(crate) fn values(derived: &Value) -> BTreeMap<String, MetricValue> {
             }
             (d.key.clone(), m)
         })
-        .collect()
+        .collect();
+    for (key, label, value) in [
+        (
+            "nonMeleeDamage",
+            "Other damage",
+            s["nonMeleeDamage"].as_f64(),
+        ),
+        (
+            "localShieldNotBlocked",
+            "Your shield not blocked",
+            shields["localNotBlocked"].as_f64(),
+        ),
+        (
+            "localShieldDisabled",
+            "Your shield disabled",
+            shields["localDisabled"].as_f64(),
+        ),
+    ] {
+        result.insert(key.into(),extra(key,label,"count","Other damage never enters melee combos or dominance. Shield outcomes count once per observed attack.",value));
+    }
+    result
 }
 pub(crate) fn summary_values(summary: &Value) -> BTreeMap<String, MetricValue> {
-    definitions()
+    let mut result: BTreeMap<_, _> = definitions()
         .iter()
         .map(|d| (d.key.clone(), metric(&d.key, summary[&d.key].as_f64())))
-        .collect()
+        .collect();
+    for (key, label) in [
+        ("nonMeleeDamage", "Other damage"),
+        ("localShieldNotBlocked", "Your shield not blocked"),
+    ] {
+        result.insert(key.into(),extra(key,label,"count","Other damage does not count as a melee hit. Each observed shield attack has one outcome.",summary[key].as_f64()));
+    }
+    result
 }
+
 pub(crate) fn extra(
     key: &str,
     label: &str,

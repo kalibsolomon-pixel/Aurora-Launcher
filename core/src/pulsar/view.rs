@@ -51,9 +51,9 @@ pub struct LibraryQuery {
 pub enum OutcomeFilter {
     #[default]
     All,
-    Unknown,
+    #[serde(alias = "UNKNOWN", alias = "INTERRUPTED")]
+    NoResult,
     Loss,
-    Interrupted,
     Win,
     Draw,
 }
@@ -216,6 +216,8 @@ pub struct FightSummary {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ResolutionView {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
     pub classification: String,
     pub label: String,
     pub source: String,
@@ -427,8 +429,9 @@ pub struct OpponentView {
     pub wins: usize,
     pub losses: usize,
     pub draws: usize,
-    pub unknown: usize,
-    /// Counts for results grouped in the player's Other column.
+    #[serde(alias = "unknown")]
+    pub no_result: usize,
+    /// Reasons grouped in the player's No result column.
     #[serde(default)]
     pub other_results: BTreeMap<String, usize>,
     pub last_fought_epoch_millis: i64,

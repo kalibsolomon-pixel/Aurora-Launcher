@@ -536,6 +536,9 @@ impl Default for CombatInterval {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
 pub(crate) struct Statistics {
+    pub strict_version: i32,
+    pub non_melee_damage: i32,
+    pub local_shield_not_blocked: i32,
     pub measurement_version: i32,
     pub total_inputs: i32,
     pub unique_attacks: i32,
@@ -602,6 +605,9 @@ pub(crate) struct Statistics {
 impl Default for Statistics {
     fn default() -> Self {
         Self {
+            strict_version: 0,
+            non_melee_damage: 0,
+            local_shield_not_blocked: 0,
             measurement_version: Default::default(),
             total_inputs: Default::default(),
             unique_attacks: Default::default(),

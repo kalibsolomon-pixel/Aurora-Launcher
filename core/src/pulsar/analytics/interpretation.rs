@@ -14,7 +14,7 @@ pub(crate) fn of(
     shields: &Value,
     incoming: &[Value],
     timing: &[Value],
-    availability: &str,
+    _availability: &str,
 ) -> Vec<String> {
     let r = resolution(f);
     let mut out = vec![format!(
@@ -44,7 +44,7 @@ pub(crate) fn of(
         out.push(format!(
             "You landed {number} consecutive hits {}",
             match s.ended_by {
-                "RETALIATION" => "before an attributed return hit.",
+                "RETALIATION" => "before the opponent hit you back.",
                 "TRADE" => "before a same-tick trade.",
                 "DISENGAGE" => "before both players disengaged.",
                 "ROUND_BOUNDARY" => "before the round ended.",
@@ -63,8 +63,6 @@ pub(crate) fn of(
             }
             .into(),
         );
-    } else if availability != "Observed" {
-        out.push(format!("Some incoming damage could not be attributed to the opponent, so opponent combos are {}.",availability.to_lowercase()));
     }
     if num(reach, "eligible") > 0.0 {
         out.push(format!("Your reach was within the configured target window ({:.2} ± {:.2} m) on {} of {} eligible hits.",num(reach,"target"),num(reach,"tolerance"),num(reach,"within")as usize,num(reach,"eligible")as usize));
@@ -72,13 +70,13 @@ pub(crate) fn of(
     if f.session.is_some() && hits.is_empty() && misses.is_empty() {
         return out;
     }
-    out.push(match d.availability{"INCOMPLETE"=>"Incoming-hit attribution was incomplete, so encounter dominance could not be established confidently.".into(),"AVAILABLE"=>format!("During {} s of observed active combat you held the advantage {}% of the time and the opponent {}%.",super::format::number(d.active,1),super::format::number(ratio(100.0*d.local,d.active).unwrap_or(f64::NAN),0),super::format::number(ratio(100.0*d.opponent,d.active).unwrap_or(f64::NAN),0)),_=>"Too few confirmed exchanges were observed to estimate encounter dominance.".into()});
+    out.push(match d.availability{"AVAILABLE"=>format!("During {} s of observed active combat you held the advantage {}% of the time and the opponent {}%.",super::format::number(d.active,1),super::format::number(ratio(100.0*d.local,d.active).unwrap_or(f64::NAN),0),super::format::number(ratio(100.0*d.opponent,d.active).unwrap_or(f64::NAN),0)),_=>"Too few confirmed exchanges were observed to estimate encounter dominance.".into()});
     if shields["available"] == true && num(shields, "attacksIntoShield") > 0.0 {
-        out.push(format!("{} of your {} attacks into a raised shield were confirmed blocks{}. Confirmed blocks are excluded from the accuracy denominator.",num(shields,"confirmedBlocks")as usize,num(shields,"attacksIntoShield")as usize,if num(shields,"estimatedBlocks")>0.0{format!(" and {} were estimated blocks",num(shields,"estimatedBlocks")as usize)}else{String::new()}));
+        out.push(format!("{} of your {} attacks into a raised shield were Blocked or Disabled. Both are excluded from the accuracy denominator.",num(shields,"confirmedBlocks")as usize,num(shields,"attacksIntoShield")as usize));
     }
     let att = incoming.iter().filter(|r| r["attributed"] == true).count();
     if att > 0 {
-        out.push(format!("{} of {} attributed incoming hits had an observed jump within ±{} ticks ({} on the same tick). Whether a jump reduced knockback is not measured.",incoming.iter().filter(|r|matches!(text(r,"jumpClass"),"IDEAL_CANDIDATE"|"ATTEMPT_CANDIDATE")).count(),att,f.policy().jump_window_ticks,incoming.iter().filter(|r|text(r,"jumpClass")=="IDEAL_CANDIDATE").count()));
+        out.push(format!("{} of {} hits taken had an observed jump within ±{} ticks ({} on the same tick). Whether a jump reduced knockback is not measured.",incoming.iter().filter(|r|matches!(text(r,"jumpClass"),"IDEAL_CANDIDATE"|"ATTEMPT_CANDIDATE")).count(),att,f.policy().jump_window_ticks,incoming.iter().filter(|r|text(r,"jumpClass")=="IDEAL_CANDIDATE").count()));
     }
     let mut weapons: BTreeMap<&str, [usize; 2]> = BTreeMap::new();
     for t in timing {

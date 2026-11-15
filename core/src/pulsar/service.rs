@@ -92,8 +92,7 @@ pub(crate) fn filtered<'a>(index: &'a Index, q: &LibraryQuery) -> Result<Vec<&'a
                 OutcomeFilter::Win => outcome == "WIN",
                 OutcomeFilter::Loss => outcome == "LOSS",
                 OutcomeFilter::Draw => outcome == "DRAW",
-                OutcomeFilter::Unknown => outcome == "UNKNOWN",
-                OutcomeFilter::Interrupted => outcome == "INTERRUPTED",
+                OutcomeFilter::NoResult => outcome == "NO_RESULT",
             };
             matches
                 && (!q.hits_only || f.statistics.hits > 0)
@@ -742,14 +741,9 @@ pub fn opponents(paths: &ManagedPaths, q: LibraryQuery) -> Result<Vec<OpponentVi
             Some("WIN") => group.0.wins += 1,
             Some("LOSS") => group.0.losses += 1,
             Some("DRAW") => group.0.draws += 1,
-            other => {
-                group.0.unknown += 1;
-                let label = match other {
-                    Some("INTERRUPTED") => "Interrupted",
-                    Some("UNKNOWN") => "Unknown",
-                    None => "No result",
-                    _ => "Unclassified result",
-                };
+            _ => {
+                group.0.no_result += 1;
+                let label = f.reason.as_deref().unwrap_or("Ended without a death");
                 *group.0.other_results.entry(label.into()).or_default() += 1;
             }
         };

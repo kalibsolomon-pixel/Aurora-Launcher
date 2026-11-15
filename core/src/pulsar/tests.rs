@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const IDS: [&str; 8] = [
+const IDS: [&str; 24] = [
     "02100001-0000-4000-8000-000000000021",
     "02100002-0000-4000-8000-000000000021",
     "02100003-0000-4000-8000-000000000021",
@@ -14,9 +14,25 @@ const IDS: [&str; 8] = [
     "02100006-0000-4000-8000-000000000021",
     "02100007-0000-4000-8000-000000000021",
     "02100008-0000-4000-8000-000000000021",
+    "00000000-0000-0000-0000-000000000040",
+    "00000000-0000-0000-0000-000000000041",
+    "00000000-0000-0000-0000-000000000042",
+    "00000000-0000-0000-0000-000000000043",
+    "00000000-0000-0000-0000-000000000044",
+    "00000000-0000-0000-0000-000000000045",
+    "00000000-0000-0000-0000-000000000046",
+    "00000000-0000-0000-0000-000000000047",
+    "02100020-0000-4000-8000-000000000021",
+    "02100021-0000-4000-8000-000000000021",
+    "02100022-0000-4000-8000-000000000021",
+    "02100023-0000-4000-8000-000000000021",
+    "02100024-0000-4000-8000-000000000021",
+    "02100025-0000-4000-8000-000000000021",
+    "02100026-0000-4000-8000-000000000021",
+    "02100027-0000-4000-8000-000000000021",
 ];
 fn fixture(n: usize) -> serde_json::Value {
-    let bytes: [&[u8]; 8] = [
+    let bytes: [&[u8]; 24] = [
         include_bytes!("testdata/02100001-0000-4000-8000-000000000021.json.gz"),
         include_bytes!("testdata/02100002-0000-4000-8000-000000000021.json.gz"),
         include_bytes!("testdata/02100003-0000-4000-8000-000000000021.json.gz"),
@@ -25,6 +41,22 @@ fn fixture(n: usize) -> serde_json::Value {
         include_bytes!("testdata/02100006-0000-4000-8000-000000000021.json.gz"),
         include_bytes!("testdata/02100007-0000-4000-8000-000000000021.json.gz"),
         include_bytes!("testdata/02100008-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/00000000-0000-0000-0000-000000000040.json.gz"),
+        include_bytes!("testdata/00000000-0000-0000-0000-000000000041.json.gz"),
+        include_bytes!("testdata/00000000-0000-0000-0000-000000000042.json.gz"),
+        include_bytes!("testdata/00000000-0000-0000-0000-000000000043.json.gz"),
+        include_bytes!("testdata/00000000-0000-0000-0000-000000000044.json.gz"),
+        include_bytes!("testdata/00000000-0000-0000-0000-000000000045.json.gz"),
+        include_bytes!("testdata/00000000-0000-0000-0000-000000000046.json.gz"),
+        include_bytes!("testdata/00000000-0000-0000-0000-000000000047.json.gz"),
+        include_bytes!("testdata/02100020-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100021-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100022-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100023-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100024-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100025-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100026-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100027-0000-4000-8000-000000000021.json.gz"),
     ];
     let mut raw = Vec::new();
     flate2::read::GzDecoder::new(bytes[n])
@@ -413,7 +445,7 @@ fn compare_oracle(
 }
 fn oracle_case(n: usize) {
     let data = fixture(n);
-    let raw = fight(n);
+    let raw = parse::decode(&serde_json::to_vec(&data["oracle"]["fight"]).unwrap()).unwrap();
     let a = analytics::analyze(&raw);
     let mut errors = Vec::new();
     let mut projected = a.derived.clone();
@@ -1528,11 +1560,127 @@ fn opponent_other_results_reconcile_with_the_aggregate_column() {
     for opponent in service::opponents(&lab.paths, view::LibraryQuery::default()).unwrap() {
         assert_eq!(
             opponent.other_results.values().sum::<usize>(),
-            opponent.unknown
+            opponent.no_result
         );
-        assert!(opponent.other_results.keys().all(|label| matches!(
-            label.as_str(),
-            "Unknown" | "Interrupted" | "No result" | "Unclassified result"
-        )));
+        assert!(opponent.other_results.keys().all(|label| !label.is_empty()
+            && !matches!(
+                label.as_str(),
+                "Unknown" | "Interrupted" | "Unclassified result"
+            )));
     }
+}
+
+#[test]
+fn oracle_strict_outcomes_and_legacy_mappings() {
+    for n in 8..24 {
+        oracle_case(n);
+    }
+}
+
+// Apply only the exporter?s explicit name privacy projection to original recordings.
+// All measurements, classifications and result proof still come from source bytes.
+fn oracle_names(raw: &mut serde_json::Value, exported: &serde_json::Value) {
+    for key in ["opponent", "opponentLabel"] {
+        if let Some(v) = exported.get(key) {
+            raw[key] = v.clone();
+        }
+    }
+    if let (Some(a), Some(b)) = (raw["events"].as_array_mut(), exported["events"].as_array()) {
+        for (a, b) in a.iter_mut().zip(b) {
+            for key in ["actor", "target"] {
+                if let Some(v) = b.get(key) {
+                    a[key] = v.clone();
+                }
+            }
+            if let Some(v) = b["context"].get("sourceName") {
+                a["context"]["sourceName"] = v.clone();
+            }
+        }
+    }
+    if let Some(b) = exported["session"]["exchanges"].as_array() {
+        if let Some(a) = raw
+            .get_mut("session")
+            .and_then(|s| s.get_mut("exchanges"))
+            .and_then(serde_json::Value::as_array_mut)
+        {
+            for (a, b) in a.iter_mut().zip(b) {
+                oracle_names(a, b);
+            }
+        }
+    }
+}
+#[test]
+fn original_sources_match_strict_oracles_and_normalization_is_idempotent() {
+    for n in 0..24 {
+        let data = fixture(n);
+        let mut raw = data["raw"].clone();
+        oracle_names(&mut raw, &data["oracle"]["fight"]);
+        let f = parse::decode(&serde_json::to_vec(&raw).unwrap())
+            .unwrap_or_else(|e| panic!("{}: {:?}", IDS[n], e));
+        let mut twice = f.clone();
+        super::strict::normalize(&mut twice);
+        assert_eq!(
+            serde_json::to_value(&f).unwrap(),
+            serde_json::to_value(&twice).unwrap(),
+            "{} is not idempotent",
+            IDS[n]
+        );
+        let mut derived = analytics::analyze(&f).derived;
+        if data["oracle"]["anonymized"] == true && f.session.is_some() {
+            for row in derived["boundaries"].as_array_mut().unwrap() {
+                row["text"] = "Announcement text redacted".into();
+            }
+        }
+        let mut errors = Vec::new();
+        compare_oracle(&derived, &data["oracle"]["derived"], "source", &mut errors);
+        assert!(
+            errors.is_empty(),
+            "{}: {:?}",
+            IDS[n],
+            errors.iter().take(15).collect::<Vec<_>>()
+        );
+    }
+}
+
+#[test]
+fn strict_report_version_is_independent_of_recording_schema() {
+    for n in 0..24 {
+        let d = fixture(n);
+        assert_eq!(d["oracle"]["version"], 7);
+        assert_eq!(
+            parse::decode_report(&serde_json::to_vec(&d["oracle"]).unwrap())
+                .unwrap()
+                .id,
+            IDS[n]
+        );
+        let mut future = d["oracle"].clone();
+        future["version"] = 8.into();
+        assert_eq!(
+            parse::decode_report(&serde_json::to_vec(&future).unwrap())
+                .unwrap_err()
+                .code,
+            "pulsar_report_version"
+        );
+    }
+}
+
+#[test]
+fn old_cached_summaries_upgrade_from_immutable_attempt_proof() {
+    let lab = Lab::new();
+    lab.write(0);
+    lab.refresh();
+    let path = store::library_root(&lab.paths).join("index.json");
+    let mut index: serde_json::Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+    index["entries"][0]["record"]["statistics"]["strictVersion"] = 0.into();
+    index["entries"][0]["record"]["statistics"]["hits"] = 0.into();
+    fs::write(&path, serde_json::to_vec(&index).unwrap()).unwrap();
+    let upgraded = store::read_index(&lab.paths).unwrap();
+    assert_eq!(
+        upgraded.entries[0].record.statistics.hits,
+        fight(0).statistics.hits
+    );
+    assert_eq!(
+        fs::read(&path).unwrap(),
+        serde_json::to_vec(&index).unwrap()
+    );
 }

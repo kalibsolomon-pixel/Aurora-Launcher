@@ -7,6 +7,7 @@ mod reports;
 mod service;
 mod settings;
 mod store;
+mod strict;
 pub use service::*;
 pub mod view;
 mod wire;

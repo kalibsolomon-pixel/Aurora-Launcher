@@ -12,7 +12,6 @@ pub(crate) struct Dominance {
     pub local: f64,
     pub opponent: f64,
     pub neutral: f64,
-    pub incomplete: f64,
     pub insufficient: f64,
     pub availability: &'static str,
     pub changes: usize,
@@ -22,16 +21,10 @@ pub(crate) struct Dominance {
 }
 impl Dominance {
     pub(crate) fn payload(&self) -> Value {
-        json!({"step":self.step,"values":self.values.iter().map(|v|v.map(|v|(v*1e4+0.5).floor()/1e4)).collect::<Vec<_>>(),"states":self.states.iter().collect::<String>(),"availability":self.availability,"availabilityLabel":match self.availability{"AVAILABLE"=>"Available","INCOMPLETE"=>"Incomplete attribution",_=>"Insufficient evidence"},"active":self.active,"localShare":ratio(100.0*self.local,self.active),"opponentShare":ratio(100.0*self.opponent,self.active),"neutralShare":ratio(100.0*self.neutral,self.active),"incomplete":self.incomplete,"insufficient":self.insufficient,"changes":self.changes,"longest":self.longest,"swing":self.swing,"turningPoints":self.turning,"model":{"tau":3.0,"threshold":0.2,"minMass":0.35,"maxUnattributed":0.5,"hit":1.0,"streakBonus":0.25,"shieldBlocked":0.25,"shieldDisabled":0.5,"localBlock":0.25}})
+        json!({"step":self.step,"values":self.values.iter().map(|v|v.map(|v|(v*1e4+0.5).floor()/1e4)).collect::<Vec<_>>(),"states":self.states.iter().collect::<String>(),"availability":self.availability,"availabilityLabel":match self.availability{"AVAILABLE"=>"Available",_=>"Insufficient evidence"},"active":self.active,"localShare":ratio(100.0*self.local,self.active),"opponentShare":ratio(100.0*self.opponent,self.active),"neutralShare":ratio(100.0*self.neutral,self.active),"insufficient":self.insufficient,"changes":self.changes,"longest":self.longest,"swing":self.swing,"turningPoints":self.turning,"model":{"tau":3.0,"threshold":0.2,"minMass":0.35,"hit":1.0,"streakBonus":0.25,"shieldBlocked":0.25,"shieldDisabled":0.5,"localBlock":0.25}})
     }
 }
-pub(crate) fn analyze(
-    f: &FightRecord,
-    combos: &Combos,
-    shields: &[Value],
-    unattributed: &[f64],
-    attributed: usize,
-) -> Dominance {
+pub(crate) fn analyze(f: &FightRecord, combos: &Combos, shields: &[Value]) -> Dominance {
     let mut inputs: Vec<(f64, f64, &str)> = Vec::new();
     let mut weights = BTreeMap::new();
     for s in &combos.streaks {
@@ -75,14 +68,10 @@ pub(crate) fn analyze(
     if f.session.is_some() {
         inputs.clear();
     }
-    let input_count = inputs.len();
+    let input_count = inputs.iter().filter(|i| i.1 != 0.0).count();
     let span = f.duration().max(inputs.last().map(|i| i.0).unwrap_or(0.0));
     let step = 0.05_f64.max(span / 2000.0);
     let n = ((span / step).ceil() as usize + 1).max(2);
-    for t in unattributed {
-        inputs.push((*t, 0.0, "UNATTRIBUTED"));
-    }
-    inputs.sort_by(|a, b| a.0.total_cmp(&b.0));
     let mut d = Dominance {
         step,
         values: Vec::with_capacity(n),
@@ -91,7 +80,6 @@ pub(crate) fn analyze(
         local: 0.0,
         opponent: 0.0,
         neutral: 0.0,
-        incomplete: 0.0,
         insufficient: 0.0,
         availability: "INSUFFICIENT",
         changes: 0,
@@ -99,7 +87,7 @@ pub(crate) fn analyze(
         swing: Value::Null,
         turning: Vec::new(),
     };
-    let (mut p, mut q, mut u, mut at) = (0.0_f64, 0.0_f64, 0.0_f64, 0.0_f64);
+    let (mut p, mut q, mut at) = (0.0_f64, 0.0_f64, 0.0_f64);
     let (mut i, mut interval) = (0, 0);
     for k in 0..n {
         let t = k as f64 * step;
@@ -109,15 +97,12 @@ pub(crate) fn analyze(
             let decay = (-(time - at).max(0.0) / 3.0).exp();
             p *= decay;
             q *= decay;
-            u *= decay;
             at = at.max(time);
             match kind {
                 "EXCHANGE_RESET" => {
                     p = 0.0;
                     q = 0.0;
-                    u = 0.0;
                 }
-                "UNATTRIBUTED" => u += 1.0,
                 _ => {
                     if weight > 0.0 {
                         p += weight;
@@ -128,12 +113,10 @@ pub(crate) fn analyze(
             }
         }
         let decay = (-(t - at) / 3.0).exp();
-        let (pt, qt, ut) = (p * decay, q * decay, u * decay);
+        let (pt, qt) = (p * decay, q * decay);
         let value = (pt - qt) / (pt + qt + 1.0);
         let mut state = if pt + qt < 0.35 {
             'I'
-        } else if ut >= 0.5 {
-            'C'
         } else if value >= 0.2 {
             'L'
         } else if value <= -0.2 {
@@ -159,7 +142,6 @@ pub(crate) fn analyze(
             'L' => d.local += step,
             'O' => d.opponent += step,
             'N' => d.neutral += step,
-            'C' => d.incomplete += step,
             _ => d.insufficient += step,
         }
     }
@@ -191,7 +173,7 @@ pub(crate) fn analyze(
                 d.turning.push([k as f64 * step, d.values[k].unwrap()]);
             }
             last = Some(*state);
-        } else if matches!(state, 'I' | 'C') {
+        } else if matches!(state, 'I') {
             last = None;
         }
     }
@@ -200,7 +182,7 @@ pub(crate) fn analyze(
         (VecDeque::new(), VecDeque::new());
     let mut swing_size = -1.0;
     for b in 0..n {
-        if matches!(d.states[b], 'I' | 'C') {
+        if matches!(d.states[b], 'I') {
             maxq.clear();
             minq.clear();
             continue;
@@ -230,11 +212,7 @@ pub(crate) fn analyze(
         }
         minq.push_back(b);
     }
-    d.availability = if d.incomplete > 0.25 * (d.active + d.incomplete)
-        || unattributed.len() as f64 > 1.0_f64.max(0.25 * (attributed + unattributed.len()) as f64)
-    {
-        "INCOMPLETE"
-    } else if d.active < 1.0 || input_count < 3 {
+    d.availability = if d.active < 1.0 || input_count < 3 {
         "INSUFFICIENT"
     } else {
         "AVAILABLE"

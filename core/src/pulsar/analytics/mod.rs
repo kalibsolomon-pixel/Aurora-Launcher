@@ -39,15 +39,36 @@ pub(crate) fn outgoing(e: &CombatEvent) -> bool {
     e.kind == "ATTACK" && e.actor.as_deref() == Some("local")
 }
 pub(crate) fn attributed(e: &CombatEvent, opponent: Option<&str>) -> bool {
-    e.kind == "DAMAGE_IN"
-        && e.actor.is_some()
-        && opponent.is_some()
-        && e.actor.as_deref() == opponent
-        && e.context
-            .as_ref()
-            .and_then(|c| c.attribution.as_deref())
-            .is_none_or(|a| matches!(a, "OPPONENT_DIRECT" | "OPPONENT_INDIRECT"))
+    if e.kind != "DAMAGE_IN" || opponent.is_none() || e.actor.as_deref() != opponent {
+        return false;
+    }
+    let Some(c) = &e.context else {
+        return true;
+    };
+    let att = c.attribution.as_deref();
+    if matches!(att, Some("UNATTRIBUTED" | "UNKNOWN_CAUSE")) {
+        return false;
+    }
+    match c.damage_type.as_deref() {
+        None => att.is_none_or(|a| matches!(a, "OPPONENT_DIRECT" | "OPPONENT_INDIRECT")),
+        Some(t) => {
+            att == Some("OPPONENT_DIRECT")
+                && c.direct == Some(true)
+                && matches!(t.rsplit(':').next(), Some("player_attack" | "mace_smash"))
+        }
+    }
 }
+pub(crate) fn strict_combos(f: &FightRecord, events: &[CombatEvent]) -> Combos {
+    combos::analyze(f, events)
+}
+pub(crate) fn strict_jump_count(f: &FightRecord, events: &[CombatEvent]) -> usize {
+    incoming::jumps(f, events)
+        .0
+        .iter()
+        .filter(|j| j["candidate"] == true)
+        .count()
+}
+
 pub(crate) fn item(m: Option<&Measurement>) -> &str {
     m.and_then(|m| m.weapon.as_deref())
         .map(|w| w.split(';').next().unwrap_or("unknown"))
@@ -188,15 +209,16 @@ pub(crate) fn resolution(f: &FightRecord) -> ResolutionView {
             "OBSERVED"
         });
     ResolutionView {
+        reason: (class == "NO_RESULT").then(|| f.reason.clone()).flatten(),
         classification: class.into(),
         label: match class {
-            "CONFIRMED_WIN" => "Confirmed server-declared win",
-            "CONFIRMED_LOSS" => "Confirmed server-declared loss",
+            "CONFIRMED_WIN" => "Win",
+            "CONFIRMED_LOSS" => "Loss",
             "INFERRED_WIN" => "Inferred win",
             "INFERRED_LOSS" => "Inferred loss",
             "DRAW" => "Draw",
             "INTERRUPTED" => "Interrupted",
-            _ => "Unknown",
+            _ => "No result",
         }
         .into(),
         source: source_label(source).into(),
@@ -239,7 +261,7 @@ fn source_label(source: &str) -> &str {
         "LOCAL_DEATH" => "Local death observed",
         "OPPONENT_DEATH" => "Opponent death observed",
         "OPPONENT_REMOVED" => "Opponent left the client world",
-        "THIRD_PARTY_KILL" => "Opponent killed by a third party",
+        "THIRD_PARTY_KILL" => "Opponent's killer",
         "CONFLICT" => "Contradictory evidence",
         "INACTIVITY" => "Combat inactivity",
         "DISCONNECT" => "Disconnect or world change",
@@ -302,11 +324,8 @@ pub(crate) fn analyze(original: &FightRecord) -> Analytics {
         let evidence = by_seq.get(&ev.evidence_sequence);
         let evidence_t = f.seconds(evidence.map(|e| e.nano_time).unwrap_or(event.nano_time));
         let weapon = item(a.measurement.as_ref());
-        if matches!(
-            ev.result.as_deref(),
-            Some("SHIELD_BLOCK" | "SHIELD_DISABLE")
-        ) {
-            let disable = ev.result.as_deref() == Some("SHIELD_DISABLE");
+        if matches!(ev.result.as_deref(), Some("BLOCKED" | "DISABLED")) {
+            let disable = ev.result.as_deref() == Some("DISABLED");
             blocks += 1;
             if disable {
                 disable_count += 1;
@@ -371,86 +390,100 @@ pub(crate) fn analyze(original: &FightRecord) -> Analytics {
         .filter(|e| attributed(e, f.opponent.as_deref()))
         .map(|e| f.seconds(e.nano_time))
         .collect();
-    let (mut into_shield, mut estimated, mut bypassed, mut local_blocks, mut local_disabled) =
-        (0, 0, 0, 0, 0);
-    for e in &events {
+    let (mut into_shield, mut bypassed) = (0, 0);
+    let mut shield_ids: BTreeSet<i64> = shields
+        .iter()
+        .filter_map(|v| v["attackSequence"].as_i64())
+        .collect();
+    for e in events.iter().filter(|e| outgoing(e)) {
         let t = f.seconds(e.nano_time);
-        match e.kind.as_str() {
-            "ATTACK" => {
-                if !outgoing(e) {
-                    continue;
-                }
-                let class = f
-                    .statistics
-                    .attack_classifications
-                    .get(&e.sequence)
-                    .map(String::as_str);
-                if let Some(class) = class.filter(|c| !matches!(*c, "HIT" | "SHIELD_BLOCK")) {
-                    outcomes.insert(e.sequence, class.into());
-                }
-                let empty = e.attack.is_none()
-                    || e.detail
-                        .as_deref()
-                        .is_some_and(|d| d.starts_with("empty-swing"));
-                let raised =
-                    !empty && e.context.as_ref().and_then(|c| c.target_blocking) == Some(true);
-                if raised {
-                    into_shield += 1;
-                }
-                if hit_ids.contains(&e.sequence) {
-                    if raised {
-                        bypassed += 1;
-                    }
-                    continue;
-                }
-                if matches!(class, Some("EXCLUDED" | "SHIELD_BLOCK"))
-                    || (class.is_none() && outcomes.contains_key(&e.sequence))
-                {
-                    continue;
-                }
-                let block =
-                    raised && e.context.as_ref().and_then(|c| c.target_facing) == Some(true);
-                if block {
-                    estimated += 1;
-                    shields.push(json!({"time":t,"type":"ESTIMATED_BLOCK","subject":"opponent","attackSequence":e.sequence,"weapon":item(e.attack.as_ref().and_then(|a|a.measurement.as_ref()))}));
-                }
-                if class.is_none() {
-                    outcomes.insert(
-                        e.sequence,
-                        if empty {
-                            "EMPTY"
-                        } else if block {
-                            "ESTIMATED_BLOCK"
-                        } else {
-                            "UNCERTAIN"
-                        }
-                        .into(),
-                    );
-                }
-                let a = e.attack.as_ref();
-                let reach = a.and_then(comparable);
-                let contact = a.is_some_and(|a| a.ray_contact);
-                misses.push(json!({"seq":e.sequence,"t":t,"empty":empty,"estimatedReach":reach,"contact":contact,"aimH":if contact{a.map(face_horizontal)}else{None},"aimV":if contact{a.map(|a|a.aim_y)}else{None}}));
-                if let Some(r) = reach {
-                    miss_bins[reach_bin(r)] += 1;
-                }
-            }
-            "SHIELD" => {
-                if let Some(c) = e
-                    .context
-                    .as_ref()
-                    .filter(|c| c.subject.as_deref() == Some("local"))
-                {
-                    if c.shield.as_deref() == Some("DISABLE") {
-                        local_disabled += 1;
-                    } else {
-                        local_blocks += 1;
-                    }
-                    shields.push(json!({"time":t,"type":c.shield,"subject":"local","attackSequence":null,"weapon":null}));
-                }
-            }
-            _ => {}
+        let class = f
+            .statistics
+            .attack_classifications
+            .get(&e.sequence)
+            .map(String::as_str);
+        if let Some(c) = class {
+            outcomes.insert(e.sequence, c.into());
         }
+        let raised = class != Some("EXCLUDED")
+            && e.context.as_ref().and_then(|c| c.target_blocking) == Some(true);
+        if raised {
+            into_shield += 1;
+        }
+        if hit_ids.contains(&e.sequence) {
+            if raised {
+                bypassed += 1;
+            }
+            continue;
+        }
+        if class == Some("HIT")
+            || class.is_none()
+                && f.statistics.attack_classifications.is_empty()
+                && f.statistics.hits > 0
+                && f.evaluations.is_empty()
+        {
+            continue;
+        }
+        if matches!(class, Some("BLOCKED" | "DISABLED")) {
+            if shield_ids.insert(e.sequence) {
+                blocks += 1;
+                let disable = class == Some("DISABLED");
+                if disable {
+                    disable_count += 1;
+                    disables.push(t);
+                }
+                shields.push(json!({"time":t,"type":if disable{"DISABLE"}else{"BLOCK"},"subject":"opponent","attackSequence":e.sequence,"weapon":item(e.attack.as_ref().and_then(|a|a.measurement.as_ref()))}));
+            }
+            continue;
+        }
+        if class == Some("EXCLUDED") || class.is_none() && outcomes.contains_key(&e.sequence) {
+            continue;
+        }
+        if class.is_none() {
+            outcomes.insert(e.sequence, "MISS".into());
+        }
+        let empty = e.attack.is_none()
+            || e.detail
+                .as_deref()
+                .is_some_and(|d| d.starts_with("empty-swing"));
+        let a = e.attack.as_ref();
+        let reach = a.and_then(comparable);
+        let contact = a.is_some_and(|a| a.ray_contact);
+        misses.push(json!({"seq":e.sequence,"t":t,"empty":empty,"estimatedReach":reach,"contact":contact,"aimH":if contact{a.map(face_horizontal)}else{None},"aimV":if contact{a.map(|a|a.aim_y)}else{None}}));
+        if let Some(r) = reach {
+            miss_bins[reach_bin(r)] += 1;
+        }
+    }
+    let (mut local_blocks, mut local_disabled, mut local_not_blocked) = (0, 0, 0);
+    for d in super::strict::defense(
+        &events,
+        f.opponent.as_deref(),
+        f.policy().correlation_millis,
+    ) {
+        let kind = match d.result {
+            "BLOCKED" => {
+                local_blocks += 1;
+                "BLOCK"
+            }
+            "DISABLED" => {
+                local_disabled += 1;
+                "DISABLE"
+            }
+            _ => {
+                local_not_blocked += 1;
+                "NOT_BLOCKED"
+            }
+        };
+        shields.push(json!({"time":f.seconds(d.time),"type":kind,"subject":"local","attackSequence":d.sequence,"weapon":null}));
+    }
+    if local_blocks + local_disabled + local_not_blocked == 0 {
+        local_blocks = f.statistics.local_shield_blocks;
+        local_disabled = f.statistics.local_shield_disabled;
+        local_not_blocked = f.statistics.local_shield_not_blocked;
+    }
+    if f.evaluations.is_empty() && f.statistics.attack_classifications.is_empty() {
+        blocks = f.statistics.shield_blocks;
+        disable_count = f.statistics.shield_disables;
     }
     shields.sort_by(|a, b| num(a, "time").total_cmp(&num(b, "time")));
     let after_disable = hits
@@ -461,28 +494,19 @@ pub(crate) fn analyze(original: &FightRecord) -> Analytics {
                 .any(|d| num(h, "evidenceT") > *d && num(h, "evidenceT") - d <= 5.0)
         })
         .count();
-    let shield_payload = json!({"available":context,"attacksIntoShield":into_shield,"confirmedBlocks":blocks,"estimatedBlocks":estimated,"disables":disable_count,"hitsAfterDisable":after_disable,"bypassed":bypassed,"localBlocks":local_blocks,"localDisabled":local_disabled,"events":shields});
+    let shield_payload = json!({"available":context,"attacksIntoShield":into_shield,"confirmedBlocks":blocks,"disables":disable_count,"hitsAfterDisable":after_disable,"bypassed":bypassed,"localBlocks":local_blocks,"localDisabled":local_disabled,"localNotBlocked":local_not_blocked,"events":shields});
     let incoming = incoming::build(f, &events);
-    let attributed_count = incoming
-        .rows
-        .iter()
-        .filter(|r| r["attributed"] == true)
-        .count();
-    let third = incoming
-        .rows
-        .iter()
-        .filter(|r| r["attributed"] != true && text(r, "attribution") == "OTHER_ENTITY")
-        .count();
-    let unattributed_count = incoming.rows.len() - attributed_count - third;
-    let mut unattributed = incoming.unexplained.clone();
-    unattributed.extend(
-        incoming
-            .rows
-            .iter()
-            .filter(|r| r["attributed"] != true)
-            .map(|r| num(r, "time")),
-    );
-    let dominance = dominance::analyze(f, &combos, &shields, &unattributed, attributed_count);
+    let mut damage_causes: BTreeMap<String, usize> = BTreeMap::new();
+    for row in &incoming.rows {
+        *damage_causes.entry(text(row, "cause").into()).or_default() += 1;
+    }
+    if incoming.rows.is_empty() && f.statistics.non_melee_damage > 0 {
+        damage_causes.insert(
+            "Unknown cause".into(),
+            f.statistics.non_melee_damage as usize,
+        );
+    }
+    let dominance = dominance::analyze(f, &combos, &shields);
     let eligible: Vec<&CombatEvent> = events
         .iter()
         .filter(|e| {
@@ -509,7 +533,7 @@ pub(crate) fn analyze(original: &FightRecord) -> Analytics {
             )
         })
         .collect();
-    let timing_samples:Vec<Value>=eligible.iter().filter(|e|e.kind=="ATTACK").filter_map(|e|{let m=e.attack.as_ref()?.measurement.as_ref()?;let timing=m.timing.as_ref()?;let opener=timing.grade.as_deref()==Some("OPENER");Some(json!({"seq":e.sequence,"t":f.seconds(e.nano_time),"weapon":item(Some(m)),"attackSpeed":m.attack_speed,"expected":(!opener).then_some(timing.expected_ticks),"interval":(!opener).then_some(timing.interval_ticks),"delta":(!opener).then_some(timing.interval_ticks-timing.expected_ticks),"grade":timing.grade,"outcome":outcomes.get(&e.sequence).map(String::as_str).unwrap_or("UNCERTAIN")}))}).collect();
+    let timing_samples:Vec<Value>=eligible.iter().filter(|e|e.kind=="ATTACK").filter_map(|e|{let m=e.attack.as_ref()?.measurement.as_ref()?;let timing=m.timing.as_ref()?;let opener=timing.grade.as_deref()==Some("OPENER");Some(json!({"seq":e.sequence,"t":f.seconds(e.nano_time),"weapon":item(Some(m)),"attackSpeed":m.attack_speed,"expected":(!opener).then_some(timing.expected_ticks),"interval":(!opener).then_some(timing.interval_ticks),"delta":(!opener).then_some(timing.interval_ticks-timing.expected_ticks),"grade":timing.grade,"outcome":outcomes.get(&e.sequence)}))}).collect();
     let reach = reach_summary(
         &hits,
         f.policy().perfect_reach_target,
@@ -524,17 +548,17 @@ pub(crate) fn analyze(original: &FightRecord) -> Analytics {
         .iter()
         .map(|e| (f.seconds(e.end_nanos) - f.seconds(e.start_nanos)).max(0.0))
         .sum();
-    let availability = if f.session.is_some()
-        || (attributed_count == 0 && unattributed_count + incoming.unexplained.len() > 0)
-    {
+    let availability = if f.session.is_some() {
         "Unavailable"
-    } else if unattributed_count + incoming.unexplained.len() > 0 {
-        "Estimated"
     } else {
         "Observed"
     };
     let mut summary = summary(f);
-    let changes = json!({"averageCombo":combos.average(),"averageLocalCombo":combos.average(),"attributedIncoming":attributed_count,"unattributedIncoming":unattributed_count,"thirdPartyIncoming":third,"unexplainedHealthDrops":incoming.unexplained.len(),"serverCrits":context.then_some(server_crits),"comboCount":combos.count(),"comboHits":combos.hits(),"longestOpponentCombo":combos.longest(false),"longestUnanswered":combos.longest_unanswered,"opponentComboAvailability":availability,"combatActiveSeconds":(f.statistics.measurement_version>0).then_some(active_seconds)});
+    let average = ratio(
+        f.statistics.combo_hits as f64,
+        f.statistics.combo_count as f64,
+    );
+    let changes = json!({"averageCombo":average,"averageLocalCombo":average,"attributedIncoming":f.statistics.incoming,"unexplainedHealthDrops":incoming.unexplained.len(),"serverCrits":context.then_some(server_crits),"opponentComboAvailability":availability,"combatActiveSeconds":(f.statistics.measurement_version>0).then_some(active_seconds)});
     summary
         .as_object_mut()
         .unwrap()
@@ -570,14 +594,12 @@ pub(crate) fn analyze(original: &FightRecord) -> Analytics {
             ("longestOpponentCombo", s.longest_opponent_combo),
             ("longestUnanswered", s.longest_unanswered),
             ("attributedIncoming", s.incoming),
-            ("unattributedIncoming", s.unattributed_incoming),
-            ("thirdPartyIncoming", s.third_party_incoming),
         ] {
             summary[k] = v.into();
         }
         summary["opponentComboAvailability"] = "Unavailable".into();
     }
-    let derived = json!({"summary":summary,"hits":hits,"misses":misses,"readiness":readiness,"timings":timings,"reachBinSize":0.5,"hitReachBins":hit_bins,"missReachBins":miss_bins,"cooldownBins":cooldown_bins,"intervals":intervals,"comboLengths":combos.streaks.iter().filter(|s|s.local).map(|s|s.seqs.len()).collect::<Vec<_>>(),"placement":{"center":center,"edge":edge,"high":high,"low":low},"momentum":momentum(f,&hits,&incoming_times),"incoming":incoming_times,"jumps":jumps,"jumpsWithoutDamage":jumps_without,"motionSamples":events.iter().filter(|e|e.kind=="MOTION").count(),"sprintTransitions":events.iter().filter(|e|e.kind=="SPRINT").count(),"schema":f.schema_version,"resolution":resolution(f),"interpretations":interpretations,"combos":combos.payload(original),"combatExchanges":active,"exchangeTimeoutSeconds":f.statistics.exchange_timeout_seconds,"dominance":dominance.payload(),"shields":shield_payload,"incomingDetail":incoming.rows,"timingSamples":timing_samples,"attemptOutcomes":outcomes.iter().map(|(k,v)|(k.to_string(),v)).collect::<BTreeMap<_,_>>(),"reach":reach,"aim":aim,"jumpEffect":incoming::jump_effect(&incoming.rows),"jumpWindowTicks":f.policy().jump_window_ticks,"boundaries":boundaries});
+    let derived = json!({"summary":summary,"hits":hits,"misses":misses,"readiness":readiness,"timings":timings,"reachBinSize":0.5,"hitReachBins":hit_bins,"missReachBins":miss_bins,"cooldownBins":cooldown_bins,"intervals":intervals,"comboLengths":combos.streaks.iter().filter(|s|s.local).map(|s|s.seqs.len()).collect::<Vec<_>>(),"placement":{"center":center,"edge":edge,"high":high,"low":low},"momentum":momentum(f,&hits,&incoming_times),"incoming":incoming_times,"jumps":jumps,"jumpsWithoutDamage":jumps_without,"motionSamples":events.iter().filter(|e|e.kind=="MOTION").count(),"sprintTransitions":events.iter().filter(|e|e.kind=="SPRINT").count(),"schema":f.schema_version,"resolution":resolution(f),"interpretations":interpretations,"combos":combos.payload(original),"combatExchanges":active,"exchangeTimeoutSeconds":f.statistics.exchange_timeout_seconds,"dominance":dominance.payload(),"shields":shield_payload,"incomingDetail":incoming.rows,"damageCauses":damage_causes,"timingSamples":timing_samples,"attemptOutcomes":outcomes.iter().map(|(k,v)|(k.to_string(),v)).collect::<BTreeMap<_,_>>(),"reach":reach,"aim":aim,"jumpEffect":incoming::jump_effect(&incoming.rows),"jumpWindowTicks":f.policy().jump_window_ticks,"boundaries":boundaries});
     Analytics {
         events,
         derived,
@@ -590,8 +612,8 @@ pub(crate) fn summary(f: &FightRecord) -> Value {
     let s = &f.statistics;
     let measurement = s.measurement_version > 0;
     let interval = ratio(s.interval_sum, s.interval_count as f64);
-    let mut summary = json!({"attempts":s.attempts,"measurementVersion":s.measurement_version,"totalInputs":measurement.then_some(s.total_inputs),"uniqueAttacks":measurement.then_some(s.unique_attacks),"excludedSwings":measurement.then_some(s.excluded_swings),"deduplicatedAttacks":measurement.then_some(s.deduplicated_attacks),"eligibleMisses":measurement.then_some(s.eligible_misses),"uncertainShield":measurement.then_some(s.uncertain_shield),"unresolved":if measurement{s.uncertain-s.uncertain_shield}else{s.uncertain},"combatActiveSeconds":null,"hits":s.hits,"emptyMisses":s.empty_misses,"uncertain":s.uncertain,"contacts":s.contacts,"accuracy":ratio(100.0*s.hits as f64,(s.attempts-s.shield_blocks).max(0)as f64),"averageReach":ratio(s.reach_sum,s.reach_count as f64),"maxReach":(s.reach_count>0).then_some(s.max_reach),"reachSamples":s.reach_count,"criticalConditions":s.critical_conditions,"criticalRate":ratio(100.0*s.critical_conditions as f64,s.hits as f64),"sprintHits":s.sprint_hits,"sprintRate":ratio(100.0*s.sprint_hits as f64,s.hits as f64)});
-    summary.as_object_mut().unwrap().extend(json!({"averageInterval":interval,"intervalDeviation":interval.map(|m|(s.interval_squared/s.interval_count as f64-m*m).max(0.0).sqrt()),"jumpCandidates":s.jump_candidates,"perfectReachHits":(f.schema_version>=2).then_some(s.perfect_reach_hits),"incoming":s.incoming,"longestCombo":s.longest_combo,"averageCombo":null,"averageLocalCombo":null,"duration":f.duration(),"accuracyDenominator":(s.attempts-s.shield_blocks).max(0),"serverCrits":(f.schema_version>=3).then_some(s.server_crits),"damageTaken":(f.schema_version>=3).then_some(s.damage_taken),"comboCount":s.combo_count,"comboHits":s.combo_hits,"longestOpponentCombo":s.longest_opponent_combo,"longestUnanswered":s.longest_unanswered,"attributedIncoming":s.incoming,"unattributedIncoming":s.unattributed_incoming,"thirdPartyIncoming":s.third_party_incoming,"unexplainedHealthDrops":0,"opponentComboAvailability":"Unavailable","contextAvailable":f.schema_version>=3}).as_object().unwrap().clone());
+    let mut summary = json!({"attempts":s.attempts,"measurementVersion":s.measurement_version,"totalInputs":measurement.then_some(s.total_inputs),"uniqueAttacks":measurement.then_some(s.unique_attacks),"excludedSwings":measurement.then_some(s.excluded_swings),"deduplicatedAttacks":measurement.then_some(s.deduplicated_attacks),"eligibleMisses":measurement.then_some(s.eligible_misses),"combatActiveSeconds":null,"hits":s.hits,"emptyMisses":s.empty_misses,"misses":s.empty_misses,"blocked":s.shield_blocks-s.shield_disables,"disabled":s.shield_disables,"blockedAttacks":s.shield_blocks,"nonMeleeDamage":s.non_melee_damage,"localShieldNotBlocked":s.local_shield_not_blocked,"contacts":s.contacts,"accuracy":ratio(100.0*s.hits as f64,(s.hits+s.empty_misses)as f64),"averageReach":ratio(s.reach_sum,s.reach_count as f64),"maxReach":(s.reach_count>0).then_some(s.max_reach),"reachSamples":s.reach_count,"criticalConditions":s.critical_conditions,"criticalRate":ratio(100.0*s.critical_conditions as f64,s.hits as f64),"sprintHits":s.sprint_hits,"sprintRate":ratio(100.0*s.sprint_hits as f64,s.hits as f64)});
+    summary.as_object_mut().unwrap().extend(json!({"averageInterval":interval,"intervalDeviation":interval.map(|m|(s.interval_squared/s.interval_count as f64-m*m).max(0.0).sqrt()),"jumpCandidates":s.jump_candidates,"perfectReachHits":(f.schema_version>=2).then_some(s.perfect_reach_hits),"incoming":s.incoming,"longestCombo":s.longest_combo,"averageCombo":null,"averageLocalCombo":null,"duration":f.duration(),"accuracyDenominator":(s.hits+s.empty_misses),"serverCrits":(f.schema_version>=3).then_some(s.server_crits),"damageTaken":(f.schema_version>=3).then_some(s.damage_taken),"comboCount":s.combo_count,"comboHits":s.combo_hits,"longestOpponentCombo":s.longest_opponent_combo,"longestUnanswered":s.longest_unanswered,"attributedIncoming":s.incoming,"unexplainedHealthDrops":0,"opponentComboAvailability":"Unavailable","contextAvailable":f.schema_version>=3}).as_object().unwrap().clone());
     summary
 }
 

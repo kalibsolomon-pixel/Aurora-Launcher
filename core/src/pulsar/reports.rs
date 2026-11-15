@@ -92,13 +92,20 @@ fn receipt_folder(paths: &ManagedPaths, e: &Entry, verify: bool) -> Result<PathB
                 "The completed report file is unavailable or too large.",
             ));
         }
-        if verify
-            && store::digest(&parse::read_bytes(&instance, &file, parse::MAX_FILE_BYTES)?) != hash
-        {
-            return Err(Error::new(
-                "pulsar_report_pending",
-                "The report and receipt do not match yet. Refresh after export completes.",
-            ));
+        if verify {
+            let bytes = parse::read_bytes(&instance, &file, parse::MAX_FILE_BYTES)?;
+            if store::digest(&bytes) != hash {
+                return Err(Error::new(
+                    "pulsar_report_pending",
+                    "The report and receipt do not match yet. Refresh after export completes.",
+                ));
+            }
+            if name == "report.json" && parse::decode_report(&bytes)?.id != e.key.fight_id {
+                return Err(Error::new(
+                    "pulsar_report_invalid",
+                    "Report identity does not match the fight.",
+                ));
+            }
         }
     }
     Ok(folder)

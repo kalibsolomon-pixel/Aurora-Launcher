@@ -206,7 +206,13 @@ fn tabs_value(
         "averageReach".into(),
         metrics::metric("averageReach", field(&d["reach"], "mean")),
     );
-    let mut offense=TabView{metrics:submetrics(&all,&["accuracy","hits","attempts","emptyMisses","uncertain","averageReach","maxReach","reachWithin","reachDeviation","reachError","aimCentral","aimDistance","timingPerfect","criticalRate","sprintRate","serverCrits"]),notices:vec!["Uncertain attacks stay in the accuracy denominator. Critical conditions do not establish damage, and sprint state does not establish knockback.".into()],..Default::default()};
+    let mut offense=TabView{metrics:submetrics(&all,&["accuracy","hits","attempts","emptyMisses","averageReach","maxReach","reachWithin","reachDeviation","reachError","aimCentral","aimDistance","timingPerfect","criticalRate","sprintRate","serverCrits"]),notices:vec!["Accuracy is hits divided by hits plus misses. Blocked and Disabled are excluded. Critical conditions do not establish damage, and sprint state does not establish knockback.".into()],..Default::default()};
+    if f.statistics.hits > 0
+        && f.statistics.attack_classifications.is_empty()
+        && f.evaluations.is_empty()
+    {
+        offense.notices.push("This older recording only saved outcome totals. Individual attack outcomes are unavailable.".into());
+    }
     let hits: Vec<_> = array(d, "hits")
         .iter()
         .filter(|h| {
@@ -279,10 +285,8 @@ fn tabs_value(
         "excludedSwings",
         "deduplicatedAttacks",
         "eligibleMisses",
-        "uncertainShield",
-        "unresolved",
     ] {
-        offense.metrics.insert(key.into(),metrics::extra(key,key,"","Frozen canonical input policy. Historical recordings retain their original classification.",field(&d["summary"],key)));
+        offense.metrics.insert(key.into(),metrics::extra(key,key,"","Frozen canonical input policy. Older recordings use the same Hit, Miss and shield outcome rules.",field(&d["summary"],key)));
     }
     let s = &d["summary"];
     offense.metrics.insert(
@@ -291,16 +295,43 @@ fn tabs_value(
             "accuracyDenominator",
             "Eligible accuracy attempts",
             "count",
-            "Attack attempts minus confirmed shield blocks. Uncertain results remain eligible.",
+            "Hits plus misses. Blocked and Disabled are excluded.",
             Some(analytics::num(s, "attempts") - analytics::num(&d["shields"], "confirmedBlocks")),
         ),
     );
     if let Some(m) = offense.metrics.get_mut("eligibleMisses") {
-        m.definition.label = "Canonical miss classifications".into();
+        m.definition.label = "Misses after duplicate clicks are removed".into();
         m.definition.help="MISS classifications under the current frozen input policy. Unavailable for older recording policies; this diagnostic can differ from the historical aimed-swing counter.".into();
     }
-    let outcomes = json!([{"category":"HIT","count":s["hits"]},{"category":"SHIELD_BLOCK","count":d["shields"]["confirmedBlocks"]},{"category":"ESTIMATED_BLOCK","count":d["shields"]["estimatedBlocks"]},{"category":"UNCERTAIN","count":(analytics::num(s,"uncertain")-analytics::num(&d["shields"],"estimatedBlocks")).max(0.0)},{"category":"MISS","count":s["emptyMisses"]}]);
-    offense.charts.push(chart("attack_outcomes","Attack outcomes","stackedBar","","attempts",vec![ChartSeries{label:"Outcome counts".into(),points:outcomes.as_array().unwrap().iter().enumerate().map(|(i,r)|{let mut p=point(i as f64,field(r,"count"),r,r["category"].as_str().unwrap().into());p.category=r["category"].as_str().unwrap().into();p}).collect()}],vec![],"Accuracy is confirmed hits out of eligible attempts. Confirmed shield blocks are excluded; uncertain results remain in the denominator."));
+    let outcomes = json!([{"category":"HIT","count":s["hits"]},{"category":"BLOCKED","count":s["blocked"]},{"category":"DISABLED","count":s["disabled"]},{"category":"MISS","count":s["misses"]}]);
+    offense.charts.push(chart(
+        "attack_outcomes",
+        "Attack outcomes",
+        "stackedBar",
+        "",
+        "attempts",
+        vec![ChartSeries {
+            label: "Outcome counts".into(),
+            points: outcomes
+                .as_array()
+                .unwrap()
+                .iter()
+                .enumerate()
+                .map(|(i, r)| {
+                    let mut p = point(
+                        i as f64,
+                        field(r, "count"),
+                        r,
+                        r["category"].as_str().unwrap().into(),
+                    );
+                    p.category = r["category"].as_str().unwrap().into();
+                    p
+                })
+                .collect(),
+        }],
+        vec![],
+        "Accuracy is hits divided by hits plus misses. Blocked and Disabled are excluded.",
+    ));
     let mut bins = [0usize; 42];
     for v in array(&reach, "values").iter().filter_map(Value::as_f64) {
         let bin = if v < 2.0 {
@@ -323,7 +354,7 @@ fn tabs_value(
     offense.charts.push(chart("reach_histogram","Reach distribution","histogram","m","hits",vec![ChartSeries{label:"Eligible hit reach".into(),points:bins.iter().enumerate().map(|(i,n)|{let x=if i==0{1.95}else if i==41{4.05}else{2.0+(i as f64-0.5)*0.05};let mut p=point(x,Some(*n as f64),&Value::Null,format!("{x:.3} m: {n} confirmed hits"));p.category=if(x-target).abs()<=tolerance+1e-9{"within"}else{"outside"}.into();p}).collect()}],vec![band.clone()],"0.05 m interior buckets, underflow below 2 m and overflow at 4 m; target shading classifies bucket midpoints."));
     offense.charts.push(chart(
         "reach_scatter",
-        "Confirmed reach and uncertain estimates",
+        "Hit and miss contact distances",
         "scatter",
         "s",
         "averageReach",
@@ -343,7 +374,7 @@ fn tabs_value(
                     .collect(),
             },
             ChartSeries {
-                label: "No hit / uncertain".into(),
+                label: "Miss".into(),
                 points: array(d, "misses")
                     .iter()
                     .map(|h| {
@@ -351,7 +382,7 @@ fn tabs_value(
                             analytics::num(h, "t"),
                             field(h, "estimatedReach"),
                             h,
-                            "Estimated reach; not a confirmed hit".into(),
+                            "Miss contact distance".into(),
                         );
                         p.category = "hollow".into();
                         p
@@ -563,7 +594,7 @@ fn tabs_value(
                         p.category = format!(
                             "{}:{}",
                             t["grade"].as_str().unwrap_or("UNAVAILABLE"),
-                            t["outcome"].as_str().unwrap_or("UNRESOLVED")
+                            t["outcome"].as_str().unwrap_or("Unavailable")
                         );
                         p
                     })
@@ -603,18 +634,41 @@ fn tabs_value(
         None,
     ));
 
-    let mut defense=TabView{metrics:submetrics(&all,&["incoming","unattributedIncoming","attacksIntoShield","shieldBlocks","estimatedShieldBlocks","shieldDisables","hitsAfterDisable","localShieldBlocks","damageTaken","knockback","jumpCandidates"]),notices:vec!["Damage dealt, prevented damage and successful jump resets are not measured. Third-party damage is not opponent retaliation.".into()],..Default::default()};
+    let mut defense=TabView{metrics:submetrics(&all,&["incoming","nonMeleeDamage","attacksIntoShield","shieldBlocks","localShieldNotBlocked","shieldDisables","hitsAfterDisable","localShieldBlocks","damageTaken","knockback","jumpCandidates"]),notices:vec!["Damage dealt, prevented damage and successful jump resets are not measured. Only opponent direct melee counts as hits taken.".into()],..Default::default()};
     let incoming = array(d, "incomingDetail");
+    defense.metrics.insert(
+        "localShieldNotBlocked".into(),
+        metrics::extra(
+            "localShieldNotBlocked",
+            "Your shield not blocked",
+            "count",
+            "Opponent melee attacks that got through your raised shield.",
+            field(&d["shields"], "localNotBlocked"),
+        ),
+    );
+    defense.tables.push(table(
+        "damage_causes",
+        "Damage by cause",
+        &json!(
+            d["damageCauses"]
+                .as_object()
+                .into_iter()
+                .flatten()
+                .map(|(cause, count)| json!({"cause":cause,"count":count}))
+                .collect::<Vec<_>>()
+        ),
+        None,
+    ));
     let attributed: Vec<_> = incoming
         .iter()
         .filter(|r| r["attributed"] == true)
         .collect();
     for (key, label, unit, value) in [
         (
-            "thirdPartyIncoming",
-            "Third-party damage",
+            "nonMeleeDamage",
+            "Other damage",
             "",
-            field(s, "thirdPartyIncoming"),
+            field(s, "nonMeleeDamage"),
         ),
         (
             "unexplainedHealthDrops",
@@ -838,12 +892,6 @@ fn tabs_value(
             field(&d["dominance"], "neutralShare"),
         ),
         (
-            "dominanceIncompleteSeconds",
-            "Incomplete attribution",
-            "s",
-            field(&d["dominance"], "incomplete"),
-        ),
-        (
             "dominanceInsufficientSeconds",
             "Insufficient evidence",
             "s",
@@ -877,7 +925,7 @@ fn tabs_value(
     flow.charts.push(chart("combos","Confirmed hit streaks","combo","s","comboCount",["LOCAL","OPPONENT"].into_iter().map(|side|ChartSeries{label:side.into(),points:array(&d["combos"],"marks").iter().filter(|r|r["side"]==side).map(|r|{let mut p=point(analytics::num(r,"t"),Some(if side=="LOCAL"{1.0}else{-1.0}),r,format!("{}{}",side,if r["traded"]==true{" same-tick trade"}else{""}));p.category=if r["traded"]==true{"trade"}else{"hit"}.into();p}).collect()}).collect(),bands,"Two-sided evidence timeline with trade marks and combo bands. Boundaries split recorded streaks."));
     let step = analytics::num(&d["dominance"], "step");
     let states = d["dominance"]["states"].as_str().unwrap_or("").as_bytes();
-    flow.charts.push(chart("dominance","Encounter dominance","dominance","s","dominance",vec![ChartSeries{label:"Decayed confirmed evidence".into(),points:array(&d["dominance"],"values").iter().enumerate().map(|(i,v)|{let mut p=point(i as f64*step,v.as_f64(),&Value::Null,format!("{} s; {}",format::number(i as f64*step,2),states.get(i).copied().unwrap_or(b'I')as char));p.category=(states.get(i).copied().unwrap_or(b'I')as char).to_string();if p.category=="C"{p.availability=Availability::Incomplete;}p}).collect()}],vec![],"D=(P-N)/(P+N+1), tau 3 s. +/-0.2 advantage threshold; insufficient gaps and incomplete attribution are explicit. Shares exclude both."));
+    flow.charts.push(chart("dominance","Encounter dominance","dominance","s","dominance",vec![ChartSeries{label:"Decayed confirmed evidence".into(),points:array(&d["dominance"],"values").iter().enumerate().map(|(i,v)|{let mut p=point(i as f64*step,v.as_f64(),&Value::Null,format!("{} s; {}",format::number(i as f64*step,2),states.get(i).copied().unwrap_or(b'I')as char));p.category=(states.get(i).copied().unwrap_or(b'I')as char).to_string();p}).collect()}],vec![],"D=(P-N)/(P+N+1), tau 3 s. +/-0.2 advantage threshold; gaps mark insufficient evidence. Shares exclude gaps."));
     flow.charts.push(chart("active_exchanges","Frozen combat-active intervals","timeline","s","fights",vec![],array(d,"combatExchanges").iter().map(|e|ChartBand{start:analytics::num(e,"start"),end:analytics::num(e,"end"),label:e["endedBy"].as_str().unwrap_or("").into(),lane:"activeExchange".into()}).collect(),"Active intervals include the recorded timeout tail; these differ from hit-streak exchanges."));
     for (id, title, data) in [
         ("combos", "Combo detail", &d["combos"]["streaks"]),
@@ -1188,7 +1236,11 @@ pub(crate) fn pool(
         "attempts",
         "hits",
         "emptyMisses",
-        "uncertain",
+        "misses",
+        "blocked",
+        "disabled",
+        "nonMeleeDamage",
+        "localShieldNotBlocked",
         "contacts",
         "criticalConditions",
         "sprintHits",
@@ -1196,8 +1248,6 @@ pub(crate) fn pool(
         "incoming",
         "comboCount",
         "comboHits",
-        "unattributedIncoming",
-        "thirdPartyIncoming",
         "longestCombo",
         "longestOpponentCombo",
         "longestUnanswered",
@@ -1269,7 +1319,7 @@ pub(crate) fn pool(
         summary[key] = json!(value);
     }
     summary["contextAvailable"] = json!(entries.iter().any(|e| e.record.schema_version >= 3));
-    summary["opponentComboAvailability"] = "Estimated".into();
+    summary["opponentComboAvailability"] = "Observed".into();
     summary["duration"] = json!(entries.iter().map(|e| e.record.duration()).sum::<f64>());
     let measurement = entries
         .iter()
@@ -1291,9 +1341,6 @@ pub(crate) fn pool(
         ("eligibleMisses", |s: &super::wire::Statistics| {
             s.eligible_misses
         }),
-        ("uncertainShield", |s: &super::wire::Statistics| {
-            s.uncertain_shield
-        }),
     ] {
         summary[key] = json!(measurement.then(|| {
             entries
@@ -1303,8 +1350,6 @@ pub(crate) fn pool(
                 .sum::<i64>()
         }));
     }
-    summary["unresolved"] =
-        json!(analytics::num(&summary, "uncertain") - analytics::num(&summary, "uncertainShield"));
     summary["measurementVersion"] = json!(i32::from(measurement));
     summary["accuracyDenominator"] = json!(attempts - blocks);
     for key in [
@@ -1385,8 +1430,8 @@ pub(crate) fn pool(
         ("confirmedBlocks", |s: &super::wire::Statistics| {
             s.shield_blocks
         }),
-        ("estimatedBlocks", |s: &super::wire::Statistics| {
-            s.estimated_shield_blocks
+        ("localNotBlocked", |s: &super::wire::Statistics| {
+            s.local_shield_not_blocked
         }),
         ("disables", |s: &super::wire::Statistics| s.shield_disables),
         ("localBlocks", |s: &super::wire::Statistics| {
@@ -1524,15 +1569,14 @@ pub(crate) fn pooled_flow_metrics(
     timelines: &[(FightKey, FightRecord, Analytics)],
 ) -> BTreeMap<String, MetricValue> {
     let (mut local, mut opponent, mut neutral) = (0.0, 0.0, 0.0);
-    let mut counts = [0; 3];
+    let mut counts = [0; 2];
     for (_, _, a) in timelines {
         local += a.dominance.local;
         opponent += a.dominance.opponent;
         neutral += a.dominance.neutral;
         counts[match a.dominance.availability {
             "AVAILABLE" => 0,
-            "INCOMPLETE" => 1,
-            _ => 2,
+            _ => 1,
         }] += 1;
     }
     let mut result = BTreeMap::new();
@@ -1556,10 +1600,7 @@ pub(crate) fn pooled_flow_metrics(
             analytics::ratio(100.0 * opponent, local + opponent + neutral),
         ),
     );
-    for (i, label) in ["available", "incomplete", "insufficient"]
-        .into_iter()
-        .enumerate()
-    {
+    for (i, label) in ["available", "insufficient"].into_iter().enumerate() {
         let key = format!("dominance_{label}");
         result.insert(
             key.clone(),

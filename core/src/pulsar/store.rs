@@ -105,7 +105,7 @@ pub(crate) fn read_index(paths: &ManagedPaths) -> Result<Index, Error> {
         return Ok(Index::default());
     }
     let bytes = parse::read_bytes(paths.data_root(), &path, INDEX_LIMIT)?;
-    let index: Index = serde_json::from_slice(&bytes).map_err(|_| {
+    let mut index: Index = serde_json::from_slice(&bytes).map_err(|_| {
         Error::new(
             "pulsar_index_invalid",
             "The library index is damaged; it was preserved.",
@@ -143,6 +143,19 @@ pub(crate) fn read_index(paths: &ManagedPaths) -> Result<Index, Error> {
     }
     for key in &index.tombstones {
         library_file(paths, key)?;
+    }
+    for entry in &mut index.entries {
+        if entry.record.statistics.strict_version == 0 {
+            // Old index summaries omitted the maps. Prefer the immutable imported
+            // bytes so per-attempt proof wins over contradictory cached totals.
+            if let Ok(mut record) = load_record(paths, entry) {
+                record.summary_only();
+                entry.record = record;
+            } else {
+                super::strict::normalize(&mut entry.record);
+                entry.stale = true;
+            }
+        }
     }
     Ok(index)
 }

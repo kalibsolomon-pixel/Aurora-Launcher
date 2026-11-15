@@ -48,21 +48,14 @@ pub(crate) fn short_item(item: &str) -> String {
 pub(crate) fn result(f: &super::super::wire::FightRecord) -> String {
     let r = super::resolution(f);
     match r.classification.as_str() {
-        "CONFIRMED_WIN" => "Win (confirmed)",
-        "CONFIRMED_LOSS" => "Loss (confirmed)",
-        "INFERRED_WIN" => "Win (inferred)",
-        "INFERRED_LOSS" => "Loss (inferred)",
-        "DRAW" => "Draw",
-        "INTERRUPTED" => "Interrupted",
-        _ => {
-            if f.session.is_some() {
-                "No result"
-            } else {
-                "Unknown"
-            }
-        }
+        "CONFIRMED_WIN" => "Win".into(),
+        "CONFIRMED_LOSS" => "Loss".into(),
+        "DRAW" => "Draw".into(),
+        _ => format!(
+            "No result \u{b7} {}",
+            r.reason.as_deref().unwrap_or("Ended without a death")
+        ),
     }
-    .into()
 }
 
 /// Gregorian UTC date grouping; local display formatting is delegated to the host.

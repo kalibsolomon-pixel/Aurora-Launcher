@@ -1,5 +1,5 @@
 //! Supplemental presentation data over frozen statistics and canonical analytics.
-//! Kept separate from the exact format-6 oracle payload.
+//! Kept separate from the exact format-7 oracle payload.
 use super::{
     analytics::{self, Analytics, metrics},
     projection,
@@ -113,10 +113,6 @@ pub(crate) fn summary(f: &FightRecord, a: Option<&Analytics>) -> Metrics {
     );
     if let Some(a) = a {
         match a.dominance.availability {
-            "INCOMPLETE" => {
-                share.availability = Availability::Incomplete;
-                share.reason = Some("Some incoming evidence could not be attributed.".into());
-            }
             "INSUFFICIENT" => {
                 share.availability = Availability::Unavailable;
                 share.reason = Some("Insufficient tracked-opponent evidence.".into());
