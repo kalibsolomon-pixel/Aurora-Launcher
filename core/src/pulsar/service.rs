@@ -620,10 +620,18 @@ pub fn analyze_library(
     } else {
         timelines.first()
     };
+    let pooled_combo_chart = flow
+        .charts
+        .iter()
+        .find(|c| c.id == "pooled_combo_distribution")
+        .cloned();
     if let Some((_, record, a)) = focus {
         flow = projection::tabs(record, a, &request.weapon, &request.timing_result).3;
         flow.metrics
             .extend(projection::pooled_flow_metrics(&chosen, &timelines));
+    }
+    if let Some(chart) = pooled_combo_chart {
+        flow.charts.push(chart);
     }
     if let Some((_, _, latest)) = timelines.first() {
         overview.interpretations = latest.derived["interpretations"]
@@ -734,7 +742,16 @@ pub fn opponents(paths: &ManagedPaths, q: LibraryQuery) -> Result<Vec<OpponentVi
             Some("WIN") => group.0.wins += 1,
             Some("LOSS") => group.0.losses += 1,
             Some("DRAW") => group.0.draws += 1,
-            _ => group.0.unknown += 1,
+            other => {
+                group.0.unknown += 1;
+                let label = match other {
+                    Some("INTERRUPTED") => "Interrupted",
+                    Some("UNKNOWN") => "Unknown",
+                    None => "No result",
+                    _ => "Unclassified result",
+                };
+                *group.0.other_results.entry(label.into()).or_default() += 1;
+            }
         };
         let recorded_at = entry.record.start_epoch_millis;
         if group

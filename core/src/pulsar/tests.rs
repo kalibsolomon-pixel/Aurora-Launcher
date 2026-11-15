@@ -1484,3 +1484,55 @@ fn previous_period_is_disjoint_and_uses_the_same_pooled_denominators() {
     assert_eq!(all.previous_recordings, 0);
     assert!(all.previous_period.is_none());
 }
+
+#[test]
+fn pooled_combo_distribution_counts_loaded_multi_hit_local_streaks() {
+    let lab = Lab::new();
+    for i in [0, 2] {
+        lab.write(i);
+    }
+    lab.refresh();
+    let analysis = service::analyze_library(&lab.paths, view::AnalysisRequest::default()).unwrap();
+    let chart = analysis
+        .flow
+        .charts
+        .iter()
+        .find(|c| c.id == "pooled_combo_distribution")
+        .unwrap();
+    let points = &chart.series[0].points;
+    let expected = [0, 2]
+        .into_iter()
+        .map(|i| {
+            analytics::analyze(&fight(i))
+                .combos
+                .streaks
+                .iter()
+                .filter(|s| s.local && s.seqs.len() >= 2)
+                .count()
+        })
+        .sum::<usize>();
+    assert_eq!(
+        points.iter().filter_map(|p| p.y).sum::<f64>(),
+        expected as f64
+    );
+    assert!(points.iter().all(|p| p.x >= 2.));
+}
+
+#[test]
+fn opponent_other_results_reconcile_with_the_aggregate_column() {
+    let lab = Lab::new();
+    for i in 0..8 {
+        lab.write(i);
+    }
+    lab.refresh();
+    for opponent in service::opponents(&lab.paths, view::LibraryQuery::default()).unwrap() {
+        assert_eq!(
+            opponent.other_results.values().sum::<usize>(),
+            opponent.unknown
+        );
+        assert!(opponent.other_results.keys().all(|label| matches!(
+            label.as_str(),
+            "Unknown" | "Interrupted" | "No result" | "Unclassified result"
+        )));
+    }
+}

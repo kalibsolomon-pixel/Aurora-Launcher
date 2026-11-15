@@ -428,6 +428,9 @@ pub struct OpponentView {
     pub losses: usize,
     pub draws: usize,
     pub unknown: usize,
+    /// Counts for results grouped in the player's Other column.
+    #[serde(default)]
+    pub other_results: BTreeMap<String, usize>,
     pub last_fought_epoch_millis: i64,
     pub metrics: BTreeMap<String, MetricValue>,
 }

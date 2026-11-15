@@ -1474,6 +1474,40 @@ pub(crate) fn pool(
         "reachWithin".into(),
         metrics::metric("reachWithin", analytics::ratio(100.0 * within, eligible)),
     );
+    let mut lengths = BTreeMap::<usize, usize>::new();
+    for (_, _, analytics) in timelines {
+        for streak in analytics
+            .combos
+            .streaks
+            .iter()
+            .filter(|s| s.local && s.seqs.len() >= 2)
+        {
+            *lengths.entry(streak.seqs.len()).or_default() += 1;
+        }
+    }
+    flow.charts.push(chart(
+        "pooled_combo_distribution",
+        "Your combo lengths",
+        "histogram",
+        "hits per combo",
+        "comboCount",
+        vec![ChartSeries {
+            label: "Recorded multi-hit combos".into(),
+            points: lengths
+                .into_iter()
+                .map(|(length, count)| {
+                    point(
+                        length as f64,
+                        Some(count as f64),
+                        &Value::Null,
+                        format!("{length}-hit combos: {count}"),
+                    )
+                })
+                .collect(),
+        }],
+        vec![],
+        "Confirmed local combos from loaded timelines in this scope; single hits are excluded.",
+    ));
     // Latest incoming/shield tables preserve the reference's per-record origin.
     if let Some((_, latest, a)) = timelines.first() {
         let latest_tabs = tabs(latest, a, weapon, timing);
