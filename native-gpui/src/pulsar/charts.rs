@@ -402,7 +402,7 @@ impl Chart {
                                     palette.ring.opacity(0.25)
                                 } else {
                                     if band.lane.is_some() {
-                                        palette.control
+                                        palette.ring.opacity(0.15)
                                     } else {
                                         palette.control.opacity(0.2)
                                     }
@@ -779,7 +779,7 @@ impl Chart {
                         div()
                             .w(px(36.))
                             .flex_shrink_0()
-                            .h(px(164.))
+                            .h(px(if self.kind == Kind::Grid { 240. } else { 164. }))
                             .flex()
                             .flex_col()
                             .justify_between()

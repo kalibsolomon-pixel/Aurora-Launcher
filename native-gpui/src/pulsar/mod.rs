@@ -895,6 +895,8 @@ impl Pulsar {
         if ready {
             for option in self.showcase_options.clone() {
                 match option.as_str() {
+                    "delete" => self.delete_open = true,
+                    "export" => self.export_open = true,
                     "density" => self.aim_density = true,
                     "methods" => self.show_methods = true,
                     "data" => self.show_data = true,

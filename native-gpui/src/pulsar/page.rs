@@ -541,9 +541,13 @@ impl Pulsar {
                     ui::row(t, i + 1 == count)
                         .flex_wrap()
                         .child(
-                            ui::title_block(t, row.label.clone(), Some(row.help.clone().into()))
-                                .flex_1()
-                                .min_w(px(200.)),
+                            ui::title_block(
+                                t,
+                                super::analysis_ui::display_label(&row.label),
+                                Some(row.help.clone().into()),
+                            )
+                            .flex_1()
+                            .min_w(px(200.)),
                         )
                         .child(ui::muted(t, value))
                         .child(ui::badge(t, "Change in game", ui::Tone::Neutral)),

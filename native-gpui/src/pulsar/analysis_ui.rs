@@ -110,7 +110,7 @@ impl Pulsar {
             .child(ui::section_header(t, title.to_owned(), None))
             .child(group);
         if let Some(metric) = self.metric_info.as_ref().and_then(|k| m.get(k)) {
-            panel = panel.child(ui::title_block(
+            panel = panel.child(explanation(
                 t,
                 format!(
                     "{} | {} | {}",
@@ -147,25 +147,27 @@ impl Pulsar {
             .gap(px(8.))
             .min_w(px(0.))
             .child(tabs::table(t, &projection, narrow));
-        body = body.child(
-            div().flex().child(
-                button(
-                    format!("table-toggle-{id}"),
-                    if expanded {
-                        "Collapse table".into()
-                    } else {
-                        format!("Show all {} rows", data.rows.len())
-                    },
-                )
-                .selected(expanded)
-                .on_click(cx.listener(move |this, _, _, cx| {
-                    if !this.table_expanded.remove(&id) {
-                        this.table_expanded.insert(id.clone());
-                    }
-                    cx.notify();
-                })),
-            ),
-        );
+        if data.rows.len() > 8 {
+            body = body.child(
+                div().flex().child(
+                    button(
+                        format!("table-toggle-{id}"),
+                        if expanded {
+                            "Collapse table".into()
+                        } else {
+                            format!("Show all {} rows", data.rows.len())
+                        },
+                    )
+                    .selected(expanded)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if !this.table_expanded.remove(&id) {
+                            this.table_expanded.insert(id.clone());
+                        }
+                        cx.notify();
+                    })),
+                ),
+            );
+        }
         body
     }
     pub(super) fn overview_groups(
@@ -461,7 +463,7 @@ impl Pulsar {
             let block_only = get("shieldBlocks")
                 .zip(get("shieldDisables"))
                 .map(|(b, d)| (b - d).max(0.));
-            body=body.child(stack(t,"shield-offense","Attack results against shields",vec![
+            body=body.child(stack(t,"shield-offense","Attack outcomes and shield interactions",vec![
                 ("Confirmed hit",get("hits")),("Block only",block_only),("Shield disable",get("shieldDisables")),
                 ("Estimated block",get("estimatedShieldBlocks")),("Unknown result",get("uncertain").zip(get("estimatedShieldBlocks")).map(|(u,e)|(u-e).max(0.))),
                 ("Empty swing",get("emptyMisses"))],"Block only excludes disables, so a disable is counted once. Estimated blocks remain uncertain."));
@@ -576,11 +578,11 @@ impl Pulsar {
    ("Page Up / Page Down | Home / End","Scroll the page except while typing. Tab scroll positions are remembered."),
    ("Escape","Dismiss the current dialog, then return to the previous screen."),
    ("Space | comma / period","Play or pause; step to the previous / next recorded event. Reduced motion uses event stepping.")
-  ].into_iter().map(|(label,help)|ui::title_block(t,label,Some(help.into()))))
+  ].into_iter().map(|(label,help)|explanation(t,label,Some(help.into()))))
     }
 }
 
-fn display_label(label: &str) -> String {
+pub(super) fn display_label(label: &str) -> String {
     let mut out = String::new();
     for (i, c) in label.chars().enumerate() {
         if c.is_uppercase() && i > 0 {
@@ -589,4 +591,18 @@ fn display_label(label: &str) -> String {
         out.push(if i == 0 { c.to_ascii_uppercase() } else { c });
     }
     out
+}
+
+pub(super) fn explanation(
+    t: &AuroraTheme,
+    title: impl Into<gpui::SharedString>,
+    detail: Option<gpui::SharedString>,
+) -> Div {
+    div()
+        .flex()
+        .flex_col()
+        .min_w(px(0.))
+        .gap(px(4.))
+        .child(ui::section_header(t, title, None))
+        .when_some(detail, |d, text| d.child(ui::caption(t, text)))
 }

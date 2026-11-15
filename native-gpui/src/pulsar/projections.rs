@@ -334,14 +334,39 @@ impl Pulsar {
                         },
                     ));
                     let mut list=ui::list_card(t).child(ui::row(t,false).child(ui::section_header(t,"Latest timing samples",Some("Newest 50 · values are frozen per weapon; opener intervals remain unavailable.".into()))));
+                    let expanded = self.table_expanded.contains("timing_latest");
+                    let shown = if expanded { 50 } else { 8 };
                     for (i, s) in samples
                         .iter()
-                        .skip(samples.len().saturating_sub(50))
+                        .skip(samples.len().saturating_sub(shown))
                         .enumerate()
                     {
-                        list=list.child(ui::row(t,i+1==samples.len().min(50)).child(ui::title_block(t,format!("{} · {} · {}",text(s,"weapon"),text(s,"grade"),text(s,"outcome")),Some(format!("{:.2} s · speed {} · expected {} · interval {} · difference {}",num(s,"t").unwrap_or(0.),format(num(s,"attackSpeed"),"/s"),format(num(s,"expected"),"ticks"),format(num(s,"interval"),"ticks"),format(num(s,"delta"),"ticks")).into()))));
+                        list=list.child(ui::row(t,i+1==samples.len().min(shown)).child(ui::title_block(t,format!("{} · {} · {}",text(s,"weapon"),text(s,"grade"),text(s,"outcome")),Some(format!("{:.2} s · speed {} · expected {} · interval {} · difference {}",num(s,"t").unwrap_or(0.),format(num(s,"attackSpeed"),"/s"),format(num(s,"expected"),"ticks"),format(num(s,"interval"),"ticks"),format(num(s,"delta"),"ticks")).into()))));
                     }
                     body = body.child(list);
+                    if samples.len() > 8 {
+                        body = body.child(
+                            div().flex().child(
+                                button(
+                                    "timing-expand",
+                                    if expanded {
+                                        "Collapse samples"
+                                    } else {
+                                        "Show newest 50 samples"
+                                    },
+                                )
+                                .selected(expanded)
+                                .on_click(cx.listener(
+                                    |this, _, _, cx| {
+                                        if !this.table_expanded.remove("timing_latest") {
+                                            this.table_expanded.insert("timing_latest".into());
+                                        }
+                                        cx.notify();
+                                    },
+                                )),
+                            ),
+                        );
+                    }
                 }
             }
             2 => {
@@ -646,21 +671,18 @@ impl Pulsar {
                                     cx.notify();
                                 })),
                         );
-                    for (i, s) in streaks.iter().enumerate() {
-                        selectors = selectors.child(
-                            button(
-                                ("combo-select", i),
-                                format!("{} · {} hits", text(s, "side"), s["length"]),
-                            )
-                            .selected(self.combo_selection == i)
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    this.combo_selection = i;
-                                    cx.notify();
-                                },
-                            )),
-                        );
-                    }
+                    selectors = selectors.child(ui::caption(
+                        t,
+                        format!(
+                            "Combo {} of {}",
+                            if streaks.is_empty() {
+                                0
+                            } else {
+                                self.combo_selection + 1
+                            },
+                            streaks.len()
+                        ),
+                    ));
                     body = body.child(selectors);
                     if let Some(s) = streaks.get(self.combo_selection) {
                         let mut card = ui::card(t).child(ui::section_header(
@@ -796,7 +818,7 @@ impl Pulsar {
                             ..Default::default()
                         },
                     ));
-                    body=body.child(ui::title_block(t,"How dominance is measured",Some("D = (P - Q) / (P + Q + 1). Confirmed hits weigh 1; subsequent streak hits add 0.25. Blocking an opponent attack adds 0.25; an opponent shield block subtracts 0.25. Shield disables weigh +/-0.5. Evidence decays exponentially with tau = 3 s. Advantage starts at +/-0.2; mass below 0.35 is insufficient, unattributed mass at 0.5 is incomplete. Shares exclude inactive and incomplete time and pool by observed active duration. Current exchange boundaries reset the model. This heuristic measures observed evidence, not damage, skill or a server verdict; aim, reach and accuracy do not enter the model.".into())));
+                    body=body.child(super::analysis_ui::explanation(t,"How dominance is measured",Some("D = (P - Q) / (P + Q + 1). Confirmed hits weigh 1; subsequent streak hits add 0.25. Blocking an opponent attack adds 0.25; an opponent shield block subtracts 0.25. Shield disables weigh +/-0.5. Evidence decays exponentially with tau = 3 s. Advantage starts at +/-0.2; mass below 0.35 is insufficient, unattributed mass at 0.5 is incomplete. Shares exclude inactive and incomplete time and pool by observed active duration. Current exchange boundaries reset the model. This heuristic measures observed evidence, not damage, skill or a server verdict; aim, reach and accuracy do not enter the model.".into())));
                 }
             }
             _ => {}
@@ -991,19 +1013,41 @@ impl Pulsar {
             ));
             card = card.child(grade_legend(t, &["IDEAL", "GOOD", "PERIPHERAL", "POOR"]));
         }
-        let mut choose = div().flex().flex_wrap().gap(px(4.));
-        for (i, s) in samples.iter().enumerate() {
-            if let Some(seq) = s["seq"].as_i64() {
-                choose = choose.child(
-                    button(("aim-hit", i), format!("#{seq} · {}", text(s, "grade")))
-                        .selected(selected.is_some_and(|s| s["seq"].as_i64() == Some(seq)))
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.aim_selection = Some(seq);
-                            cx.notify();
-                        })),
-                );
-            }
+        let selected_index = selected
+            .and_then(|s| samples.iter().position(|v| v["seq"] == s["seq"]))
+            .unwrap_or(0);
+        let mut choose = div().flex().flex_wrap().items_center().gap(px(8.));
+        for (id, label, step) in [
+            ("aim-previous", "Previous contact", -1isize),
+            ("aim-next", "Next contact", 1isize),
+        ] {
+            let sequence = if samples.is_empty() {
+                None
+            } else {
+                samples
+                    [((selected_index as isize + step).rem_euclid(samples.len() as isize)) as usize]
+                    ["seq"]
+                    .as_i64()
+            };
+            choose = choose.child(button(id, label).disabled(sequence.is_none()).on_click(
+                cx.listener(move |this, _, _, cx| {
+                    this.aim_selection = sequence;
+                    cx.notify();
+                }),
+            ));
         }
+        choose = choose.child(ui::caption(
+            t,
+            format!(
+                "{} of {} measured contacts",
+                if samples.is_empty() {
+                    0
+                } else {
+                    selected_index + 1
+                },
+                samples.len()
+            ),
+        ));
         card = card.child(choose);
         if let Some(s) = selected {
             card = card.child(ui::caption(

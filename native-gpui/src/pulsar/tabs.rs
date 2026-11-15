@@ -272,14 +272,19 @@ pub(super) fn chart(view: &ChartView) -> Chart {
             } else {
                 p.y
             },
-            label: format!(
+            label: if kind == Kind::Stacked {
+                p.label.clone()
+            } else {
+                format!(
                     "{}: {} - {} {} {}",
                     s.label,
                     p.label,
                     p.y.map(|y| format!("{y:.2}"))
                         .unwrap_or_else(|| "Unavailable".into()),
-                    view.y_definition.unit, p.category
-                ),
+                    view.y_definition.unit,
+                    p.category
+                )
+            },
             shape: if p.category.contains("SHIELD") || p.category == "trade" {
                 Shape::Diamond
             } else if p.category.contains("MISS")
@@ -331,7 +336,9 @@ pub(super) fn chart(view: &ChartView) -> Chart {
         .filter_map(|s| s.y)
         .filter(|y| y.is_finite())
         .fold(0_f64, f64::min);
-    let range = if kind == Kind::Area {
+    let range = if view.id == "active_exchanges" {
+        (-0.5, 0.5)
+    } else if kind == Kind::Area {
         (-1., 1.)
     } else if view.y_definition.unit == "%" {
         (0., 100.)
@@ -363,6 +370,7 @@ pub(super) fn chart(view: &ChartView) -> Chart {
             start: b.start,
             end: b.end,
             lane: match b.lane.as_str() {
+                "activeExchange" => Some(0.),
                 "LOCAL" | "local" => Some(1.),
                 "OPPONENT" => Some(-1.),
                 "opponent" => Some(0.),
@@ -383,8 +391,16 @@ pub(super) fn chart(view: &ChartView) -> Chart {
     Chart {
         id: view.id.clone(),
         title: view.title.clone(),
-        x_label: view.x_unit.clone(),
-        y_label: format!("{} ({})", view.y_definition.label, view.y_definition.unit),
+        x_label: if kind == Kind::Stacked && view.x_unit.is_empty() {
+            "observations".into()
+        } else {
+            view.x_unit.clone()
+        },
+        y_label: if view.y_definition.unit.is_empty() {
+            view.y_definition.label.clone()
+        } else {
+            format!("{} ({})", view.y_definition.label, view.y_definition.unit)
+        },
         samples,
         kind,
         domain: (min_x, max_x),
@@ -601,7 +617,7 @@ impl Pulsar {
             let mut definitions =
                 ui::card(t).child(ui::section_header(t, "Definitions & evidence", None));
             for m in tab.metrics.values() {
-                definitions = definitions.child(ui::title_block(
+                definitions = definitions.child(super::analysis_ui::explanation(
                     t,
                     format!(
                         "{} · {} · {}",

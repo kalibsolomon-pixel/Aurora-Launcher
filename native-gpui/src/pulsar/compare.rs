@@ -91,19 +91,31 @@ impl Pulsar {
                 .flex_1()
             }),
         )));
-        let mut rows = ui::list_card(t).child(
+        let mut rows = ui::list_card(t).min_w(px(700.)).w_full().child(
             ui::row(t, false)
-                .child(ui::caption(t, "Measurement").flex_1())
-                .child(ui::caption(t, "First fight").flex_1())
-                .child(ui::caption(t, "Second fight").flex_1())
+                .child(ui::caption(t, "Measurement").flex_1().min_w(px(0.)))
+                .child(ui::caption(t, "First fight").flex_1().min_w(px(0.)))
+                .child(ui::caption(t, "Second fight").flex_1().min_w(px(0.)))
                 .child(ui::caption(t, "Difference").w(px(100.))),
         );
         for (i, m) in data.metrics.iter().enumerate() {
             rows = rows.child(
                 ui::row(t, i + 1 == data.metrics.len())
-                    .child(ui::muted(t, m.left.definition.label.clone()).flex_1())
-                    .child(ui::muted(t, tabs::metric_value(&m.left)).flex_1())
-                    .child(ui::muted(t, tabs::metric_value(&m.right)).flex_1())
+                    .child(
+                        ui::muted(t, m.left.definition.label.clone())
+                            .flex_1()
+                            .min_w(px(0.)),
+                    )
+                    .child(
+                        ui::muted(t, tabs::metric_value(&m.left))
+                            .flex_1()
+                            .min_w(px(0.)),
+                    )
+                    .child(
+                        ui::muted(t, tabs::metric_value(&m.right))
+                            .flex_1()
+                            .min_w(px(0.)),
+                    )
                     .child(
                         ui::caption(
                             t,
@@ -116,7 +128,14 @@ impl Pulsar {
                     ),
             );
         }
-        page = page.child(rows);
+        page = page.child(
+            div()
+                .id("pulsar-compare-table")
+                .w_full()
+                .min_w(px(0.))
+                .overflow_x_scroll()
+                .child(rows),
+        );
         for n in &data.notices {
             page = page.child(ui::caption(t, n.clone()));
         }
