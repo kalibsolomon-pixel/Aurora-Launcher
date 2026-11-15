@@ -47,6 +47,9 @@ use crate::controls::{
 use crate::theme::theme;
 use crate::ui;
 
+#[path = "sync_group.rs"]
+mod group;
+
 pub enum SyncingEvent {
     Changed,
 }
@@ -439,6 +442,9 @@ enum Reply {
     Instances(u64, ApiResult<api::LauncherState>),
     Status(u64, ApiResult<api::SyncStatus>),
     Resolved(ResolveGuard, ApiResult<serde_json::Value>),
+    Group(u64, ApiResult<api::SyncGroupOverview>),
+    GroupSaved(ApiResult<api::SyncGroupOverview>),
+    GroupSynced(ApiResult<api::SyncGroupReport>),
 }
 
 fn error(error: api::ApiError) -> String {
@@ -492,6 +498,7 @@ pub struct Syncing {
     edit_off_choices: bool,
     _input_events: Vec<Subscription>,
     message: String,
+    group: group::GroupView,
 }
 
 impl Syncing {
@@ -611,6 +618,7 @@ impl Syncing {
             category_bounds: std::array::from_fn(|_| Rc::new(Cell::new(None))),
             _input_events: input_events,
             message: String::new(),
+            group: group::GroupView::default(),
         };
         this.refresh(cx);
         this
@@ -629,6 +637,7 @@ impl Syncing {
         };
         self.read_status();
         self.read_conflicts();
+        self.read_group();
         let instances_host = host.clone();
         self.instances_serial = self.instances_serial.wrapping_add(1);
         let instances_serial = self.instances_serial;
@@ -926,6 +935,9 @@ impl Syncing {
                 self.read_status();
             }
             Reply::Instances(_, _) => {}
+            reply @ (Reply::Group(..) | Reply::GroupSaved(_) | Reply::GroupSynced(_)) => {
+                self.receive_group(reply, cx)
+            }
         }
     }
 
@@ -938,6 +950,12 @@ impl Syncing {
         payload: &serde_json::Value,
         cx: &mut Context<Self>,
     ) {
+        if self.host.is_some() && name == "instance-sync-group" {
+            // A launch applied the group; show the new history entry.
+            self.read_group();
+            cx.notify();
+            return;
+        }
         if self.host.is_none() || name != "instance-sync-state" {
             return;
         }
@@ -1119,6 +1137,16 @@ impl Render for Syncing {
                 "sync",
                 "Sync is unavailable",
                 self.message.clone(),
+            ));
+        }
+
+        // --- Synced group ---------------------------------------------------
+        root = root.child(self.render_group(t, cx));
+        if self.group.active() {
+            // The group is in charge of settings; the legacy file pool is off.
+            return root.child(ui::caption(
+                t,
+                "File sync between selected instances is turned off while the synced group is on.",
             ));
         }
 
