@@ -239,6 +239,10 @@ pub struct Coverage {
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AnalysisView {
+    #[serde(default)]
+    pub previous_period: Option<TabView>,
+    #[serde(default)]
+    pub previous_recordings: usize,
     pub coverage: Coverage,
     pub latest: Option<FightSummary>,
     pub focus: Option<FightKey>,

@@ -534,7 +534,37 @@ pub fn analyze_library(
         AnalysisWindow::Last25 => 25,
         AnalysisWindow::All => entries.len(),
     };
+    let previous: Vec<_> = entries.iter().skip(count).take(count).copied().collect();
     let chosen: Vec<_> = entries.into_iter().take(count).collect();
+    // Previous recordings use the same pooled definitions and bounded timeline budget.
+    let mut previous_timelines = Vec::new();
+    let (mut prior_bytes, mut prior_events) = (0, 0);
+    for e in &previous {
+        if e.event_count == 0
+            || prior_bytes + e.bytes as usize > parse::MAX_TIMELINE_BYTES
+            || prior_events + e.event_count > parse::MAX_TIMELINE_EVENTS
+        {
+            continue;
+        }
+        prior_bytes += e.bytes as usize;
+        prior_events += e.event_count;
+        if let Ok(record) = store::load_record(paths, e).and_then(|r| {
+            analysis_budget(&r)?;
+            Ok(r)
+        }) {
+            let a = analytics::analyze(&record);
+            previous_timelines.push((e.key.clone(), record, a));
+        }
+    }
+    let previous_period = (!previous.is_empty()).then(|| {
+        projection::pool(
+            &previous,
+            &previous_timelines,
+            &request.weapon,
+            &request.timing_result,
+        )
+        .0
+    });
     let mut coverage = Coverage {
         recordings: chosen.len(),
         measurement_recordings: chosen
@@ -645,6 +675,8 @@ pub fn analyze_library(
         view
     });
     Ok(AnalysisView {
+        previous_period,
+        previous_recordings: previous.len(),
         coverage,
         latest,
         focus: focus.map(|(key, _, _)| key.clone()),

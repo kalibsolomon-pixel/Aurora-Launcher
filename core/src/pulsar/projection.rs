@@ -300,7 +300,7 @@ fn tabs_value(
         m.definition.help="MISS classifications under the current frozen input policy. Unavailable for older recording policies; this diagnostic can differ from the historical aimed-swing counter.".into();
     }
     let outcomes = json!([{"category":"HIT","count":s["hits"]},{"category":"SHIELD_BLOCK","count":d["shields"]["confirmedBlocks"]},{"category":"ESTIMATED_BLOCK","count":d["shields"]["estimatedBlocks"]},{"category":"UNCERTAIN","count":(analytics::num(s,"uncertain")-analytics::num(&d["shields"],"estimatedBlocks")).max(0.0)},{"category":"MISS","count":s["emptyMisses"]}]);
-    offense.charts.push(chart("attack_outcomes","Attack outcomes","stackedBar","","attempts",vec![ChartSeries{label:"Outcome counts".into(),points:outcomes.as_array().unwrap().iter().enumerate().map(|(i,r)|{let mut p=point(i as f64,field(r,"count"),r,r["category"].as_str().unwrap().into());p.category=r["category"].as_str().unwrap().into();p}).collect()}],vec![],"Confirmed shield blocks are excluded from the accuracy denominator; estimated blocks remain uncertain."));
+    offense.charts.push(chart("attack_outcomes","Attack outcomes","stackedBar","","attempts",vec![ChartSeries{label:"Outcome counts".into(),points:outcomes.as_array().unwrap().iter().enumerate().map(|(i,r)|{let mut p=point(i as f64,field(r,"count"),r,r["category"].as_str().unwrap().into());p.category=r["category"].as_str().unwrap().into();p}).collect()}],vec![],"Accuracy is confirmed hits out of eligible attempts. Confirmed shield blocks are excluded; uncertain results remain in the denominator."));
     let mut bins = [0usize; 42];
     for v in array(&reach, "values").iter().filter_map(Value::as_f64) {
         let bin = if v < 2.0 {
@@ -1155,7 +1155,7 @@ pub(crate) fn playback(
 }
 
 pub(crate) fn trends(entries: &[&Entry]) -> Vec<ChartView> {
-    ["accuracy","averageReach","criticalRate","averageInterval","sprintRate"].into_iter().map(|key|chart(&format!("trend_{key}"),&metrics::definition(key).label,"line","recording",key,vec![ChartSeries{label:metrics::definition(key).label,points:entries.iter().rev().enumerate().map(|(i,e)|{let v=analytics::summary(&e.record)[key].as_f64();let mut p=point(i as f64,v,&Value::Null,format!("{}; {}",format::short_date(e.record.start_epoch_millis),format::value(v,&metrics::definition(key).unit)));p.key=Some(e.key.clone());p}).collect()}],vec![],"Chronological recorded sufficient statistics. Missing denominators are gaps; never sort formatted strings.")).collect()
+    ["accuracy","averageReach","criticalRate","averageInterval","sprintRate"].into_iter().map(|key|chart(&format!("trend_{key}"),&metrics::definition(key).label,"line","recording",key,vec![ChartSeries{label:metrics::definition(key).label,points:entries.iter().rev().enumerate().map(|(i,e)|{let v=analytics::summary(&e.record)[key].as_f64();let mut p=point(i as f64,v,&Value::Null,format!("{}; {}. Fight {}. {}",format::short_date(e.record.start_epoch_millis),format::value(v,&metrics::definition(key).unit),e.record.opponent_label.as_deref().or(e.record.opponent.as_deref()).unwrap_or("Manual session"), if key == "accuracy" { format!("{} confirmed hits from {} eligible attempts", e.record.statistics.hits, e.record.statistics.attempts - e.record.statistics.shield_blocks) } else { String::new() }));p.key=Some(e.key.clone());p}).collect()}],vec![],"Chronological recorded sufficient statistics. Missing denominators are gaps; never sort formatted strings.")).collect()
 }
 
 pub(crate) fn pool(

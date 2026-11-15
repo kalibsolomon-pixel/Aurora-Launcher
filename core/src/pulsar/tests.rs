@@ -1418,3 +1418,53 @@ fn card_denominators_frozen_regions_rounds_and_focused_flow_are_source_supported
         Some(41.0)
     );
 }
+
+#[test]
+fn previous_period_is_disjoint_and_uses_the_same_pooled_denominators() {
+    let lab = Lab::new();
+    for i in 0..12 {
+        let mut raw = fixture(if i < 10 { 0 } else { 2 })["raw"].clone();
+        let id = format!("03100000-0000-4000-8000-{i:012}");
+        raw["id"] = id.clone().into();
+        raw["startEpochMillis"] = (2_000_000_i64 - i as i64 * 1000).into();
+        fs::write(
+            lab.source
+                .root
+                .join("phenomena/fights")
+                .join(format!("{id}.json")),
+            serde_json::to_vec(&raw).unwrap(),
+        )
+        .unwrap();
+    }
+    lab.refresh();
+    let current = service::analyze_library(
+        &lab.paths,
+        view::AnalysisRequest {
+            window: view::AnalysisWindow::Last10,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(current.coverage.recordings, 10);
+    assert_eq!(current.previous_recordings, 2);
+    let previous = current.previous_period.unwrap();
+    assert_eq!(
+        previous.metrics["accuracy"].value,
+        analytics::summary(&fight(2))["accuracy"].as_f64()
+    );
+    assert_eq!(
+        current.overview.metrics["accuracy"].value,
+        analytics::summary(&fight(0))["accuracy"].as_f64()
+    );
+    let all = service::analyze_library(
+        &lab.paths,
+        view::AnalysisRequest {
+            window: view::AnalysisWindow::All,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    assert_eq!(all.coverage.recordings, 12);
+    assert_eq!(all.previous_recordings, 0);
+    assert!(all.previous_period.is_none());
+}
