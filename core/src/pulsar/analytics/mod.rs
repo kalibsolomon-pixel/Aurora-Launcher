@@ -260,10 +260,21 @@ pub(crate) struct Analytics {
     pub combos: Combos,
     pub dominance: Dominance,
 }
-pub(crate) fn analyze(f: &FightRecord) -> Analytics {
-    let events = canonical_events(f);
+pub(crate) fn analyze(original: &FightRecord) -> Analytics {
+    let events = canonical_events(original);
+    let adjusted = if original.evidence().timeline_start_nanos.is_none() {
+        let mut adjusted = original.clone();
+        adjusted
+            .match_evidence
+            .as_mut()
+            .unwrap()
+            .timeline_start_nanos = Some(events.first().map(|e| e.nano_time).unwrap_or(0));
+        Some(adjusted)
+    } else {
+        None
+    };
+    let f = adjusted.as_ref().unwrap_or(original);
     let context = f.schema_version >= 3;
-    // The first canonical event and first raw event have the same clock origin in valid streams.
     let by_seq: BTreeMap<i64, &CombatEvent> = events.iter().map(|e| (e.sequence, e)).collect();
     let crit_ticks: BTreeSet<i64> = events
         .iter()
@@ -566,7 +577,7 @@ pub(crate) fn analyze(f: &FightRecord) -> Analytics {
         }
         summary["opponentComboAvailability"] = "Unavailable".into();
     }
-    let derived = json!({"summary":summary,"hits":hits,"misses":misses,"readiness":readiness,"timings":timings,"reachBinSize":0.5,"hitReachBins":hit_bins,"missReachBins":miss_bins,"cooldownBins":cooldown_bins,"intervals":intervals,"comboLengths":combos.streaks.iter().filter(|s|s.local).map(|s|s.seqs.len()).collect::<Vec<_>>(),"placement":{"center":center,"edge":edge,"high":high,"low":low},"momentum":momentum(f,&hits,&incoming_times),"incoming":incoming_times,"jumps":jumps,"jumpsWithoutDamage":jumps_without,"motionSamples":events.iter().filter(|e|e.kind=="MOTION").count(),"sprintTransitions":events.iter().filter(|e|e.kind=="SPRINT").count(),"schema":f.schema_version,"resolution":resolution(f),"interpretations":interpretations,"combos":combos.payload(f),"combatExchanges":active,"exchangeTimeoutSeconds":f.statistics.exchange_timeout_seconds,"dominance":dominance.payload(),"shields":shield_payload,"incomingDetail":incoming.rows,"timingSamples":timing_samples,"attemptOutcomes":outcomes.iter().map(|(k,v)|(k.to_string(),v)).collect::<BTreeMap<_,_>>(),"reach":reach,"aim":aim,"jumpEffect":incoming::jump_effect(&incoming.rows),"jumpWindowTicks":f.policy().jump_window_ticks,"boundaries":boundaries});
+    let derived = json!({"summary":summary,"hits":hits,"misses":misses,"readiness":readiness,"timings":timings,"reachBinSize":0.5,"hitReachBins":hit_bins,"missReachBins":miss_bins,"cooldownBins":cooldown_bins,"intervals":intervals,"comboLengths":combos.streaks.iter().filter(|s|s.local).map(|s|s.seqs.len()).collect::<Vec<_>>(),"placement":{"center":center,"edge":edge,"high":high,"low":low},"momentum":momentum(f,&hits,&incoming_times),"incoming":incoming_times,"jumps":jumps,"jumpsWithoutDamage":jumps_without,"motionSamples":events.iter().filter(|e|e.kind=="MOTION").count(),"sprintTransitions":events.iter().filter(|e|e.kind=="SPRINT").count(),"schema":f.schema_version,"resolution":resolution(f),"interpretations":interpretations,"combos":combos.payload(original),"combatExchanges":active,"exchangeTimeoutSeconds":f.statistics.exchange_timeout_seconds,"dominance":dominance.payload(),"shields":shield_payload,"incomingDetail":incoming.rows,"timingSamples":timing_samples,"attemptOutcomes":outcomes.iter().map(|(k,v)|(k.to_string(),v)).collect::<BTreeMap<_,_>>(),"reach":reach,"aim":aim,"jumpEffect":incoming::jump_effect(&incoming.rows),"jumpWindowTicks":f.policy().jump_window_ticks,"boundaries":boundaries});
     Analytics {
         events,
         derived,

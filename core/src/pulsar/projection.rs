@@ -72,7 +72,16 @@ fn scalar_string(v: &Value) -> String {
 }
 pub(crate) fn table(id: &str, title: &str, data: &Value, key: Option<&FightKey>) -> TableView {
     let rows: Vec<Value> = if let Some(rows) = data.as_array() {
-        rows.iter().take(2000).cloned().collect()
+        rows.iter()
+            .take(2000)
+            .map(|v| {
+                if id == "turning_points" && v.is_array() {
+                    json!({"time":v[0], "dominance":v[1]})
+                } else {
+                    v.clone()
+                }
+            })
+            .collect()
     } else if let Some(rows) = data.as_object() {
         rows.iter()
             .take(2000)
@@ -741,26 +750,46 @@ fn tabs_value(
         vec![],
         "Sound observations identify shield subject; local attacker identity is unavailable.",
     ));
-    let mut jump_lanes = Vec::new();
-    for (label, rows, x) in [
-        ("Attributed incoming", json!(attributed), "tick"),
-        ("Actual jumps", d["jumps"].clone(), "t"),
-    ] {
-        jump_lanes.push(ChartSeries {
-            label: label.into(),
-            points: rows
-                .as_array()
-                .map(Vec::as_slice)
-                .unwrap_or(&[])
+    let jump_lanes = vec![
+        ChartSeries {
+            label: "Attributed incoming".into(),
+            points: attributed
                 .iter()
                 .filter_map(|r| {
-                    let t = field(r, x)?;
-                    Some(point(t, Some(1.0), r, scalar_string(r)))
+                    field(r, "tick")
+                        .map(|tick| point(tick, Some(0.0), r, "Attributed incoming hit".into()))
                 })
                 .collect(),
-        });
-    }
-    defense.charts.push(chart("jump_lanes","Incoming and actual jumps","lanes","client ticks / see labels","jumpCandidates",jump_lanes,vec![],"The raw timeline and incoming tables retain client ticks and signed pairing offsets; no world reconstruction."));
+        },
+        ChartSeries {
+            label: "Actual jumps".into(),
+            points: f
+                .events
+                .iter()
+                .filter(|e| e.kind == "JUMP")
+                .filter_map(|e| {
+                    e.client_tick.map(|tick| {
+                        let mut p =
+                            point(tick as f64, Some(1.0), &Value::Null, "Actual jump".into());
+                        p.sequence = Some(e.sequence);
+                        p
+                    })
+                })
+                .collect(),
+        },
+    ];
+    let pairing_bands = attributed
+        .iter()
+        .filter_map(|r| {
+            Some(ChartBand {
+                start: field(r, "tick")?,
+                end: field(r, "tick")? + field(r, "jumpOffsetTicks")?,
+                label: format!("Signed offset {} ticks", r["jumpOffsetTicks"]),
+                lane: "jumpPair".into(),
+            })
+        })
+        .collect();
+    defense.charts.push(chart("jump_lanes","Incoming and actual jumps","lanes","client ticks","jumpCandidates",jump_lanes,pairing_bands,"Shared client-tick lanes with signed pairing offsets. Actual jumps, not inputs; no world reconstruction."));
 
     let mut flow=TabView{metrics:submetrics(&all,&["comboCount","comboHits","longestCombo","averageCombo","longestOpponentCombo","longestUnanswered","dominanceShare"]),interpretations:array(d,"interpretations").iter().filter_map(Value::as_str).map(str::to_owned).collect(),notices:vec!["Combos use evidence time and attributed incoming hits; same-tick trades extend neither side's streak.".into()],..Default::default()};
     for (key, label, unit, value) in [
@@ -1163,13 +1192,17 @@ pub(crate) fn pool(
     for key in count_keys {
         let values: Vec<_> = entries
             .iter()
-            .map(|e| analytics::summary(&e.record)[key].as_f64().unwrap_or(0.0))
+            .filter_map(|e| analytics::summary(&e.record)[key].as_f64())
             .collect();
-        summary[key] = json!(if max_keys.contains(&key) {
-            values.into_iter().fold(0.0_f64, f64::max)
+        summary[key] = if values.is_empty() {
+            Value::Null
         } else {
-            values.iter().sum()
-        });
+            json!(if max_keys.contains(&key) {
+                values.into_iter().fold(0.0_f64, f64::max)
+            } else {
+                values.iter().sum()
+            })
+        };
     }
     let sum = |read: fn(&super::wire::Statistics) -> f64| {
         entries
@@ -1479,6 +1512,36 @@ pub(crate) fn pooled_flow_metrics(
             ),
         );
     }
-    let _ = entries;
+    for key in [
+        "comboCount",
+        "comboHits",
+        "longestCombo",
+        "longestOpponentCombo",
+        "longestUnanswered",
+    ] {
+        let values = entries
+            .iter()
+            .map(|e| analytics::summary(&e.record)[key].as_f64().unwrap_or(0.0));
+        let value = if key.starts_with("longest") {
+            values.fold(0.0_f64, f64::max)
+        } else {
+            values.sum()
+        };
+        result.insert(key.into(), metrics::metric(key, Some(value)));
+    }
+    let lengths: Vec<f64> = timelines
+        .iter()
+        .flat_map(|(_, _, a)| {
+            a.combos
+                .streaks
+                .iter()
+                .filter(|s| s.local && s.seqs.len() >= 2)
+                .map(|s| s.seqs.len() as f64)
+        })
+        .collect();
+    result.insert(
+        "averageCombo".into(),
+        metrics::metric("averageCombo", analytics::mean(&lengths)),
+    );
     result
 }

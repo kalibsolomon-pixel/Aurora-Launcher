@@ -544,11 +544,21 @@ pub(crate) fn delete(
             }
             let path = f?.path();
             parse::safe_path(paths.data_root(), &path)?;
-            if fs::symlink_metadata(&path)?.is_file() {
+            let owned = path.file_stem().and_then(|s| s.to_str()).is_some_and(|s| {
+                s.len() == 64
+                    && s.bytes()
+                        .all(|c| c.is_ascii_digit() || (b'a'..=b'f').contains(&c))
+            });
+            if owned
+                && path.extension().is_some_and(|s| s == "json")
+                && fs::symlink_metadata(&path)?.is_file()
+            {
                 fs::remove_file(path)?;
             }
         }
-        fs::remove_dir(versions)?;
+        if fs::read_dir(&versions)?.next().is_none() {
+            fs::remove_dir(versions)?;
+        }
     }
     for path in source_paths {
         parse::safe_path(&instance, &path)?;

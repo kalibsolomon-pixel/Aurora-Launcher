@@ -268,7 +268,10 @@ fn normalize(value: &mut Value, name: &str) {
                 ("attackClassifications", true),
                 ("attackTimings", true),
                 ("combatExchanges", false),
+                ("reachDistribution", false),
+                ("recentReach", false),
             ],
+            "Resolution" => &[("notes", false)],
             _ => &[],
         };
         for (field, map) in fields {
@@ -289,6 +292,9 @@ fn normalize(value: &mut Value, name: &str) {
             }
             if let Some(evidence) = obj.get_mut("matchEvidence") {
                 normalize(evidence, "MatchEvidence");
+            }
+            if let Some(resolution) = obj.get_mut("resolution") {
+                normalize(resolution, "Resolution");
             }
             if let Some(exchanges) = obj
                 .get_mut("session")
@@ -359,7 +365,7 @@ fn validate_fight(f: &mut FightRecord, depth: usize) -> Result<(), Error> {
     }
     let mut sequence = -1;
     let mut time = -1;
-    for e in &f.events {
+    for e in &mut f.events {
         if e.kind.is_empty()
             || e.confidence.is_empty()
             || e.sequence <= sequence
@@ -372,6 +378,10 @@ fn validate_fight(f: &mut FightRecord, depth: usize) -> Result<(), Error> {
         }
         sequence = e.sequence;
         time = e.nano_time;
+        if let Some(m) = e.attack.as_mut().and_then(|a| a.measurement.as_mut()) {
+            m.attack_speed = m.attack_speed.max(0.0);
+            m.cooldown_ticks = m.cooldown_ticks.max(0.0);
+        }
     }
     // Negative sufficient-stat counts would manufacture invalid rates.
     let stats = serde_json::to_value(&f.statistics).unwrap();

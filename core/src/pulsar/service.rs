@@ -361,7 +361,7 @@ pub fn detail(paths: &ManagedPaths, request: DetailRequest) -> Result<FightDetai
     let analysis = analytics::analyze(&record);
     let parent = store::load_record(paths, &entry)?;
     let mut summary = summary(paths, &entry);
-    summary.timeline_loaded = !record.events.is_empty();
+    summary.timeline_loaded = true;
     summary.metrics = metrics::values(&analysis.derived);
     if selected.is_some() {
         summary.opponent =
@@ -551,8 +551,23 @@ pub fn analyze_library(
             .map(str::to_owned)
             .collect();
     }
+    let trend_window = request
+        .query
+        .instance_id
+        .as_ref()
+        .and_then(|id| settings::inspect(paths, id).ok())
+        .and_then(|v| v.settings.into_iter().find(|s| s.key == "trendWindow"))
+        .and_then(|s| s.value.as_u64())
+        .unwrap_or(20)
+        .clamp(5, 100) as usize;
+    overview.charts.extend(projection::trends(
+        &chosen
+            .iter()
+            .take(trend_window)
+            .copied()
+            .collect::<Vec<_>>(),
+    ));
     let trend = projection::trends(&chosen);
-    overview.charts.extend(trend.clone());
     let mut offense = offense;
     offense.charts.extend(trend.into_iter().filter(|c| {
         matches!(
@@ -680,6 +695,8 @@ pub fn records(paths: &ManagedPaths, q: LibraryQuery) -> Result<Vec<RecordView>,
             None,
         ),
     ] {
+        let (mut bytes, mut events) = (0usize, 0usize);
+        let mut partial = false;
         let mut best: Option<(&Entry, f64)> = None;
         for e in &entries {
             if minimum.is_some_and(|min| {
@@ -693,11 +710,27 @@ pub fn records(paths: &ManagedPaths, q: LibraryQuery) -> Result<Vec<RecordView>,
                 "hits" => Some(e.record.statistics.hits as f64),
                 "longestCombo" => Some(e.record.statistics.longest_combo as f64),
                 _ => {
-                    if e.record.session.is_some() || e.event_count > parse::MAX_TIMELINE_EVENTS {
+                    if e.record.session.is_some() {
                         continue;
                     }
-                    let f = store::load_record(paths, e)?;
-                    analysis_budget(&f)?;
+                    if bytes.saturating_add(e.bytes as usize) > parse::MAX_TIMELINE_BYTES
+                        || events.saturating_add(e.event_count) > parse::MAX_TIMELINE_EVENTS
+                    {
+                        partial = true;
+                        continue;
+                    }
+                    let f = match store::load_record(paths, e).and_then(|f| {
+                        analysis_budget(&f)?;
+                        Ok(f)
+                    }) {
+                        Ok(f) => f,
+                        Err(_) => {
+                            partial = true;
+                            continue;
+                        }
+                    };
+                    bytes += e.bytes as usize;
+                    events += e.event_count;
                     let a = analytics::analyze(&f);
                     if a.dominance.availability != "AVAILABLE" {
                         continue;
@@ -715,7 +748,7 @@ pub fn records(paths: &ManagedPaths, q: LibraryQuery) -> Result<Vec<RecordView>,
                 }
             }
         }
-        let metric = if key == "duration" {
+        let mut metric = if key == "duration" {
             metrics::extra(
                 key,
                 "Duration",
@@ -726,6 +759,10 @@ pub fn records(paths: &ManagedPaths, q: LibraryQuery) -> Result<Vec<RecordView>,
         } else {
             metrics::metric(key, best.map(|(_, v)| v))
         };
+        if partial {
+            metric.availability = Availability::Incomplete;
+            metric.reason = Some("Best among readable timelines within the 64 MiB / 50,000 event budget; other recordings were skipped.".into());
+        }
         result.push(RecordView {
             id: id.into(),
             label: label.into(),

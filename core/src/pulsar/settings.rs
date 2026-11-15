@@ -1,4 +1,4 @@
-use super::{Error, parse, service, store, view::*};
+use super::{Error, parse, service, view::*};
 use crate::paths::ManagedPaths;
 use serde_json::{Value, json};
 
@@ -94,7 +94,7 @@ pub(crate) fn inspect(paths: &ManagedPaths, id: &str) -> Result<SettingsView, Er
     }
     let mut settings = Vec::new();
     for (key, value) in effective.as_object().unwrap() {
-        settings.push(SettingView{key:key.clone(),group:group(key).into(),label:key.clone(),value:value.clone(),persisted:persisted.contains_key(key),runtime_only:true,help:"Read-only persisted preference/default. Change in game; saved recording policies remain frozen.".into()});
+        settings.push(SettingView{key:key.clone(),group:group(key).into(),label:key.clone(),value:value.clone(),persisted:persisted.contains_key(key),runtime_only:true,help:"Read-only persisted value or constructor default; persisted values are shown before client validation/clamping. Change in game; saved recording policies remain frozen.".into()});
     }
     for (key, label) in [
         ("captureState", "Recording state and duration"),
@@ -120,7 +120,6 @@ pub(crate) fn inspect(paths: &ManagedPaths, id: &str) -> Result<SettingsView, Er
             match parse::read_bytes(&source.root,&p,1024*1024).and_then(|bytes|serde_json::from_slice::<Value>(&bytes).map_err(|_|Error::new("pulsar_settings_invalid","Standalone preferences are malformed."))){Ok(v)=>settings.push(SettingView{key:format!("standalone:{filename}"),group:"Data & exports".into(),label:format!("Standalone preferences: {filename}"),value:v,persisted:true,runtime_only:true,help:"Read-only standalone preferences. Explicit import is an in-game action; the original is preserved.".into()}),Err(e)=>warnings.push(e.message)}
         }
     }
-    let _ = store::now();
     Ok(SettingsView {
         instance_id: id.into(),
         source_path,
