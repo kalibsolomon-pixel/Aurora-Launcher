@@ -307,11 +307,42 @@ fn real_stores_import_read_only_without_parse_errors() {
             ),
         },
     ];
+    let mut before = Vec::new();
+    for source in &sources {
+        for name in ["phenomena", "kwamster"] {
+            let mut pending = vec![(source.root.join(name).join("fights"), 0)];
+            while let Some((folder, depth)) = pending.pop() {
+                if !folder.exists() {
+                    continue;
+                }
+                for child in fs::read_dir(folder).unwrap() {
+                    let path = child.unwrap().path();
+                    let meta = fs::symlink_metadata(&path).unwrap();
+                    if meta.is_dir() && depth < 2 {
+                        pending.push((path, depth + 1));
+                    } else if meta.is_file() && path.extension().is_some_and(|s| s == "json") {
+                        let bytes =
+                            parse::read_bytes(&source.root, &path, parse::MAX_FILE_BYTES).unwrap();
+                        before.push((path, store::digest(&bytes), meta.modified().unwrap()));
+                    }
+                }
+            }
+        }
+    }
     let index = store::refresh(&lab.paths, &sources).unwrap();
     for (id, issues) in &index.issues {
         assert!(issues.is_empty(), "{id}: {issues:?}");
     }
     assert_eq!(index.entries.len(), 369);
+    for (path, hash, modified) in before {
+        assert_eq!(
+            store::digest(&fs::read(&path).unwrap()),
+            hash,
+            "{} changed",
+            path.display()
+        );
+        assert_eq!(fs::metadata(path).unwrap().modified().unwrap(), modified);
+    }
     eprintln!(
         "REAL STORE IMPORT: {} recordings, zero parse errors",
         index.entries.len()
@@ -473,9 +504,153 @@ fn nullable_constructor_collections_and_negative_measurements_normalize() {
         raw["statistics"][key] = serde_json::Value::Null;
     }
     raw["resolution"]["notes"] = serde_json::Value::Null;
+    let attack = raw["events"]
+        .as_array_mut()
+        .unwrap()
+        .iter_mut()
+        .find(|e| e["kind"] == "ATTACK")
+        .unwrap();
+    attack["attack"]["measurement"]["attackSpeed"] = (-1.0).into();
+    attack["attack"]["measurement"]["cooldownTicks"] = (-2.0).into();
     let decoded = parse::decode(&serde_json::to_vec(&raw).unwrap()).unwrap();
     assert!(decoded.statistics.reach_distribution.is_empty());
     assert!(decoded.resolution.unwrap().notes.is_empty());
+    let measurement = decoded
+        .events
+        .iter()
+        .find_map(|e| e.attack.as_ref())
+        .unwrap()
+        .measurement
+        .as_ref()
+        .unwrap();
+    assert_eq!(measurement.attack_speed, 0.0);
+    assert_eq!(measurement.cooldown_ticks, 0.0);
+}
+
+#[test]
+fn additive_unknown_fields_obey_the_same_depth_limit() {
+    let mut raw = fixture(6)["raw"].clone();
+    let mut nested = serde_json::Value::Null;
+    for _ in 0..65 {
+        nested = serde_json::json!({"next":nested});
+    }
+    raw["unknownFutureField"] = nested;
+    assert_eq!(
+        parse::decode(&serde_json::to_vec(&raw).unwrap())
+            .unwrap_err()
+            .code,
+        "pulsar_depth"
+    );
+}
+
+#[cfg(windows)]
+#[test]
+fn windows_transient_sharing_violation_is_retried() {
+    use std::os::windows::fs::OpenOptionsExt;
+    let lab = Lab::new();
+    let path = lab.write(0);
+    let locked = fs::OpenOptions::new()
+        .read(true)
+        .share_mode(0)
+        .open(&path)
+        .unwrap();
+    let release = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(15));
+        drop(locked);
+    });
+    assert!(parse::read_fight(&lab.source.root, &path).is_ok());
+    release.join().unwrap();
+}
+
+#[test]
+fn canonical_and_raw_export_clocks_keep_their_distinct_historical_origins() {
+    let mut f = fight(2);
+    f.match_evidence.as_mut().unwrap().timeline_start_nanos = None;
+    let mut duplicate = f.events[0].clone();
+    duplicate.sequence = 0;
+    duplicate.nano_time = 0;
+    f.events.insert(0, duplicate);
+    let a = analytics::analyze(&f);
+    assert_eq!(a.derived["timingSamples"][0]["t"], 0.0);
+    let first_mark = &a.combos.marks[0];
+    assert_eq!(
+        a.derived["combos"]["marks"][0]["t"].as_f64(),
+        Some(f.seconds(first_mark.nanos))
+    );
+    assert!(
+        (f.seconds(i64::MAX) - ((i64::MAX as i128 - f.origin() as i128) as f64 / 1e9)).abs() < 1e-9
+    );
+}
+
+#[test]
+fn below_resolution_is_frozen_and_excluded_from_graded_timing_rate() {
+    let mut f = fight(0);
+    for timing in f.statistics.attack_timings.values_mut() {
+        timing.grade = Some("BELOW_RESOLUTION".into());
+        timing.expected_ticks = 0.5;
+        timing.interval_ticks = 1.0;
+    }
+    let a = analytics::analyze(&f);
+    assert!(
+        a.derived["timingSamples"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|t| t["grade"] == "BELOW_RESOLUTION")
+    );
+    assert_eq!(
+        analytics::metrics::values(&a.derived)["timingPerfect"].value,
+        None
+    );
+}
+
+#[test]
+fn pooled_dominance_uses_observed_durations_and_old_context_stays_unavailable() {
+    let lab = Lab::new();
+    lab.write(0);
+    lab.write(2);
+    let index = lab.refresh();
+    let entries: Vec<_> = index.entries.iter().collect();
+    let timelines: Vec<_> = index
+        .entries
+        .iter()
+        .map(|e| {
+            let f = store::load_record(&lab.paths, e).unwrap();
+            let a = analytics::analyze(&f);
+            (e.key.clone(), f, a)
+        })
+        .collect();
+    let pooled = projection::pooled_flow_metrics(&entries, &timelines);
+    let (a, b) = (
+        fixture(0)["oracle"]["derived"]["dominance"].clone(),
+        fixture(2)["oracle"]["derived"]["dominance"].clone(),
+    );
+    let (da, db) = (a["active"].as_f64().unwrap(), b["active"].as_f64().unwrap());
+    let expected = (a["localShare"].as_f64().unwrap() * da
+        + b["localShare"].as_f64().unwrap() * db)
+        / (da + db);
+    assert!((pooled["pooledDominanceShare"].value.unwrap() - expected).abs() < 1e-9);
+    let old = analytics::analyze(&fight(5));
+    let values = analytics::metrics::values(&old.derived);
+    for key in ["serverCrits", "damageTaken", "knockback", "shieldBlocks"] {
+        assert_eq!(values[key].value, None, "{key}");
+    }
+}
+
+#[test]
+fn formats_preserve_units_local_dates_and_unavailable() {
+    use analytics::format::*;
+    assert_eq!(value(None, "%"), "-");
+    assert_eq!(value(Some(0.0), "%"), "0.0%");
+    assert_eq!(duration(60_000_000_000), "1m 00s");
+    assert_eq!(duration(1_250_000_000), "1.3s");
+    assert_eq!(date_group(0), "1970-01-01");
+    assert_eq!(date_group(-1), "1969-12-31");
+    let date = date_time(1_700_000_000_000);
+    let short = short_date(1_700_000_000_000);
+    assert_eq!(date.len(), 16);
+    assert_eq!(short, &date[5..]);
+    assert_eq!(opponent(None, Some("1234567890")), "Entity 12345678");
 }
 
 #[test]
@@ -761,7 +936,36 @@ fn history_ties_filters_pagination_and_unavailable_last() {
     };
     assert_eq!(
         service::filtered(&index, &q).unwrap()[0].key.fight_id,
-        IDS[0]
+        index.entries[0].key.fight_id
+    );
+    index.entries.reverse();
+    assert_eq!(
+        service::filtered(&index, &q).unwrap()[0].key,
+        index.entries[0].key
+    );
+    let search = view::LibraryQuery {
+        search: "NO SUCH OPPONENT OR SERVER".into(),
+        ..Default::default()
+    };
+    assert!(service::filtered(&index, &search).unwrap().is_empty());
+    let search = view::LibraryQuery {
+        search: index
+            .entries
+            .iter()
+            .find(|e| e.key.fight_id == IDS[0])
+            .unwrap()
+            .record
+            .opponent_label
+            .clone()
+            .unwrap()
+            .to_uppercase(),
+        ..Default::default()
+    };
+    assert!(
+        service::filtered(&index, &search)
+            .unwrap()
+            .iter()
+            .any(|e| e.key.fight_id == IDS[0])
     );
     let q = view::LibraryQuery {
         outcome: view::OutcomeFilter::Win,
@@ -901,6 +1105,7 @@ fn report_copy_receipt_integrity_confirmation_and_source_preservation() {
     fs::write(folder.join(".phenomena-owner"), IDS[0]).unwrap();
     fs::write(folder.join("index.html"), b"<html>anonymized</html>").unwrap();
     fs::write(folder.join("report.json"), b"{}").unwrap();
+    assert!(reports::available(&lab.paths,&index.entries[0]));
     let destination = Lab::new();
     let mut request = view::ExportRequest {
         key: key.clone(),
@@ -992,6 +1197,20 @@ async fn application_commands_use_native_host_and_serialize_contract_end_to_end(
     assert!(json["summary"]["timelineLoaded"] == true);
     let roundtrip: view::FightDetailView = serde_json::from_value(json).unwrap();
     assert_eq!(roundtrip.summary.key, detail.key);
+    let filtered = app::analyze_pulsar_fight(
+        host.clone(),
+        view::DetailAnalysisRequest {
+            detail: detail.clone(),
+            weapon: Some("minecraft:diamond_axe".into()),
+            timing_result: Some("NO_HIT".into()),
+        },
+    )
+    .await
+    .unwrap();
+    assert_eq!(filtered.offense.metrics["reachEligible"].value, Some(1.0));
+    assert_eq!(filtered.offense.metrics["averageReach"].value, Some(2.6));
+    assert_eq!(filtered.offense.metrics["timingGraded"].value, Some(2.0));
+    assert_eq!(filtered.offense.metrics["timingPerfect"].value, Some(100.0));
     let playback = app::get_pulsar_playback(
         host.clone(),
         view::PlaybackRequest {
@@ -1036,5 +1255,39 @@ async fn application_commands_use_native_host_and_serialize_contract_end_to_end(
     assert_eq!(
         serde_json::to_value(error).unwrap()["code"],
         "pulsar_query_limit"
+    );
+}
+
+#[test]
+fn selected_detail_filters_apply_inside_manual_exchange_and_reject_invalid_filters() {
+    let lab = Lab::new();
+    lab.write(3);
+    let index = lab.refresh();
+    let parent = store::load_record(&lab.paths, &index.entries[0]).unwrap();
+    let exchange = &parent.session.as_ref().unwrap().exchanges[0];
+    let detail = view::DetailRequest {
+        key: index.entries[0].key.clone(),
+        exchange_id: Some(exchange.id.clone()),
+        ..Default::default()
+    };
+    let mut request = view::DetailAnalysisRequest {
+        detail,
+        weapon: Some("minecraft:diamond_axe".into()),
+        timing_result: Some("HITS".into()),
+    };
+    let filtered = service::detail_analysis(&lab.paths, request.clone()).unwrap();
+    assert_eq!(
+        filtered.selected_exchange.as_deref(),
+        Some(exchange.id.as_str())
+    );
+    assert_eq!(filtered.offense.metrics["timingGraded"].value, Some(0.0));
+    assert_eq!(filtered.offense.metrics["timingPerfect"].value, None);
+    assert_eq!(filtered.offense.metrics["reachEligible"].value, Some(1.0));
+    request.timing_result = Some("invalid".into());
+    assert_eq!(
+        service::detail_analysis(&lab.paths, request)
+            .unwrap_err()
+            .code,
+        "pulsar_invalid_filter"
     );
 }

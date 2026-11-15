@@ -47,6 +47,24 @@ fn validate_query(q: &LibraryQuery) -> Result<(), Error> {
     }
     Ok(())
 }
+fn validate_filters(weapon: &Option<String>, timing: &Option<String>) -> Result<(), Error> {
+    if weapon.as_ref().is_some_and(|w| w.len() > 256) {
+        return Err(Error::new(
+            "pulsar_query_limit",
+            "Weapon filter is too long.",
+        ));
+    }
+    if timing
+        .as_ref()
+        .is_some_and(|t| !matches!(t.as_str(), "ALL" | "HITS" | "NO_HIT"))
+    {
+        return Err(Error::new(
+            "pulsar_invalid_filter",
+            "Timing result must be ALL, HITS or NO_HIT.",
+        ));
+    }
+    Ok(())
+}
 fn metric_sort(a: Option<f64>, b: Option<f64>) -> Ordering {
     match (a, b) {
         (Some(a), Some(b)) => b.total_cmp(&a),
@@ -124,7 +142,6 @@ pub(crate) fn filtered<'a>(index: &'a Index, q: &LibraryQuery) -> Result<Vec<&'a
             HistorySort::Duration => b.duration_nanos.cmp(&a.duration_nanos),
         }
         .then(b.start_epoch_millis.cmp(&a.start_epoch_millis))
-        .then(a.id.cmp(&b.id))
     });
     Ok(entries)
 }
@@ -357,6 +374,20 @@ pub(crate) fn selected_record(
     Ok((entry, parent, None))
 }
 pub fn detail(paths: &ManagedPaths, request: DetailRequest) -> Result<FightDetailView, Error> {
+    detail_analysis(
+        paths,
+        DetailAnalysisRequest {
+            detail: request,
+            ..Default::default()
+        },
+    )
+}
+pub fn detail_analysis(
+    paths: &ManagedPaths,
+    filters: DetailAnalysisRequest,
+) -> Result<FightDetailView, Error> {
+    validate_filters(&filters.weapon, &filters.timing_result)?;
+    let request = filters.detail;
     let (entry, record, selected) = selected_record(paths, &request)?;
     let analysis = analytics::analyze(&record);
     let parent = store::load_record(paths, &entry)?;
@@ -372,7 +403,7 @@ pub fn detail(paths: &ManagedPaths, request: DetailRequest) -> Result<FightDetai
         summary.result_label = format::result(&record);
         summary.outcome = record.outcome.clone().unwrap_or("UNKNOWN".into());
     }
-    let tabs = projection::tabs(&record, &analysis, &None, &None);
+    let tabs = projection::tabs(&record, &analysis, &filters.weapon, &filters.timing_result);
     let participants = parent
         .session
         .as_ref()
@@ -464,12 +495,7 @@ pub fn analyze_library(
     request: AnalysisRequest,
 ) -> Result<AnalysisView, Error> {
     validate_query(&request.query)?;
-    if request.weapon.as_ref().is_some_and(|w| w.len() > 256) {
-        return Err(Error::new(
-            "pulsar_query_limit",
-            "Weapon filter is too long.",
-        ));
-    }
+    validate_filters(&request.weapon, &request.timing_result)?;
     let index = store::read_index(paths)?;
     let mut q = request.query.clone();
     q.sort = HistorySort::Newest;
@@ -497,13 +523,13 @@ pub fn analyze_library(
         {
             continue;
         }
+        bytes += e.bytes as usize;
+        events += e.event_count;
         match store::load_record(paths, e).and_then(|r| {
             analysis_budget(&r)?;
             Ok(r)
         }) {
             Ok(record) => {
-                bytes += e.bytes as usize;
-                events += e.event_count;
                 coverage.timeline_recordings += 1;
                 coverage.context_recordings += usize::from(record.schema_version >= 3);
                 let a = analytics::analyze(&record);
@@ -719,6 +745,8 @@ pub fn records(paths: &ManagedPaths, q: LibraryQuery) -> Result<Vec<RecordView>,
                         partial = true;
                         continue;
                     }
+                    bytes += e.bytes as usize;
+                    events += e.event_count;
                     let f = match store::load_record(paths, e).and_then(|f| {
                         analysis_budget(&f)?;
                         Ok(f)
@@ -729,8 +757,6 @@ pub fn records(paths: &ManagedPaths, q: LibraryQuery) -> Result<Vec<RecordView>,
                             continue;
                         }
                     };
-                    bytes += e.bytes as usize;
-                    events += e.event_count;
                     let a = analytics::analyze(&f);
                     if a.dominance.availability != "AVAILABLE" {
                         continue;

@@ -8816,6 +8816,15 @@ pub async fn get_pulsar_playback(
 ) -> Result<crate::pulsar::view::PlaybackView, CommandError> {
     pulsar_worker(app, move |paths| crate::pulsar::playback(paths, request)).await
 }
+pub async fn analyze_pulsar_fight(
+    app: Host,
+    request: crate::pulsar::view::DetailAnalysisRequest,
+) -> Result<crate::pulsar::view::FightDetailView, CommandError> {
+    pulsar_worker(app, move |paths| {
+        crate::pulsar::detail_analysis(paths, request)
+    })
+    .await
+}
 pub async fn get_pulsar_settings(
     app: Host,
     request: crate::pulsar::view::FolderRequest,

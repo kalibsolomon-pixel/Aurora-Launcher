@@ -58,6 +58,16 @@ pub(crate) fn inspect(paths: &ManagedPaths, id: &str) -> Result<SettingsView, Er
                 "Aurora configuration is malformed; it was preserved.",
             )
         })?;
+        if !aurora.is_object()
+            || aurora
+                .get("pulsarSettings")
+                .is_some_and(|v| !v.is_null() && !v.is_object())
+        {
+            return Err(Error::new(
+                "pulsar_settings_invalid",
+                "Aurora configuration has an invalid object shape; it was preserved.",
+            ));
+        }
         source_path = Some(path.to_string_lossy().into_owned());
         if let Some(settings) = aurora["pulsarSettings"].as_object() {
             schema = settings

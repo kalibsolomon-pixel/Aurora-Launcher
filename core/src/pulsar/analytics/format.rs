@@ -79,3 +79,75 @@ pub(crate) fn date_group(epoch_millis: i64) -> String {
     year += i64::from(month <= 2);
     format!("{year:04}-{month:02}-{day:02}")
 }
+
+#[repr(C)]
+struct LocalTime {
+    second: i32,
+    minute: i32,
+    hour: i32,
+    day: i32,
+    month: i32,
+    year: i32,
+    weekday: i32,
+    yearday: i32,
+    daylight: i32,
+    #[cfg(unix)]
+    offset: std::ffi::c_long,
+    #[cfg(unix)]
+    zone: *const std::ffi::c_char,
+}
+fn local_time(epoch_millis: i64) -> Option<LocalTime> {
+    let seconds = epoch_millis.div_euclid(1000);
+    // The C runtimes write a fully initialized tm only on success. No shared
+    // static localtime buffer is used by these concurrently invoked projections.
+    let mut result = std::mem::MaybeUninit::<LocalTime>::uninit();
+    #[cfg(windows)]
+    {
+        #[link(name = "ucrt")]
+        unsafe extern "C" {
+            fn _localtime64_s(out: *mut LocalTime, time: *const i64) -> i32;
+        }
+        if unsafe { _localtime64_s(result.as_mut_ptr(), &seconds) } == 0 {
+            return Some(unsafe { result.assume_init() });
+        }
+    }
+    #[cfg(unix)]
+    {
+        unsafe extern "C" {
+            fn localtime_r(time: *const std::ffi::c_long, out: *mut LocalTime) -> *mut LocalTime;
+        }
+        let seconds = std::ffi::c_long::try_from(seconds).ok()?;
+        if !unsafe { localtime_r(&seconds, result.as_mut_ptr()) }.is_null() {
+            return Some(unsafe { result.assume_init() });
+        }
+    }
+    None
+}
+#[allow(dead_code)]
+pub(crate) fn date_time(epoch_millis: i64) -> String {
+    local_time(epoch_millis)
+        .map(|t| {
+            format!(
+                "{:04}-{:02}-{:02} {:02}:{:02}",
+                i64::from(t.year) + 1900,
+                t.month + 1,
+                t.day,
+                t.hour,
+                t.minute
+            )
+        })
+        .unwrap_or_else(|| "-".into())
+}
+pub(crate) fn short_date(epoch_millis: i64) -> String {
+    local_time(epoch_millis)
+        .map(|t| {
+            format!(
+                "{:02}-{:02} {:02}:{:02}",
+                t.month + 1,
+                t.day,
+                t.hour,
+                t.minute
+            )
+        })
+        .unwrap_or_else(|| "-".into())
+}

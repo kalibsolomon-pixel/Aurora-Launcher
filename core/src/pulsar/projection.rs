@@ -1140,7 +1140,7 @@ pub(crate) fn playback(
 }
 
 pub(crate) fn trends(entries: &[&Entry]) -> Vec<ChartView> {
-    ["accuracy","averageReach","criticalRate","averageInterval","sprintRate"].into_iter().map(|key|chart(&format!("trend_{key}"),&metrics::definition(key).label,"line","recording",key,vec![ChartSeries{label:metrics::definition(key).label,points:entries.iter().rev().enumerate().map(|(i,e)|{let v=analytics::summary(&e.record)[key].as_f64();let mut p=point(i as f64,v,&Value::Null,format!("{}; {}",format::date_group(e.record.start_epoch_millis),format::value(v,&metrics::definition(key).unit)));p.key=Some(e.key.clone());p}).collect()}],vec![],"Chronological recorded sufficient statistics. Missing denominators are gaps; never sort formatted strings.")).collect()
+    ["accuracy","averageReach","criticalRate","averageInterval","sprintRate"].into_iter().map(|key|chart(&format!("trend_{key}"),&metrics::definition(key).label,"line","recording",key,vec![ChartSeries{label:metrics::definition(key).label,points:entries.iter().rev().enumerate().map(|(i,e)|{let v=analytics::summary(&e.record)[key].as_f64();let mut p=point(i as f64,v,&Value::Null,format!("{}; {}",format::short_date(e.record.start_epoch_millis),format::value(v,&metrics::definition(key).unit)));p.key=Some(e.key.clone());p}).collect()}],vec![],"Chronological recorded sufficient statistics. Missing denominators are gaps; never sort formatted strings.")).collect()
 }
 
 pub(crate) fn pool(

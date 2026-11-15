@@ -31,6 +31,14 @@ pub(crate) fn safe_path(root: &Path, path: &Path) -> Result<(), Error> {
             "The path is outside its Pulsar root.",
         ));
     }
+    for ancestor in root.ancestors().skip(1) {
+        if crate::install::coordination::redirected(&fs::symlink_metadata(ancestor)?) {
+            return Err(Error::new(
+                "pulsar_unsafe_path",
+                "A Pulsar root ancestor is a link or reparse point.",
+            ));
+        }
+    }
     let mut current = root.to_path_buf();
     for component in
         std::iter::once(None).chain(path.strip_prefix(root).unwrap().components().map(Some))
@@ -319,6 +327,30 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<FightRecord, Error> {
             "The recording is not complete, valid JSON.",
         )
     })?;
+    fn depth(value: &Value, level: usize) -> Result<(), Error> {
+        if level > 64 {
+            return Err(Error::new(
+                "pulsar_depth",
+                "The recording exceeds the nesting limit.",
+            ));
+        }
+        match value {
+            Value::Array(values) => {
+                for v in values {
+                    depth(v, level + 1)?;
+                }
+            }
+            Value::Object(values) => {
+                for v in values.values() {
+                    depth(v, level + 1)?;
+                }
+            }
+            _ => {}
+        }
+        Ok(())
+    }
+    // Additive unknown fields have the same depth budget as known schema fields.
+    depth(&value, 0)?;
     validate(
         &value,
         &serde_json::json!({"$ref":"#/$defs/FightRecord"}),

@@ -87,6 +87,15 @@ pub(crate) fn values(derived: &Value) -> BTreeMap<String, MetricValue> {
                 _ => s[&d.key].as_f64(),
             };
             let mut m = metric(&d.key, v);
+            if matches!(d.key.as_str(), "serverCrits" | "damageTaken" | "knockback")
+                && s["contextAvailable"] != true
+            {
+                m.value = None;
+                m.availability = Availability::Unavailable;
+                m.reason = Some(
+                    "Structured context requires schema 3 or newer with loaded evidence.".into(),
+                );
+            }
             if d.key == "longestOpponentCombo" {
                 match s["opponentComboAvailability"].as_str() {
                     Some("Unavailable") => {

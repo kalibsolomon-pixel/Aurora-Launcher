@@ -1972,6 +1972,12 @@ pub async fn pulsar_detail(host: Host, request: DetailRequest) -> ApiResult<Figh
 pub async fn pulsar_playback(host: Host, request: PlaybackRequest) -> ApiResult<PlaybackView> {
     convert(app::get_pulsar_playback(host, request).await)
 }
+pub async fn pulsar_detail_analysis(
+    host: Host,
+    request: DetailAnalysisRequest,
+) -> ApiResult<FightDetailView> {
+    convert(app::analyze_pulsar_fight(host, request).await)
+}
 pub async fn pulsar_settings(host: Host, request: FolderRequest) -> ApiResult<SettingsView> {
     convert(app::get_pulsar_settings(host, request).await)
 }

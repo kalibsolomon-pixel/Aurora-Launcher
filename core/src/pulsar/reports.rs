@@ -104,10 +104,10 @@ fn receipt_folder(paths: &ManagedPaths, e: &Entry, verify: bool) -> Result<PathB
     Ok(folder)
 }
 pub(crate) fn available(paths: &ManagedPaths, e: &Entry) -> bool {
-    receipt_folder(paths, e, false).is_ok()
+    existing(paths, e, false).is_ok()
 }
-fn existing(paths: &ManagedPaths, e: &Entry) -> Result<PathBuf, Error> {
-    match receipt_folder(paths, e, true) {
+fn existing(paths: &ManagedPaths, e: &Entry, verify: bool) -> Result<PathBuf, Error> {
+    match receipt_folder(paths, e, verify) {
         Ok(p) => Ok(p),
         Err(error) if error.code == "pulsar_report_missing" => {
             // Manual exports may not have a receipt. Require a UUID ownership marker and both files.
@@ -152,7 +152,7 @@ fn existing(paths: &ManagedPaths, e: &Entry) -> Result<PathBuf, Error> {
 pub(crate) fn view(paths: &ManagedPaths, key: &FightKey) -> Result<ActionReceipt, Error> {
     let index = store::read_index(paths)?;
     let entry = store::entry(&index, key)?;
-    let folder = existing(paths, entry)?;
+    let folder = existing(paths, entry, true)?;
     let page = folder.join("index.html");
     crate::host::open_path(&page).map_err(|_| {
         Error::new(
@@ -224,7 +224,7 @@ pub(crate) fn export(
     }
     let index = store::read_index(paths)?;
     let entry = store::entry(&index, &request.key)?;
-    let source = existing(paths, entry)?;
+    let source = existing(paths, entry, true)?;
     let destination = PathBuf::from(&request.destination);
     if !destination.is_absolute() || destination.as_os_str().len() > 32760 {
         return Err(Error::new(

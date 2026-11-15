@@ -94,6 +94,14 @@ pub struct DetailRequest {
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", default)]
+pub struct DetailAnalysisRequest {
+    pub detail: DetailRequest,
+    pub weapon: Option<String>,
+    /// ALL, HITS or NO_HIT. Only timing samples are affected by this filter.
+    pub timing_result: Option<String>,
+}
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", default)]
 pub struct PlaybackRequest {
     pub detail: DetailRequest,
     pub playhead_seconds: f64,
