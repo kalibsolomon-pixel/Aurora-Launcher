@@ -203,12 +203,13 @@ impl Pulsar {
                     } else {
                         210.
                     }))
-                    .when(m.len() == 5, |d| d.flex_1().min_w(px(170.)))
+                    .when(m.len() == 5, |d| d.w(px(0.)).flex_1().min_w(px(120.)))
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .gap(px(4.))
+                            .when(m.len() == 5, |d| d.h(px(64.)))
                             .child(
                                 ui::caption(
                                     t,

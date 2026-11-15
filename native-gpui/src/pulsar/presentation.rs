@@ -34,7 +34,7 @@ pub fn text(input: &str) -> String {
                 || (word.len() > 1
                     && word.chars().any(|c| c.is_ascii_alphabetic())
                     && word.chars().all(|c| !c.is_ascii_lowercase())
-                    && !matches!(word, "HP" | "UI" | "SD" | "UTC"))
+                    && !matches!(word, "HP" | "UI" | "SD" | "UTC" | "MB"))
             {
                 let mut s = word.replace('_', " ").to_lowercase();
                 if let Some(c) = s.get_mut(0..1) {
@@ -80,7 +80,11 @@ pub fn comparison_delta(left: &MetricValue, right: &MetricValue) -> String {
         return "Unavailable".into();
     };
     let unit = left.definition.unit.as_str();
-    let precision = if unit == "count" {
+    let precision = if left.definition.key == "averageCombo" {
+        1
+    } else if unit == "count"
+        || (matches!(unit, "" | "dimensionless") && a.fract() == 0. && b.fract() == 0.)
+    {
         0
     } else if matches!(unit, "" | "dimensionless") {
         3
@@ -200,6 +204,10 @@ mod tests {
         assert_eq!(comparison_delta(&a, &b), "+<0.1 m");
         assert_eq!(comparison_delta(&b, &a), "-<0.1 m");
         assert_eq!(comparison_delta(&a, &a), "0 m");
+        a.definition.unit.clear();
+        a.value = Some(14.);
+        b.value = Some(12.);
+        assert_eq!(comparison_delta(&a, &b), "-2");
         b.value = None;
         assert_eq!(comparison_delta(&a, &b), "Unavailable");
     }

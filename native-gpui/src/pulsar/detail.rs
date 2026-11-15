@@ -155,7 +155,7 @@ impl Pulsar {
                     .child(div().flex_1())
                     .child(
                         button("fight-delete", "Delete fight")
-                            .variant(ButtonVariant::DangerSubtle)
+                            .variant(ButtonVariant::Danger)
                             .icon("delete")
                             .disabled(self.busy)
                             .on_click(cx.listener(|this, _, _, cx| {

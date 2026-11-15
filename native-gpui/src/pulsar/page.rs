@@ -508,7 +508,7 @@ impl Pulsar {
                             grouped
                                 .w_full()
                                 .min_w(px(0.))
-                                .h(px(if narrow { 140. } else { 100. }))
+                                .h(px(if narrow { 140. } else { 88. }))
                                 .into_any_element()
                         })
                         .collect::<Vec<_>>()
@@ -618,10 +618,10 @@ impl Pulsar {
             Some("Results from your recorded fights".into()),
         )));
         for (i, o) in self.opponents.iter().enumerate() {
-            let key = o.fights.first().cloned();
-            let latest = key
-                .as_ref()
-                .and_then(|key| self.library.rows.iter().find(|f| &f.key == key));
+            let latest = o.latest.as_ref();
+            let key = latest
+                .map(|f| f.key.clone())
+                .or_else(|| o.fights.first().cloned());
             let opponent = o.label.clone();
             let mut record = div().flex().gap(px(16.));
             for (label, n, tone) in [
@@ -646,14 +646,7 @@ impl Pulsar {
                         ui::title_block(
                             t,
                             o.label.clone(),
-                            Some(
-                                format!(
-                                    "{} · Last fought {}",
-                                    super::presentation::count(o.fights.len(), "fight"),
-                                    utc_time(o.last_fought_epoch_millis)
-                                )
-                                .into(),
-                            ),
+                            Some(super::presentation::count(o.fights.len(), "fight").into()),
                         )
                         .flex_1()
                         .min_w(px(180.)),
@@ -715,9 +708,7 @@ impl Pulsar {
             ));
         for (i, r) in self.records.iter().enumerate() {
             let key = r.key.clone();
-            let source = key
-                .as_ref()
-                .and_then(|k| self.library.rows.iter().find(|f| &f.key == k));
+            let source = r.source.as_ref();
             let record_id = format!("record-definition-{i}");
             let open = self.disclosures.contains(&record_id);
             list = list.child(
@@ -989,7 +980,13 @@ fn setting_label(key: &str, fallback: &str) -> String {
         "summary" => "Post-fight summary",
         "tracking" => "Fight tracking",
         "recording" => "Save recordings",
-        _ => return super::analysis_ui::display_label(fallback),
+        _ => {
+            let mut label = super::analysis_ui::display_label(fallback).to_lowercase();
+            if let Some(first) = label.get_mut(0..1) {
+                first.make_ascii_uppercase();
+            }
+            return label;
+        }
     }
     .into()
 }

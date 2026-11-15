@@ -228,6 +228,18 @@ fn polygon(window: &mut Window, coords: &[(gpui::Pixels, gpui::Pixels)], color: 
 
 fn stack_color(t: &AuroraTheme, label: &str, index: usize) -> Hsla {
     let label = label.to_ascii_uppercase();
+    if label.contains("DISABLE") {
+        return t.danger.opacity(0.75);
+    }
+    if label.contains("ESTIMATED") && label.contains("BLOCK") {
+        return t.success.opacity(0.4);
+    }
+    if label.contains("UNKNOWN") || label.contains("UNATTRIBUTED") {
+        return t.muted_foreground.opacity(0.55);
+    }
+    if label.contains("THIRD PARTY") {
+        return t.warning.opacity(0.85);
+    }
     if label.contains("HIT") && !label.contains("NO_HIT") {
         return t.ring;
     }
@@ -845,11 +857,16 @@ impl Chart {
             );
         }
         ui::card(t)
+            .when(self.id.contains("trend"), |d| d.gap(px(8.)))
             .min_w(px(0.))
             .child(ui::section_header(t, self.title.clone(), None))
-            .when(self.kind != Kind::Lanes, |d| {
-                d.child(ui::caption(t, self.y_label.clone()))
+            .when(self.id.contains("trend"), |d| {
+                d.child(ui::caption(t, self.note.clone()))
             })
+            .when(
+                self.kind != Kind::Lanes && !self.id.contains("trend"),
+                |d| d.child(ui::caption(t, self.y_label.clone())),
+            )
             .child(
                 div()
                     .flex()
@@ -931,7 +948,9 @@ impl Chart {
                     })),
             )
             .child(ui::caption(t, self.x_label.clone()).text_center())
-            .child(ui::caption(t, self.note.clone()))
+            .when(!self.id.contains("trend"), |d| {
+                d.child(ui::caption(t, self.note.clone()))
+            })
     }
 }
 
