@@ -216,7 +216,7 @@ impl Pulsar {
         let Some(p) = &self.playback else {
             return div().child(page.child(ui::muted(
                 t,
-                "Playback unavailable: no canonical event timeline was loaded.",
+                "Playback unavailable: this recording has no event timeline.",
             )));
         };
         let duration = self.duration();
@@ -349,7 +349,7 @@ impl Pulsar {
         let measured = lane_bounds.clone();
         let lane_chart = Chart {
             id: "playback-lanes".into(),
-            title: "Recorded event lanes".into(),
+            title: "Event lanes".into(),
             x_label: "Recording time (s)".into(),
             y_label: lanes
                 .iter()
@@ -385,27 +385,55 @@ impl Pulsar {
                 })
                 .collect(),
             incomplete: vec![],
-            note: "Attacks includes attack attempts and confirming hit evidence. Other events includes deaths and critical animations. Select a marker to seek."
+            note: "Shaded bands are rounds and combat; the white line is the playhead. Select a mark to jump to it."
                 .into(),
         };
-        let keys = [
-            ("\u{25a0}", "Attack attempt", t.ring),
-            ("\u{25c6}", "Shield", t.warning),
-            ("\u{25cb}", "Jump", t.success),
-            ("\u{25b2}", "Incoming hit", t.danger),
-            ("+", "Hit evidence", t.success),
-            ("+", "Critical animation", t.success),
-            ("\u{00d7}", "Death", t.danger),
-            ("|", "Sprint change", t.foreground),
-        ];
-        page = page.child(div().flex().flex_col().gap(px(6.))
-            .child(div().flex().flex_wrap().items_center().gap(px(12.))
-                .child(ui::caption(t, "Events").font_weight(gpui::FontWeight::MEDIUM))
+        // Two compact legend rows; each key is drawn with the plot's own mark.
+        let legend_row = |title: &str, keys: Vec<(Shape, &str, gpui::Hsla)>| {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(px(12.))
+                .child(
+                    ui::caption(t, title.to_owned())
+                        .w(px(104.))
+                        .flex_shrink_0()
+                        .font_weight(gpui::FontWeight::MEDIUM),
+                )
                 .children(keys.into_iter().map(|(shape, label, color)| {
-                    div().flex().items_center().gap(px(4.))
-                        .child(div().text_color(color).child(shape)).child(ui::caption(t, label))
-                })))
-            .child(ui::caption(t, "Lane state: shaded bands show rounds and active exchanges; the vertical line is the playhead. Hit evidence and critical animations share a plus; a diamond on the Attacks lane marks a simultaneous trade.")));
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .child(super::charts::glyph(shape, color).w(px(12.)).h(px(12.)))
+                        .child(ui::caption(t, label))
+                }))
+        };
+        page = page.child(
+            div()
+                .flex()
+                .flex_col()
+                .gap(px(4.))
+                .child(legend_row(
+                    "Your actions",
+                    vec![
+                        (Shape::Square, "Attack attempt", t.ring),
+                        (Shape::Diamond, "Shield or trade", t.warning),
+                        (Shape::Hollow, "Jump", t.success),
+                        (Shape::Tick, "Sprint change", t.foreground),
+                    ],
+                ))
+                .child(legend_row(
+                    "Hits and results",
+                    vec![
+                        (Shape::Plus, "Hit evidence", t.success),
+                        (Shape::Star, "Critical animation", t.success),
+                        (Shape::Triangle, "Incoming hit", t.danger),
+                        (Shape::Cross, "Death", t.danger),
+                    ],
+                )),
+        );
         let shortcuts = ui::caption(
             t,
             "Space: play or pause \u{b7} Comma: previous event \u{b7} Period: next event \u{b7} Arrow keys: seek one second",
@@ -591,7 +619,8 @@ fn event_shape(e: &EventView) -> Shape {
         "SHIELD" => Shape::Diamond,
         "JUMP" => Shape::Hollow,
         "DAMAGE_IN" => Shape::Triangle,
-        "HURT" | "CRIT" => Shape::Plus,
+        "HURT" => Shape::Plus,
+        "CRIT" => Shape::Star,
         "DEATH" => Shape::Cross,
         "SPRINT" | "ROUND" | "COMBAT_EXCHANGE" => Shape::Tick,
         _ => Shape::Square,

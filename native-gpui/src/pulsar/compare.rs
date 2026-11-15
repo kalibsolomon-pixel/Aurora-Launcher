@@ -60,7 +60,7 @@ impl Pulsar {
             .child(ui::page_header(
                 t,
                 "Compare fights",
-                Some("Shared measurements, with each recording’s own policy and coverage.".into()),
+                Some("Each fight is measured with the settings it was recorded with.".into()),
             ));
         if let Some(error) = &self.error {
             page = page.child(ui::muted(t, error.clone()));
@@ -75,6 +75,7 @@ impl Pulsar {
                 },
             ));
         };
+        let (left_name, right_name) = side_names(&data.left, &data.right);
         page = page.child(
             ui::card(t).child(
                 div().flex().flex_wrap().gap(px(20.)).children(
@@ -90,11 +91,11 @@ impl Pulsar {
                                 .gap(px(6.))
                                 .child(ui::caption(
                                     t,
-                                    if i == 0 {
-                                        "First fight"
-                                    } else {
-                                        "Second fight"
-                                    },
+                                    format!(
+                                        "{} fight \u{b7} {}",
+                                        if i == 0 { "Earlier" } else { "Later" },
+                                        if i == 0 { &left_name } else { &right_name }
+                                    ),
                                 ))
                                 .child(ui::section_header(t, f.opponent.clone(), None))
                                 .child(ui::caption(t, super::page::utc_time(f.start_epoch_millis)))
@@ -115,33 +116,39 @@ impl Pulsar {
                 ),
             ),
         );
-        let mut summary =
-            ui::card(t)
-                .p(px(16.))
-                .gap(px(8.))
-                .child(ui::section_header(t, "What changed", None))
-                .child(ui::caption(t, "Second fight compared with the first. Only accuracy uses evaluative color. Counts depend on recording length; compare the hit rates below."));
+        // Both values sit beside every change; one convention: arrow plus magnitude.
+        let change_row = |label: String, left: String, right: String, delta: &str, color| {
+            div()
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .py(px(2.))
+                .child(ui::muted(t, label).flex_1().min_w(px(0.)))
+                .child(ui::numeric(ui::muted(t, left)).w(px(VALUE_W)))
+                .child(ui::numeric(ui::muted(t, right)).w(px(VALUE_W)))
+                .child(
+                    ui::numeric(ui::muted(t, super::presentation::delta_display(delta)))
+                        .text_color(color)
+                        .w(px(CHANGE_W)),
+                )
+        };
+        let mut rows = Vec::new();
         for key in ["accuracy", "hits", "averageReach", "longestCombo"] {
             if let Some(m) = data.metrics.iter().find(|m| m.key == key) {
                 let delta = super::presentation::comparison_delta(&m.left, &m.right);
-                let change = change_direction(&delta);
-                let wording = match key {
-                    "accuracy" => format!("Confirmed-hit accuracy {}", change_word(change)),
-                    "hits" => format!("Confirmed hits {}", change_word(change)),
-                    "averageReach" => format!("Average contact reach {}", change_word(change)),
-                    _ => format!("Longest combo {}", change_word(change)),
+                let label = match key {
+                    "accuracy" => "Confirmed-hit accuracy",
+                    "hits" => "Confirmed hits",
+                    "averageReach" => "Average contact reach",
+                    _ => "Longest combo",
                 };
-                summary = summary.child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(12.))
-                        .child(ui::muted(t, wording).flex_1())
-                        .child(
-                            ui::muted(t, format!("{} {delta}", direction_arrow(change)))
-                                .text_color(delta_color(t, key, change)),
-                        ),
-                );
+                rows.push((
+                    key,
+                    label.to_owned(),
+                    tabs::metric_value(&m.left),
+                    tabs::metric_value(&m.right),
+                    delta,
+                ));
             }
         }
         let rate = |f: &FightSummary| {
@@ -149,17 +156,76 @@ impl Pulsar {
                 .map(|v| format!("{v:.2} hits/s"))
                 .unwrap_or_else(|| "Unavailable".into())
         };
-        summary = summary.child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(12.))
-                .child(ui::muted(t, "Confirmed-hit rate").flex_1())
-                .child(ui::muted(
-                    t,
-                    format!("{} to {}", rate(&data.left), rate(&data.right)),
-                )),
+        let rate_delta = match (hit_rate(&data.left), hit_rate(&data.right)) {
+            (Some(a), Some(b)) => {
+                let n = (b * 100.).round() / 100. - (a * 100.).round() / 100.;
+                if n.abs() < 0.005 {
+                    "0 hits/s".to_owned()
+                } else {
+                    format!("{n:+.2} hits/s")
+                }
+            }
+            _ => "Unavailable".into(),
+        };
+        rows.insert(
+            2,
+            (
+                "rate",
+                "Confirmed hits per second".into(),
+                rate(&data.left),
+                rate(&data.right),
+                rate_delta,
+            ),
         );
+        // Lead with the change that matters most: accuracy, else the hit rate.
+        let lead = rows
+            .iter()
+            .find(|r| r.0 == "accuracy" && change_direction(&r.4) != 0)
+            .or_else(|| rows.iter().find(|r| r.0 == "rate"))
+            .map(|r| {
+                format!(
+                    "Main change: {} {} ({} at {left_name}, {} at {right_name}).",
+                    r.1.to_lowercase(),
+                    super::presentation::delta_display(&r.4),
+                    r.2,
+                    r.3
+                )
+            });
+        let mut summary = ui::card(t)
+            .p(px(16.))
+            .gap(px(8.))
+            .child(ui::section_header(t, "What changed", None))
+            .when_some(lead, |d, lead| {
+                d.child(
+                    ui::muted(t, lead)
+                        .text_color(t.foreground)
+                        .font_weight(gpui::FontWeight::MEDIUM),
+                )
+            })
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(12.))
+                    .child(ui::caption(t, "Measurement").flex_1())
+                    .child(ui::numeric(ui::caption(t, left_name.clone())).w(px(VALUE_W)))
+                    .child(ui::numeric(ui::caption(t, right_name.clone())).w(px(VALUE_W)))
+                    .child(ui::numeric(ui::caption(t, "Change")).w(px(CHANGE_W))),
+            );
+        for (key, label, left, right, delta) in &rows {
+            let color = delta_color(t, key, change_direction(delta));
+            summary = summary.child(change_row(
+                label.clone(),
+                left.clone(),
+                right.clone(),
+                delta,
+                color,
+            ));
+        }
+        summary = summary.child(ui::caption(
+            t,
+            "Change is the later fight minus the earlier one. Counts grow with fight length; hits per second allows for it.",
+        ));
         page = page.child(summary);
         for group in ["Offense", "Defense", "Flow"] {
             let metrics = data
@@ -174,9 +240,9 @@ impl Pulsar {
                 ui::row(t, false)
                     .py(px(7.))
                     .child(ui::caption(t, "Measurement").flex_1().min_w(px(0.)))
-                    .child(ui::caption(t, "First fight").w(px(120.)))
-                    .child(ui::caption(t, "Second fight").w(px(120.)))
-                    .child(ui::caption(t, "Change").w(px(130.))),
+                    .child(ui::numeric(ui::caption(t, left_name.clone())).w(px(VALUE_W)))
+                    .child(ui::numeric(ui::caption(t, right_name.clone())).w(px(VALUE_W)))
+                    .child(ui::numeric(ui::caption(t, "Change")).w(px(CHANGE_W))),
             );
             for (i, m) in metrics.iter().enumerate() {
                 let delta = super::presentation::comparison_delta(&m.left, &m.right);
@@ -207,12 +273,16 @@ impl Pulsar {
                                     |d| d.child(ui::caption(t, brief_definition(&m.key))),
                                 ),
                         )
-                        .child(ui::muted(t, tabs::metric_value(&m.left)).w(px(120.)))
-                        .child(ui::muted(t, tabs::metric_value(&m.right)).w(px(120.)))
                         .child(
-                            ui::caption(t, format!("{} {delta}", direction_arrow(direction)))
+                            ui::numeric(ui::muted(t, tabs::metric_value(&m.left))).w(px(VALUE_W)),
+                        )
+                        .child(
+                            ui::numeric(ui::muted(t, tabs::metric_value(&m.right))).w(px(VALUE_W)),
+                        )
+                        .child(
+                            ui::numeric(ui::muted(t, super::presentation::delta_display(&delta)))
                                 .text_color(delta_color(t, &m.key, direction))
-                                .w(px(130.)),
+                                .w(px(CHANGE_W)),
                         ),
                 );
             }
@@ -253,18 +323,25 @@ fn change_direction(delta: &str) -> i8 {
         0
     }
 }
-fn direction_arrow(change: i8) -> &'static str {
-    match change {
-        1 => "\u{2191}",
-        -1 => "\u{2193}",
-        _ => "\u{2194}",
-    }
-}
-fn change_word(change: i8) -> &'static str {
-    match change {
-        1 => "increased",
-        -1 => "decreased",
-        _ => "held steady or is unavailable",
+const VALUE_W: f32 = 120.;
+const CHANGE_W: f32 = 110.;
+
+/// Short side labels: the time alone on the same day, otherwise date and time.
+fn side_names(left: &FightSummary, right: &FightSummary) -> (String, String) {
+    let (a, b) = (
+        super::page::utc_time(left.start_epoch_millis),
+        super::page::utc_time(right.start_epoch_millis),
+    );
+    if a.get(..10) == b.get(..10) && a != b {
+        (
+            super::page::clock_time(left.start_epoch_millis),
+            super::page::clock_time(right.start_epoch_millis),
+        )
+    } else {
+        (
+            super::presentation::short_stamp(&a),
+            super::presentation::short_stamp(&b),
+        )
     }
 }
 fn delta_color(t: &AuroraTheme, key: &str, change: i8) -> gpui::Hsla {
@@ -329,17 +406,17 @@ fn brief_definition(key: &str) -> &'static str {
         "serverCrits" => "Server critical animation on the opponent",
         "comboCount" => "Recorded multi-hit streaks",
         "comboHits" => "Confirmed hits inside combos",
-        "longestOpponentCombo" => "Longest attributed incoming-hit streak",
+        "longestOpponentCombo" => "Opponent's longest run of hits on you",
         "longestUnanswered" => "Hits before confirmed retaliation",
-        "reachWithin" => "Contacts inside the frozen target band",
+        "reachWithin" => "Hits inside your reach target window",
         "reachDeviation" => "Spread of confirmed contact distances",
-        "reachError" => "Mean distance from the frozen reach target",
-        "timingPerfect" => "Intervals inside the frozen timing tolerance",
+        "reachError" => "Average distance from your reach target",
+        "timingPerfect" => "Attacks timed to the weapon cooldown",
         "damageTaken" => "Observed health lost",
         "knockback" => "Incoming hits with velocity evidence",
         "fights" => "Number of recorded fights",
-        "momentum" | "dominance" => "Source model output; coverage may be unavailable",
-        _ => "Frozen recording evidence",
+        "momentum" | "dominance" => "Score from the fight timeline; may be unavailable",
+        _ => "Recorded measurement",
     }
 }
 #[cfg(test)]
@@ -368,6 +445,17 @@ mod tests {
         assert_eq!(change_direction("-2"), -1);
         assert_eq!(change_direction("0 pp"), 0);
         assert_eq!(change_direction("Unavailable"), 0);
+        let mut a = FightSummary {
+            start_epoch_millis: 1_792_917_180_000,
+            ..Default::default()
+        };
+        let mut b = a.clone();
+        b.start_epoch_millis += 7_200_000;
+        let (l, r) = side_names(&a, &b);
+        assert_ne!(l, r);
+        assert!(!l.contains(' '), "{l}");
+        a.start_epoch_millis -= 86_400_000;
+        assert!(side_names(&a, &b).0.contains(' '));
         assert_eq!(metric_group("accuracy"), "Offense");
         assert_eq!(metric_group("incoming"), "Defense");
         assert_eq!(metric_group("longestCombo"), "Flow");

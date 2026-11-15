@@ -16,6 +16,8 @@ pub enum Shape {
     Cross,
     Plus,
     Tick,
+    /// Asterisk: a critical animation, distinct from plain hit evidence.
+    Star,
 }
 
 /// Saved report preferences also govern native charts. No animation is scheduled here.
@@ -65,6 +67,8 @@ pub(super) struct Options {
     pub regions: Vec<(f64, f64, f64, f64, usize)>,
     pub connectors: Vec<(f64, f64, f64, f64)>,
     pub selected_sample: Option<usize>,
+    /// Render inside an existing card instead of as a standalone card.
+    pub embedded: bool,
 }
 pub(super) fn grade_color(t: &AuroraTheme, label: &str) -> Hsla {
     if label.contains("PERIPHERAL") || label.contains("TOO_FAST") {
@@ -147,6 +151,52 @@ pub fn nice_peak(value: f64) -> f64 {
         .unwrap_or(value)
 }
 
+/// A 1-2-2.5-5 step that splits `span` into at most `count` clean intervals.
+pub fn nice_step(span: f64, count: f64) -> f64 {
+    if !span.is_finite() || span <= 0. || count <= 0. {
+        return 1.;
+    }
+    let raw = span / count;
+    let magnitude = 10_f64.powf(raw.log10().floor());
+    [1., 2., 2.5, 5., 10.]
+        .into_iter()
+        .map(|n| n * magnitude)
+        .find(|n| *n >= raw - 1e-9)
+        .unwrap_or(raw)
+}
+
+/// Integer steps for count axes (2.5 becomes 5; never below 1).
+pub fn count_step(span: f64, count: f64) -> f64 {
+    let step = nice_step(span, count);
+    if step > 1. && step.fract() != 0. {
+        step * 2.
+    } else {
+        step.max(1.)
+    }
+}
+
+/// Tick values from `start` to `end` inclusive at multiples of `step`.
+pub fn ticks(start: f64, end: f64, step: f64) -> Vec<f64> {
+    if !(step > 0.) || !start.is_finite() || !end.is_finite() {
+        return vec![];
+    }
+    let first = (start / step).ceil() as i64;
+    let last = (end / step + 1e-9).floor() as i64;
+    (first..=last).map(|i| i as f64 * step).take(64).collect()
+}
+
+/// Tick text with only the decimals its step needs.
+pub fn tick_label(value: f64, step: f64) -> String {
+    let value = if value.abs() < step * 1e-6 { 0. } else { value };
+    if step >= 1. - 1e-9 {
+        format!("{value:.0}")
+    } else if step >= 0.1 - 1e-9 {
+        format!("{value:.1}")
+    } else {
+        format!("{value:.2}")
+    }
+}
+
 pub fn segments(samples: &[Sample]) -> Vec<Vec<(f64, f64)>> {
     let mut out = Vec::new();
     let mut run = Vec::new();
@@ -227,6 +277,91 @@ fn polygon(window: &mut Window, coords: &[(gpui::Pixels, gpui::Pixels)], color: 
     }
 }
 
+/// One event mark, shared by plots and their legends so both always match.
+fn mark(window: &mut Window, shape: Shape, xx: gpui::Pixels, yy: gpui::Pixels, ink: Hsla) {
+    let r = px(3.5);
+    match shape {
+        Shape::Square => polygon(
+            window,
+            &[
+                (xx - r, yy - r),
+                (xx + r, yy - r),
+                (xx + r, yy + r),
+                (xx - r, yy + r),
+            ],
+            ink,
+        ),
+        Shape::Diamond => polygon(
+            window,
+            &[
+                (xx, yy - r - px(1.)),
+                (xx + r + px(1.), yy),
+                (xx, yy + r + px(1.)),
+                (xx - r - px(1.), yy),
+            ],
+            ink,
+        ),
+        Shape::Hollow => {
+            let circle = (0..=16)
+                .map(|i| {
+                    let angle = i as f32 * std::f32::consts::TAU / 16.;
+                    (xx + r * angle.cos(), yy + r * angle.sin())
+                })
+                .collect::<Vec<_>>();
+            stroke(window, &circle, ink, 1.5);
+        }
+        Shape::Triangle => polygon(
+            window,
+            &[
+                (xx, yy - r - px(1.)),
+                (xx + r + px(1.), yy + r),
+                (xx - r - px(1.), yy + r),
+            ],
+            ink,
+        ),
+        Shape::Cross => {
+            stroke(window, &[(xx - r, yy - r), (xx + r, yy + r)], ink, 1.5);
+            stroke(window, &[(xx - r, yy + r), (xx + r, yy - r)], ink, 1.5);
+        }
+        Shape::Plus => {
+            stroke(window, &[(xx - r, yy), (xx + r, yy)], ink, 1.5);
+            stroke(window, &[(xx, yy - r), (xx, yy + r)], ink, 1.5);
+        }
+        Shape::Tick => stroke(
+            window,
+            &[(xx, yy - r - px(2.)), (xx, yy + r + px(2.))],
+            ink,
+            2.,
+        ),
+        Shape::Star => {
+            let arm = r + px(1.);
+            for (dx, dy) in [(0f32, 1f32), (0.866, 0.5), (0.866, -0.5)] {
+                stroke(
+                    window,
+                    &[
+                        (xx - arm * dx, yy - arm * dy),
+                        (xx + arm * dx, yy + arm * dy),
+                    ],
+                    ink,
+                    1.5,
+                );
+            }
+        }
+        Shape::Reset => stroke(window, &[(xx - r, yy), (xx + r, yy)], ink, 2.),
+    }
+}
+
+/// A legend key drawn with the same mark as the plot.
+pub(super) fn glyph(shape: Shape, ink: Hsla) -> gpui::Canvas<()> {
+    canvas(
+        |_, _, _| {},
+        move |bounds, _, window, _| {
+            let center = bounds.center();
+            mark(window, shape, center.x, center.y, ink);
+        },
+    )
+}
+
 fn stack_color(t: &AuroraTheme, label: &str, index: usize) -> Hsla {
     let label = label.to_ascii_uppercase();
     if label.contains("DISABLE") {
@@ -263,6 +398,20 @@ fn stack_color(t: &AuroraTheme, label: &str, index: usize) -> Hsla {
 }
 
 impl Chart {
+    /// Value-axis ticks. Count axes use clean integer steps; others split in four.
+    pub fn y_ticks(&self) -> Vec<f64> {
+        let (low, high) = self.range;
+        let step = if self.id == "pooled_combo_distribution" {
+            count_step(high - low, 4.)
+        } else {
+            nice_step(high - low, 4.)
+        };
+        let ticks = ticks(low, high, step);
+        if ticks.len() < 2 {
+            return vec![low, high];
+        }
+        ticks
+    }
     pub fn render(&self, t: &AuroraTheme) -> Div {
         self.render_with_bounds(t, None)
     }
@@ -302,38 +451,37 @@ impl Chart {
                 } else {
                     stack_color(t, &s.label, i)
                 };
-                labels =
-                    labels.child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(6.))
-                            .child(div().w(px(10.)).h(px(10.)).rounded(px(2.)).bg(
-                                if n == Some(0.) {
-                                    color.opacity(0.35)
+                // Every key stays readable: zero is carried by the count and an
+                // outlined swatch, never by dimming the label.
+                let edge = Hsla { a: 1., ..color };
+                labels = labels.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .child(
+                            div()
+                                .w(px(10.))
+                                .h(px(10.))
+                                .rounded(px(2.))
+                                .border_1()
+                                .border_color(edge)
+                                .when(n != Some(0.), |d| d.bg(color)),
+                        )
+                        .child(ui::caption(
+                            t,
+                            format!(
+                                "{}: {}",
+                                s.label,
+                                n.map(|n| if total > 0. && n > 0. {
+                                    format!("{n:.0} ({:.1}%)", n / total * 100.)
                                 } else {
-                                    color
-                                },
-                            ))
-                            .child(
-                                ui::caption(
-                                    t,
-                                    format!(
-                                        "{}: {}",
-                                        s.label,
-                                        n.map(|n| if total > 0. {
-                                            format!("{n:.0} ({:.1}%)", n / total * 100.)
-                                        } else {
-                                            format!("{n:.0}")
-                                        })
-                                        .unwrap_or_else(|| "Unavailable".into())
-                                    ),
-                                )
-                                .when(n == Some(0.), |d| {
-                                    d.text_color(t.muted_foreground.opacity(0.7))
-                                }),
+                                    format!("{n:.0}")
+                                })
+                                .unwrap_or_else(|| "Unavailable".into())
                             ),
-                    );
+                        )),
+                );
                 if let Some(n) = n.filter(|n| *n > 0.) {
                     bar = bar.child(
                         div()
@@ -367,7 +515,7 @@ impl Chart {
                 .when(self.id == "incoming-attribution", |d| {
                     d.child(ui::caption(
                         t,
-                        "Only attributed opponent hits extend combos. Zero-count outcomes stay in the key.",
+                        "Only hits from your opponent end your combos. Damage from other attackers or unknown sources does not.",
                     ))
                 })
                 .child(bar)
@@ -390,9 +538,9 @@ impl Chart {
                     d.child(ui::caption(
                         t,
                         if self.id == "attack_outcomes" {
-                            "Confirmed hits and observed attack outcomes.".into()
+                            "Every recorded attack, by what the server confirmed.".into()
                         } else {
-                            format!("{} Zero-count categories have no bar width.", self.note)
+                            self.note.clone()
                         },
                     ))
                 });
@@ -403,6 +551,7 @@ impl Chart {
         let connectors = options.connectors;
         let selected_sample = options.selected_sample;
         let palette = t.clone();
+        let grid_ticks = self.y_ticks();
         let available =
             !self.bands.is_empty() || self.samples.iter().any(|p| p.y.is_some_and(f64::is_finite));
         let description = format!(
@@ -426,9 +575,12 @@ impl Chart {
         } else if self.kind == Kind::Grid {
             240.
         } else if self.id == "pooled_combo_distribution" {
-            64.
+            88.
+        } else if self.kind == Kind::Timeline && self.range == (-0.5, 1.5) {
+            // Two lanes (you and the opponent) need little height.
+            104.
         } else if self.id.contains("trend") {
-            96.
+            80.
         } else {
             164.
         };
@@ -455,8 +607,12 @@ impl Chart {
                         let height = bounds.size.height;
                         let x = |v| left + width * fraction(v, chart.domain);
                         let y = |v| top + height * (1. - fraction(v, chart.range));
-                        for n in 0..=if preferences.grid { 4 } else { 0 } {
-                            let yy = top + height * (n as f32 / 4.);
+                        for &value in
+                            grid_ticks
+                                .iter()
+                                .take(if preferences.grid { usize::MAX } else { 1 })
+                        {
+                            let yy = y(value);
                             stroke(
                                 window,
                                 &[(left, yy), (left + width, yy)],
@@ -629,8 +785,10 @@ impl Chart {
                                     .collect::<Vec<_>>();
                                 stroke(window, &outline, palette.foreground, 2.);
                             }
+                            // Your own data uses the accent, as on every other chart.
                             let color = if chart.kind == Kind::Histogram
-                                && chart.band.is_some_and(|(a, b)| s.x >= a && s.x <= b)
+                                && (chart.id == "pooled_combo_distribution"
+                                    || chart.band.is_some_and(|(a, b)| s.x >= a && s.x <= b))
                             {
                                 palette.ring
                             } else {
@@ -667,7 +825,9 @@ impl Chart {
                                         match s.shape {
                                             Shape::Square => palette.ring,
                                             Shape::Diamond => palette.warning,
-                                            Shape::Hollow | Shape::Plus => palette.success,
+                                            Shape::Hollow | Shape::Plus | Shape::Star => {
+                                                palette.success
+                                            }
                                             Shape::Triangle | Shape::Cross => palette.danger,
                                             Shape::Tick => palette.foreground,
                                             _ => palette.muted_foreground,
@@ -675,71 +835,8 @@ impl Chart {
                                     } else {
                                         grade_color(&palette, &s.label)
                                     };
-                                    match s.shape {
-                                        Shape::Square => polygon(
-                                            window,
-                                            &[
-                                                (xx - r, yy - r),
-                                                (xx + r, yy - r),
-                                                (xx + r, yy + r),
-                                                (xx - r, yy + r),
-                                            ],
-                                            ink,
-                                        ),
-                                        Shape::Diamond => polygon(
-                                            window,
-                                            &[
-                                                (xx, yy - r - px(1.)),
-                                                (xx + r + px(1.), yy),
-                                                (xx, yy + r + px(1.)),
-                                                (xx - r - px(1.), yy),
-                                            ],
-                                            ink,
-                                        ),
-                                        Shape::Hollow => {
-                                            let circle = (0..=16)
-                                                .map(|i| {
-                                                    let angle =
-                                                        i as f32 * std::f32::consts::TAU / 16.;
-                                                    (xx + r * angle.cos(), yy + r * angle.sin())
-                                                })
-                                                .collect::<Vec<_>>();
-                                            stroke(window, &circle, ink, 1.5);
-                                        }
-                                        Shape::Triangle => polygon(
-                                            window,
-                                            &[
-                                                (xx, yy - r - px(1.)),
-                                                (xx + r + px(1.), yy + r),
-                                                (xx - r - px(1.), yy + r),
-                                            ],
-                                            ink,
-                                        ),
-                                        Shape::Cross => {
-                                            stroke(
-                                                window,
-                                                &[(xx - r, yy - r), (xx + r, yy + r)],
-                                                ink,
-                                                1.5,
-                                            );
-                                            stroke(
-                                                window,
-                                                &[(xx - r, yy + r), (xx + r, yy - r)],
-                                                ink,
-                                                1.5,
-                                            );
-                                        }
-                                        Shape::Plus => {
-                                            stroke(window, &[(xx - r, yy), (xx + r, yy)], ink, 1.5);
-                                            stroke(window, &[(xx, yy - r), (xx, yy + r)], ink, 1.5);
-                                        }
-                                        Shape::Tick => stroke(
-                                            window,
-                                            &[(xx, yy - r - px(2.)), (xx, yy + r + px(2.))],
-                                            ink,
-                                            2.,
-                                        ),
-                                        Shape::Reset => stroke(
+                                    if s.shape == Shape::Reset {
+                                        stroke(
                                             window,
                                             &[
                                                 (xx - r, top + height - px(4.)),
@@ -747,7 +844,9 @@ impl Chart {
                                             ],
                                             palette.subtle_foreground,
                                             2.,
-                                        ),
+                                        );
+                                    } else {
+                                        mark(window, s.shape, xx, yy, ink);
                                     }
                                 }
                                 Kind::Area | Kind::Stacked => {}
@@ -900,11 +999,51 @@ impl Chart {
                     }),
             );
         }
-        ui::card(t)
-            .when(self.id.contains("trend"), |d| d.gap(px(8.)))
-            .when(self.id == "pooled_combo_distribution", |d| {
-                d.p(px(16.)).gap(px(8.))
-            })
+        let lanes = self.kind == Kind::Lanes;
+        let combo_distribution = self.id == "pooled_combo_distribution";
+        let trend = self.id.contains("trend");
+        let label_width = if lanes { 92. } else { 44. };
+        // Lanes read against a labeled time ruler directly above the marks.
+        let ruler = |d: Div| {
+            let step = nice_step(self.domain.1 - self.domain.0, 6.);
+            d.child(
+                div()
+                    .flex()
+                    .gap(px(12.))
+                    .h(px(16.))
+                    .child(
+                        ui::caption(t, "Time")
+                            .w(px(label_width))
+                            .flex_shrink_0()
+                            .line_height(px(16.)),
+                    )
+                    .child(
+                        div().flex_1().relative().h(px(16.)).children(
+                            ticks(self.domain.0, self.domain.1, step)
+                                .into_iter()
+                                .map(|v| {
+                                    ui::caption(t, format!("{v:.0} s"))
+                                        .absolute()
+                                        .left(relative(fraction(v, self.domain)))
+                                        .ml(px(-16.))
+                                        .w(px(32.))
+                                        .text_center()
+                                        .line_height(px(16.))
+                                }),
+                        ),
+                    ),
+            )
+        };
+        let shell = if options.embedded {
+            div().flex().flex_col().gap(px(8.))
+        } else {
+            ui::card(t)
+                .when(trend, |d| d.gap(px(8.)))
+                .when(combo_distribution || lanes || trend, |d| {
+                    d.p(px(16.)).gap(px(8.))
+                })
+        };
+        shell
             .min_w(px(0.))
             .child(
                 div()
@@ -913,32 +1052,40 @@ impl Chart {
                     .items_center()
                     .justify_between()
                     .gap(px(8.))
-                    .child(ui::section_header(t, self.title.clone(), None))
+                    .when(!options.embedded, |d| {
+                        d.child(ui::section_header(t, self.title.clone(), None))
+                    })
+                    .when(options.embedded, |d| {
+                        d.child(
+                            div()
+                                .text_size(px(ui::TEXT_BODY))
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .text_color(t.foreground)
+                                .child(super::presentation::text(&self.title)),
+                        )
+                    })
                     .when_some(options.header, |d, controls| d.child(controls))
-                    .when(self.kind == Kind::Lanes, |d| {
+                    .when(lanes, |d| {
                         d.child(ui::caption(
                             t,
                             format!("Playhead {:.1} s", self.playhead.unwrap_or(0.)),
                         ))
                     })
-                    .when(self.id.contains("trend"), |d| {
-                        d.child(ui::caption(t, self.x_label.clone()))
-                    }),
+                    .when(trend, |d| d.child(ui::caption(t, self.x_label.clone()))),
             )
-            .when(self.id.contains("trend"), |d| {
-                d.child(ui::caption(t, self.note.clone()))
-            })
+            .when(trend, |d| d.child(ui::caption(t, self.note.clone())))
             .when(
-                self.kind != Kind::Lanes && !self.id.contains("trend"),
+                !lanes && !trend && !combo_distribution && !self.y_label.is_empty(),
                 |d| d.child(ui::caption(t, self.y_label.clone())),
             )
+            .when(lanes, ruler)
             .child(
                 div()
                     .flex()
                     .gap(px(12.))
-                    .child(if self.kind == Kind::Lanes {
+                    .child(if lanes {
                         div()
-                            .w(px(92.))
+                            .w(px(label_width))
                             .flex_shrink_0()
                             .h(px(plot_height))
                             .flex()
@@ -954,36 +1101,39 @@ impl Chart {
                     } else {
                         let percent = self.y_label.contains('%');
                         let combo = self.kind == Kind::Timeline && self.range == (-0.5, 1.5);
-                        let labels = if combo {
-                            vec!["You".into(), "Opponent".into()]
+                        let labels: Vec<(f32, String)> = if combo {
+                            vec![(0.25, "You".into()), (0.75, "Opponent".into())]
                         } else {
-                            (0..=4)
-                                .map(|i| {
-                                    let v = self.range.1
-                                        - (self.range.1 - self.range.0) * i as f64 / 4.;
-                                    if percent {
-                                        format!("{v:.0}%")
-                                    } else if self.id == "pooled_combo_distribution" {
-                                        format!("{v:.0}")
-                                    } else {
-                                        format!("{v:.1}")
-                                    }
+                            self.y_ticks()
+                                .into_iter()
+                                .map(|v| {
+                                    (
+                                        1. - fraction(v, self.range),
+                                        if percent {
+                                            format!("{v:.0}%")
+                                        } else {
+                                            tick_label(
+                                                v,
+                                                if combo_distribution {
+                                                    1.
+                                                } else {
+                                                    nice_step(self.range.1 - self.range.0, 4.)
+                                                },
+                                            )
+                                        },
+                                    )
                                 })
                                 .collect()
                         };
                         div()
-                            .w(px(if combo { 64. } else { 44. }))
+                            .w(px(if combo { 64. } else { label_width }))
                             .flex_shrink_0()
                             .h(px(plot_height))
                             .relative()
-                            .children(labels.into_iter().enumerate().map(|(i, v)| {
-                                let position = if combo {
-                                    0.25 + i as f32 * 0.5
-                                } else {
-                                    i as f32 / 4.
-                                };
-                                ui::caption(t, v)
+                            .children(labels.into_iter().map(|(position, v)| {
+                                ui::numeric(ui::caption(t, v))
                                     .absolute()
+                                    .when(!combo, |d| d.right(px(4.)))
                                     .top(px(plot_height * position - 8.))
                                     .h(px(16.))
                                     .line_height(px(16.))
@@ -1001,43 +1151,52 @@ impl Chart {
                         )
                     })),
             )
-            .child(
-                div()
-                    .pl(px(if self.kind == Kind::Lanes { 104. } else { 56. }))
-                    .child(if self.id == "pooled_combo_distribution" {
-                        div()
-                            .relative()
-                            .h(px(16.))
-                            .children(self.samples.iter().map(|s| {
-                                ui::caption(t, format!("{:.0}", s.x))
-                                    .absolute()
-                                    .left(relative(fraction(s.x, self.domain)))
-                                    .ml(px(-12.))
-                                    .w(px(24.))
-                                    .text_center()
-                            }))
-                    } else {
+            .when(!lanes, |d| {
+                d.child(div().pl(px(56.)).child(if combo_distribution {
+                    div()
+                        .relative()
+                        .h(px(16.))
+                        .children(self.samples.iter().map(|s| {
+                            ui::caption(t, format!("{:.0}", s.x))
+                                .absolute()
+                                .left(relative(fraction(s.x, self.domain)))
+                                .ml(px(-12.))
+                                .w(px(24.))
+                                .text_center()
+                        }))
+                } else {
+                    if trend {
                         div().flex().justify_between().children((0..=4).map(|i| {
-                            let label = if self.id.contains("trend") {
+                            ui::caption(
+                                t,
                                 self.samples
                                     .get((self.samples.len().saturating_sub(1) * i) / 4)
-                                    .map(|s| axis_date(&s.label))
-                                    .unwrap_or("Unavailable")
-                                    .to_owned()
-                            } else {
-                                format!(
-                                    "{:.1}",
-                                    self.domain.0 + (self.domain.1 - self.domain.0) * i as f64 / 4.
-                                )
-                            };
-                            ui::caption(t, label)
+                                    .map(|s| super::presentation::short_stamp(axis_date(&s.label)))
+                                    .unwrap_or_else(|| "Unavailable".into()),
+                            )
                         }))
-                    }),
-            )
-            .when(!self.id.contains("trend"), |d| {
+                    } else {
+                        let step = nice_step(self.domain.1 - self.domain.0, 5.);
+                        div().relative().h(px(16.)).children(
+                            ticks(self.domain.0, self.domain.1, step)
+                                .into_iter()
+                                .map(|v| {
+                                    ui::caption(t, tick_label(v, step))
+                                        .absolute()
+                                        .left(relative(fraction(v, self.domain)))
+                                        .ml(px(-20.))
+                                        .w(px(40.))
+                                        .text_center()
+                                        .line_height(px(16.))
+                                }),
+                        )
+                    }
+                }))
+            })
+            .when(!trend && !lanes, |d| {
                 d.child(ui::caption(t, self.x_label.clone()).text_center())
             })
-            .when(!self.id.contains("trend"), |d| {
+            .when(!trend && !self.note.is_empty(), |d| {
                 d.child(ui::caption(t, self.note.clone()))
             })
     }
@@ -1072,6 +1231,17 @@ mod tests {
         assert_eq!(fraction(20., (0., 10.)), 1.);
         assert_eq!(nice_peak(23.), 50.);
         assert_eq!(nice_peak(f64::NAN), 1.);
+        assert_eq!(nice_step(36., 4.), 10.);
+        assert_eq!(nice_step(100., 4.), 25.);
+        assert_eq!(count_step(9., 4.), 5.);
+        assert_eq!(count_step(2., 4.), 1.);
+        assert_eq!(ticks(0., 40., 10.), [0., 10., 20., 30., 40.]);
+        assert_eq!(
+            ticks(1.925, 4.075, nice_step(2.15, 5.)),
+            [2., 2.5, 3., 3.5, 4.]
+        );
+        assert_eq!(tick_label(4.5, 0.5), "4.5");
+        assert_eq!(tick_label(-0., 5.), "0");
     }
 }
 
