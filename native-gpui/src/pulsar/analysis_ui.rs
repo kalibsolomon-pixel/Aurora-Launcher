@@ -478,7 +478,7 @@ impl Pulsar {
                                 ui::caption(
                                     t,
                                     match key.as_str() {
-                                        "accuracyDenominator" => "Eligible attempts".into(),
+                                        "accuracyDenominator" => "Hits and Misses".into(),
                                         "incoming" => "Hits from opponent".into(),
                                         "incomingCritical" | "criticalOnLocal"
                                         | "opponentCrits" => "Incoming crits".into(),
@@ -564,7 +564,7 @@ impl Pulsar {
             let definitions = [
                 (
                     "accuracy",
-                    "Accuracy: confirmed hits out of eligible attempts.",
+                    "Accuracy: Hits divided by Hits plus Misses. Blocked and Disabled are excluded.",
                 ),
                 ("averageReach", "Reach: distance at confirmed contact."),
                 (
@@ -662,7 +662,7 @@ impl Pulsar {
                 "Accuracy",
                 value(m, "accuracy"),
                 format!(
-                    "{} hits from eligible attempts",
+                    "{} Hits from Hits and Misses",
                     denominator(m, "hits", "accuracyDenominator")
                 ),
             ),
@@ -709,7 +709,7 @@ impl Pulsar {
                     value(m, "opponentDominanceShare")
                 ),
                 format!(
-                    "{} of active combat; pauses and unclear periods left out",
+                    "{} of active combat; pauses and periods with too little evidence left out",
                     value(m, "dominanceActiveSeconds")
                 ),
             ),

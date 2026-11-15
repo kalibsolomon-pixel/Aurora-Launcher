@@ -468,7 +468,17 @@ impl Pulsar {
                 }
                 if section == 0 || section == 1 || section == 4 {
                     let incoming = rows(d, "incomingDetail");
-                    let mut list=ui::list_card(t).child(ui::row(t,false).child(ui::section_header(t,"Incoming evidence",Some("Health loss and knockback may not have been recorded for every hit. Other damage is listed by cause and does not count as your opponent hitting back.".into()))));
+                    let mut list = ui::list_card(t).child(
+                        ui::row(t, false).child(
+                            ui::section_header(
+                                t,
+                                "Incoming evidence",
+                                Some("Health loss and knockback may be missing. Other damage is listed by cause; it never ends your combo.".into()),
+                            )
+                            .flex_1()
+                            .min_w(px(0.)),
+                        ),
+                    );
                     for (i, r) in incoming.iter().enumerate() {
                         list = list.child(
                             ui::row(t, i + 1 == incoming.len()).child(ui::title_block(

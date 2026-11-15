@@ -529,7 +529,7 @@ impl Chart {
                     d.child(ui::caption(
                         t,
                         if self.id == "attack_outcomes" {
-                            "Every recorded attack, by what the server confirmed.".into()
+                            "Each aimed attack has one outcome. Blocked and Disabled are separate from Misses.".into()
                         } else {
                             self.note.clone()
                         },

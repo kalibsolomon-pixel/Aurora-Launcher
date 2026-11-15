@@ -663,7 +663,7 @@ impl Pulsar {
                         ui::caption(
                             t,
                             format!(
-                                "Eligible attempts: {observed:.0} recorded \u{2212} {:.0} Blocked or Disabled = {eligible:.0}. Blocked attacks do not count against your accuracy.",
+                                "Accuracy denominator: {observed:.0} attempts \u{2212} {:.0} Blocked or Disabled = {eligible:.0} Hits and Misses.",
                                 (observed - eligible).max(0.)
                             ),
                         )

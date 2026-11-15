@@ -404,7 +404,7 @@ fn brief_definition(key: &str) -> &'static str {
         "averageReach" => "Distance at confirmed contact",
         "aimCentral" => "Contacts inside the ideal and good aim regions",
         "aimDistance" => "Distance from the ideal contact point",
-        "accuracyDenominator" => "Attempts eligible for confirmed-hit accuracy",
+        "accuracyDenominator" => "Hits plus Misses; Blocked and Disabled are excluded",
         "dominanceShare" => "Share of measured active combat with an advantage",
         "averageCombo" => "Average hits per combo",
         "emptyMisses" => "Attacks that neither hit nor met a shield",

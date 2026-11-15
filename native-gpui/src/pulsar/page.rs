@@ -631,7 +631,7 @@ impl Pulsar {
                 .py(px(6.))
                 .gap(px(8.))
                 .child(ui::caption(t, "Opponent").flex_1().min_w(px(98.)))
-                .child(numeric_header("Record (W\u{2013}L\u{2013}D)", OPP_RECORD_W))
+                .child(numeric_header("W\u{2013}L\u{2013}D", OPP_RECORD_W))
                 .child(numeric_header("No result", OPP_OTHER_W))
                 .child(numeric_header("Accuracy", OPP_METRIC_W))
                 .child(numeric_header("Reach", OPP_METRIC_W))
@@ -1979,8 +1979,8 @@ pub(super) fn duration_text(nanos: i64) -> String {
 }
 
 /// Opponent table columns, shared by the heading and every row.
-const OPP_RECORD_W: f32 = 112.;
-const OPP_OTHER_W: f32 = 48.;
+const OPP_RECORD_W: f32 = 92.;
+const OPP_OTHER_W: f32 = 76.;
 const OPP_METRIC_W: f32 = 72.;
 const OPP_LATEST_W: f32 = 168.;
 const OPP_GUTTER: f32 = 24.;
