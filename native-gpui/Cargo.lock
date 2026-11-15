@@ -471,7 +471,7 @@ dependencies = [
 
 [[package]]
 name = "aurora-launcher"
-version = "2.2.1"
+version = "2.3.0"
 dependencies = [
  "base64ct",
  "flate2",
@@ -505,7 +505,7 @@ dependencies = [
 
 [[package]]
 name = "aurora-native-gpui"
-version = "2.2.1"
+version = "2.3.0"
 dependencies = [
  "async-channel",
  "aurora-launcher",
