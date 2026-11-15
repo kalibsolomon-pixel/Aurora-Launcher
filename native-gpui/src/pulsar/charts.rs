@@ -285,7 +285,12 @@ impl Chart {
                 .filter_map(|s| s.y)
                 .filter(|n| n.is_finite() && *n >= 0.)
                 .sum::<f64>();
-            let mut bar = div().flex().w_full().h(px(24.)).gap(px(2.));
+            let mut bar = div()
+                .flex()
+                .w_full()
+                .min_w(px(0.))
+                .h(px(20.))
+                .overflow_hidden();
             let mut labels = div().flex().flex_wrap().gap(px(16.));
             for (i, s) in self.samples.iter().enumerate() {
                 let theme = t.clone();
@@ -317,7 +322,9 @@ impl Chart {
                         div()
                             .id(format!("{}-stack-{i}", self.id))
                             .h_full()
-                            .w(relative((n / total.max(1.)) as f32))
+                            .w(px(0.))
+                            .flex_grow((n / total.max(1.)) as f32)
+                            .min_w(px(0.))
                             .bg(color)
                             .role(Role::Image)
                             .aria_label(format!("{}: {n:.0}", s.label))
@@ -332,7 +339,17 @@ impl Chart {
                 }
             }
             return ui::card(t)
+                .p(px(16.))
+                .gap(px(10.))
+                .w_full()
+                .min_w(px(0.))
                 .child(ui::section_header(t, self.title.clone(), None))
+                .when(self.id == "incoming-attribution", |d| {
+                    d.child(ui::caption(
+                        t,
+                        "Only attributed opponent hits extend combos. Zero-count outcomes stay in the key.",
+                    ))
+                })
                 .child(bar)
                 .child(
                     div()
@@ -349,13 +366,16 @@ impl Chart {
                         )),
                 )
                 .child(labels)
-                .child(ui::caption(
-                    t,
-                    format!(
-                        "{} Zero-count categories stay in the key and occupy no bar width.",
-                        self.note
-                    ),
-                ));
+                .when(self.id != "incoming-attribution", |d| {
+                    d.child(ui::caption(
+                        t,
+                        if self.id == "attack_outcomes" {
+                            "Confirmed hits and observed attack outcomes.".into()
+                        } else {
+                            format!("{} Zero-count categories have no bar width.", self.note)
+                        },
+                    ))
+                });
         }
         let chart = self.clone();
         let preferences = options.preferences;
@@ -734,7 +754,7 @@ impl Chart {
                 )
                 .size_full(),
             );
-        if let Some(head) = self.playhead {
+        if let Some(head) = self.playhead.filter(|_| self.kind != Kind::Lanes) {
             plot = plot.child(
                 div()
                     .absolute()
@@ -867,6 +887,12 @@ impl Chart {
                     .justify_between()
                     .gap(px(8.))
                     .child(ui::section_header(t, self.title.clone(), None))
+                    .when(self.kind == Kind::Lanes, |d| {
+                        d.child(ui::caption(
+                            t,
+                            format!("Playhead {:.1} s", self.playhead.unwrap_or(0.)),
+                        ))
+                    })
                     .when(self.id.contains("trend"), |d| {
                         d.child(ui::caption(t, self.x_label.clone()))
                     }),
@@ -919,11 +945,19 @@ impl Chart {
                             .w(px(if combo { 64. } else { 44. }))
                             .flex_shrink_0()
                             .h(px(plot_height))
-                            .flex()
-                            .flex_col()
-                            .justify_between()
-                            .when(combo, |d| d.py(px(plot_height / 4. - 8.)))
-                            .children(labels.into_iter().map(|v| ui::caption(t, v)))
+                            .relative()
+                            .children(labels.into_iter().enumerate().map(|(i, v)| {
+                                let position = if combo {
+                                    0.25 + i as f32 * 0.5
+                                } else {
+                                    i as f32 / 4.
+                                };
+                                ui::caption(t, v)
+                                    .absolute()
+                                    .top(px(plot_height * position - 8.))
+                                    .h(px(16.))
+                                    .line_height(px(16.))
+                            }))
                     })
                     .child(plot.flex_1().when(!available, |d| {
                         d.child(

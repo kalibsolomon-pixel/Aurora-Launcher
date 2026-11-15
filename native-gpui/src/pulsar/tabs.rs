@@ -286,6 +286,8 @@ pub(super) fn chart(view: &ChartView) -> Chart {
             x: p.x,
             y: if kind == Kind::Lanes {
                 p.y.map(|_| series as f64)
+            } else if view.y_definition.unit == "%" {
+                p.y.filter(|v| v.is_finite()).map(|v| v.clamp(0., 100.))
             } else {
                 p.y
             },
@@ -529,6 +531,35 @@ impl Pulsar {
             })
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect();
+        if index == 3 && self.detail_request.is_none() {
+            let metric = |key: &str| {
+                tab.metrics
+                    .get(key)
+                    .map(metric_value)
+                    .unwrap_or_else(|| "Unavailable".into())
+            };
+            let line = if self.sections[3] == 2 {
+                format!(
+                    "You held the advantage for {} of measured active combat; the opponent held {}.",
+                    metric("dominanceShare"),
+                    metric("opponentDominanceShare")
+                )
+            } else if self.sections[3] == 3 {
+                format!(
+                    "{} of active combat was recorded; {} lacks enough evidence for the dominance model.",
+                    metric("combatActiveSeconds"),
+                    metric("dominanceInsufficientSeconds")
+                )
+            } else {
+                format!(
+                    "Your combos averaged {} hits, with a longest run of {}. Opponent combos peaked at {}.",
+                    metric("averageCombo"),
+                    metric("longestCombo"),
+                    metric("longestOpponentCombo")
+                )
+            };
+            body = body.child(ui::muted(t, line));
+        }
         if !main.is_empty() && !(index == 0 && self.detail_request.is_none()) {
             if summary {
                 if let Some(insight) = super::presentation::summary_insight(
@@ -590,7 +621,7 @@ impl Pulsar {
                 } else {
                     "How this is counted"
                 },
-                self.metrics_panel(t, "Counting details", &diagnostics, cx),
+                div().flex().flex_col().gap(px(8.)).when(index == 1 && matches!(self.sections[1], 0 | 1), |d| d.child(ui::caption(t, "Accuracy counts confirmed hits out of eligible attempts. Confirmed shield blocks are excluded; uncertain attempts remain in the denominator. Zero-count outcomes stay in the legend and have no bar width."))).child(self.metrics_panel(t, "Counting details", &diagnostics, cx)),
                 cx,
             ));
         }
@@ -890,6 +921,36 @@ mod tests {
         let projected = chart(&lane);
         assert_eq!(projected.samples[0].y, Some(0.));
         assert_eq!(projected.samples[1].y, Some(1.));
+    }
+
+    #[test]
+    fn percentage_charts_clamp_values_and_preserve_missing_samples() {
+        let view = ChartView {
+            id: "accuracy_trend".into(),
+            y_definition: MetricDef {
+                unit: "%".into(),
+                ..Default::default()
+            },
+            series: vec![ChartSeries {
+                points: [Some(-2.), Some(102.), None, Some(0.)]
+                    .into_iter()
+                    .enumerate()
+                    .map(|(i, y)| ChartPoint {
+                        x: i as f64,
+                        y,
+                        ..Default::default()
+                    })
+                    .collect(),
+                ..Default::default()
+            }],
+            ..Default::default()
+        };
+        let p = chart(&view);
+        assert_eq!(p.range, (0., 100.));
+        assert_eq!(
+            p.samples.iter().map(|s| s.y).collect::<Vec<_>>(),
+            [Some(0.), Some(100.), None, Some(0.)]
+        );
     }
 
     #[test]
