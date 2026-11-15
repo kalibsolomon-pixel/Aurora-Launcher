@@ -3,6 +3,7 @@ mod analytics;
 mod cards;
 mod parse;
 mod projection;
+mod replay;
 mod reports;
 mod service;
 mod settings;

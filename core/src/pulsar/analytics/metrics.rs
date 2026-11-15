@@ -144,6 +144,33 @@ pub(crate) fn values(derived: &Value) -> BTreeMap<String, MetricValue> {
     ] {
         result.insert(key.into(),extra(key,label,"count","Other damage never enters melee combos or dominance. Shield outcomes count once per observed attack.",value));
     }
+    for (key, label, help) in [
+        (
+            "stuns",
+            "Stuns",
+            "A subset of Disabled: one follow-up within 150 ms and 3 ticks is absorbed. It adds no attempt, hit or miss.",
+        ),
+        (
+            "localStuns",
+            "Stuns against you",
+            "A subset of your shield being Disabled, with a damage-proven follow-up within 150 ms and 3 ticks.",
+        ),
+        (
+            "spamClicks",
+            "Not counted: spam clicks",
+            "No-response packets below 50% cooldown or within 10 ticks after your confirmed hit. Diagnostic only.",
+        ),
+        (
+            "notCountedIncomingSwings",
+            "Not counted: opponent swings",
+            "Opponent swings without damage or a shield response. Diagnostic only.",
+        ),
+    ] {
+        result.insert(
+            key.into(),
+            extra(key, label, "count", help, s[key].as_f64()),
+        );
+    }
     result
 }
 pub(crate) fn summary_values(summary: &Value) -> BTreeMap<String, MetricValue> {

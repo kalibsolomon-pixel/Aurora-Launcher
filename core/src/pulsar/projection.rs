@@ -206,7 +206,7 @@ fn tabs_value(
         "averageReach".into(),
         metrics::metric("averageReach", field(&d["reach"], "mean")),
     );
-    let mut offense=TabView{metrics:submetrics(&all,&["accuracy","hits","attempts","emptyMisses","averageReach","maxReach","reachWithin","reachDeviation","reachError","aimCentral","aimDistance","timingPerfect","criticalRate","sprintRate","serverCrits"]),notices:vec!["Accuracy is hits divided by hits plus misses. Blocked and Disabled are excluded. Critical conditions do not establish damage, and sprint state does not establish knockback.".into()],..Default::default()};
+    let mut offense=TabView{metrics:submetrics(&all,&["accuracy","hits","attempts","emptyMisses","stuns","averageReach","maxReach","reachWithin","reachDeviation","reachError","aimCentral","aimDistance","timingPerfect","criticalRate","sprintRate","serverCrits"]),notices:vec!["Accuracy is hits divided by hits plus misses. Blocked and Disabled are excluded. Critical conditions do not establish damage, and sprint state does not establish knockback.".into()],..Default::default()};
     if f.statistics.hits > 0
         && f.statistics.attack_classifications.is_empty()
         && f.evaluations.is_empty()
@@ -285,10 +285,12 @@ fn tabs_value(
         "excludedSwings",
         "deduplicatedAttacks",
         "eligibleMisses",
+        "spamClicks",
     ] {
-        offense.metrics.insert(key.into(),metrics::extra(key,key,"","Frozen canonical input policy. Older recordings use the same Hit, Miss and shield outcome rules.",field(&d["summary"],key)));
+        offense.metrics.insert(key.into(),metrics::extra(key,key,"","Every real attack packet is a distinct input. Stun follow-ups and no-response spam clicks are not counted as attempts.",field(&d["summary"],key)));
     }
     let s = &d["summary"];
+    offense.metrics.insert("spamClicks".into(), metrics::extra("spamClicks", "Not counted: spam clicks", "count", "No-response real packets below 50% cooldown or within 10 ticks after your confirmed hit. This rule does not establish why the server ignored a click.", field(s,"spamClicks")));
     offense.metrics.insert(
         "accuracyDenominator".into(),
         metrics::extra(
@@ -300,8 +302,8 @@ fn tabs_value(
         ),
     );
     if let Some(m) = offense.metrics.get_mut("eligibleMisses") {
-        m.definition.label = "Misses after duplicate clicks are removed".into();
-        m.definition.help="MISS classifications under the current frozen input policy. Unavailable for older recording policies; this diagnostic can differ from the historical aimed-swing counter.".into();
+        m.definition.label = "Counted misses".into();
+        m.definition.help="Misses exclude absorbed stun follow-ups and no-response spam clicks. Older recordings without a complete timeline retain saved totals.".into();
     }
     let outcomes = json!([{"category":"HIT","count":s["hits"]},{"category":"BLOCKED","count":s["blocked"]},{"category":"DISABLED","count":s["disabled"]},{"category":"MISS","count":s["misses"]}]);
     offense.charts.push(chart(
@@ -634,7 +636,7 @@ fn tabs_value(
         None,
     ));
 
-    let mut defense=TabView{metrics:submetrics(&all,&["incoming","nonMeleeDamage","attacksIntoShield","shieldBlocks","localShieldNotBlocked","shieldDisables","hitsAfterDisable","localShieldBlocks","damageTaken","knockback","jumpCandidates"]),notices:vec!["Damage dealt, prevented damage and successful jump resets are not measured. Only opponent direct melee counts as hits taken.".into()],..Default::default()};
+    let mut defense=TabView{metrics:submetrics(&all,&["incoming","nonMeleeDamage","attacksIntoShield","shieldBlocks","localShieldNotBlocked","shieldDisables","hitsAfterDisable","localShieldBlocks","stuns","localStuns","notCountedIncomingSwings","damageTaken","knockback","jumpCandidates"]),notices:vec!["Damage dealt, prevented damage and successful jump resets are not measured. Only opponent direct melee counts as hits taken.".into()],..Default::default()};
     let incoming = array(d, "incomingDetail");
     defense.metrics.insert(
         "localShieldNotBlocked".into(),
@@ -960,15 +962,35 @@ fn tabs_value(
 }
 
 pub(crate) fn events(f: &FightRecord, a: &Analytics) -> Vec<EventView> {
-    a.events
+    let mut seen = std::collections::BTreeSet::new();
+    f.events
         .iter()
+        .filter(|e| seen.insert(e.sequence))
         .map(|e| EventView {
             sequence: e.sequence,
             time: f.seconds(e.nano_time),
             tick: e.client_tick,
             kind: e.kind.clone(),
             confidence: e.confidence.clone(),
-            detail: e.detail.clone().unwrap_or_default(),
+            detail: if f.statistics.stun_follow_ups.contains_key(&e.sequence)
+                || f.statistics
+                    .stun_incoming_follow_ups
+                    .contains_key(&e.sequence)
+                || f.statistics.stun_outgoing_damage.contains(&e.sequence)
+                || f.statistics.stun_incoming_damage.contains(&e.sequence)
+            {
+                "Stun follow-up".into()
+            } else if f.statistics.spam_click_sequences.contains(&e.sequence) {
+                "Not counted: spam click".into()
+            } else if f
+                .statistics
+                .not_counted_incoming_sequences
+                .contains(&e.sequence)
+            {
+                "Not counted: opponent swing".into()
+            } else {
+                e.detail.clone().unwrap_or_default()
+            },
             outcome: a.derived["attemptOutcomes"][e.sequence.to_string()]
                 .as_str()
                 .map(str::to_owned),
@@ -981,8 +1003,15 @@ pub(crate) fn events(f: &FightRecord, a: &Analytics) -> Vec<EventView> {
                 _ => "events",
             }
             .into(),
-            attributed_incoming: analytics::attributed(e, f.opponent.as_deref()),
+            attributed_incoming: analytics::attributed(e, f.opponent.as_deref())
+                && !f.statistics.stun_incoming_damage.contains(&e.sequence),
             eligible_attempt: analytics::outgoing(e)
+                && !f.statistics.stun_follow_ups.contains_key(&e.sequence)
+                && !f.statistics.spam_click_sequences.contains(&e.sequence)
+                && f.statistics
+                    .attack_canonical_ids
+                    .get(&e.sequence)
+                    .is_none_or(|id| *id == e.sequence)
                 && f.statistics
                     .attack_classifications
                     .get(&e.sequence)
@@ -1233,6 +1262,10 @@ pub(crate) fn pool(
         "maxReach",
     ];
     let count_keys = [
+        "stuns",
+        "localStuns",
+        "spamClicks",
+        "notCountedIncomingSwings",
         "attempts",
         "hits",
         "emptyMisses",
@@ -1433,6 +1466,8 @@ pub(crate) fn pool(
         ("localNotBlocked", |s: &super::wire::Statistics| {
             s.local_shield_not_blocked
         }),
+        ("stuns", |s: &super::wire::Statistics| s.stuns),
+        ("localStuns", |s: &super::wire::Statistics| s.local_stuns),
         ("disables", |s: &super::wire::Statistics| s.shield_disables),
         ("localBlocks", |s: &super::wire::Statistics| {
             s.local_shield_blocks

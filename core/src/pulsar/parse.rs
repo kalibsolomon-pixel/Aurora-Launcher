@@ -184,7 +184,7 @@ fn validate(value: &Value, rule: &Value, key: &str, depth: usize) -> Result<(), 
             if !object
                 .get("schemaVersion")
                 .and_then(Value::as_i64)
-                .is_some_and(|v| (1..=6).contains(&v))
+                .is_some_and(|v| (1..=7).contains(&v))
             {
                 return Err(Error::new(
                     "pulsar_unsupported_schema",
@@ -275,6 +275,12 @@ fn normalize(value: &mut Value, name: &str) {
                 ("attackSamples", true),
                 ("attackClassifications", true),
                 ("attackTimings", true),
+                ("stunFollowUps", true),
+                ("stunIncomingFollowUps", true),
+                ("stunIncomingDamage", false),
+                ("stunOutgoingDamage", false),
+                ("spamClickSequences", false),
+                ("notCountedIncomingSequences", false),
                 ("combatExchanges", false),
                 ("reachDistribution", false),
                 ("recentReach", false),
@@ -370,7 +376,7 @@ pub(crate) fn decode(bytes: &[u8]) -> Result<FightRecord, Error> {
 }
 
 fn validate_fight(f: &mut FightRecord, depth: usize) -> Result<(), Error> {
-    if !(1..=6).contains(&f.schema_version) {
+    if !(1..=7).contains(&f.schema_version) {
         return Err(Error::new(
             "pulsar_unsupported_schema",
             "Unsupported recording schema; source preserved.",
@@ -398,7 +404,11 @@ fn validate_fight(f: &mut FightRecord, depth: usize) -> Result<(), Error> {
     }
     let mut sequence = -1;
     let mut time = -1;
+    let mut seen = std::collections::BTreeSet::new();
     for e in &mut f.events {
+        if !seen.insert(e.sequence) {
+            continue;
+        }
         if e.kind.is_empty()
             || e.confidence.is_empty()
             || e.sequence <= sequence
@@ -537,6 +547,12 @@ impl FightRecord {
         self.statistics.attack_samples.clear();
         self.statistics.attack_classifications.clear();
         self.statistics.attack_timings.clear();
+        self.statistics.stun_follow_ups.clear();
+        self.statistics.stun_incoming_follow_ups.clear();
+        self.statistics.stun_incoming_damage.clear();
+        self.statistics.stun_outgoing_damage.clear();
+        self.statistics.spam_click_sequences.clear();
+        self.statistics.not_counted_incoming_sequences.clear();
         self.statistics.combat_exchanges.clear();
         if let Some(s) = &mut self.session {
             for ex in &mut s.exchanges {
@@ -557,7 +573,7 @@ pub(crate) fn decode_report(bytes: &[u8]) -> Result<FightRecord, Error> {
     fn envelope(v: &Value, depth: usize) -> Result<FightRecord, Error> {
         if depth > 1
             || v["format"] != "phenomena-report"
-            || !matches!(v["version"].as_u64(), Some(6 | 7))
+            || !matches!(v["version"].as_u64(), Some(6 | 7 | 8 | 9))
         {
             return Err(Error::new(
                 "pulsar_report_version",

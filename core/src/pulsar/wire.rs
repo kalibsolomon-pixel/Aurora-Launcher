@@ -537,6 +537,17 @@ impl Default for CombatInterval {
 #[serde(rename_all = "camelCase", default)]
 pub(crate) struct Statistics {
     pub strict_version: i32,
+    pub stuns: i32,
+    pub local_stuns: i32,
+    pub spam_clicks: i32,
+    pub not_counted_incoming_swings: i32,
+    pub stun_follow_ups: BTreeMap<i64, i64>,
+    pub stun_incoming_follow_ups: BTreeMap<i64, i64>,
+    pub stun_incoming_damage: std::collections::BTreeSet<i64>,
+    pub stun_outgoing_damage: std::collections::BTreeSet<i64>,
+    pub spam_click_sequences: std::collections::BTreeSet<i64>,
+    pub not_counted_incoming_sequences: std::collections::BTreeSet<i64>,
+
     pub non_melee_damage: i32,
     pub local_shield_not_blocked: i32,
     pub measurement_version: i32,
@@ -606,6 +617,17 @@ impl Default for Statistics {
     fn default() -> Self {
         Self {
             strict_version: 0,
+            stuns: Default::default(),
+            local_stuns: Default::default(),
+            spam_clicks: Default::default(),
+            not_counted_incoming_swings: Default::default(),
+            stun_follow_ups: Default::default(),
+            stun_incoming_follow_ups: Default::default(),
+            stun_incoming_damage: Default::default(),
+            stun_outgoing_damage: Default::default(),
+            spam_click_sequences: Default::default(),
+            not_counted_incoming_sequences: Default::default(),
+
             non_melee_damage: 0,
             local_shield_not_blocked: 0,
             measurement_version: Default::default(),

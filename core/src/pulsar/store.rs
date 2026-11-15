@@ -145,7 +145,13 @@ pub(crate) fn read_index(paths: &ManagedPaths) -> Result<Index, Error> {
         library_file(paths, key)?;
     }
     for entry in &mut index.entries {
-        if entry.record.statistics.strict_version == 0 {
+        if entry.record.statistics.strict_version
+            < if entry.record.schema_version >= 6 {
+                3
+            } else {
+                1
+            }
+        {
             // Old index summaries omitted the maps. Prefer the immutable imported
             // bytes so per-attempt proof wins over contradictory cached totals.
             if let Ok(mut record) = load_record(paths, entry) {

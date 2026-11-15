@@ -5,7 +5,7 @@ use std::{
     path::{Path, PathBuf},
 };
 
-const IDS: [&str; 24] = [
+const IDS: [&str; 42] = [
     "02100001-0000-4000-8000-000000000021",
     "02100002-0000-4000-8000-000000000021",
     "02100003-0000-4000-8000-000000000021",
@@ -30,9 +30,27 @@ const IDS: [&str; 24] = [
     "02100025-0000-4000-8000-000000000021",
     "02100026-0000-4000-8000-000000000021",
     "02100027-0000-4000-8000-000000000021",
+    "00000000-0000-0000-0000-000000000048",
+    "02100050-0000-4000-8000-000000000021",
+    "02100051-0000-4000-8000-000000000021",
+    "02100052-0000-4000-8000-000000000021",
+    "02100053-0000-4000-8000-000000000021",
+    "02100054-0000-4000-8000-000000000021",
+    "02100055-0000-4000-8000-000000000021",
+    "02100056-0000-4000-8000-000000000021",
+    "02100057-0000-4000-8000-000000000021",
+    "02100058-0000-4000-8000-000000000021",
+    "02100059-0000-4000-8000-000000000021",
+    "02100060-0000-4000-8000-000000000021",
+    "02100061-0000-4000-8000-000000000021",
+    "02100062-0000-4000-8000-000000000021",
+    "02100063-0000-4000-8000-000000000021",
+    "02100064-0000-4000-8000-000000000021",
+    "02100065-0000-4000-8000-000000000021",
+    "02100066-0000-4000-8000-000000000021",
 ];
 fn fixture(n: usize) -> serde_json::Value {
-    let bytes: [&[u8]; 24] = [
+    let bytes: [&[u8]; 42] = [
         include_bytes!("testdata/02100001-0000-4000-8000-000000000021.json.gz"),
         include_bytes!("testdata/02100002-0000-4000-8000-000000000021.json.gz"),
         include_bytes!("testdata/02100003-0000-4000-8000-000000000021.json.gz"),
@@ -57,6 +75,24 @@ fn fixture(n: usize) -> serde_json::Value {
         include_bytes!("testdata/02100025-0000-4000-8000-000000000021.json.gz"),
         include_bytes!("testdata/02100026-0000-4000-8000-000000000021.json.gz"),
         include_bytes!("testdata/02100027-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/00000000-0000-0000-0000-000000000048.json.gz"),
+        include_bytes!("testdata/02100050-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100051-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100052-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100053-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100054-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100055-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100056-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100057-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100058-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100059-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100060-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100061-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100062-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100063-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100064-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100065-0000-4000-8000-000000000021.json.gz"),
+        include_bytes!("testdata/02100066-0000-4000-8000-000000000021.json.gz"),
     ];
     let mut raw = Vec::new();
     flate2::read::GzDecoder::new(bytes[n])
@@ -531,6 +567,12 @@ fn nullable_constructor_collections_and_negative_measurements_normalize() {
         "attackSamples",
         "attackClassifications",
         "attackTimings",
+        "stunFollowUps",
+        "stunIncomingFollowUps",
+        "stunIncomingDamage",
+        "stunOutgoingDamage",
+        "spamClickSequences",
+        "notCountedIncomingSequences",
         "combatExchanges",
     ] {
         raw["statistics"][key] = serde_json::Value::Null;
@@ -545,7 +587,8 @@ fn nullable_constructor_collections_and_negative_measurements_normalize() {
     attack["attack"]["measurement"]["attackSpeed"] = (-1.0).into();
     attack["attack"]["measurement"]["cooldownTicks"] = (-2.0).into();
     let decoded = parse::decode(&serde_json::to_vec(&raw).unwrap()).unwrap();
-    assert!(decoded.statistics.reach_distribution.is_empty());
+    assert_eq!(decoded.statistics.strict_version, 3);
+    assert_eq!(decoded.statistics.reach_distribution.len(), 8);
     assert!(decoded.resolution.unwrap().notes.is_empty());
     let measurement = decoded
         .events
@@ -753,10 +796,10 @@ fn junction_ancestors_are_rejected_without_touching_the_target() {
 }
 
 #[test]
-fn canonical_duplicates_exclusions_and_frozen_timings_survive_preferences() {
+fn distinct_packets_exclusions_and_frozen_timings_survive_preferences() {
     let mut f = fight(2);
     let a = analytics::analyze(&f);
-    assert_eq!(a.derived["summary"]["deduplicatedAttacks"], 1);
+    assert_eq!(a.derived["summary"]["deduplicatedAttacks"], 0);
     assert_eq!(a.derived["summary"]["excludedSwings"], 1);
     assert_eq!(a.events.iter().filter(|e| e.kind == "ATTACK").count(), 14);
     f.policy.as_mut().unwrap().timing_tolerance_ticks = 0.0;
@@ -768,7 +811,7 @@ fn canonical_duplicates_exclusions_and_frozen_timings_survive_preferences() {
 }
 
 #[test]
-fn same_tick_trades_deduplicate_opponent_observations() {
+fn same_tick_trades_keep_distinct_damage_packets() {
     let mut f = fight(0);
     let local = analytics::analyze(&f)
         .combos
@@ -791,8 +834,8 @@ fn same_tick_trades_deduplicate_opponent_observations() {
         f.events.push(event);
     }
     let c = analytics::analyze(&f).combos;
-    assert_eq!(c.marks.iter().filter(|m| !m.local).count(), 1);
-    assert_eq!(c.marks.iter().filter(|m| m.traded).count(), 2);
+    assert_eq!(c.marks.iter().filter(|m| !m.local).count(), 2);
+    assert_eq!(c.marks.iter().filter(|m| m.traded).count(), 3);
 }
 
 #[test]
@@ -1572,7 +1615,7 @@ fn opponent_other_results_reconcile_with_the_aggregate_column() {
 
 #[test]
 fn oracle_strict_outcomes_and_legacy_mappings() {
-    for n in 8..24 {
+    for n in 8..IDS.len() {
         oracle_case(n);
     }
 }
@@ -1611,7 +1654,7 @@ fn oracle_names(raw: &mut serde_json::Value, exported: &serde_json::Value) {
 }
 #[test]
 fn original_sources_match_strict_oracles_and_normalization_is_idempotent() {
-    for n in 0..24 {
+    for n in 0..IDS.len() {
         let data = fixture(n);
         let mut raw = data["raw"].clone();
         oracle_names(&mut raw, &data["oracle"]["fight"]);
@@ -1644,17 +1687,25 @@ fn original_sources_match_strict_oracles_and_normalization_is_idempotent() {
 
 #[test]
 fn strict_report_version_is_independent_of_recording_schema() {
-    for n in 0..24 {
+    for n in 0..IDS.len() {
         let d = fixture(n);
-        assert_eq!(d["oracle"]["version"], 7);
+        assert_eq!(d["oracle"]["version"], 9);
         assert_eq!(
             parse::decode_report(&serde_json::to_vec(&d["oracle"]).unwrap())
                 .unwrap()
                 .id,
             IDS[n]
         );
+        let mut previous = d["oracle"].clone();
+        previous["version"] = 8.into();
+        assert_eq!(
+            parse::decode_report(&serde_json::to_vec(&previous).unwrap())
+                .unwrap()
+                .id,
+            IDS[n]
+        );
         let mut future = d["oracle"].clone();
-        future["version"] = 8.into();
+        future["version"] = 10.into();
         assert_eq!(
             parse::decode_report(&serde_json::to_vec(&future).unwrap())
                 .unwrap_err()
@@ -1682,5 +1733,143 @@ fn old_cached_summaries_upgrade_from_immutable_attempt_proof() {
     assert_eq!(
         fs::read(&path).unwrap(),
         serde_json::to_vec(&index).unwrap()
+    );
+}
+
+#[test]
+#[ignore = "Requires a read-only copied live recording manifest in PULSAR_LIVE_MANIFEST."]
+fn live_replay_matches_client_per_fight() {
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &fs::read(std::env::var("PULSAR_LIVE_MANIFEST").expect("copied manifest")).unwrap(),
+    )
+    .unwrap();
+    let lab = Lab::new();
+    let mut totals = [0; 6];
+    let mut incoming = [0; 6];
+    let rows = manifest.as_array().unwrap();
+    assert_eq!(rows.len(), 25);
+    for row in rows {
+        let path = Path::new(row["copy"].as_str().unwrap());
+        let bytes = fs::read(path).unwrap();
+        let f = parse::decode(&bytes).unwrap();
+        let s = &f.statistics;
+        let counts = [
+            s.hits,
+            s.shield_blocks - s.shield_disables,
+            s.shield_disables,
+            s.empty_misses,
+            s.stuns,
+            s.spam_clicks,
+        ];
+        let expected: Vec<i32> = row["expected"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_i64().unwrap() as i32)
+            .collect();
+        assert_eq!(counts.as_slice(), expected, "{}", path.display());
+        let defense = [
+            s.incoming,
+            s.local_shield_blocks,
+            s.local_shield_disabled,
+            s.local_shield_not_blocked,
+            s.local_stuns,
+            s.not_counted_incoming_swings,
+        ];
+        let expected: Vec<i32> = row["incoming"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|v| v.as_i64().unwrap() as i32)
+            .collect();
+        assert_eq!(defense.as_slice(), expected, "incoming {}", path.display());
+        for i in 0..6 {
+            totals[i] += counts[i];
+            incoming[i] += defense[i];
+        }
+        fs::write(
+            lab.source
+                .root
+                .join("phenomena/fights")
+                .join(format!("{}.json", f.id)),
+            bytes,
+        )
+        .unwrap();
+    }
+    let index = lab.refresh();
+    assert_eq!(index.entries.len(), 25);
+    assert!(index.issues.values().all(Vec::is_empty));
+    assert_eq!(totals, [607, 56, 48, 164, 41, 339]);
+    assert_eq!(incoming, [422, 27, 17, 14, 2, 13]);
+    eprintln!(
+        "LIVE REPLAY: 25/25 exact per-fight outgoing and incoming matches; totals {totals:?}; accuracy {:.2}%",
+        100. * totals[0] as f64 / (totals[0] + totals[3]) as f64
+    );
+}
+
+#[test]
+fn raw_stun_and_omitted_inputs_remain_diagnostic_without_playback_counts() {
+    for n in 0..IDS.len() {
+        let f = fight(n);
+        if !super::replay::replayable(&f) {
+            continue;
+        }
+        let a = analytics::analyze(&f);
+        let p = projection::playback(&f, &a, f.duration(), None).unwrap();
+        assert_eq!(p.events.len(), f.events.len(), "{} raw playback", IDS[n]);
+        let last = p.checkpoints.last().unwrap();
+        assert_eq!(
+            last.attempts, f.statistics.attempts as usize,
+            "{} attempts",
+            IDS[n]
+        );
+        assert_eq!(last.hits, f.statistics.hits as usize, "{} hits", IDS[n]);
+        assert_eq!(
+            last.incoming, f.statistics.incoming as usize,
+            "{} incoming",
+            IDS[n]
+        );
+        for e in &p.events {
+            if f.statistics.spam_click_sequences.contains(&e.sequence) {
+                assert_eq!(e.detail, "Not counted: spam click");
+                assert!(e.outcome.is_none());
+                assert!(!e.eligible_attempt);
+            }
+            if f.statistics
+                .not_counted_incoming_sequences
+                .contains(&e.sequence)
+            {
+                assert_eq!(e.detail, "Not counted: opponent swing");
+                assert!(!e.attributed_incoming);
+            }
+            if f.statistics.stun_follow_ups.contains_key(&e.sequence)
+                || f.statistics.stun_incoming_damage.contains(&e.sequence)
+                || f.statistics.stun_outgoing_damage.contains(&e.sequence)
+            {
+                assert_eq!(e.detail, "Stun follow-up");
+                assert!(e.outcome.is_none());
+                assert!(!e.eligible_attempt);
+                assert!(!e.attributed_incoming);
+            }
+        }
+    }
+}
+#[test]
+fn repeated_raw_sequence_ids_are_ignored_during_replay() {
+    let n = IDS
+        .iter()
+        .position(|id| id.starts_with("02100050"))
+        .unwrap();
+    let mut raw = fixture(n)["raw"].clone();
+    let before = parse::decode(&serde_json::to_vec(&raw).unwrap()).unwrap();
+    let event = raw["events"][0].clone();
+    raw["events"].as_array_mut().unwrap().insert(1, event);
+    let after = parse::decode(&serde_json::to_vec(&raw).unwrap()).unwrap();
+    assert_eq!(after.statistics.attempts, before.statistics.attempts);
+    assert_eq!(after.statistics.hits, before.statistics.hits);
+    assert_eq!(after.statistics.stuns, before.statistics.stuns);
+    assert_eq!(
+        after.statistics.total_inputs,
+        before.statistics.total_inputs
     );
 }

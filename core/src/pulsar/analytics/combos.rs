@@ -111,9 +111,7 @@ pub(crate) fn analyze(f: &FightRecord, events: &[CombatEvent]) -> Combos {
         .filter(|e| attributed(e, f.opponent.as_deref()))
     {
         if let Some(tick) = e.client_tick {
-            if !opponent_ticks.insert(tick) {
-                continue;
-            }
+            opponent_ticks.insert(tick);
         }
         result.marks.push(Mark {
             seq: e.sequence,

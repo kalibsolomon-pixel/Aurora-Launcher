@@ -18,14 +18,28 @@
     "label": "Attacks",
     "unit": "",
     "confidence": "Observed",
-    "help": "Unique attacks aimed at the opponent. Swings away and duplicates are excluded."
+    "help": "Counted attacks aimed at the opponent. Swings away, duplicate observations and no-response spam clicks are excluded; a stun follow-up is part of Disabled."
   },
   {
     "key": "emptyMisses",
     "label": "Misses",
     "unit": "",
     "confidence": "Observed",
-    "help": "Every eligible attack with no damage or shield block, including invulnerability clicks."
+    "help": "Aimed attacks with no damage or shield block, after excluding no-response spam clicks."
+  },
+  {
+    "key": "spamClicks",
+    "label": "Not counted: spam clicks",
+    "unit": "",
+    "confidence": "Observed",
+    "help": "Real packets with no response, sent below 50% cooldown or within 10 ticks after your confirmed hit on that opponent. Not attacks or misses."
+  },
+  {
+    "key": "notCountedIncomingSwings",
+    "label": "Not counted: opponent swings",
+    "unit": "",
+    "confidence": "Observed",
+    "help": "Opponent swing animations with no damage, block sound or disable sound. They do not prove an attack reached you."
   },
   {
     "key": "averageReach",
@@ -126,6 +140,13 @@
     "help": "Attacks followed by a shield-disable sound. Included in blocked attacks, excluded from accuracy."
   },
   {
+    "key": "stuns",
+    "label": "Stuns",
+    "unit": "",
+    "confidence": "Observed sequence",
+    "help": "Disabled attempts with one immediate follow-up on the same opponent within 3 ticks and 150 ms. The follow-up is part of the Disabled attempt, not a hit, miss or separate attempt."
+  },
+  {
     "key": "hitsAfterDisable",
     "label": "Hits after a disable",
     "unit": "",
@@ -137,7 +158,7 @@
     "label": "Blocked",
     "unit": "",
     "confidence": "Observed",
-    "help": "Opponent swings blocked by your raised shield, with no damage."
+    "help": "Opponent attacks confirmed by a block sound at your shield, with no damage."
   },
   {
     "key": "serverCrits",

@@ -17,89 +17,6 @@ pub(crate) struct Defense {
     pub time: i64,
     pub result: &'static str,
 }
-fn nearest(attacks: &[&CombatEvent], time: i64, window: i64) -> Option<usize> {
-    let i = attacks.partition_point(|a| a.nano_time < time);
-    [i.checked_sub(1), (i < attacks.len()).then_some(i)]
-        .into_iter()
-        .flatten()
-        .filter(|&k| (attacks[k].nano_time as i128 - time as i128).abs() <= window as i128)
-        .min_by_key(|&k| {
-            (
-                (attacks[k].nano_time as i128 - time as i128).abs(),
-                attacks[k].nano_time,
-            )
-        })
-}
-pub(crate) fn defense(events: &[CombatEvent], opponent: Option<&str>, millis: f64) -> Vec<Defense> {
-    let window = (millis * 1e6) as i64;
-    let mut attacks: Vec<_> = events
-        .iter()
-        .filter(|e| {
-            e.kind == "ATTACK"
-                && e.actor.as_deref() == opponent
-                && e.target.as_deref() == Some("local")
-                && e.context
-                    .as_ref()
-                    .is_some_and(|c| c.target_blocking == Some(true))
-        })
-        .collect();
-    let seeds: Vec<_> = events
-        .iter()
-        .filter(|e| {
-            analytics::attributed(e, opponent)
-                && e.context
-                    .as_ref()
-                    .is_some_and(|c| c.target_blocking == Some(true))
-                && nearest(&attacks, e.nano_time, window).is_none()
-        })
-        .collect();
-    attacks.extend(seeds);
-    attacks.sort_by_key(|e| (e.nano_time, e.sequence));
-    let mut flags = vec![(false, false, false); attacks.len()];
-    for e in events {
-        let hit = analytics::attributed(e, opponent);
-        let shield = e.kind == "SHIELD"
-            && e.context
-                .as_ref()
-                .is_some_and(|c| c.subject.as_deref() == Some("local"));
-        if !hit && !shield {
-            continue;
-        }
-        if let Some(k) = nearest(&attacks, e.nano_time, window) {
-            if hit {
-                flags[k].0 = true;
-            } else {
-                match e.context.as_ref().and_then(|c| c.shield.as_deref()) {
-                    Some("DISABLE") => flags[k].2 = true,
-                    Some("BLOCK") => flags[k].1 = true,
-                    _ => {}
-                }
-            }
-        }
-    }
-    attacks
-        .iter()
-        .zip(flags)
-        .map(|(a, (damage, block, disable))| Defense {
-            sequence: a.sequence,
-            time: a.nano_time,
-            result: if disable {
-                "DISABLED"
-            } else if damage {
-                "NOT_BLOCKED"
-            } else if block
-                || a.context
-                    .as_ref()
-                    .is_some_and(|c| c.target_facing == Some(true))
-            {
-                "BLOCKED"
-            } else {
-                "NOT_BLOCKED"
-            },
-        })
-        .collect()
-}
-
 pub(crate) fn no_result_reason(source: &str) -> &'static str {
     match source {
         "THIRD_PARTY_KILL" => "Opponent killed by another player",
@@ -235,11 +152,17 @@ pub(crate) fn normalize(f: &mut FightRecord) {
             });
         }
     }
-    let defense = defense(
+    if super::replay::replayable(f) {
+        super::replay::replay(f);
+    }
+    super::replay::pool(f);
+    let defensive = super::replay::defense(
         &f.events,
         f.opponent.as_deref(),
         f.policy().correlation_millis,
+        &super::replay::boundaries(f),
     );
+    let defense = &defensive.outcomes;
     let s = &mut f.statistics;
     if s.strict_version == 0 {
         s.non_melee_damage = s
@@ -338,10 +261,36 @@ pub(crate) fn normalize(f: &mut FightRecord) {
                 .filter(|e| analytics::attributed(e, f.opponent.as_deref()))
                 .count() as i32;
         }
-        s.non_melee_damage =
-            f.events.iter().filter(|e| e.kind == "DAMAGE_IN").count() as i32 - s.incoming;
+        s.non_melee_damage = f.events.iter().filter(|e| e.kind == "DAMAGE_IN").count() as i32
+            - s.incoming
+            - if f.opponent.is_none() {
+                s.stun_incoming_damage.len() as i32
+            } else {
+                0
+            };
     }
-    if !defense.is_empty() {
+    if !f.events.is_empty() && f.opponent.is_some() {
+        s.not_counted_incoming_sequences = defensive.not_counted;
+        s.not_counted_incoming_swings = s.not_counted_incoming_sequences.len() as i32;
+        s.local_stuns = defensive.stuns;
+        s.stun_incoming_damage = defensive.damage;
+        s.stun_incoming_follow_ups = defensive.follow_ups;
+    }
+    s.incoming -= f
+        .events
+        .iter()
+        .filter(|e| {
+            analytics::attributed(e, f.opponent.as_deref())
+                && s.stun_incoming_damage.contains(&e.sequence)
+        })
+        .count() as i32;
+    if !defense.is_empty()
+        || !s.not_counted_incoming_sequences.is_empty()
+        || f.events.iter().any(|e| {
+            e.kind == "SHIELD"
+                && e.context.as_ref().and_then(|c| c.subject.as_deref()) == Some("local")
+        })
+    {
         s.local_shield_blocks = defense.iter().filter(|d| d.result == "BLOCKED").count() as i32;
         s.local_shield_disabled = defense.iter().filter(|d| d.result == "DISABLED").count() as i32;
         s.local_shield_not_blocked =
@@ -349,7 +298,7 @@ pub(crate) fn normalize(f: &mut FightRecord) {
     }
     s.unattributed_incoming = 0;
     s.third_party_incoming = 0;
-    s.strict_version = 1;
+    s.strict_version = s.strict_version.max(1);
     f.evaluations.retain(|e| {
         s.attack_classifications
             .get(&e.attack_sequence)
