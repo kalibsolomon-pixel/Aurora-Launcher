@@ -333,6 +333,7 @@ pub(crate) fn quick_play(mode: String, target_id: String) {
 pub fn on_launch_progress(phase: &str) {
     let label = match phase {
         "checkingPreconditions" => "Checking readiness…",
+        "syncingSettings" => "Syncing settings…",
         "preparingJava" => "Preparing managed Java…",
         "resolvingLaunch" => "Preparing the game…",
         "restoringSession" => "Restoring the Minecraft session…",
