@@ -184,8 +184,25 @@ pub fn tile(
 
 pub const CARD_ART_SIDE: f32 = 96.;
 
-/// Shared content card with artwork leading the text and space for actions
-/// below it, so buttons never compete with the title at narrow widths.
+/// Narrowest card width before the grid drops a column.
+const CARD_MIN_WIDTH: f32 = 520.;
+
+/// Columns of project cards for the current window: one on narrow windows,
+/// more as the page widens. Recomputed on resize; nothing is persisted.
+pub fn card_columns(viewport_width: gpui::Pixels) -> u16 {
+    let available = f32::from(viewport_width) - crate::navigation::PAGE_CHROME;
+    ((available + 12.) / (CARD_MIN_WIDTH + 12.))
+        .floor()
+        .clamp(1., 3.) as u16
+}
+
+/// Grid that lays project cards out in `columns` equal tracks.
+pub fn card_grid(columns: u16) -> Div {
+    div().grid().grid_cols(columns).gap(px(12.)).w_full()
+}
+
+/// Shared content card with artwork leading the text; actions sit under the
+/// text in the same column so the card is only as tall as its content.
 pub fn project_card(
     palette: &AuroraTheme,
     art: impl gpui::IntoElement,
@@ -195,17 +212,21 @@ pub fn project_card(
     crate::ui::card(palette)
         .w_full()
         .min_w(px(0.))
-        .gap(px(12.))
         .p(px(16.))
         .child(
-            div()
-                .flex()
-                .items_start()
-                .gap(px(16.))
-                .child(art)
-                .child(div().flex_1().min_w(px(0.)).child(text)),
+            div().flex().items_start().gap(px(16.)).child(art).child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .min_h(px(CARD_ART_SIDE))
+                    .flex()
+                    .flex_col()
+                    .justify_between()
+                    .gap(px(12.))
+                    .child(text)
+                    .child(actions),
+            ),
         )
-        .child(actions)
 }
 
 #[cfg(test)]

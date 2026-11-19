@@ -1721,6 +1721,7 @@ impl Render for Content {
                     Some("Try a different name or file name, or clear the filter."),
                 ));
             }
+            let mut cards = artwork::card_grid(artwork::card_columns(window.viewport_size().width));
             for entry in visible {
                 let e = entry.clone();
                 let v = view.clone();
@@ -1939,7 +1940,7 @@ impl Render for Content {
                         })),
                     )
                 });
-                list = list.child(artwork::project_card(
+                cards = cards.child(artwork::project_card(
                     t,
                     artwork::tile(
                         gpui::SharedString::from(format!("icon-{}", entry.id)),
@@ -1960,6 +1961,7 @@ impl Render for Content {
                         .child(remove),
                 ));
             }
+            list = list.child(cards);
             // ------------------------------------------------------ local import
             let mut import = ui::card(t)
                 .gap(px(14.))

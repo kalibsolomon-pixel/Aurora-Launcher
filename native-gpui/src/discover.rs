@@ -2869,6 +2869,7 @@ impl Render for Discover {
         };
 
         let mut list = div().flex().flex_col().gap(px(12.)).id("discover-results");
+        let mut cards = artwork::card_grid(artwork::card_columns(window.viewport_size().width));
         let total = s.results.len();
         let current_page = self.results_page.min(total.saturating_sub(1) / page_size);
         let start = current_page * page_size;
@@ -2936,7 +2937,7 @@ impl Render for Discover {
                             })),
                     )
                 });
-            list = list.child(artwork::project_card(
+            cards = cards.child(artwork::project_card(
                 &palette,
                 artwork::tile(
                     ("art", index),
@@ -2949,6 +2950,7 @@ impl Render for Discover {
                 actions,
             ));
         }
+        list = list.child(cards);
         if total > 0 {
             list = list.child(
                 div()
