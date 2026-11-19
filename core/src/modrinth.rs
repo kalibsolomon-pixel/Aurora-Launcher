@@ -115,7 +115,10 @@ impl Client {
         OFFICIAL
             .get_or_init(|| Self {
                 base: Url::parse(BASE).expect("fixed official Modrinth API URL"),
-                http: crate::downloads::build_client(&DownloadOptions::default()),
+                http: crate::downloads::build_client(&DownloadOptions {
+                    max_redirects: 0,
+                    ..DownloadOptions::default()
+                }),
             })
             .clone()
     }
@@ -703,6 +706,171 @@ impl Client {
         })
     }
 
+    /// The project page can browse other Minecraft versions and loaders. Its
+    /// catalog is display-only; install review still resolves the exact version
+    /// against the instance and verifies all of its files and dependencies.
+    pub async fn project_page(
+        &self,
+        kind: BrowseKind,
+        project_id: &str,
+    ) -> Result<ProjectPage, Error> {
+        let project = self.project(project_id).await?;
+        if project.id != project_id || project.project_type != kind.project_type() {
+            return Err(Error::InvalidResponse);
+        }
+        let mut versions_url = self.endpoint(&["project", project_id, "version"])?;
+        versions_url
+            .query_pairs_mut()
+            .append_pair("include_changelog", "false");
+        let (versions, author) = tokio::join!(
+            self.get::<Vec<VersionDto>>(versions_url),
+            self.project_author(&project),
+        );
+        let (mut versions, releases_error) = match versions {
+            Ok(versions) => (versions, None),
+            Err(error) => (Vec::new(), Some(error.to_string())),
+        };
+        versions.sort_by(|a, b| {
+            b.date_published
+                .cmp(&a.date_published)
+                .then_with(|| b.id.cmp(&a.id))
+        });
+        let mut seen = HashSet::new();
+        let releases = versions
+            .into_iter()
+            .filter(|version| {
+                version.project_id == project_id
+                    && validate_id(&version.id).is_ok()
+                    && seen.insert(version.id.clone())
+            })
+            .map(|version| {
+                let (file_size, unsupported_reason) = match kind.content_type() {
+                    None => self.pack_version_support(&version),
+                    Some(kind) => {
+                        let file = choose_file(&version, kind).ok().filter(|file| {
+                            self.official_file_source(&file.url, &file.hashes.sha512, file.size)
+                                .is_ok()
+                        });
+                        (
+                            file.map(|file| file.size),
+                            if kind == ContentType::Mod && !client_environment(&version.environment)
+                            {
+                                Some("This release does not support a Minecraft client.".into())
+                            } else if file.is_none() {
+                                Some("This release has no supported file on Modrinth's CDN.".into())
+                            } else {
+                                None
+                            },
+                        )
+                    }
+                };
+                ProjectRelease {
+                    version: VersionChoice {
+                        id: version.id,
+                        name: version.name,
+                        version_number: version.version_number,
+                        version_type: version.version_type,
+                        date_published: version.date_published,
+                        environment: version.environment,
+                        loaders: version.loaders,
+                        game_versions: version.game_versions,
+                        archive_size: (kind == BrowseKind::Modpack).then_some(file_size).flatten(),
+                        unsupported_reason,
+                    },
+                    file_size,
+                    dependencies: version
+                        .dependencies
+                        .into_iter()
+                        .map(|dependency| ProjectDependency {
+                            project_id: dependency.project_id.filter(|id| validate_id(id).is_ok()),
+                            version_id: dependency.version_id.filter(|id| validate_id(id).is_ok()),
+                            file_name: dependency.file_name,
+                            kind: dependency.dependency_type,
+                        })
+                        .collect(),
+                }
+            })
+            .collect();
+        let links = [
+            ("Source", project.source_url),
+            ("Issues", project.issues_url),
+            ("Wiki", project.wiki_url),
+            ("Discord", project.discord_url),
+        ]
+        .into_iter()
+        .filter_map(|(label, url)| {
+            Some(ProjectLink {
+                label,
+                url: safe_web_link(url.as_deref()?, None)?,
+            })
+        })
+        .collect();
+        let gallery = project
+            .gallery
+            .into_iter()
+            .filter_map(|entry| {
+                Some(ProjectScreenshot {
+                    url: safe_icon_url(&entry.url)?,
+                    title: entry.title,
+                    description: entry.description,
+                })
+            })
+            .collect();
+        Ok(ProjectPage {
+            project_id: project.id,
+            title: project.title,
+            summary: project.description,
+            author,
+            body: project.body,
+            downloads: project.downloads,
+            followers: project.followers,
+            categories: project.categories,
+            loaders: project.loaders,
+            links,
+            gallery,
+            releases,
+            releases_error,
+        })
+    }
+
+    async fn project_author(&self, project: &ProjectDto) -> Option<String> {
+        if let Some(id) = project.organization.as_deref()
+            && validate_id(id).is_ok()
+            && let Ok(organization) = self
+                .get::<OrganizationDto>(self.endpoint(&["organization", id]).ok()?)
+                .await
+        {
+            return Some(organization.name);
+        }
+        let members: Vec<ProjectMemberDto> = self
+            .get(self.endpoint(&["project", &project.id, "members"]).ok()?)
+            .await
+            .ok()?;
+        members
+            .iter()
+            .find(|member| member.is_owner || member.role.eq_ignore_ascii_case("owner"))
+            .or_else(|| {
+                members
+                    .iter()
+                    .find(|member| member.role.to_ascii_lowercase().contains("lead"))
+            })
+            .or_else(|| members.first())
+            .map(|member| member.user.username.clone())
+    }
+
+    pub async fn project_changelog(
+        &self,
+        project_id: &str,
+        version_id: &str,
+    ) -> Result<Option<String>, Error> {
+        validate_id(project_id)?;
+        let version = self.version(version_id).await?;
+        if version.project_id != project_id || version.id != version_id {
+            return Err(Error::InvalidResponse);
+        }
+        Ok(version.changelog.filter(|text| !text.trim().is_empty()))
+    }
+
     /// A modpack version's published archive size and, when Aurora cannot
     /// install it, why: the same pre-download rules `modpacks` resolution
     /// applies (an archive must exist on the official CDN, its loader and
@@ -1134,7 +1302,7 @@ fn verified_recognition(queried: &[String], version: VersionDto) -> Result<Recog
     })
 }
 
-fn safe_icon_url(raw: &str) -> Option<String> {
+pub(crate) fn safe_icon_url(raw: &str) -> Option<String> {
     let url = Url::parse(raw).ok()?;
     if url.scheme() != "https"
         || url.host_str() != Some("cdn.modrinth.com")
@@ -1147,6 +1315,23 @@ fn safe_icon_url(raw: &str) -> Option<String> {
         return None;
     }
     Some(url.into())
+}
+
+/// Publisher links are opened only on explicit activation. Restrict platform
+/// URL handlers to HTTPS links without embedded credentials.
+pub fn safe_web_link(value: &str, base: Option<&str>) -> Option<String> {
+    if value.trim() != value || value.is_empty() || value.chars().any(char::is_control) {
+        return None;
+    }
+    let url = match base {
+        Some(base) => Url::parse(base).ok()?.join(value).ok()?,
+        None => Url::parse(value).ok()?,
+    };
+    (url.scheme() == "https"
+        && url.has_host()
+        && url.username().is_empty()
+        && url.password().is_none())
+    .then(|| url.into())
 }
 
 const CLIENT_ENVIRONMENTS: &[&str] = &[
@@ -1615,12 +1800,60 @@ pub struct VersionChoice {
     /// Published byte size of a modpack version's `.mrpack` archive, known
     /// before any download. `None` for other kinds or without an archive.
     pub archive_size: Option<u64>,
-    /// Why Aurora cannot install this modpack version, decided from its
-    /// published metadata by the same rules resolution applies before the
-    /// archive download. `None` when nothing refuses it yet (the verified
-    /// archive is still checked); always `None` for other kinds, whose
-    /// incompatible versions are not listed.
+    /// A refusal based on published metadata. The project catalog can show
+    /// unsupported releases for any kind. A missing refusal does not replace
+    /// the exact installation review.
     pub unsupported_reason: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectPage {
+    pub project_id: String,
+    pub title: String,
+    pub summary: String,
+    pub author: Option<String>,
+    pub body: String,
+    pub downloads: u64,
+    pub followers: u64,
+    pub categories: Vec<String>,
+    pub loaders: Vec<String>,
+    pub links: Vec<ProjectLink>,
+    pub gallery: Vec<ProjectScreenshot>,
+    pub releases: Vec<ProjectRelease>,
+    pub releases_error: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectLink {
+    pub label: &'static str,
+    pub url: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectScreenshot {
+    pub url: String,
+    pub title: Option<String>,
+    pub description: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectRelease {
+    pub version: VersionChoice,
+    pub file_size: Option<u64>,
+    pub dependencies: Vec<ProjectDependency>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectDependency {
+    pub project_id: Option<String>,
+    pub version_id: Option<String>,
+    pub file_name: Option<String>,
+    pub kind: String,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1688,6 +1921,42 @@ struct ProjectDto {
     environment: Vec<String>,
     #[serde(default)]
     icon_url: Option<String>,
+    #[serde(default)]
+    body: String,
+    #[serde(default)]
+    downloads: u64,
+    #[serde(default)]
+    followers: u64,
+    #[serde(default)]
+    categories: Vec<String>,
+    source_url: Option<String>,
+    issues_url: Option<String>,
+    wiki_url: Option<String>,
+    discord_url: Option<String>,
+    #[serde(default)]
+    gallery: Vec<GalleryDto>,
+    organization: Option<String>,
+}
+#[derive(Debug, Deserialize)]
+struct OrganizationDto {
+    name: String,
+}
+#[derive(Debug, Deserialize)]
+struct GalleryDto {
+    url: String,
+    title: Option<String>,
+    description: Option<String>,
+}
+#[derive(Debug, Deserialize)]
+struct ProjectMemberDto {
+    role: String,
+    #[serde(default)]
+    is_owner: bool,
+    user: ProjectUserDto,
+}
+#[derive(Debug, Deserialize)]
+struct ProjectUserDto {
+    username: String,
 }
 #[derive(Debug, Deserialize)]
 struct LicenseDto {
@@ -1728,6 +1997,7 @@ pub(crate) struct HashesDto {
 pub(crate) struct DependencyDto {
     project_id: Option<String>,
     version_id: Option<String>,
+    file_name: Option<String>,
     dependency_type: String,
 }
 
@@ -3661,6 +3931,64 @@ mod tests {
             .details_browse(&context(), BrowseKind::Modpack, "PACK0001")
             .await
             .unwrap()
+    }
+
+    #[tokio::test]
+    async fn project_page_keeps_publisher_content_and_rejects_foreign_releases_and_urls() {
+        let id = "PROJECT1";
+        let mut document = project(id, "mod");
+        document["body"] = json!("# Description\n\nFull body.");
+        document["source_url"] = json!("https://example.org/source");
+        document["wiki_url"] = json!("file:///tmp/project.html");
+        document["gallery"] = json!([
+            {"url": "https://cdn.modrinth.com/data/PROJECT1/images/capture.webp"},
+            {"url": "https://example.org/untrusted.png"}
+        ]);
+        let dependency = json!([{"project_id": "DEPEND01", "dependency_type": "required"}]);
+        let mut release = version("RELEASE1", id, dependency);
+        release["changelog"] = json!("Exact release notes.");
+        let server = server(HashMap::from([
+            ("/v2/project/PROJECT1".into(), document),
+            (
+                "/v2/project/PROJECT1/members".into(),
+                json!([
+                    {"role": "Member", "user": {"username": "contributor"}},
+                    {"role": "Owner", "user": {"username": "publisher"}}
+                ]),
+            ),
+            (
+                "/v2/project/PROJECT1/version".into(),
+                json!([release, version("RELEASE2", "FOREIGN1", json!([]))]),
+            ),
+            ("/v2/version/RELEASE1".into(), release),
+        ]));
+        let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
+        let page = client.project_page(BrowseKind::Mod, id).await.unwrap();
+        assert_eq!(page.body, "# Description\n\nFull body.");
+        assert_eq!(page.author.as_deref(), Some("publisher"));
+        assert_eq!(page.links.len(), 1);
+        assert_eq!(page.links[0].label, "Source");
+        assert_eq!(page.gallery.len(), 1);
+        assert_eq!(page.releases.len(), 1);
+        assert_eq!(page.releases[0].file_size, Some(4));
+        assert_eq!(
+            page.releases[0].dependencies[0].project_id.as_deref(),
+            Some("DEPEND01")
+        );
+        assert_eq!(
+            client
+                .project_changelog(id, "RELEASE1")
+                .await
+                .unwrap()
+                .as_deref(),
+            Some("Exact release notes.")
+        );
+        assert!(
+            client
+                .project_changelog("FOREIGN1", "RELEASE1")
+                .await
+                .is_err()
+        );
     }
 
     #[tokio::test]

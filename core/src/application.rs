@@ -3964,6 +3964,43 @@ pub async fn get_modrinth_project(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ModrinthProjectPageRequest {
+    content_type: crate::modrinth::BrowseKind,
+    project_id: String,
+}
+
+pub async fn get_modrinth_project_page(
+    request: ModrinthProjectPageRequest,
+) -> Result<crate::modrinth::ProjectPage, CommandError> {
+    crate::modrinth::Client::official()
+        .project_page(request.content_type, &request.project_id)
+        .await
+        .map_err(provider_error)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModrinthChangelogRequest {
+    project_id: String,
+    version_id: String,
+}
+
+pub async fn get_modrinth_changelog(
+    request: ModrinthChangelogRequest,
+) -> Result<Option<String>, CommandError> {
+    crate::modrinth::Client::official()
+        .project_changelog(&request.project_id, &request.version_id)
+        .await
+        .map_err(provider_error)
+}
+
+pub async fn get_modrinth_project_image(app: Host, url: &str) -> Option<String> {
+    let managed = managed_paths(&app).ok()?;
+    crate::artwork::resolve_project_image(&managed, url).await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModrinthArtworkRequest {
     project_id: String,
 }
