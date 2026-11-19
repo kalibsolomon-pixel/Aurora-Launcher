@@ -185,7 +185,7 @@ pub fn tile(
 pub const CARD_ART_SIDE: f32 = 96.;
 
 /// Narrowest card width before the grid drops a column.
-const CARD_MIN_WIDTH: f32 = 520.;
+const CARD_MIN_WIDTH: f32 = 420.;
 
 /// Columns of project cards for the current window: one on narrow windows,
 /// more as the page widens. Recomputed on resize; nothing is persisted.
