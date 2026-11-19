@@ -39,14 +39,17 @@ const squircle = Buffer.from(`<svg xmlns="http://www.w3.org/2000/svg" width="${s
 </linearGradient></defs>
 <polygon points="${points.join(' ')}" fill="url(#g)"/>
 </svg>`);
-// The ribbon keeps its silhouette; 600 px wide leaves balanced inset.
-const ribbon = await sharp(svg, { density: 288 })
-  .resize(600, 480, { fit: 'inside' })
+// The ribbon (content x 32..604, y 72..452 of the 640x512 viewBox) fills 78% of
+// the squircle's width, centred a touch above the middle: the same placement as
+// the client's app icon (Aurora-Client tools/gen_aurora_brand.py, 2026-11-19).
+const scale = 0.78 * (size - 2 * margin) / (604 - 32);
+const ribbonWidth = Math.round(640 * scale), ribbonHeight = Math.round(512 * scale);
+const ribbon = await sharp(svg, { density: 288 * 2 })
+  .resize(ribbonWidth, ribbonHeight, { fit: 'fill' })
   .png()
   .toBuffer();
-const meta = await sharp(ribbon).metadata();
 const master = await sharp(squircle)
-  .composite([{ input: ribbon, left: Math.round((size - meta.width) / 2), top: Math.round((size - meta.height) / 2) }])
+  .composite([{ input: ribbon, left: Math.round(center - 318 * scale), top: Math.round(500 - 262 * scale) }])
   .png()
   .toBuffer();
 await fs.writeFile(path.join(root, 'icon.png'), master);
