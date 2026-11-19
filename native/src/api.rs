@@ -1089,6 +1089,10 @@ pub struct DiscordState {
     pub preferences: DiscordPreferences,
 }
 
+pub fn initialize_discord(host: Host) -> ApiResult<()> {
+    app::initialize_discord(host).map_err(Into::into)
+}
+
 pub fn discord_state() -> ApiResult<DiscordState> {
     convert::<_, DiscordState>(Ok::<_, app::CommandError>(app::get_discord_state()))
 }

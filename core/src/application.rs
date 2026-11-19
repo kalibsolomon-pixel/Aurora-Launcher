@@ -1313,6 +1313,13 @@ pub fn set_home_widgets(
 pub fn reset_home_widgets(app: Host) -> Result<crate::home_widgets::HomeLayout, CommandError> {
     set_home_widgets(app, Default::default())
 }
+pub fn initialize_discord(app: Host) -> Result<(), CommandError> {
+    let paths = managed_paths(&app)?;
+    let config = crate::config::load(&paths.config_file())?.unwrap_or_default();
+    crate::discord::initialize(app, config.discord().clone());
+    Ok(())
+}
+
 pub fn get_discord_state() -> crate::discord::DiscordState {
     crate::discord::state()
 }

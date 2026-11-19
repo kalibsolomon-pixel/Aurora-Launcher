@@ -2684,6 +2684,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             },
         ))
     };
+    if let Some(host) = host.as_ref().filter(|_| !diagnostic) {
+        if api::initialize_discord(host.clone()).is_err() {
+            eprintln!("[aurora-launcher] Discord preferences unavailable; see Settings");
+        }
+    }
     gpui_kit::platform::application().run(move |cx: &mut App| {
         gpui_kit::base::init(cx);
         theme::init(cx);
@@ -3013,6 +3018,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )
         .expect("open Aurora Launcher window");
     });
+    runtime.block_on(aurora_launcher_lib::discord::shutdown());
     runtime.shutdown_timeout(std::time::Duration::from_secs(2));
     if failed.load(std::sync::atomic::Ordering::Relaxed) {
         return Err("Diagnostic mode requires a portrait secondary display".into());
