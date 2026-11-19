@@ -3,9 +3,8 @@
 <linearGradient id="upper" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#138aab"/><stop offset=".32" stop-color="#27e3d2"/><stop offset=".65" stop-color="#65dce8"/><stop offset="1" stop-color="#a3c1ff"/></linearGradient>
 <linearGradient id="lower" x1="0" y1="1" x2="1" y2="0"><stop stop-color="#2d4ed1"/><stop offset=".48" stop-color="#5d5ce8"/><stop offset="1" stop-color="#b17bfa"/></linearGradient>
 <linearGradient id="edge" x1="0" y1="0" x2="0" y2="1"><stop stop-color="#d8ffff" stop-opacity=".8"/><stop offset="1" stop-color="#a1d9ff" stop-opacity="0"/></linearGradient>
-<linearGradient id="fold" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#1244a5"/><stop offset="1" stop-color="#563cb6"/></linearGradient>
-<clipPath id="silhouette"><path d="M32 452 C132 235 216 123 311 115 C406 109 452 226 497 231 C539 236 573 167 604 72 C582 288 516 438 420 399 C358 374 330 303 269 302 C198 300 127 377 32 452Z"/></clipPath></defs>
-<g clip-path="url(#silhouette)">
+<mask id="silhouette" maskUnits="userSpaceOnUse" x="0" y="0" width="640" height="512"><path d="M32 452 C132 235 216 123 311 115 C406 109 452 226 497 231 C539 236 573 167 604 72 C582 288 516 438 420 399 C358 374 330 303 269 302 C198 300 127 377 32 452Z" fill="#fff"/><path d="M1.76 378.17 L110.92 463.68 L-135.73 778.58 L-244.89 693.07Z" fill="#000"/><circle cx="56.34" cy="420.92" r="9.00" fill="#fff"/><path d="M517.54 133.04 L651.61 166.63 L748.46 -221.47 L614.39 -255.06Z" fill="#000"/><circle cx="584.58" cy="149.84" r="9.00" fill="#fff"/></mask></defs>
+<g mask="url(#silhouette)">
 <path d="M32 452 C132 235 216 123 311 115 C406 109 452 226 497 231 C539 236 573 167 604 72 C582 288 516 438 420 399 C358 374 330 303 269 302 C198 300 127 377 32 452Z" fill="url(#lower)"/>
 <path d="M32 452 C136 349 211 286 269 302 C330 303 358 374 420 399 C516 438 582 288 604 72 C560 334 508 397 442 364 C380 332 355 262 291 255 C214 247 137 345 32 452Z" fill="#172c8e" opacity=".18"/>
 <path d="M32 452 C132 235 216 123 311 115 C406 109 452 226 497 231 C539 236 573 167 604 72 C574 266 524 342 449 311 C383 283 361 199 294 200 C207 202 125 326 32 452Z" fill="url(#upper)"/>
