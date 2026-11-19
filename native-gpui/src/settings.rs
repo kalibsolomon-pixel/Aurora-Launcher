@@ -433,17 +433,19 @@ fn shortcut_text(state: &str, managed_by: &str) -> String {
 
 fn discord_status(state: &api::DiscordState) -> String {
     if !state.configured {
-        return "This build has no Discord application ID, so presence cannot connect. Choices are saved; nothing is sent.".into();
+        return "This build needs a valid Discord application ID to connect.".into();
     }
     match (state.preferences.enabled, state.connection.as_str()) {
-        (false, _) => "Ready. Aurora's Discord application is configured. Turn on Rich Presence to share activity.".into(),
+        (false, _) => "Turn on Rich Presence to connect to Discord and share activity.".into(),
         (true, "connected") => "Connected to the Discord app on this computer.".into(),
         (true, "notDetected") => {
-            "Discord is not running. Aurora checks again occasionally while this is on.".into()
+            "Open the Discord desktop app. Aurora will keep checking for a connection.".into()
         }
-        (true, "failed") => "Discord could not be reached. Use Reconnect to try again.".into(),
-        (true, "closed") => "Disconnected from Discord.".into(),
-        (true, _) => "Waiting for the Discord app on this computer.".into(),
+        (true, "failed") => {
+            "Discord did not accept the connection or activity. Use Reconnect to try again.".into()
+        }
+        (true, "closed") => "Aurora lost its connection to Discord and will retry.".into(),
+        (true, _) => "Connecting to the Discord app on this computer.".into(),
     }
 }
 
@@ -663,7 +665,7 @@ enum Message {
     AppearanceRead(ApiResult<api::Appearance>),
     AppearanceSaved(u64, ApiResult<api::Appearance>),
     DiscordRead(ApiResult<api::DiscordState>),
-    DiscordSaved(u64, ApiResult<api::DiscordState>),
+    DiscordSaved(ApiResult<api::DiscordState>),
     DesktopRead(ApiResult<api::DesktopIntegration>),
     DesktopSaved(ApiResult<api::DesktopIntegration>),
     FolderOpened(ApiResult<()>),
@@ -691,7 +693,6 @@ pub struct Settings {
     appearance: AppearanceState,
     appearance_read: u64,
     discord_read: u64,
-    discord_event: u64,
     desktop_read: u64,
     discord: Option<api::DiscordState>,
     discord_busy: bool,
@@ -787,7 +788,6 @@ impl Settings {
             appearance: AppearanceState::default(),
             appearance_read: 0,
             discord_read: 0,
-            discord_event: 0,
             desktop_read: 0,
             discord: None,
             discord_busy: false,
@@ -1203,7 +1203,6 @@ impl Settings {
         preferences.server_address = preferences.server && preferences.server_address;
         self.discord_busy = true;
         self.discord_read += 1;
-        let event_revision = self.discord_event;
         self.discord_error = None;
         cx.notify();
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -1214,7 +1213,7 @@ impl Settings {
         cx.spawn(async move |weak, cx| {
             if let Ok(result) = rx.await {
                 let _ = weak.update(cx, |view, cx| {
-                    view.receive(Message::DiscordSaved(event_revision, result), cx)
+                    view.receive(Message::DiscordSaved(result), cx)
                 });
             }
         })
@@ -1227,7 +1226,7 @@ impl Settings {
         }
         self.discord_busy = true;
         self.discord_read += 1;
-        let event_revision = self.discord_event;
+        self.discord_error = None;
         cx.notify();
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.rt.spawn(async move {
@@ -1237,7 +1236,7 @@ impl Settings {
         cx.spawn(async move |weak, cx| {
             if let Ok(result) = rx.await {
                 let _ = weak.update(cx, |view, cx| {
-                    view.receive(Message::DiscordSaved(event_revision, result), cx)
+                    view.receive(Message::DiscordSaved(result), cx)
                 });
             }
         })
@@ -1406,17 +1405,13 @@ impl Settings {
                     Err(error) => self.discord_error = Some(error.message),
                 }
             }
-            Message::DiscordSaved(event_revision, result) => {
+            Message::DiscordSaved(result) => {
                 self.discord_busy = false;
                 match result {
-                    Ok(mut state) => {
-                        if event_revision != self.discord_event {
-                            if let Some(current) = &self.discord {
-                                state.connection = current.connection.clone();
-                                state.configured = current.configured;
-                            }
-                        }
-                        self.discord = Some(state);
+                    Ok(state) => {
+                        // Retries or preference updates may have settled while
+                        // the result was queued for the UI thread.
+                        self.discord = Some(api::discord_state().unwrap_or(state));
                         self.discord_error = None;
                     }
                     Err(error) => self.discord_error = Some(error.message),
@@ -1494,15 +1489,8 @@ impl Settings {
     ) {
         match name {
             "discord-state" => {
-                if let Ok(mut state) = serde_json::from_value::<api::DiscordState>(payload.clone())
-                {
-                    self.discord_event += 1;
+                if let Ok(state) = api::discord_state() {
                     self.discord_read += 1;
-                    if self.discord_busy {
-                        if let Some(current) = &self.discord {
-                            state.preferences = current.preferences.clone();
-                        }
-                    }
                     self.discord = Some(state);
                     cx.notify();
                 }
@@ -2019,7 +2007,7 @@ fn discord_badge(state: Option<&api::DiscordState>) -> Option<(&'static str, ui:
     } else {
         match state.connection.as_str() {
             "connected" => ("Connected", ui::Tone::Success),
-            "notDetected" => ("Discord not running", ui::Tone::Warning),
+            "notDetected" => ("Discord unavailable", ui::Tone::Warning),
             "failed" => ("Connection failed", ui::Tone::Danger),
             "closed" => ("Disconnected", ui::Tone::Neutral),
             _ => ("Connecting", ui::Tone::Accent),
@@ -2365,7 +2353,7 @@ impl Render for Settings {
                     .as_ref()
                     .map(|s| s.preferences.clone())
                     .unwrap_or_default();
-                let discord_disabled = self.discord_busy || no_host;
+                let discord_disabled = self.discord_busy || no_host || state.is_none();
                 let header_actions = div()
                     .flex()
                     .items_center()
@@ -2390,33 +2378,30 @@ impl Render for Settings {
                 ));
                 let weak_toggle = weak.clone();
                 card = card.child(
-                ui::setting_row(
-                    t,
-                    "Rich Presence",
-                    Some(
-                        "Shows that you are playing through Aurora in your Discord status. Nothing is shared until this is on."
-                            .into(),
-                    ),
-                    !preferences.enabled && self.discord_error.is_none(),
-                )
-                .child(control_slot(
-                    AuroraToggle::new("discord-enabled")
-                        .label("Discord Rich Presence")
-                        .checked(preferences.enabled)
-                        .disabled(discord_disabled)
-                        .on_change({
-                            let weak_toggle = weak_toggle.clone();
-                            move |next: bool, _event, _window, app| {
-                                let _ = weak_toggle.update(app, |this, cx| {
-                                    this.save_discord(
-                                        move |preferences| preferences.enabled = next,
-                                        cx,
-                                    );
-                                });
-                            }
-                        }),
-                )),
-            );
+                    ui::setting_row(
+                        t,
+                        "Rich Presence",
+                        Some("Share when you are in the launcher or playing Minecraft.".into()),
+                        !preferences.enabled && self.discord_error.is_none(),
+                    )
+                    .child(control_slot(
+                        AuroraToggle::new("discord-enabled")
+                            .label("Discord Rich Presence")
+                            .checked(preferences.enabled)
+                            .disabled(discord_disabled)
+                            .on_change({
+                                let weak_toggle = weak_toggle.clone();
+                                move |next: bool, _event, _window, app| {
+                                    let _ = weak_toggle.update(app, |this, cx| {
+                                        this.save_discord(
+                                            move |preferences| preferences.enabled = next,
+                                            cx,
+                                        );
+                                    });
+                                }
+                            }),
+                    )),
+                );
                 if preferences.enabled {
                     let rows = [
                         ("discord-instance-name", "Instance name", "instance_name"),

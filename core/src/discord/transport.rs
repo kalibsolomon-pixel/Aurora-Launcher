@@ -110,12 +110,8 @@ async fn open() -> Result<Box<dyn Stream>, Failure> {
     }
     Err(Failure::Unavailable)
 }
-impl Transport for Native {
-    async fn connect(&mut self, id: &str) -> Result<(), Failure> {
-        self.disconnect();
-        let mut stream = tokio::time::timeout(DEADLINE, open())
-            .await
-            .map_err(|_| Failure::Unavailable)??;
+impl Native {
+    async fn handshake(&mut self, id: &str, mut stream: Box<dyn Stream>) -> Result<(), Failure> {
         let result = tokio::time::timeout(DEADLINE, async {
             write_frame(
                 stream.as_mut(),
@@ -132,6 +128,16 @@ impl Transport for Native {
         self.stream = Some(stream);
         Ok(())
     }
+}
+impl Transport for Native {
+    async fn connect(&mut self, id: &str) -> Result<(), Failure> {
+        self.disconnect();
+        let stream = tokio::time::timeout(DEADLINE, open())
+            .await
+            .map_err(|_| Failure::Unavailable)??;
+        self.handshake(id, stream).await
+    }
+
     async fn publish(&mut self, activity: Option<&super::Activity>) -> Result<(), Failure> {
         let stream = self.stream.as_mut().ok_or(Failure::Closed)?;
         self.nonce = self.nonce.wrapping_add(1);
@@ -190,5 +196,72 @@ mod tests {
         .await
         .unwrap();
         response(&mut reader, Some("2")).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn native_ipc_exchanges_handshake_activity_and_clear_with_fake_discord() {
+        let (client, mut discord) = tokio::io::duplex(1024);
+        let mut transport = Native::default();
+        let activity = super::super::activity(
+            &super::super::DiscordPreferences {
+                enabled: true,
+                ..Default::default()
+            },
+            None,
+        )
+        .unwrap();
+
+        tokio::join!(
+            async {
+                transport
+                    .handshake("test-only", Box::new(client))
+                    .await
+                    .unwrap();
+                transport.publish(Some(&activity)).await.unwrap();
+                transport.publish(None).await.unwrap();
+            },
+            async {
+                let (opcode, body) = read_frame(&mut discord).await.unwrap();
+                assert_eq!(opcode, 0);
+                assert_eq!(
+                    serde_json::from_slice::<Value>(&body).unwrap(),
+                    json!({"v":1,"client_id":"test-only"})
+                );
+                write_frame(&mut discord, 1, br#"{"cmd":"DISPATCH","evt":"READY"}"#)
+                    .await
+                    .unwrap();
+
+                for (nonce, expected_activity) in [("1", json!(activity)), ("2", Value::Null)] {
+                    let (opcode, body) = read_frame(&mut discord).await.unwrap();
+                    assert_eq!(opcode, 1);
+                    assert_eq!(
+                        serde_json::from_slice::<Value>(&body).unwrap(),
+                        json!({
+                            "cmd": "SET_ACTIVITY",
+                            "args": {"pid": std::process::id(), "activity": expected_activity},
+                            "nonce": nonce,
+                        })
+                    );
+                    if nonce == "1" {
+                        write_frame(&mut discord, 3, b"keep alive").await.unwrap();
+                        assert_eq!(
+                            read_frame(&mut discord).await.unwrap(),
+                            (4, b"keep alive".to_vec())
+                        );
+                        write_frame(
+                            &mut discord,
+                            1,
+                            br#"{"cmd":"SET_ACTIVITY","nonce":"stale"}"#,
+                        )
+                        .await
+                        .unwrap();
+                    }
+                    let ack = json!({"cmd":"SET_ACTIVITY","evt":null,"nonce":nonce});
+                    write_frame(&mut discord, 1, &serde_json::to_vec(&ack).unwrap())
+                        .await
+                        .unwrap();
+                }
+            }
+        );
     }
 }
