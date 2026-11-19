@@ -57,7 +57,7 @@ pub fn state() -> DiscordState {
 }
 enum Message {
     Connect(oneshot::Sender<()>),
-    Preferences(DiscordPreferences),
+    Preferences,
     Process(GameActivity),
     Shutdown(oneshot::Sender<()>),
 }
@@ -78,9 +78,9 @@ pub async fn connect() -> DiscordState {
     state()
 }
 pub fn preferences_changed(preferences: DiscordPreferences) {
-    status().lock().unwrap().preferences = preferences.clone();
+    status().lock().unwrap().preferences = preferences;
     if let Some(sender) = SENDER.get() {
-        let _ = sender.send(Message::Preferences(preferences));
+        let _ = sender.send(Message::Preferences);
     }
 }
 pub fn process_changed(game: GameActivity) {
@@ -170,17 +170,13 @@ impl<T: Transport> Worker<T> {
             }
         }
         // Deterministic: most recently started Running child wins, then Starting.
-        let game = self
-            .games
-            .values()
-            .filter(|g| g.status.blocks_launch())
-            .max_by_key(|g| {
-                (
-                    g.status == crate::launch::state::LaunchProcessStatus::Running,
-                    g.started_at,
-                    &g.instance_id,
-                )
-            });
+        let game = self.games.values().max_by_key(|g| {
+            (
+                g.status == crate::launch::state::LaunchProcessStatus::Running,
+                g.started_at,
+                &g.instance_id,
+            )
+        });
         let activity = activity(&self.preferences, game);
         if let Err(error) = self.transport.publish(activity.as_ref()).await {
             self.fail(error);
@@ -206,56 +202,89 @@ impl<T: Transport> Worker<T> {
         }
         self.transport.disconnect();
     }
-}
-pub fn initialize(app: crate::host::Host, preferences: DiscordPreferences) {
-    let (wake, mut gameplay_wake) = mpsc::channel(1);
-    let _ = GAMEPLAY_WAKE.set(wake);
-    let (sender, mut receiver) = mpsc::unbounded_channel();
-    if SENDER.set(sender).is_err() {
-        return;
-    }
-    status().lock().unwrap().preferences = preferences.clone();
-    let host = app.clone();
-    host.spawn(async move {
-        let mut worker = Worker::new(Native::default(), preferences);
+
+    async fn run(
+        &mut self,
+        id: Option<&str>,
+        mut receiver: mpsc::UnboundedReceiver<Message>,
+        mut gameplay_wake: mpsc::Receiver<()>,
+        status: &Mutex<DiscordState>,
+        notify: impl Fn(DiscordState),
+    ) {
         loop {
-            let mut reconnect = false;
             let mut connected_reply = None;
-            let next_wake = worker.next_wake(application_id());
+            let next_wake = self.next_wake(id);
             tokio::select! {
-                message=receiver.recv()=>match message {
-                    Some(Message::Connect(reply))=> {reconnect=true;connected_reply=Some(reply);},
-                    Some(Message::Preferences(preferences))=> {worker.change_preferences(preferences);},
-                    Some(Message::Process(game))=> {worker.games.insert(game.instance_id.clone(),game);},
-                    Some(Message::Shutdown(reply))=> {worker.stop().await;let _=reply.send(());break;},
-                    None=>{worker.stop().await;break;},
+                message = receiver.recv() => match message {
+                    Some(Message::Connect(reply)) => connected_reply = Some(reply),
+                    Some(Message::Preferences) => {}
+                    Some(Message::Process(game)) => {
+                        if game.status.blocks_launch() {
+                            self.games.insert(game.instance_id.clone(), game);
+                        } else {
+                            self.games.remove(&game.instance_id);
+                        }
+                    }
+                    Some(Message::Shutdown(reply)) => {
+                        self.stop().await;
+                        let _ = reply.send(());
+                        break;
+                    }
+                    None => {
+                        self.stop().await;
+                        break;
+                    }
                 },
-                _=async { match next_wake { Some(deadline)=>tokio::time::sleep_until(deadline).await, None=>std::future::pending::<()>().await } }=>{},
-                _=gameplay_wake.recv()=>{},
+                _ = wait_for_deadline(next_wake) => {},
+                Some(()) = gameplay_wake.recv() => {},
             }
-            worker.reconcile(application_id(), reconnect).await;
-            let new = DiscordState {
-                connection: worker.connection,
-                configured: application_id().is_some(),
-                preferences: worker.preferences.clone(),
-                gameplay_capability: true,
-            };
+            // Apply the latest persisted preferences before any IPC, including
+            // a reconnect or health check queued ahead of the preference wake.
+            self.change_preferences(status.lock().unwrap().preferences.clone());
+            self.reconcile(id, connected_reply.is_some()).await;
             let changed = {
-                let mut current = status().lock().unwrap();
-                if *current != new {
-                    *current = new.clone();
-                    true
+                let mut current = status.lock().unwrap();
+                // A save can finish while IPC is in flight. Leave its state
+                // intact and reconcile it on the next wake.
+                if current.preferences == self.preferences && current.connection != self.connection
+                {
+                    current.connection = self.connection;
+                    Some(current.clone())
                 } else {
-                    false
+                    None
                 }
             };
-            if changed {
-                let _ = app.emit("discord-state", new);
+            if let Some(new) = changed {
+                notify(new);
             }
             if let Some(reply) = connected_reply {
                 let _ = reply.send(());
             }
         }
+    }
+}
+
+async fn wait_for_deadline(deadline: Option<Instant>) {
+    match deadline {
+        Some(deadline) => tokio::time::sleep_until(deadline).await,
+        None => std::future::pending().await,
+    }
+}
+
+pub fn initialize(app: crate::host::Host, preferences: DiscordPreferences) {
+    let (sender, receiver) = mpsc::unbounded_channel();
+    if SENDER.set(sender).is_err() {
+        return;
+    }
+    let (wake, gameplay_wake) = mpsc::channel(1);
+    let _ = GAMEPLAY_WAKE.set(wake);
+    status().lock().unwrap().preferences = preferences.clone();
+    app.clone().spawn(async move {
+        Worker::new(Native::default(), preferences)
+            .run(application_id(), receiver, gameplay_wake, status(), |new| {
+                let _ = app.emit("discord-state", new);
+            })
+            .await;
     });
 }
 
@@ -268,10 +297,14 @@ mod tests {
         connected: bool,
         calls: Vec<Option<super::super::Activity>>,
         connections: usize,
+        unavailable_attempts: usize,
     }
     impl Transport for Fake {
         async fn connect(&mut self, _: &str) -> Result<(), Failure> {
             self.connections += 1;
+            if self.connections <= self.unavailable_attempts {
+                return Err(Failure::Unavailable);
+            }
             if let Some(error) = self.failure {
                 return Err(error);
             }
@@ -442,5 +475,113 @@ mod tests {
                 .details,
             "In Launcher"
         );
+    }
+
+    #[tokio::test(start_paused = true)]
+    async fn actor_retries_at_startup_and_publishes_the_supervised_game_lifecycle() {
+        use crate::launch::state::LaunchProcessStatus;
+
+        let preferences = DiscordPreferences {
+            enabled: true,
+            instance_name: true,
+            minecraft_version: true,
+            elapsed_time: true,
+            ..Default::default()
+        };
+        let mut worker = Worker::new(
+            Fake {
+                unavailable_attempts: 1,
+                ..Default::default()
+            },
+            preferences.clone(),
+        );
+        let status = Mutex::new(DiscordState {
+            connection: Connection::Ready,
+            configured: true,
+            preferences,
+            gameplay_capability: true,
+        });
+        let (sender, receiver) = mpsc::unbounded_channel();
+        let (_wake, gameplay_wake) = mpsc::channel(1);
+        let (notify, mut notifications) = mpsc::unbounded_channel();
+        let game = GameActivity {
+            instance_id: "fixture".into(),
+            instance_name: "Test instance".into(),
+            minecraft_version: "1.21.11".into(),
+            platform: "Fabric".into(),
+            aurora_active: false,
+            status: LaunchProcessStatus::Starting,
+            started_at: Some(123),
+            gameplay: None,
+        };
+
+        let boot = Instant::now();
+        tokio::join!(
+            worker.run(
+                Some("test-only"),
+                receiver,
+                gameplay_wake,
+                &status,
+                |state| {
+                    notify.send(state).unwrap();
+                }
+            ),
+            async {
+                assert_eq!(
+                    notifications.recv().await.unwrap().connection,
+                    Connection::NotDetected
+                );
+                assert_eq!((Instant::now() - boot).as_secs(), 0);
+                let first_failure = Instant::now();
+                assert_eq!(
+                    notifications.recv().await.unwrap().connection,
+                    Connection::Connected
+                );
+                assert_eq!(
+                    (Instant::now() - first_failure).as_secs(),
+                    retry_delay(1).as_secs()
+                );
+
+                sender.send(Message::Process(game.clone())).unwrap();
+                sender
+                    .send(Message::Process(GameActivity {
+                        status: LaunchProcessStatus::Running,
+                        ..game.clone()
+                    }))
+                    .unwrap();
+                let (reply, done) = oneshot::channel();
+                sender.send(Message::Connect(reply)).unwrap();
+                done.await.unwrap();
+                assert_eq!(status.lock().unwrap().connection, Connection::Connected);
+
+                sender
+                    .send(Message::Process(GameActivity {
+                        status: LaunchProcessStatus::Exited,
+                        ..game
+                    }))
+                    .unwrap();
+                let (reply, done) = oneshot::channel();
+                sender.send(Message::Shutdown(reply)).unwrap();
+                done.await.unwrap();
+            }
+        );
+
+        assert_eq!(worker.transport.connections, 3);
+        let calls = &worker.transport.calls;
+        assert_eq!(calls.len(), 6);
+        assert_eq!(calls[0].as_ref().unwrap().details, "In Launcher");
+        assert_eq!(calls[1].as_ref().unwrap().details, "Starting Minecraft");
+        let playing = calls[2].as_ref().unwrap();
+        assert_eq!(playing.details, "Playing Minecraft");
+        assert_eq!(
+            playing.state.as_deref(),
+            Some("Minecraft 1.21.11 · Test instance")
+        );
+        assert_eq!(playing.timestamps.as_ref().unwrap().start, 123);
+        assert_eq!(calls[3].as_ref(), Some(playing));
+        assert_eq!(calls[4], calls[0]);
+        assert_eq!(calls[5], None);
+        assert!(!worker.transport.connected);
+        assert!(worker.games.is_empty());
     }
 }

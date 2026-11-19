@@ -37,9 +37,14 @@ include update signatures and SHA-256 hashes.
 - Sync selected settings and files between compatible instances, with backups and conflict review.
 
 Modrinth modpacks for Fabric, Forge, and NeoForge are available from version
-2.1.1, including compatible additions to existing instances. CurseForge and Quilt
-modpacks are outside this release's scope. See the
+2.1.1, including compatible additions to existing instances. See the
 [2.1.1 release notes](docs/releases/NATIVE_2_1_1_NOTES.md) for loader and update limits.
+
+In **Instances**, choose or drop an extracted Modrinth folder or a self-contained
+CurseForge folder to review it as a new instance. CurseForge manifests with
+required hosted files need a verified download source and cannot be imported.
+In **Content**, choose or drop an unpacked resource pack, shader pack, or folder
+of top-level mod JARs. Aurora imports loose resource and shader packs as ZIPs.
 
 Aurora Client 3.5.0 supports Minecraft 26.1.2, 26.2 and 26.3. The latest compatible 1.21.11 Client (3.2.1) remains available as legacy. Client releases and update checks come directly from the official Client GitHub releases, with verified artifacts and exact environment matching.
 

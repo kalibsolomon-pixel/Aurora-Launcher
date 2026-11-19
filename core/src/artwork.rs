@@ -133,7 +133,11 @@ pub fn read_cached(paths: &ManagedPaths, project_id: &str) -> Option<String> {
     if !valid_id(project_id) {
         return None;
     }
-    let path = object_path(paths, project_id);
+    read_cached_object(paths, project_id)
+}
+
+fn read_cached_object(paths: &ManagedPaths, key: &str) -> Option<String> {
+    let path = object_path(paths, key);
     if !std::fs::symlink_metadata(&path).ok()?.file_type().is_file()
         || !path
             .canonicalize()
@@ -152,7 +156,7 @@ pub fn read_cached(paths: &ManagedPaths, project_id: &str) -> Option<String> {
     // Validated provider formats become canonical PNG once, so ordinary
     // navigation and offline restarts need no decoder worker or CDN request.
     if !bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
-        let _ = persist(paths, project_id, &image);
+        let _ = persist(paths, key, &image);
     }
     Some(image.data_url())
 }
@@ -236,6 +240,17 @@ pub async fn resolve_artwork(paths: &ManagedPaths, project_id: &str) -> ArtworkR
     resolve_with(paths, project_id, || acquire_artwork(paths, project_id)).await
 }
 
+/// Body and gallery images share the normalized provider artwork store. The
+/// official CDN policy still applies, and only a digest determines the key.
+pub async fn resolve_project_image(paths: &ManagedPaths, url: &str) -> Option<String> {
+    use sha2::Digest as _;
+    let url = crate::modrinth::safe_icon_url(url)?;
+    let key = format!("media-{:x}", sha2::Sha256::digest(url.as_bytes()));
+    resolve_with(paths, &key, || acquire_cdn_artwork(paths, &key, &url))
+        .await
+        .source
+}
+
 async fn resolve_with<F, Fut>(paths: &ManagedPaths, project_id: &str, acquire: F) -> ArtworkResult
 where
     F: FnOnce() -> Fut,
@@ -244,7 +259,7 @@ where
     let key = format!("{}:{project_id}", paths.data_root().display());
     let lock = project_lock(&key);
     let _guard = lock.lock().await;
-    if let Some(hit) = read_cached(paths, project_id) {
+    if let Some(hit) = read_cached_object(paths, project_id) {
         return ArtworkResult::available(hit);
     }
     let results = result_memo();
@@ -287,6 +302,10 @@ async fn acquire_artwork(paths: &ManagedPaths, project_id: &str) -> ArtworkResul
         Ok(None) | Err(crate::modrinth::Error::NotFound) => return ArtworkResult::unavailable(),
         Err(_) => return ArtworkResult::retry(),
     };
+    acquire_cdn_artwork(paths, project_id, &url).await
+}
+
+async fn acquire_cdn_artwork(paths: &ManagedPaths, key: &str, url: &str) -> ArtworkResult {
     // Cosmetic CDN locators do not require redirects. Refusing all redirects
     // prevents even an intermediate request to a provider-controlled other host.
     let http = reqwest::Client::builder()
@@ -297,13 +316,13 @@ async fn acquire_artwork(paths: &ManagedPaths, project_id: &str) -> ArtworkResul
     let Ok(http) = http else {
         return ArtworkResult::retry();
     };
-    let image = match download(&http, &url, OFFICIAL_CDN_HOST).await {
+    let image = match download(&http, url, OFFICIAL_CDN_HOST).await {
         Ok(image) => image,
         Err(DownloadFailure::Retryable) => return ArtworkResult::retry(),
         Err(DownloadFailure::Unavailable) => return ArtworkResult::unavailable(),
     };
     // A stale or damaged cosmetic object is replaced only by validated pixels.
-    let _ = persist(paths, project_id, &image);
+    let _ = persist(paths, key, &image);
     ArtworkResult::available(image.data_url())
 }
 

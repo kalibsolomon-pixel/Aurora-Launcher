@@ -471,7 +471,7 @@ dependencies = [
 
 [[package]]
 name = "aurora-launcher"
-version = "2.3.0"
+version = "2.4.0"
 dependencies = [
  "base64ct",
  "flate2",
@@ -505,13 +505,14 @@ dependencies = [
 
 [[package]]
 name = "aurora-native-gpui"
-version = "2.3.0"
+version = "2.4.0"
 dependencies = [
  "async-channel",
  "aurora-launcher",
  "base64 0.22.1",
  "gpui-kit",
  "image",
+ "pulldown-cmark",
  "raw-window-handle",
  "serde",
  "serde_json",
@@ -5219,6 +5220,17 @@ checksum = "4488a4a36b9a4ba6b9334a32a39971f77c1436ec82c38707bce707699cc3bbcb"
 dependencies = [
  "quote",
  "syn 2.0.119",
+]
+
+[[package]]
+name = "pulldown-cmark"
+version = "0.13.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3db2be46835f013dd3f4fa7f5f7402c537787b54ebb6fe2b94bbdd7e2669bb7b"
+dependencies = [
+ "bitflags 2.13.2",
+ "memchr",
+ "unicase",
 ]
 
 [[package]]

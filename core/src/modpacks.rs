@@ -118,7 +118,7 @@ impl PendingInstall {
         Self {
             schema_version: PENDING_SCHEMA_VERSION,
             instance_id: instance.clone(),
-            provider: "modrinth".into(),
+            provider: resolved.preview.provider.to_owned(),
             project_id: resolved.provider_project_id.clone(),
             version_id: resolved.provider_version_id.clone(),
             archive_sha512: resolved.archive_sha512.clone(),
@@ -138,9 +138,11 @@ impl PendingInstall {
         };
         let unique: HashSet<_> = self.selected_optional.iter().collect();
         if self.schema_version != PENDING_SCHEMA_VERSION
-            || self.provider != "modrinth"
-            || !id(&self.project_id)
-            || !id(&self.version_id)
+            || !match self.provider.as_str() {
+                "modrinth" => id(&self.project_id) && id(&self.version_id),
+                "local" => hex(&self.project_id, 64) && self.version_id == "snapshot",
+                _ => false,
+            }
             || !hex(&self.archive_sha512, 128)
             || !hex(&self.fingerprint, 64)
             || self.selected_optional.len() > MAX_PENDING_OPTIONAL
@@ -920,6 +922,104 @@ pub async fn install(
         None,
     )
     .await?;
+    install_resolved(
+        managed,
+        endpoints,
+        resolved,
+        selected_optional,
+        fingerprint,
+        progress,
+    )
+    .await
+}
+
+/// Resolve an immutable, locally reviewed snapshot with no invented provider
+/// identity. External URLs and both expected digests still pass the mrpack
+/// parser and the ordinary pack acquisition path.
+pub(crate) fn resolve_local(
+    managed: &ManagedPaths,
+    digest: &ArtifactDigest,
+) -> Result<Resolved, PackInstallError> {
+    let (archive, sha512) = crate::local_pack::load_snapshot(managed, digest)?;
+    let pack = crate::mrpack::parse_verified_file(&archive.path)
+        .map_err(|error| fail(error.code(), error.to_string()))?;
+    if let Some(error) = loader_build_refusal(&pack) {
+        return Err(error);
+    }
+    const MAX_DOWNLOAD_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+    if pack.required_files.iter().any(|file| file.file_size == 0)
+        || pack
+            .required_files
+            .iter()
+            .map(|file| file.file_size)
+            .sum::<u64>()
+            > MAX_DOWNLOAD_BYTES
+    {
+        return Err(fail(
+            "pack_archive_limit",
+            "Local pack downloads must declare sizes and total at most 4 GiB.",
+        ));
+    }
+    let excluded = pack
+        .excluded_paths
+        .iter()
+        .cloned()
+        .chain(pack.optional_files.iter().map(|file| file.path.clone()))
+        .collect();
+    let mut preview = PackPreview {
+        provider: "local",
+        project_id: digest.as_hex(),
+        version_id: "snapshot".into(),
+        name: pack.name.clone(),
+        pack_version: pack.pack_version.clone(),
+        minecraft_version: pack.minecraft_version.clone(),
+        loader: pack.loader.kind,
+        loader_version: pack.loader.version.clone(),
+        archive_sha512: sha512.as_hex(),
+        recognized: vec![],
+        unresolved: pack
+            .required_files
+            .iter()
+            .map(|file| file.path.clone())
+            .collect(),
+        optional: vec![],
+        excluded,
+        overrides: pack
+            .overrides
+            .iter()
+            .map(|file| file.path.clone())
+            .collect(),
+        skipped_overrides: pack.skipped_overrides.clone(),
+        fingerprint: String::new(),
+    };
+    preview.fingerprint = format!(
+        "{:x}",
+        Sha256::digest(serde_json::to_vec(&preview).map_err(|_| fail(
+            "pack_plan_invalid",
+            "The pack preview could not be encoded."
+        ))?)
+    );
+    Ok(Resolved {
+        archive,
+        archive_sha512: preview.archive_sha512.clone(),
+        provider_project_id: preview.project_id.clone(),
+        provider_version_id: preview.version_id.clone(),
+        provider_title: pack.name.clone(),
+        unresolved: pack.required_files.clone(),
+        provider_plans: vec![],
+        pack,
+        preview,
+    })
+}
+
+pub(crate) async fn install_resolved(
+    managed: &ManagedPaths,
+    endpoints: &InstanceEndpoints,
+    resolved: Resolved,
+    selected_optional: &[String],
+    fingerprint: &str,
+    progress: &mut (dyn FnMut(&'static str) + Send),
+) -> Result<InstanceRecord, PackInstallError> {
     if fingerprint != resolved.preview.fingerprint {
         return Err(fail(
             "pack_preview_stale",
@@ -956,7 +1056,7 @@ pub async fn install(
         display_name.pop();
     }
     let identity = crate::instances::PackRegistryIdentity {
-        provider: "modrinth".into(),
+        provider: resolved.preview.provider.to_owned(),
         project_id: resolved.provider_project_id.clone(),
         version_id: resolved.provider_version_id.clone(),
         name: resolved.pack.name.clone(),
@@ -1145,16 +1245,21 @@ async fn resume_record(
         }
     }
     checkpoint()?;
-    let resolved = resolve_bounded(
-        managed,
-        provider,
-        &pending.project_id,
-        &pending.version_id,
-        &pending.selected_optional,
-        Some(crate::instance_content::MAX_NEW_PACK_PROVIDER_PLANS),
-        None,
-    )
-    .await?;
+    let resolved = if pending.provider == "local" {
+        let digest = ArtifactDigest::parse(&pending.project_id).map_err(|_| pending_damaged())?;
+        resolve_local(managed, &digest)?
+    } else {
+        resolve_bounded(
+            managed,
+            provider,
+            &pending.project_id,
+            &pending.version_id,
+            &pending.selected_optional,
+            Some(crate::instance_content::MAX_NEW_PACK_PROVIDER_PLANS),
+            None,
+        )
+        .await?
+    };
     let platform = resolved
         .pack
         .loader
@@ -1172,7 +1277,7 @@ async fn resume_record(
     {
         return Err(fail(
             "pack_resume_changed",
-            "This modpack version changed on Modrinth since it was reviewed, so Aurora won't install different content into this instance. Nothing was changed.",
+            "The modpack snapshot differs from the reviewed version, so Aurora won't install different content into this instance. Nothing was changed.",
         ));
     }
     if let Some(path) = occupied_destination(&root, &resolved) {
@@ -1398,7 +1503,7 @@ async fn install_content(
         Ok(InstalledPack::new(
             record.id().clone(),
             PackIdentity {
-                provider: "modrinth".into(),
+                provider: resolved.preview.provider.to_owned(),
                 project_id: resolved.provider_project_id.clone(),
                 version_id: resolved.provider_version_id.clone(),
                 name: resolved.pack.name.clone(),
@@ -3018,6 +3123,79 @@ pub(crate) mod tests {
             PackLoaderKind::Fabric => "fabric",
             PackLoaderKind::Forge => "forge",
             PackLoaderKind::NeoForge => "neoforge",
+        }
+    }
+
+    #[tokio::test]
+    async fn extracted_packs_use_the_shared_install_and_resume_pipeline() {
+        for curseforge in [false, true] {
+            let world = LoaderWorld::new("local");
+            let source = world.root.join("extracted");
+            let (manifest, overrides, index) = if curseforge {
+                (
+                    "manifest.json",
+                    "custom-overrides",
+                    serde_json::json!({
+                        "manifestType": "minecraftModpack", "manifestVersion": 1,
+                        "name": "Local CurseForge", "version": "1", "files": [],
+                        "overrides": "custom-overrides",
+                        "minecraft": {"version": LOADER_MC, "modLoaders": [
+                            {"id": format!("fabric-{FABRIC_LOADER}"), "primary": true}
+                        ]}
+                    }),
+                )
+            } else {
+                (
+                    "modrinth.index.json",
+                    "overrides",
+                    serde_json::json!({
+                        "formatVersion": 1, "game": "minecraft", "versionId": "1",
+                        "name": "Local Modrinth", "files": [],
+                        "dependencies": dependencies_for(PackLoaderKind::Fabric)
+                    }),
+                )
+            };
+            let config = source.join(overrides).join("config/pack.txt");
+            std::fs::create_dir_all(config.parent().unwrap()).unwrap();
+            std::fs::write(&config, b"reviewed").unwrap();
+            std::fs::write(source.join(manifest), index.to_string()).unwrap();
+            let digest = crate::local_pack::snapshot_directory(&world.managed, &source)
+                .await
+                .unwrap();
+            let resolved = resolve_local(&world.managed, &digest).unwrap();
+            assert_eq!(resolved.preview.overrides, ["config/pack.txt"]);
+            let fingerprint = resolved.preview.fingerprint.clone();
+            // An installation may resume after the source folder is edited or removed.
+            std::fs::write(&config, b"edited").unwrap();
+            materialize_fault::fail_at(Some(0));
+            let error = install_resolved(
+                &world.managed,
+                &world.endpoints,
+                resolved,
+                &[],
+                &fingerprint,
+                &mut |_| {},
+            )
+            .await
+            .unwrap_err();
+            let id = error.instance_id.unwrap();
+            let resumed = resume(
+                &world.managed,
+                &world.endpoints,
+                &world.client,
+                &id,
+                &mut |_| {},
+            )
+            .await
+            .unwrap();
+            assert_eq!(resumed.state(), crate::instances::InstanceState::Ready);
+            assert_eq!(resumed.pack().unwrap().provider, "local");
+            let paths = world.managed.instance_paths(&id);
+            assert_eq!(
+                std::fs::read(paths.root().join("config/pack.txt")).unwrap(),
+                b"reviewed"
+            );
+            assert_eq!(std::fs::read(config).unwrap(), b"edited");
         }
     }
 

@@ -59,6 +59,11 @@ use crate::controls::{AuroraButton, AuroraSelect, AuroraToggle, ButtonSize, Butt
 use crate::downloads::{Downloads, DownloadsEvent, JobRequest, PreparedJob};
 use crate::{api, theme, ui};
 
+#[path = "discover/markdown.rs"]
+mod markdown;
+#[path = "discover/project.rs"]
+mod project;
+
 /// Modrinth content kinds, in UI order. The third value is the modpack flow.
 const KINDS: [&str; 4] = ["mod", "resourcePack", "shaderPack", "modpack"];
 const KIND_LABELS: [&str; 4] = ["Mods", "Resource packs", "Shaders", "Modpacks"];
@@ -201,6 +206,9 @@ fn loader_name(tag: &str) -> String {
         "neoforge" => "NeoForge".into(),
         "quilt" => "Quilt".into(),
         "vanilla" => "Vanilla".into(),
+        "minecraft" => "Minecraft".into(),
+        "iris" => "Iris".into(),
+        "optifine" => "OptiFine".into(),
         _ => tag.into(),
     }
 }
@@ -1747,9 +1755,16 @@ pub struct Discover {
     /// step with the queue by every submission and queue event.
     queue_busy: bool,
     results_page: usize,
+    review_only: bool,
 }
 
 impl EventEmitter<DiscoverEvent> for Discover {}
+
+impl Drop for Discover {
+    fn drop(&mut self) {
+        self.state.stop_review();
+    }
+}
 
 impl Discover {
     /// Builds the view. `host: None` constructs the empty diagnostic view that
@@ -1760,6 +1775,17 @@ impl Discover {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
+        Self::with_downloads(host, runtime, window, cx, None)
+    }
+
+    fn with_downloads(
+        host: Option<Host>,
+        runtime: tokio::runtime::Handle,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+        shared_downloads: Option<Entity<Downloads>>,
+    ) -> Self {
+        let review_only = shared_downloads.is_some();
         let diagnostic = host.is_none();
         let (tx, rx) = async_channel::unbounded();
         let query = cx.new(|cx| InputState::new(window, cx).placeholder("Search Modrinth…"));
@@ -1770,9 +1796,15 @@ impl Discover {
         });
         // The retained Downloads queue: submissions from this view settle
         // there and drive this view's refresh through its events.
-        let downloads = cx.new(|cx| Downloads::new(host.clone(), runtime.clone(), window, cx));
-        let _downloads_events = cx.subscribe(&downloads, |this, _, event, cx| {
+        let downloads = shared_downloads.unwrap_or_else(|| {
+            cx.new(|cx| Downloads::new(host.clone(), runtime.clone(), window, cx))
+        });
+        let _downloads_events = cx.subscribe(&downloads, move |this, _, event, cx| {
             this.sync_queue_markers(cx);
+            if review_only {
+                cx.notify();
+                return;
+            }
             match event {
                 DownloadsEvent::Changed => cx.notify(),
                 // Already on Discover; nothing to open.
@@ -1810,6 +1842,7 @@ impl Discover {
             _downloads_events,
             queue_busy: false,
             results_page: 0,
+            review_only,
         }
     }
 
@@ -1903,7 +1936,7 @@ impl Discover {
     }
 
     /// Queues one prepared job in the retained Downloads entity.
-    fn enqueue(&mut self, job: PreparedJob, cx: &mut Context<Self>) {
+    fn enqueue(&mut self, job: PreparedJob, cx: &mut Context<Self>) -> bool {
         let queued = self
             .downloads
             .update(cx, |downloads, cx| downloads.submit(job, cx));
@@ -1913,6 +1946,7 @@ impl Discover {
         }
         self.sync_queue_markers(cx);
         cx.notify();
+        queued
     }
 
     // ------------------------------------------------------------ loaders
@@ -2037,12 +2071,112 @@ impl Discover {
         cx.notify();
     }
 
-    fn open_details(&mut self, project: String, window: &mut Window, cx: &mut Context<Self>) {
-        let Some(request) = self.state.begin_details(project) else {
-            cx.notify();
+    pub fn open_content_project(
+        &mut self,
+        instance: api::InstanceSummary,
+        kind: usize,
+        project_id: String,
+        title: String,
+        cx: &mut Context<Self>,
+    ) {
+        self.open_project(kind, project_id, title, Some(instance), cx);
+    }
+
+    fn open_project(
+        &mut self,
+        kind: usize,
+        project_id: String,
+        title: String,
+        target: Option<api::InstanceSummary>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(host) = self.host.clone() else {
             return;
         };
-        self.dispatch_details(request, window, cx);
+        let image = self.state.artwork.cache.image(&project_id);
+        if let Err(error) = project::open(
+            host,
+            self.rt.clone(),
+            self.downloads.clone(),
+            project::ProjectTarget {
+                kind,
+                project_id,
+                title,
+                target,
+            },
+            image,
+            cx,
+        ) {
+            self.state.error = Some(format!("Could not open the project window. {error}"));
+            cx.notify();
+        }
+    }
+
+    fn open_details(&mut self, project_id: String, cx: &mut Context<Self>) {
+        let Some(project) = self
+            .state
+            .results
+            .iter()
+            .find(|row| row.project_id == project_id)
+        else {
+            return;
+        };
+        let target = self
+            .state
+            .instances
+            .iter()
+            .find(|instance| self.state.target.as_ref() == Some(&instance.id))
+            .cloned();
+        self.open_project(
+            self.state.kind,
+            project_id,
+            project.title.clone(),
+            target,
+            cx,
+        );
+    }
+
+    fn review_project_version(
+        &mut self,
+        target: &project::ProjectTarget,
+        page: &aurora_launcher_lib::modrinth::ProjectPage,
+        version: &aurora_launcher_lib::modrinth::VersionChoice,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        self.state.close_details();
+        self.state.kind = target.kind;
+        self.state.instances = target.target.clone().into_iter().collect();
+        self.state.target = target.target.as_ref().map(|instance| instance.id.clone());
+        self.state.origin = self.state.target.clone().map(|id| (id, 0));
+        self.state.details_open = true;
+        self.state.version_index = Some(0);
+        self.state.details = Some(api::ProjectDetails {
+            project_id: page.project_id.clone(),
+            title: page.title.clone(),
+            summary: page.summary.clone(),
+            game_versions: version.game_versions.clone(),
+            loaders: version.loaders.clone(),
+            versions: vec![api::VersionChoice {
+                id: version.id.clone(),
+                name: version.name.clone(),
+                version_number: version.version_number.clone(),
+                loaders: version.loaders.clone(),
+                version_type: version.version_type.clone(),
+                game_versions: version.game_versions.clone(),
+                archive_size: version.archive_size,
+                unsupported_reason: version.unsupported_reason.clone(),
+            }],
+            default_version_id: Some(version.id.clone()),
+        });
+        self.dialog.open(window, cx);
+        if self.state.is_pack() && self.state.target.is_some() {
+            self.state.pack_mode = 1;
+            self.load_destinations(cx);
+        } else {
+            self.review(cx);
+        }
+        cx.notify();
     }
 
     fn dispatch_details(
@@ -2268,7 +2402,10 @@ impl Discover {
             cx.notify();
             return;
         };
-        self.enqueue(job, cx);
+        if !self.enqueue(job, cx) && self.review_only {
+            self.state.detail_error = self.state.error.take();
+            return;
+        }
         self.state.close_details();
         self.dialog.close(window, cx);
         cx.notify();
@@ -2414,39 +2551,6 @@ impl RenderOnce for SearchField {
 /// Uniform artwork tile: a rounded `control` well with a hairline border and
 /// the image filling it, so every row reads alike whatever the icon's own
 /// padding or transparency.
-fn art_tile(
-    id: impl Into<gpui_kit::ElementId>,
-    image: Option<std::sync::Arc<gpui_kit::RenderImage>>,
-    glyph: &str,
-    side: f32,
-    t: &theme::AuroraTheme,
-) -> gpui_kit::Stateful<gpui_kit::Div> {
-    use gpui_kit::StyledImage as _;
-    let base = div()
-        .id(id)
-        .size(px(side))
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .overflow_hidden()
-        .rounded(px(10.))
-        .bg(t.control)
-        .border_1()
-        .border_color(t.border_subtle);
-    match image {
-        Some(image) => base.child(
-            gpui_kit::img(image)
-                .size_full()
-                .object_fit(gpui_kit::ObjectFit::Cover),
-        ),
-        None => base
-            .text_size(px(side * 0.45))
-            .text_color(t.ring)
-            .child(glyph.to_owned()),
-    }
-}
-
 fn field(t: &theme::AuroraTheme, label: &'static str, control: impl IntoElement) -> Div {
     div()
         .flex()
@@ -2535,14 +2639,15 @@ fn section_label(t: &theme::AuroraTheme, text: impl Into<SharedString>) -> Div {
 impl Render for Discover {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme::theme(cx).clone();
-        let compact = window.viewport_size().width < px(1000.);
-        let row_height = if compact { 128. } else { 100. };
         let page_size = PAGE_SIZE as usize;
 
         // Built before the immutable state borrow below; a dialog close that
         // slips past the veto (or an imperative close) still resets
         // per-project state through `details_open_changed`.
-        let details_panel = self.details_panel(cx);
+        let details_panel = self.details_panel(window, cx);
+        if self.review_only {
+            return div().child(details_panel);
+        }
 
         let s = &self.state;
         if s.diagnostic {
@@ -2763,212 +2868,89 @@ impl Render for Discover {
             s.summary()
         };
 
-        let mut list = ui::list_card(&palette).id("discover-results");
+        let mut list = div().flex().flex_col().gap(px(12.)).id("discover-results");
+        let mut cards = artwork::card_grid(artwork::card_columns(window.viewport_size().width));
         let total = s.results.len();
         let current_page = self.results_page.min(total.saturating_sub(1) / page_size);
         let start = current_page * page_size;
         let end = (start + page_size).min(total);
         for (index, project) in s.results.iter().enumerate().skip(start).take(page_size) {
             let id = project.project_id.clone();
-            let installed = s.installed.contains(&project.project_id);
-            let row_busy = s.busy_project(&project.project_id);
-            let meta = div()
+            let installed = s.installed.contains(&id);
+            let busy = s.busy_project(&id);
+            let text = div()
                 .flex()
-                .flex_shrink_0()
-                .items_center()
-                .gap(px(10.))
+                .flex_col()
+                .gap(px(5.))
                 .child(
                     div()
-                        .flex()
-                        .items_center()
-                        .gap(px(4.))
-                        .child(crate::symbols::icon(
-                            Some("download"),
-                            px(13.),
-                            palette.foreground.opacity(0.75),
-                        ))
-                        .child(
-                            div()
-                                .text_size(px(ui::TEXT_CAPTION))
-                                .text_color(palette.foreground.opacity(0.75))
-                                .child(download_label(project.downloads)),
-                        ),
+                        .text_size(px(ui::TEXT_TITLE - 4.))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(palette.foreground)
+                        .child(project.title.clone()),
+                )
+                .child(ui::caption(
+                    &palette,
+                    format!("{} · {}", project.author, download_label(project.downloads)),
+                ))
+                .child(
+                    div()
+                        .overflow_hidden()
+                        .line_clamp(3)
+                        .text_size(px(ui::TEXT_BODY))
+                        .line_height(px(19.))
+                        .text_color(palette.muted_foreground)
+                        .child(project.summary.clone()),
                 );
-            let mut metadata = Some(
-                div()
-                    .flex()
-                    .flex_shrink_0()
-                    .items_center()
-                    .gap(px(12.))
-                    .when(!compact, |meta| {
-                        meta.flex_col().items_start().w(px(155.)).gap(px(4.))
-                    })
-                    .when(!project.author.is_empty(), |line| {
-                        line.child(
-                            div()
-                                .min_w(px(0.))
-                                .max_w(px(155.))
-                                .overflow_hidden()
-                                .whitespace_nowrap()
-                                .text_ellipsis()
-                                .text_size(px(ui::TEXT_CAPTION))
-                                .text_color(palette.foreground.opacity(0.75))
-                                .child(format!("by {}", project.author)),
-                        )
-                    })
-                    .child(meta),
-            );
-
-            let can_quick_install = !s.is_pack();
-            let hover = palette.control;
-            let title_hover = palette.ring;
-            list = list.child(
-                ui::row(&palette, index + 1 == end)
-                    .id(("result", index))
-                    .gap(px(14.))
-                    .h(px(row_height))
-                    .min_h(px(row_height))
-                    .max_h(px(row_height))
-                    .flex_shrink_0()
-                    .py(px(8.))
-                    .hover(move |style| style.bg(hover))
-                    .child(art_tile(
-                        ("art", index),
-                        s.artwork.cache.image(&project.project_id),
-                        &artwork::letter(&project.title),
-                        48.,
-                        &palette,
-                    ))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_1()
-                            .w(px(0.))
-                            .min_w(px(0.))
-                            .gap(px(6.))
-                            .child(
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap(px(12.))
-                                    .child(
-                                        gpui_kit::base::Button::new(("details", index))
-                                            .aria_label(format!("Details for {}", project.title))
-                                            .flex()
-                                            .items_center()
-                                            .gap(px(7.))
-                                            .min_w(px(0.))
-                                            .h(px(22.))
-                                            .line_height(px(20.))
-                                            .rounded(palette.radius)
-                                            .border_1()
-                                            .border_color(gpui_kit::transparent_black())
-                                            .focus(move |style| style.border_color(title_hover))
-                                            .text_size(px(ui::TEXT_BODY + 1.))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(palette.foreground)
-                                            .cursor_pointer()
-                                            .hover(|style| style.text_color(title_hover))
-                                            .on_click({
-                                                let id = id.clone();
-                                                cx.listener(move |this, _, window, cx| {
-                                                    this.open_details(id.clone(), window, cx);
-                                                })
-                                            })
-                                            .child(div().truncate().child(project.title.clone()))
-                                            .child(crate::symbols::icon(
-                                                Some("open_in_new"),
-                                                px(14.),
-                                                palette.ring,
-                                            )),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .overflow_hidden()
-                                    .h(px(36.))
-                                    .max_h(px(36.))
-                                    .line_clamp(2)
-                                    .text_size(px(ui::TEXT_BODY - 1.))
-                                    .line_height(px(18.))
-                                    .text_color(palette.foreground.opacity(0.75))
-                                    .child(project.summary.clone()),
-                            )
-                            .when(compact, |body| body.children(metadata.take())),
+            let actions = div()
+                .flex()
+                .flex_wrap()
+                .justify_end()
+                .items_center()
+                .gap(px(8.))
+                .child(
+                    AuroraButton::new(("details", index), "Details")
+                        .accessibility_label(format!("Details for {}", project.title))
+                        .icon("open_in_new")
+                        .size(ButtonSize::Small)
+                        .on_click({
+                            let id = id.clone();
+                            cx.listener(move |this, _, _, cx| this.open_details(id.clone(), cx))
+                        }),
+                )
+                .when(busy, |row| {
+                    row.child(ui::status_badge(&palette, "Installing…", ui::Tone::Neutral))
+                })
+                .when(!s.is_pack() && !busy && installed, |row| {
+                    row.child(ui::status_badge(&palette, "Installed", ui::Tone::Success))
+                })
+                .when(!s.is_pack() && !busy && !installed, |row| {
+                    row.child(
+                        AuroraButton::new(("install", index), "Install")
+                            .accessibility_label(format!("Install {}", project.title))
+                            .size(ButtonSize::Small)
+                            .variant(ButtonVariant::Soft)
+                            .icon("download")
+                            .disabled(s.target.is_none())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.quick_install(id.clone(), cx);
+                            })),
                     )
-                    .when(!compact, |row| row.children(metadata.take()))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap(px(8.))
-                            .flex_none()
-                            .w(px(108.))
-                            .items_center()
-                            .justify_end()
-                            .when(row_busy, |actions| {
-                                actions.child(
-                                    div()
-                                        .flex()
-                                        .w_full()
-                                        .h(px(30.))
-                                        .items_center()
-                                        .justify_center()
-                                        .gap(px(6.))
-                                        .rounded(palette.radius)
-                                        .bg(palette.control)
-                                        .text_color(palette.foreground)
-                                        .text_size(px(ui::TEXT_CAPTION))
-                                        .child(crate::symbols::icon(
-                                            Some("hourglass_empty"),
-                                            px(14.),
-                                            palette.ring,
-                                        ))
-                                        .child("Installing…"),
-                                )
-                            })
-                            .when(can_quick_install && !row_busy && installed, |actions| {
-                                actions.child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .gap(px(5.))
-                                        .w_full()
-                                        .h(px(28.))
-                                        .rounded(palette.radius)
-                                        .bg(palette.control)
-                                        .text_size(px(ui::TEXT_CAPTION))
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(palette.foreground)
-                                        .child(crate::symbols::icon(
-                                            Some("check"),
-                                            px(14.),
-                                            palette.ring,
-                                        ))
-                                        .child("Installed"),
-                                )
-                            })
-                            .when(can_quick_install && !row_busy && !installed, |actions| {
-                                actions.child({
-                                    let id = id.clone();
-                                    AuroraButton::new(("install", index), "Install")
-                                        .full_width()
-                                        .accessibility_label(format!("Install {}", project.title))
-                                        .size(ButtonSize::Small)
-                                        .variant(ButtonVariant::Soft)
-                                        .icon("download")
-                                        .disabled(s.target.is_none())
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.quick_install(id.clone(), cx);
-                                        }))
-                                })
-                            }),
-                    ),
-            );
+                });
+            cards = cards.child(artwork::project_card(
+                &palette,
+                artwork::tile(
+                    ("art", index),
+                    s.artwork.cache.image(&project.project_id),
+                    &artwork::letter(&project.title),
+                    px(artwork::CARD_ART_SIDE),
+                    &palette,
+                ),
+                text,
+                actions,
+            ));
         }
+        list = list.child(cards);
         if total > 0 {
             list = list.child(
                 div()
@@ -3111,7 +3093,7 @@ impl Discover {
     /// Escape/Enter bindings; `on_cancel` vetoes while a review prepares
     /// (cancelling it instead). Installs live in the Downloads queue, so
     /// confirming never blocks the dialog.
-    fn details_panel(&self, cx: &mut Context<Self>) -> Dialog {
+    fn details_panel(&self, window: &Window, cx: &mut Context<Self>) -> Dialog {
         let palette = theme::theme(cx).clone();
         let s = &self.state;
         let pack = s.is_pack();
@@ -3121,8 +3103,8 @@ impl Discover {
 
         let mut panel = div()
             .id("discover-details")
-            .w(px(640.))
-            .max_h(px(600.))
+            .w(px(640.).min(window.viewport_size().width - px(32.)))
+            .max_h(px(600.).min(window.viewport_size().height - px(32.)))
             .overflow_y_scroll()
             .p(px(20.))
             .flex()
@@ -3139,11 +3121,11 @@ impl Discover {
                     .items_center()
                     .gap(px(14.))
                     .children(details.map(|p| {
-                        art_tile(
+                        artwork::tile(
                             "details-art",
                             s.artwork.cache.image(&p.project_id),
                             &artwork::letter(&p.title),
-                            48.,
+                            px(48.),
                             &palette,
                         )
                     }))
@@ -3256,7 +3238,11 @@ impl Discover {
                 ));
             }
         }
-        panel = panel.child(version_block);
+        if !self.review_only {
+            panel = panel.child(version_block);
+        } else if let Some(v) = version {
+            panel = panel.child(ui::caption(&palette, version_label(v, pack)));
+        }
 
         if pack {
             // Destination mode: a new instance, or adding to a compatible one.
@@ -3434,6 +3420,11 @@ impl Discover {
 
         let reviewing = s.review_job.is_some();
         let close_hover = palette.control_hover;
+        let close_label = if self.review_only {
+            "Close install review"
+        } else {
+            "Close project details"
+        };
         panel = panel.child(ui::divider(&palette)).child(
             div()
                 .flex()
@@ -3443,7 +3434,7 @@ impl Discover {
                 .gap(px(8.))
                 .child(DialogClose::new().trigger(move |button| {
                     button
-                        .accessibility_label("Close project details")
+                        .accessibility_label(close_label)
                         .flex()
                         .items_center()
                         .justify_center()

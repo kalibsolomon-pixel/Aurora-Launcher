@@ -10,11 +10,10 @@
 //! it derives no URLs, digests or compatibility facts, and it mutates
 //! nothing the core has not already fingerprinted.
 //!
-//! The view is embedded by the parent for one exact instance: the parent
-//! supplies the instance summary and its state revision through
-//! [`ClientUpdates::set_target`] and gates its own controls on
-//! [`ClientUpdatesEvent::BusyChanged`]. There is no instance selector and no
-//! page heading here. One explicit Check runs one preview; confirming the
+//! The Settings panel reviews one exact instance at a time. The parent
+//! supplies the target and its state revision through [`ClientUpdates::set_target`]
+//! and gates its own controls on [`ClientUpdatesEvent::BusyChanged`].
+//! One explicit check runs one preview. Confirming the
 //! reviewed offer runs one apply. Constructing, retargeting or refreshing the
 //! view never contacts the provider, and `host: None` builds the diagnostic
 //! view that makes no requests at all.
@@ -28,6 +27,8 @@
 //! advisory labels only (they carry no instance attribution); the terminal
 //! reply is the sole authority.
 
+use std::{cell::Cell, rc::Rc};
+
 use aurora_launcher_lib::host::Host;
 use gpui::{
     Context, EventEmitter, Hsla, InteractiveElement as _, IntoElement, ParentElement as _, Pixels,
@@ -39,7 +40,7 @@ use tokio::runtime::Handle;
 
 use crate::api;
 use crate::backend::guarded;
-use crate::controls::{AuroraButton, ButtonSize, ButtonVariant};
+use crate::controls::{AuroraButton, AuroraSelect, ButtonSize, ButtonVariant};
 use crate::theme;
 use crate::ui;
 
@@ -47,10 +48,11 @@ use crate::ui;
 /// parent can gate its own controls), and after an apply settles either way
 /// (so the parent reloads launcher state — a partial or recovered failure may
 /// need it). Reads, checks and dismissals alone never emit `Changed`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ClientUpdatesEvent {
     Changed,
     BusyChanged(bool),
+    SelectInstance(String),
 }
 
 /// The frozen target the parent owns: exact instance id plus the parent's
@@ -587,21 +589,17 @@ pub struct ClientUpdates {
     runtime: Handle,
     tx: async_channel::Sender<Reply>,
     blocked: bool,
+    choices: Vec<(String, String, Option<String>)>,
+    picker_trigger: gpui::FocusHandle,
+    picker_menu: gpui::FocusHandle,
+    picker_bounds: Rc<Cell<Option<gpui::Bounds<gpui::Pixels>>>>,
+    picker_open: bool,
+    picker_highlight: usize,
 }
 
 impl EventEmitter<ClientUpdatesEvent> for ClientUpdates {}
 
 impl ClientUpdates {
-    pub fn is_visible(&self) -> bool {
-        self.host.is_none()
-            || self.state.target.is_none()
-            || self.state.applicable
-            || self.state.busy()
-            || self.state.review_open
-            || self.state.completed.is_some()
-            || !self.state.message.is_empty()
-            || self.state.error.is_some()
-    }
     /// Builds the view. `host: None` constructs the diagnostic view that
     /// makes no provider, credential or integration calls. Constructing the
     /// view never checks for updates; the explicit Check button does.
@@ -634,7 +632,17 @@ impl ClientUpdates {
             runtime,
             tx,
             blocked: false,
+            choices: Vec::new(),
+            picker_trigger: cx.focus_handle(),
+            picker_menu: cx.focus_handle(),
+            picker_bounds: Rc::new(Cell::new(None)),
+            picker_open: false,
+            picker_highlight: 0,
         }
+    }
+
+    pub fn set_choices(&mut self, choices: Vec<(String, String, Option<String>)>) {
+        self.choices = choices;
     }
 
     /// Adopts the parent's exact instance and state revision. This never
@@ -796,105 +804,71 @@ fn text_block(text: &str, color: Hsla, size: Pixels) -> impl IntoElement + use<>
         .fold(block, |block, line| block.child(line.to_owned()))
 }
 
-/// The compact card the embedded view lives in: one row, tidy and quiet.
-fn update_card(t: &theme::AuroraTheme) -> gpui::Div {
-    div()
-        .flex()
-        .flex_col()
-        .gap(px(6.))
-        .px(px(14.))
-        .py(px(10.))
-        .rounded(t.radius_lg)
-        .bg(t.card)
-        .border_1()
-        .border_color(t.border_subtle)
-}
-
-/// A compact two-line card for states where nothing can be checked or
-/// applied. Line 1: icon, "Aurora Client" and its status badge right after the
-/// title. Line 2: the muted explanation.
-fn slim_row(t: &theme::AuroraTheme, detail: &str, badge: Option<&str>) -> gpui::Div {
-    div()
-        .flex()
-        .items_center()
-        .gap(px(12.))
-        .h(px(56.))
-        .px(px(14.))
-        .rounded(t.radius_lg)
-        .bg(t.card)
-        .border_1()
-        .border_color(t.border_subtle)
-        .child(crate::symbols::icon(
-            Some("system_update"),
-            px(18.),
-            t.subtle_foreground,
-        ))
-        .child(
-            div()
-                .flex()
-                .flex_col()
-                .flex_1()
-                .min_w(px(0.))
-                .gap(px(2.))
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .child(
-                            div()
-                                .flex_shrink_0()
-                                .text_size(px(ui::TEXT_BODY))
-                                .font_weight(gpui::FontWeight::MEDIUM)
-                                .text_color(t.foreground)
-                                .child("Aurora Client"),
-                        )
-                        .children(badge.map(|label| {
-                            ui::badge(t, label.to_owned(), ui::Tone::Neutral).flex_shrink_0()
-                        })),
-                )
-                .child(
-                    div()
-                        .min_w(px(0.))
-                        .overflow_hidden()
-                        .text_ellipsis()
-                        .whitespace_nowrap()
-                        .text_size(px(ui::TEXT_CAPTION))
-                        .text_color(t.muted_foreground)
-                        .child(detail.to_owned()),
-                ),
-        )
-}
-
 impl Render for ClientUpdates {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme::theme(cx).clone();
         let view = cx.entity();
         let busy = self.state.busy();
 
-        // Embedded view: no selector and no page heading — the parent names
-        // the page and the instance context.
         let mut root = div().flex().flex_col();
-
-        if self.host.is_none() {
-            return root.child(slim_row(
-                &palette,
-                "Unavailable in diagnostic mode. No provider requests are made.",
-                None,
-            ));
-        }
-
-        if self.state.target.is_none()
-            && !busy
-            && !self.state.review_open
-            && self.state.completed.is_none()
-        {
-            return root.child(slim_row(
-                &palette,
-                "Choose an instance to check for Client updates.",
-                None,
-            ));
-        }
+        let selected = self.state.target.as_ref().and_then(|target| {
+            self.choices
+                .iter()
+                .position(|(id, _, _)| id == &target.instance)
+        });
+        let offer = selected.and_then(|i| self.choices[i].2.as_deref());
+        let picker = if self.choices.is_empty() {
+            None
+        } else {
+            let choices = self
+                .choices
+                .iter()
+                .map(|(_, name, version)| {
+                    version
+                        .as_ref()
+                        .map_or_else(
+                            || name.clone(),
+                            |version| format!("{name} · {version} available"),
+                        )
+                        .into()
+                })
+                .collect();
+            Some(
+                AuroraSelect::new(
+                    "client-update-instance",
+                    "Aurora Client update instance",
+                    choices,
+                    &self.picker_trigger,
+                    &self.picker_menu,
+                    self.picker_bounds.clone(),
+                )
+                .width(px(270.))
+                .selected(selected)
+                .open(self.picker_open)
+                .highlight(self.picker_highlight.min(self.choices.len() - 1))
+                .disabled(busy)
+                .on_open_change(cx.processor(move |this, open, _, cx| {
+                    this.picker_open = open;
+                    if open {
+                        this.picker_highlight = selected.unwrap_or(0);
+                    }
+                    cx.notify();
+                }))
+                .on_highlight(cx.processor(|this, index, _, cx| {
+                    if this.picker_highlight != index {
+                        this.picker_highlight = index;
+                        cx.notify();
+                    }
+                }))
+                .on_confirm(cx.processor(|this, index: usize, _, cx| {
+                    if !this.state.busy() {
+                        if let Some((id, _, _)) = this.choices.get(index) {
+                            cx.emit(ClientUpdatesEvent::SelectInstance(id.clone()));
+                        }
+                    }
+                })),
+            )
+        };
 
         let checking = matches!(
             self.state.in_flight.as_ref().map(|op| &op.kind),
@@ -906,8 +880,14 @@ impl Render for ClientUpdates {
         // the last check summary, then the idle hint.
         let status = if let Some(label) = self.state.progress_label() {
             label
+        } else if self.host.is_none() {
+            "Unavailable in diagnostic mode.".to_owned()
+        } else if self.choices.is_empty() {
+            "Available once Aurora Client is installed on a ready instance.".to_owned()
+        } else if let Some(version) = offer {
+            format!("Aurora Client {version} is available.")
         } else if !self.state.applicable {
-            "Available once the Client is installed and the instance is ready.".to_owned()
+            "Choose an instance to check for Client updates.".to_owned()
         } else if let Some(summary) = self.state.summary.clone() {
             summary
         } else if self.state.error.is_none() {
@@ -915,40 +895,42 @@ impl Render for ClientUpdates {
         } else {
             "The last check did not finish.".to_owned()
         };
-        if !self.is_visible() {
-            return root;
-        }
-        let mut card = update_card(&palette).child(
-            div()
-                .flex()
-                .items_center()
-                .gap(px(12.))
-                .child(ui::icon_tile(&palette, Some("system_update"), 28., false))
-                .child(
-                    ui::title_block(&palette, "Aurora Client updates", Some(status.into()))
-                        .flex_1(),
+        let mut actions = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .gap(px(8.))
+            .children(picker);
+        if self.state.applicable || busy {
+            actions = actions.child(
+                AuroraButton::new(
+                    "client-updates-check",
+                    if checking {
+                        "Checking…"
+                    } else if offer.is_some() {
+                        "Review update"
+                    } else {
+                        "Check for updates"
+                    },
                 )
-                .child(if self.state.applicable || busy {
-                    AuroraButton::new(
-                        "client-updates-check",
-                        if checking {
-                            "Checking…"
-                        } else {
-                            "Check for updates"
-                        },
-                    )
-                    .size(ButtonSize::Small)
-                    .icon("refresh")
-                    .disabled(busy || self.blocked || !self.state.applicable)
-                    .on_click(move |_, _, cx| {
-                        v.update(cx, |s, cx| s.start_check(cx));
-                    })
-                    .into_any_element()
+                .size(ButtonSize::Medium)
+                .icon(if offer.is_some() {
+                    "system_update"
                 } else {
-                    // Nothing to run: a status, not a dead button.
-                    ui::badge(&palette, "Not installed", ui::Tone::Neutral).into_any_element()
-                }),
-        );
+                    "refresh"
+                })
+                .disabled(busy || self.blocked || !self.state.applicable)
+                .on_click(move |_, _, cx| v.update(cx, |s, cx| s.start_check(cx))),
+            );
+        }
+        let mut card = ui::card(&palette)
+            .gap(px(12.))
+            .child(ui::section_header(
+                &palette,
+                "Aurora Client updates",
+                Some(status.into()),
+            ))
+            .child(actions);
         if !self.state.message.is_empty() {
             let message = self.state.completed.as_ref().map_or_else(
                 || self.state.message.clone(),

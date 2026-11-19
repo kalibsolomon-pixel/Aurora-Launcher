@@ -25,6 +25,7 @@ mod github;
 pub mod launcher;
 pub mod native;
 
+use std::collections::BTreeMap;
 use std::sync::Mutex;
 use std::sync::OnceLock;
 
@@ -77,8 +78,7 @@ impl UpdateAvailability {
 #[derive(Debug, Default)]
 pub struct UpdateCenter {
     pub launcher: Option<UpdateAvailability>,
-    pub client: Option<UpdateAvailability>,
-    pub client_instance_id: Option<String>,
+    pub clients: BTreeMap<String, UpdateAvailability>,
     pub launcher_phase: Option<LauncherPhase>,
     pub client_phase: Option<ClientPhase>,
     launcher_check_running: bool,
@@ -195,9 +195,28 @@ pub fn finish_check(domain: CheckDomain, availability: UpdateAvailability) {
         }
         CheckDomain::Client => {
             center.client_check_running = false;
-            center.client = Some(availability);
         }
     }
+}
+
+/// Publishes a completed discovery pass. An unavailable check cannot
+/// withdraw a previously verified offer.
+pub fn finish_client_checks(checks: BTreeMap<String, UpdateAvailability>) {
+    let mut center = center()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    for (id, availability) in checks {
+        if matches!(availability, UpdateAvailability::Unavailable { .. })
+            && matches!(
+                center.clients.get(&id),
+                Some(UpdateAvailability::UpdateAvailable { .. })
+            )
+        {
+            continue;
+        }
+        center.clients.insert(id, availability);
+    }
+    center.client_check_running = false;
 }
 
 /// Which update domain a de-duplication guard protects. The two domains

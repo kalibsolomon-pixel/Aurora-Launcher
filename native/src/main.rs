@@ -240,17 +240,8 @@ fn bind_navigation(window: &AppWindow) {
 
 fn start_discord(host: &Host) {
     // Optional integration: failures never affect startup or Play authority.
-    let Ok(root) = host.local_data_dir() else {
-        return;
-    };
-    let Ok(paths) = aurora_launcher_lib::paths::ManagedPaths::from_app_local_data_dir(root) else {
-        return;
-    };
-    if let Ok(config) = aurora_launcher_lib::config::load(&paths.config_file()) {
-        aurora_launcher_lib::discord::initialize(
-            host.clone(),
-            config.unwrap_or_default().discord().clone(),
-        );
+    if api::initialize_discord(host.clone()).is_err() {
+        eprintln!("[aurora-launcher] Discord preferences unavailable; see Settings");
     }
 }
 

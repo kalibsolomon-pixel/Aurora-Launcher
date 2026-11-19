@@ -99,25 +99,32 @@ pub async fn recognize(
             "Choose a Modrinth modpack archive (.mrpack).",
         ));
     }
-    crate::local_content::safe_source(source)
-        .map_err(|error| fail(error.code(), error.to_string()))?;
     let file_name = source
         .file_name()
         .and_then(|name| name.to_str())
         .unwrap_or("modpack.mrpack")
         .to_owned();
-    let owned = source.to_path_buf();
-    let (sha512, sha256, size) = tokio::task::spawn_blocking(move || digests(&owned))
-        .await
-        .map_err(|_| {
-            fail(
-                "local_pack_unreadable",
-                "The selected file could not be read.",
-            )
-        })??;
+    let owned = source.to_owned();
+    let (scratch, snapshot, sha512, sha256, size) = tokio::task::spawn_blocking(move || {
+        let (folder, entry) =
+            crate::import_source::Folder::selected_file(&owned).map_err(source_error)?;
+        let scratch = crate::import_source::Scratch::new().map_err(source_error)?;
+        let (snapshot, mut output) = scratch.file("selected.mrpack").map_err(source_error)?;
+        folder.copy(&entry, &mut output).map_err(source_error)?;
+        drop(output);
+        let (sha512, sha256, size) = digests(&snapshot)?;
+        Ok::<_, PackInstallError>((scratch, snapshot, sha512, sha256, size))
+    })
+    .await
+    .map_err(|_| {
+        fail(
+            "local_pack_unreadable",
+            "The selected file could not be read.",
+        )
+    })??;
     let cache = ArtifactCache::new(managed.clone());
     let stored = cache
-        .import_local(source, &sha256, size)
+        .import_local(&snapshot, &sha256, size)
         .await
         .map_err(|_| {
             fail(
@@ -125,7 +132,8 @@ pub async fn recognize(
                 "The selected file changed while it was being read. Choose it again.",
             )
         })?;
-    let stored_path = stored.path.clone();
+    drop(scratch);
+    let stored_path = stored.path;
     let pack =
         tokio::task::spawn_blocking(move || crate::mrpack::parse_verified_file(&stored_path))
             .await
@@ -139,7 +147,7 @@ pub async fn recognize(
     let unrecognized = || {
         fail(
             "local_pack_unrecognized",
-            "Modrinth does not publish this exact file as a modpack version. Aurora installs local packs only when Modrinth recognizes the exact archive, so its contents, updates and provenance stay verifiable. Download the pack from Modrinth or install it from Discover.",
+            "Modrinth does not publish this exact file as a modpack version. Aurora installs .mrpack files only when Modrinth recognizes the exact archive, so its contents, updates and provenance stay verifiable. Download the pack from Modrinth or install it from Discover.",
         )
     };
     let matches: Vec<_> = provider
@@ -185,6 +193,176 @@ pub async fn recognize(
         loader_version: pack.loader.version,
         sha512: sha512.as_hex(),
     })
+}
+
+fn source_error(error: crate::instance_content::ContentError) -> PackInstallError {
+    fail(error.code(), error.to_string())
+}
+
+/// Convert an extracted pack to the same immutable parser and override-reader
+/// input as a ZIP. Its digest identifies local bytes only.
+pub(crate) async fn snapshot_directory(
+    managed: &ManagedPaths,
+    source: &Path,
+) -> Result<ArtifactDigest, PackInstallError> {
+    let source = source.to_owned();
+    let (scratch, path, sha256, size) = tokio::task::spawn_blocking(move || {
+        let folder = crate::import_source::Folder::open(&source).map_err(source_error)?;
+        let mut entries = folder.files(true).map_err(source_error)?;
+        let modrinth = entries.iter().any(|entry| entry.name == "modrinth.index.json");
+        let curseforge = entries.iter().position(|entry| entry.name == "manifest.json");
+        let supplemental = match (modrinth, curseforge) {
+            (true, None) => None,
+            (false, Some(index)) => {
+                let manifest = entries.remove(index);
+                if manifest.size > 1024 * 1024 {
+                    return Err(fail("pack_invalid_index", "The CurseForge manifest is too large."));
+                }
+                let mut bytes = Vec::new();
+                folder.copy(&manifest, &mut bytes).map_err(source_error)?;
+                let (converted, overrides) = curseforge_index(&bytes)?;
+                let prefix = format!("{overrides}/");
+                entries.retain_mut(|entry| {
+                    if let Some(relative) = entry.name.strip_prefix(&prefix) {
+                        entry.name = format!("overrides/{relative}");
+                        true
+                    } else {
+                        false
+                    }
+                });
+                Some(("modrinth.index.json", converted))
+            }
+            _ => return Err(fail("pack_invalid_index", "Choose an extracted pack with one modrinth.index.json or manifest.json at its root.")),
+        };
+        let scratch = crate::import_source::Scratch::new().map_err(source_error)?;
+        let (path, output) = scratch.file("snapshot.mrpack").map_err(source_error)?;
+        crate::import_source::zip(&folder, &entries, supplemental.as_ref().map(|(name, bytes)| (*name, bytes.as_slice())), output)
+            .map_err(source_error)?;
+        let (_, sha256, size) = digests(&path)?;
+        Ok::<_, PackInstallError>((scratch, path, sha256, size))
+    }).await.map_err(|_| fail("local_pack_unreadable", "The selected folder could not be read."))??;
+    ArtifactCache::new(managed.clone())
+        .import_local(&path, &sha256, size)
+        .await
+        .map_err(|_| {
+            fail(
+                "local_pack_unreadable",
+                "The local pack snapshot could not be verified.",
+            )
+        })?;
+    drop(scratch);
+    Ok(sha256)
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CurseForgeManifest {
+    manifest_type: String,
+    manifest_version: u32,
+    name: String,
+    version: String,
+    minecraft: CurseForgeMinecraft,
+    files: Vec<CurseForgeFile>,
+    overrides: String,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CurseForgeMinecraft {
+    version: String,
+    mod_loaders: Vec<CurseForgeLoader>,
+}
+
+#[derive(serde::Deserialize)]
+struct CurseForgeLoader {
+    id: String,
+    primary: bool,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct CurseForgeFile {
+    project_id: u64,
+    file_id: u64,
+    required: bool,
+}
+
+fn curseforge_index(bytes: &[u8]) -> Result<(Vec<u8>, String), PackInstallError> {
+    let invalid = || {
+        fail(
+            "pack_invalid_index",
+            "The CurseForge manifest is malformed or unsupported.",
+        )
+    };
+    let manifest: CurseForgeManifest = serde_json::from_slice(bytes).map_err(|_| invalid())?;
+    let mut ids = std::collections::HashSet::new();
+    if manifest.manifest_type != "minecraftModpack"
+        || manifest.manifest_version != 1
+        || manifest.files.len() > 4096
+        || manifest
+            .files
+            .iter()
+            .any(|file| file.project_id == 0 || file.file_id == 0 || !ids.insert(file.project_id))
+        || manifest.overrides.eq_ignore_ascii_case(".minecraft")
+        || crate::instance_content::validate_file_name(&manifest.overrides).is_err()
+    {
+        return Err(invalid());
+    }
+    if manifest.files.iter().any(|file| file.required) {
+        return Err(fail(
+            "local_pack_curseforge_files_unavailable",
+            "This CurseForge manifest requires hosted files. Aurora cannot verify downloads from CurseForge file IDs. Use a Modrinth export or a self-contained pack folder.",
+        ));
+    }
+    let [loader] = manifest.minecraft.mod_loaders.as_slice() else {
+        return Err(invalid());
+    };
+    let (kind, version) = loader.id.split_once('-').ok_or_else(invalid)?;
+    if !loader.primary {
+        return Err(invalid());
+    }
+    let kind = match kind {
+        "fabric" => "fabric-loader",
+        "quilt" => "quilt-loader",
+        "forge" => "forge",
+        "neoforge" => "neoforge",
+        _ => return Err(invalid()),
+    };
+    let dependencies = std::collections::BTreeMap::from([
+        ("minecraft", manifest.minecraft.version.as_str()),
+        (kind, version),
+    ]);
+    let index = serde_json::json!({
+        "formatVersion": 1, "game": "minecraft", "versionId": manifest.version,
+        "name": manifest.name, "files": [], "dependencies": dependencies
+    });
+    Ok((
+        serde_json::to_vec(&index).map_err(|_| invalid())?,
+        manifest.overrides,
+    ))
+}
+
+pub(crate) fn load_snapshot(
+    managed: &ManagedPaths,
+    digest: &ArtifactDigest,
+) -> Result<(crate::cache::VerifiedArtifact, Sha512Digest), PackInstallError> {
+    let path = ArtifactCache::new(managed.clone()).verified_path(digest);
+    let (sha512, actual, bytes) = digests(&path)?;
+    if &actual != digest {
+        return Err(fail(
+            "local_pack_unreadable",
+            "The local pack snapshot failed verification.",
+        ));
+    }
+    Ok((
+        crate::cache::VerifiedArtifact {
+            path,
+            sha256: digest.clone(),
+            bytes,
+            origin: crate::cache::ArtifactOrigin::CacheHit,
+        },
+        sha512,
+    ))
 }
 
 #[cfg(test)]

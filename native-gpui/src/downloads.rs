@@ -84,6 +84,10 @@ pub enum JobRequest {
         merge: bool,
         request: Value,
     },
+    LocalPack {
+        snapshot: String,
+        fingerprint: String,
+    },
     Resume {
         instance: String,
     },
@@ -96,6 +100,7 @@ impl JobRequest {
         match self {
             JobRequest::Quick { project, .. } | JobRequest::Content { project, .. } => project,
             JobRequest::Pack { request, .. } => request["projectId"].as_str().unwrap_or(""),
+            JobRequest::LocalPack { snapshot, .. } => snapshot,
             JobRequest::Resume { instance } => instance,
         }
     }
@@ -114,6 +119,7 @@ impl JobRequest {
                     None
                 }
             }
+            JobRequest::LocalPack { .. } => None,
             JobRequest::Resume { instance } => Some(instance.clone()),
         }
     }
@@ -166,6 +172,10 @@ async fn execute(host: &Host, request: &JobRequest) -> api::ApiResult<Value> {
         JobRequest::Pack { merge, request } => {
             api::install_pack(host.clone(), *merge, request.clone()).await
         }
+        JobRequest::LocalPack {
+            snapshot,
+            fingerprint,
+        } => api::install_local_modpack(host.clone(), snapshot.clone(), fingerprint.clone()).await,
         JobRequest::Resume { instance } => api::resume_pack(host.clone(), instance.clone()).await,
     }
 }

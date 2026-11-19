@@ -17,8 +17,8 @@ use std::hash::Hash;
 use std::sync::Arc;
 
 use gpui::{
-    Div, InteractiveElement as _, ParentElement as _, Pixels, RenderImage, Stateful, Styled as _,
-    div, img, px,
+    Div, InteractiveElement as _, ObjectFit, ParentElement as _, Pixels, RenderImage, Stateful,
+    Styled as _, StyledImage as _, div, img, px,
 };
 
 use crate::{api, images, theme::AuroraTheme};
@@ -170,14 +170,63 @@ pub fn tile(
         .justify_center()
         .overflow_hidden()
         .rounded(palette.radius)
-        .bg(palette.surface_hover);
+        .bg(palette.control)
+        .border_1()
+        .border_color(palette.border_subtle);
     match image {
-        Some(image) => base.child(img(image).size(side)),
+        Some(image) => base.child(img(image).size_full().object_fit(ObjectFit::Contain)),
         None => base
             .text_size(px(f32::from(side) * 0.45))
             .text_color(palette.accent)
             .child(glyph.to_owned()),
     }
+}
+
+pub const CARD_ART_SIDE: f32 = 96.;
+
+/// Narrowest card width before the grid drops a column.
+const CARD_MIN_WIDTH: f32 = 420.;
+
+/// Columns of project cards for the current window: one on narrow windows,
+/// more as the page widens. Recomputed on resize; nothing is persisted.
+pub fn card_columns(viewport_width: gpui::Pixels) -> u16 {
+    let available = f32::from(viewport_width) - crate::navigation::PAGE_CHROME;
+    ((available + 12.) / (CARD_MIN_WIDTH + 12.))
+        .floor()
+        .clamp(1., 3.) as u16
+}
+
+/// Grid that lays project cards out in `columns` equal tracks.
+pub fn card_grid(columns: u16) -> Div {
+    div().grid().grid_cols(columns).gap(px(12.)).w_full()
+}
+
+/// Shared content card with artwork leading the text; actions sit under the
+/// text in the same column so the card is only as tall as its content.
+pub fn project_card(
+    palette: &AuroraTheme,
+    art: impl gpui::IntoElement,
+    text: impl gpui::IntoElement,
+    actions: impl gpui::IntoElement,
+) -> Div {
+    crate::ui::card(palette)
+        .w_full()
+        .min_w(px(0.))
+        .p(px(16.))
+        .child(
+            div().flex().items_start().gap(px(16.)).child(art).child(
+                div()
+                    .flex_1()
+                    .min_w(px(0.))
+                    .min_h(px(CARD_ART_SIDE))
+                    .flex()
+                    .flex_col()
+                    .justify_between()
+                    .gap(px(12.))
+                    .child(text)
+                    .child(actions),
+            ),
+        )
 }
 
 #[cfg(test)]

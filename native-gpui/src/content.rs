@@ -16,7 +16,7 @@ use crate::{
     artwork::{self, ArtworkCache, RawArtwork},
     backend::guarded,
     content_updates::{ContentUpdates, ContentUpdatesEvent},
-    controls::{AuroraButton, AuroraInput, AuroraSelect, AuroraToggle, ButtonSize, ButtonVariant},
+    controls::{AuroraButton, AuroraInput, AuroraToggle, ButtonSize, ButtonVariant},
     file_picker, ui,
 };
 use aurora_launcher_lib::host::Host;
@@ -28,10 +28,8 @@ use gpui_kit::base::{
     input::{InputEvent, InputState},
 };
 use serde_json::Value;
-use std::cell::Cell;
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::rc::Rc;
 use tokio::runtime::Handle;
 
 /// Icons requested per core call (the Slint host's `ICON_BATCH`).
@@ -48,6 +46,12 @@ pub enum ContentEvent {
     Discover {
         instance: String,
         kind: i32,
+    },
+    Project {
+        instance: Box<api::InstanceSummary>,
+        kind: usize,
+        project_id: String,
+        title: String,
     },
 }
 impl EventEmitter<ContentEvent> for Content {}
@@ -156,7 +160,6 @@ fn provenance(p: &Option<api::Provenance>) -> String {
         .unwrap_or_else(|| "No provider provenance".into())
 }
 /// Match Discover's artwork size and row rhythm across every content category.
-const CONTENT_ROW_HEIGHT: f32 = 100.;
 /// Note prefix for a mod other enabled mods depend on; shown as a badge.
 const REQUIRED_NOTE: &str = "Required by other mods: ";
 /// "Cannot change this mod: A requires x; B requires x." → "Required by A, B".
@@ -510,16 +513,20 @@ fn extension_is(path: &std::path::Path, wanted: &[&str]) -> bool {
 /// validates the archive itself. Anything else is refused with the reason.
 fn classify_content_drop(paths: &[PathBuf]) -> Result<String, &'static str> {
     match paths {
-        [] => Err("Drop a .jar or .zip file to import it."),
-        [path] if extension_is(path, &CONTENT_EXTENSIONS) => path
-            .to_str()
-            .map(str::to_owned)
-            .ok_or("That file's path can't be read. Move the file and try again."),
+        [] => Err("Drop a .jar, .zip, or content folder."),
+        [path]
+            if std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_dir())
+                || extension_is(path, &CONTENT_EXTENSIONS) =>
+        {
+            path.to_str()
+                .map(str::to_owned)
+                .ok_or("That file's path can't be read. Move the file and try again.")
+        }
         [path] if extension_is(path, &["mrpack"]) => {
             Err("Modpacks (.mrpack) are imported from the Instances page.")
         }
-        [_] => Err("Only .jar and .zip files can be imported as content."),
-        _ => Err("Drop one file at a time."),
+        [_] => Err("Choose a .jar, .zip, or content folder."),
+        _ => Err("Drop one file or folder at a time."),
     }
 }
 
@@ -615,11 +622,6 @@ pub struct Content {
     actions_open: bool,
     updates: Entity<ContentUpdates>,
     _update_events: Subscription,
-    instance_open: bool,
-    instance_highlight: usize,
-    instance_trigger: gpui::FocusHandle,
-    instance_content: gpui::FocusHandle,
-    instance_bounds: Rc<Cell<Option<gpui::Bounds<gpui::Pixels>>>>,
 }
 impl Content {
     pub fn new(
@@ -714,11 +716,6 @@ impl Content {
             actions_open: false,
             updates,
             _update_events: update_events,
-            instance_open: false,
-            instance_highlight: 0,
-            instance_trigger: cx.focus_handle(),
-            instance_content: cx.focus_handle(),
-            instance_bounds: Rc::new(Cell::new(None)),
         };
         this.refresh(cx);
         this
@@ -850,19 +847,8 @@ impl Content {
                         self.loading = false;
                         self.revision = self.revision.wrapping_add(1);
                     }
-                    let first_state = self.state.is_none();
-                    // The launcher's own selection, offered once as the starting point.
-                    let preferred = state
-                        .config
-                        .selected_instance_id
-                        .clone()
-                        .filter(|id| state.instances.iter().any(|i| &i.id == id));
                     self.state = Some(state);
-                    if first_state && self.selected.is_none() {
-                        if let Some(id) = preferred {
-                            self.select(id, cx);
-                        }
-                    }
+                    self.sync_updates(cx);
                 }
                 Err(e) => self.message = error(e),
             },
@@ -961,21 +947,11 @@ impl Content {
         }
         self.sync_updates(cx);
     }
-    fn select(&mut self, id: String, cx: &mut Context<Self>) {
-        if self.is_busy(cx) {
-            return;
-        }
-        self.invalidate_review();
-        self.revision = self.revision.wrapping_add(1);
-        self.selected = Some(id);
-        self.removing = None;
-        self.icons.reset();
-        self.load();
-        self.sync_updates(cx);
+    pub fn shows(&self, instance: &str) -> bool {
+        self.selected.as_deref() == Some(instance)
     }
-    /// Shows `instance` on the `kind` tab (Discover's "Back to instance").
-    /// Like `select`, it waits out a running mutation and says so instead of
-    /// silently keeping the old selection.
+
+    /// Shows the requested kind for the Instances detail's explicit target.
     pub fn show(&mut self, instance: String, kind: i32, cx: &mut Context<Self>) {
         if self.is_busy(cx) {
             self.message =
@@ -986,6 +962,9 @@ impl Content {
         self.invalidate_review();
         self.revision = self.revision.wrapping_add(1);
         self.selected = Some(instance);
+        self.message.clear();
+        self.actions_open = false;
+        self.updates_open = false;
         self.kind = Kind::from_index(kind);
         self.removing = None;
         self.icons.reset();
@@ -1013,7 +992,7 @@ impl Content {
         self.load();
         self.sync_updates(cx);
     }
-    fn choose_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn choose_path(&mut self, folder: bool, window: &mut Window, cx: &mut Context<Self>) {
         let Some(target) = self.target().filter(|_| self.host.is_some()) else {
             return;
         };
@@ -1022,23 +1001,13 @@ impl Content {
             return;
         }
         let serial = self.review_serial;
-        let Some(owner) = file_picker::owner(window) else {
-            self.receive_pick(
-                target,
-                serial,
-                Err(api::ApiError::new(
-                    "local_import_failed",
-                    "The file picker is unavailable in this window.",
-                )),
-                cx,
-            );
-            return;
-        };
+        let picker =
+            file_picker::import_path(file_picker::LocalImportKind::Content, folder, window, cx);
         self.sync_updates(cx);
         cx.notify();
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.runtime.spawn(async move {
-            let result = guarded(file_picker::choose_content_path(Some(owner))).await;
+            let result = guarded(picker).await;
             let _ = tx.send(result);
         });
         cx.spawn(async move |weak, cx| {
@@ -1375,42 +1344,6 @@ fn list_placeholder(
         })
 }
 
-/// A quiet icon-only row action; the label is the accessible name.
-/// Uniform artwork tile: a rounded `control` well with a hairline border and
-/// the image filling it, so every row reads alike whatever the icon's own
-/// padding or transparency.
-fn art_tile(
-    id: impl Into<gpui::ElementId>,
-    image: Option<std::sync::Arc<gpui::RenderImage>>,
-    glyph: &str,
-    side: f32,
-    t: &crate::theme::AuroraTheme,
-) -> gpui::Stateful<gpui::Div> {
-    let base = div()
-        .id(id)
-        .size(px(side))
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .overflow_hidden()
-        .rounded(px(10.))
-        .bg(t.control)
-        .border_1()
-        .border_color(t.border_subtle);
-    match image {
-        Some(image) => base.child(
-            gpui::img(image)
-                .size_full()
-                .object_fit(gpui::ObjectFit::Cover),
-        ),
-        None => base
-            .text_size(px(side * 0.45))
-            .text_color(t.ring)
-            .child(glyph.to_owned()),
-    }
-}
-
 fn icon_button(
     t: &crate::theme::AuroraTheme,
     id: impl Into<gpui::ElementId>,
@@ -1544,68 +1477,6 @@ impl Render for Content {
         let palette = crate::theme::theme(cx).clone();
         let t = &palette;
         let available = self.host.is_some();
-        // Compact instance chooser: one select in the page header row.
-        let instance_picker = self
-            .state
-            .as_ref()
-            .filter(|state| !state.instances.is_empty())
-            .map(|state| {
-                let ids: Vec<String> = state.instances.iter().map(|i| i.id.clone()).collect();
-                let options: Vec<gpui::SharedString> = state
-                    .instances
-                    .iter()
-                    .map(|i| gpui::SharedString::from(i.display_name.clone()))
-                    .collect();
-                let selected = self
-                    .selected
-                    .as_deref()
-                    .and_then(|id| ids.iter().position(|candidate| candidate == id));
-                div()
-                    .flex()
-                    .flex_shrink_0()
-                    .flex_col()
-                    .gap(px(4.))
-                    .child(ui::caption(t, "Instance"))
-                    .child(
-                        AuroraSelect::new(
-                            "content-instance",
-                            "Instance",
-                            options,
-                            &self.instance_trigger,
-                            &self.instance_content,
-                            self.instance_bounds.clone(),
-                        )
-                        .width(px(260.))
-                        .selected(selected)
-                        .highlight(self.instance_highlight)
-                        .open(self.instance_open && !busy)
-                        .disabled(busy)
-                        .on_open_change(cx.processor(|this, open, _window, cx| {
-                            if this.instance_open != open {
-                                this.instance_open = open;
-                                if open {
-                                    this.instance_highlight = 0;
-                                }
-                                cx.notify();
-                            }
-                        }))
-                        .on_highlight(cx.processor(|this, index, _window, cx| {
-                            if this.instance_highlight != index {
-                                this.instance_highlight = index;
-                                cx.notify();
-                            }
-                        }))
-                        .on_confirm(cx.processor(
-                            move |this, index: usize, _window, cx| {
-                                this.instance_open = false;
-                                if let Some(id) = ids.get(index) {
-                                    this.select(id.clone(), cx);
-                                }
-                                cx.notify();
-                            },
-                        )),
-                    )
-            });
         // Files dropped from the file manager feed the local import review.
         // The outline shows whether the dragged file would be accepted.
         let (accept, reject) = (palette.accent, palette.danger);
@@ -1625,24 +1496,7 @@ impl Render for Content {
             })
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
                 this.drop_files(paths.paths(), cx);
-            }))
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_end()
-                    .justify_between()
-                    .gap(px(16.))
-                    .child(div().flex_1().min_w(px(280.)).child(ui::page_header(
-                        t,
-                        "Content",
-                        Some(
-                            "Manage the mods, resource packs and shaders installed in each instance."
-                                .into(),
-                        ),
-                    )))
-                    .when_some(instance_picker, |this, picker| this.child(picker)),
-            );
+            }));
         if !self.message.is_empty() {
             root = root.child(
                 div()
@@ -1752,7 +1606,11 @@ impl Render for Content {
                             ),
                     )
                 });
-            let mut list = ui::list_card(t).when(self.actions_open, |list| list.child(toolbar));
+            let mut list = div()
+                .flex()
+                .flex_col()
+                .gap(px(12.))
+                .when(self.actions_open, |list| list.child(toolbar));
             let query = self.filter.read(cx).value();
             let visible: Vec<_> = self
                 .entries
@@ -1817,7 +1675,15 @@ impl Render for Content {
                                         .selected(self.local_import.open)
                                         .disabled(busy || previewing)
                                         .on_click(cx.listener(|this, _, window, cx| {
-                                            this.choose_file(window, cx);
+                                            this.choose_path(false, window, cx);
+                                        })),
+                                )
+                                .child(
+                                    AuroraButton::new("content-import-folder", "Choose folder")
+                                        .size(ButtonSize::Small)
+                                        .disabled(busy || previewing)
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.choose_path(true, window, cx);
                                         })),
                                 ),
                         )
@@ -1855,9 +1721,8 @@ impl Render for Content {
                     Some("Try a different name or file name, or clear the filter."),
                 ));
             }
-            let total = visible.len();
-            let last_index = total.saturating_sub(1);
-            for (index, entry) in visible.into_iter().enumerate() {
+            let mut cards = artwork::card_grid(artwork::card_columns(window.viewport_size().width));
+            for entry in visible {
                 let e = entry.clone();
                 let v = view.clone();
                 let target = self.target().unwrap();
@@ -1889,10 +1754,8 @@ impl Render for Content {
                 let mut text = div()
                     .flex()
                     .flex_col()
-                    .flex_1()
-                    .w(px(0.))
                     .gap(px(6.))
-                    .line_height(px(18.))
+                    .line_height(px(20.))
                     .min_w(px(0.))
                     .child(
                         div()
@@ -1903,8 +1766,8 @@ impl Render for Content {
                             .child(
                                 div()
                                     .min_w(px(0.))
-                                    .text_size(px(ui::TEXT_BODY + 1.))
-                                    .line_height(px(20.))
+                                    .text_size(px(ui::TEXT_TITLE - 4.))
+                                    .line_height(px(24.))
                                     .font_weight(gpui::FontWeight::SEMIBOLD)
                                     .text_color(palette.foreground)
                                     .when(disabled_row, |d| d.opacity(0.8))
@@ -2048,33 +1911,57 @@ impl Render for Content {
                         cx.notify();
                     });
                 });
-                let hover = palette.control;
-                list = list.child(
-                    ui::row(t, index == last_index)
-                        .gap(px(14.))
-                        .min_h(px(CONTENT_ROW_HEIGHT))
-                        .flex_shrink_0()
-                        .py(px(8.))
-                        .hover(move |style| style.bg(hover))
-                        .child(art_tile(
-                            gpui::SharedString::from(format!("icon-{}", entry.id)),
-                            icon,
-                            &entry.letter,
-                            48.,
-                            &palette,
-                        ))
-                        .child(text)
-                        .child(
-                            div()
-                                .flex()
-                                .flex_shrink_0()
-                                .items_center()
-                                .gap(px(16.))
-                                .child(toggle)
-                                .child(div().w(px(88.)).flex().justify_end().child(remove)),
-                        ),
-                );
+                let details = entry.project.as_ref().and_then(|project_id| {
+                    let instance = self
+                        .state
+                        .as_ref()?
+                        .instances
+                        .iter()
+                        .find(|instance| self.selected.as_ref() == Some(&instance.id))?
+                        .clone();
+                    let project_id = project_id.clone();
+                    let title = entry.name.clone();
+                    let kind = self.kind.index() as usize;
+                    Some(
+                        AuroraButton::new(
+                            gpui::SharedString::from(format!("details-{}", entry.id)),
+                            "Details",
+                        )
+                        .size(ButtonSize::Small)
+                        .icon("open_in_new")
+                        .accessibility_label(format!("Details for {title}"))
+                        .on_click(cx.listener(move |_, _, _, cx| {
+                            cx.emit(ContentEvent::Project {
+                                instance: Box::new(instance.clone()),
+                                kind,
+                                project_id: project_id.clone(),
+                                title: title.clone(),
+                            });
+                        })),
+                    )
+                });
+                cards = cards.child(artwork::project_card(
+                    t,
+                    artwork::tile(
+                        gpui::SharedString::from(format!("icon-{}", entry.id)),
+                        icon,
+                        &entry.letter,
+                        px(artwork::CARD_ART_SIDE),
+                        &palette,
+                    ),
+                    text,
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .justify_end()
+                        .items_center()
+                        .gap(px(8.))
+                        .children(details)
+                        .child(toggle)
+                        .child(remove),
+                ));
             }
+            list = list.child(cards);
             // ------------------------------------------------------ local import
             let mut import = ui::card(t)
                 .gap(px(14.))
@@ -2083,7 +1970,7 @@ impl Render for Content {
                         .child(ui::section_header(
                             t,
                             "Import local content",
-                            Some("Choose a .jar or .zip, or drop it here. You'll review it before it's installed.".into()),
+                            Some("Choose or drop a .jar, .zip, or content folder. You'll review it before it's installed.".into()),
                         ))
                         .child(
                             AuroraButton::new("content-import-close", "Close import")
@@ -2102,7 +1989,7 @@ impl Render for Content {
                         .gap(px(10.))
                         .child(
                             ui::muted(t, if previewing {
-                                "Reading file…".to_owned()
+                                "Reviewing content…".to_owned()
                             } else {
                                 std::path::Path::new(&self.local_import.path)
                                     .file_name()
@@ -2116,11 +2003,11 @@ impl Render for Content {
                             .text_ellipsis(),
                         )
                         .child(
-                            AuroraButton::new("content-import-choose", "Choose another file")
+                            AuroraButton::new("content-import-choose", "Choose file")
                                 .icon("upload_file")
                                 .disabled(busy || previewing)
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    this.choose_file(window, cx);
+                                    this.choose_path(false, window, cx);
                                 })),
                         ),
                 );
@@ -2157,6 +2044,17 @@ impl Render for Content {
                             value["sizeBytes"].as_u64().unwrap_or(0)
                         ),
                     ));
+                if let Some(names) = value["fileNames"]
+                    .as_array()
+                    .filter(|names| names.len() > 1)
+                {
+                    let names = names
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    block = block.child(ui::muted(t, names).whitespace_normal());
+                }
                 if let Some(note) = value["note"].as_str().filter(|n| !n.is_empty()) {
                     block = block.child(ui::muted(t, note.to_owned()));
                 }
@@ -2719,18 +2617,18 @@ mod tests {
 
     #[test]
     fn dropped_content_rejects_everything_else_with_a_reason() {
-        assert_eq!(drop_of(&[]), Err("Drop a .jar or .zip file to import it."));
+        assert_eq!(drop_of(&[]), Err("Drop a .jar, .zip, or content folder."));
         assert_eq!(
             drop_of(&["a.jar", "b.jar"]),
-            Err("Drop one file at a time.")
+            Err("Drop one file or folder at a time.")
         );
         assert_eq!(
             drop_of(&["a.txt"]),
-            Err("Only .jar and .zip files can be imported as content.")
+            Err("Choose a .jar, .zip, or content folder.")
         );
         assert_eq!(
             drop_of(&["no-extension"]),
-            Err("Only .jar and .zip files can be imported as content.")
+            Err("Choose a .jar, .zip, or content folder.")
         );
         assert_eq!(
             drop_of(&["pack.mrpack"]),

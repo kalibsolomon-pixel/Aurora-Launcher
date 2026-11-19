@@ -1313,6 +1313,13 @@ pub fn set_home_widgets(
 pub fn reset_home_widgets(app: Host) -> Result<crate::home_widgets::HomeLayout, CommandError> {
     set_home_widgets(app, Default::default())
 }
+pub fn initialize_discord(app: Host) -> Result<(), CommandError> {
+    let paths = managed_paths(&app)?;
+    let config = crate::config::load(&paths.config_file())?.unwrap_or_default();
+    crate::discord::initialize(app, config.discord().clone());
+    Ok(())
+}
+
 pub fn get_discord_state() -> crate::discord::DiscordState {
     crate::discord::state()
 }
@@ -3964,6 +3971,43 @@ pub async fn get_modrinth_project(
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ModrinthProjectPageRequest {
+    content_type: crate::modrinth::BrowseKind,
+    project_id: String,
+}
+
+pub async fn get_modrinth_project_page(
+    request: ModrinthProjectPageRequest,
+) -> Result<crate::modrinth::ProjectPage, CommandError> {
+    crate::modrinth::Client::official()
+        .project_page(request.content_type, &request.project_id)
+        .await
+        .map_err(provider_error)
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ModrinthChangelogRequest {
+    project_id: String,
+    version_id: String,
+}
+
+pub async fn get_modrinth_changelog(
+    request: ModrinthChangelogRequest,
+) -> Result<Option<String>, CommandError> {
+    crate::modrinth::Client::official()
+        .project_changelog(&request.project_id, &request.version_id)
+        .await
+        .map_err(provider_error)
+}
+
+pub async fn get_modrinth_project_image(app: Host, url: &str) -> Option<String> {
+    let managed = managed_paths(&app).ok()?;
+    crate::artwork::resolve_project_image(&managed, url).await
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct ModrinthArtworkRequest {
     project_id: String,
 }
@@ -4530,6 +4574,80 @@ pub async fn identify_local_modpack(
     )
     .await
     .map_err(|error| CommandError::new(error.code, error.message))
+}
+
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum LocalModpackReview {
+    Published(crate::local_pack::LocalPackMatch),
+    Folder(crate::modpacks::PackPreview),
+}
+
+pub async fn review_local_modpack(
+    app: Host,
+    request: LocalModpackRequest,
+) -> Result<LocalModpackReview, CommandError> {
+    let path = std::path::Path::new(&request.source_path);
+    if !crate::import_source::metadata(path)?.is_dir() {
+        return identify_local_modpack(app, request)
+            .await
+            .map(LocalModpackReview::Published);
+    }
+    let managed = managed_paths(&app)?;
+    let digest = crate::local_pack::snapshot_directory(&managed, path).await?;
+    let resolved =
+        tokio::task::spawn_blocking(move || crate::modpacks::resolve_local(&managed, &digest))
+            .await
+            .map_err(|_| {
+                CommandError::new("local_pack_unreadable", "The pack review did not complete.")
+            })??;
+    Ok(LocalModpackReview::Folder(resolved.preview))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalModpackInstallRequest {
+    snapshot: String,
+    fingerprint: String,
+}
+
+pub async fn install_local_modpack(
+    app: Host,
+    request: LocalModpackInstallRequest,
+) -> Result<InstanceSummary, CommandError> {
+    let managed = managed_paths(&app)?;
+    let digest = crate::integrity::ArtifactDigest::parse(&request.snapshot).map_err(|_| {
+        CommandError::new(
+            "pack_preview_required",
+            "Review the folder before installing it.",
+        )
+    })?;
+    let resolved = tokio::task::spawn_blocking({
+        let managed = managed.clone();
+        move || crate::modpacks::resolve_local(&managed, &digest)
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "local_pack_unreadable",
+            "The pack snapshot could not be read.",
+        )
+    })??;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("pack_configuration_invalid", error.to_string()))?;
+    let record = Box::pin(crate::modpacks::install_resolved(
+        &managed,
+        &endpoints,
+        resolved,
+        &[],
+        &request.fingerprint,
+        &mut |phase| {
+            crate::content_jobs::set_stage(phase);
+            let _ = app.emit("modpack-progress", serde_json::json!({ "phase": phase }));
+        },
+    ))
+    .await?;
+    Ok(InstanceSummary::from_record(&record))
 }
 
 /// One-click UX over the same resolution, fingerprint, and transaction path as
@@ -7354,12 +7472,13 @@ async fn play_instance_with_target(
 use crate::updates::CheckDomain;
 use crate::updates::launcher as launcher_updates;
 
-/// The combined update overview shown by Settings and Home.
+/// The combined launcher and per-instance update overview.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateOverviewDto {
     launcher: launcher_updates::LauncherUpdateStatus,
     client: crate::updates::UpdateAvailability,
+    clients: std::collections::BTreeMap<String, crate::updates::UpdateAvailability>,
     client_instance_id: Option<String>,
     client_instance_name: Option<String>,
     client_installed_version: Option<String>,
@@ -7374,13 +7493,32 @@ fn update_overview(app: &Host) -> Result<UpdateOverviewDto, CommandError> {
     let state = crate::updates::center()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let client = match (&selected, &state.client_instance_id) {
-        (Some(selected), Some(recorded)) if selected == recorded => state
-            .client
-            .clone()
-            .unwrap_or(crate::updates::UpdateAvailability::NotChecked),
-        (Some(_), _) => crate::updates::UpdateAvailability::NotChecked,
-        (None, _) => crate::updates::UpdateAvailability::NotApplicable {
+    use crate::updates::UpdateAvailability;
+    let clients: std::collections::BTreeMap<_, _> = registry
+        .iter()
+        .flat_map(|registry| registry.instances())
+        .filter_map(|record| {
+            let id = record.id().to_string();
+            let availability = state.clients.get(&id)?;
+            if let UpdateAvailability::UpdateAvailable { current, .. } = availability {
+                if !record
+                    .installed()
+                    .aurora
+                    .as_ref()
+                    .is_some_and(|pin| &pin.version == current)
+                {
+                    return None;
+                }
+            }
+            Some((id, availability.clone()))
+        })
+        .collect();
+    let client = match &selected {
+        Some(id) => clients
+            .get(id)
+            .cloned()
+            .unwrap_or(UpdateAvailability::NotChecked),
+        None => UpdateAvailability::NotApplicable {
             reason: "no instance is selected".to_owned(),
         },
     };
@@ -7402,6 +7540,7 @@ fn update_overview(app: &Host) -> Result<UpdateOverviewDto, CommandError> {
             phase: state.launcher_phase,
         },
         client,
+        clients,
         client_instance_id: selected,
         client_instance_name,
         client_installed_version: config.selected_instance_id().and_then(|id| {
@@ -7448,18 +7587,22 @@ async fn run_update_check(app: &Host, startup: bool) -> Result<UpdateOverviewDto
     .await;
 
     let managed = managed_paths(app)?;
-    let config = crate::config::load(&managed.config_file())?.unwrap_or_default();
-    if let Some(instance) = config.selected_instance_id() {
+    if let Ok(registry) = InstanceRegistry::load(&managed.instance_registry_file()) {
         let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
             .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
         if crate::updates::begin_check(CheckDomain::Client) == crate::updates::CheckStart::Started {
-            let availability =
-                crate::updates::client::check_client_update(&managed, &endpoints, instance).await;
-            crate::updates::finish_check(CheckDomain::Client, availability);
-            let mut state = crate::updates::center()
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            state.client_instance_id = Some(instance.to_string());
+            let mut checks = std::collections::BTreeMap::new();
+            for record in registry
+                .instances()
+                .iter()
+                .filter(|record| record.installed().aurora.is_some())
+            {
+                let id = record.id();
+                let availability =
+                    crate::updates::client::check_client_update(&managed, &endpoints, id).await;
+                checks.insert(id.to_string(), availability);
+            }
+            crate::updates::finish_client_checks(checks);
         }
     }
     let _performance = crate::performance::scope(crate::performance::Event::UpdatePublication);
@@ -7513,8 +7656,15 @@ pub async fn preview_client_update(
         let remote = crate::updates::client::fetch_update_manifest(&managed, &endpoints, &instance)
             .await
             .map_err(|error| CommandError::new(error.code(), error.message()))?;
-        crate::updates::client::preview_update(&managed, &endpoints, &instance, &remote)
-            .map_err(|error| CommandError::new(error.code(), error.message()))
+        let preview =
+            crate::updates::client::preview_update(&managed, &endpoints, &instance, &remote)
+                .map_err(|error| CommandError::new(error.code(), error.message()))?;
+        publish_client_availability(
+            &app,
+            &instance,
+            crate::updates::client::preview_availability(&preview),
+        );
+        Ok(preview)
     })
     .await
 }
@@ -7580,13 +7730,27 @@ pub async fn apply_client_update(
     .await;
     crate::updates::finish_transaction(CheckDomain::Client);
     let record = result?;
-    let mut state = crate::updates::center()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    state.client = Some(crate::updates::UpdateAvailability::UpToDate);
-    state.client_instance_id = Some(instance.to_string());
-    drop(state);
+    publish_client_availability(
+        &app,
+        &instance,
+        crate::updates::UpdateAvailability::UpToDate,
+    );
     Ok(InstanceSummary::from_record(&record))
+}
+
+fn publish_client_availability(
+    app: &Host,
+    instance: &crate::instances::InstanceId,
+    availability: crate::updates::UpdateAvailability,
+) {
+    crate::updates::center()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clients
+        .insert(instance.to_string(), availability);
+    if let Ok(overview) = update_overview(app) {
+        let _ = app.emit("update-status", &overview);
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]

@@ -350,6 +350,7 @@ pub struct Platform {
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PackPin {
+    pub provider: Option<String>,
     pub name: String,
     pub pack_version: String,
 }
@@ -587,6 +588,8 @@ pub struct ShortcutStatus {
 pub struct UpdateOverview {
     pub launcher: LauncherUpdateStatus,
     pub client: Value,
+    #[serde(default)]
+    pub clients: std::collections::BTreeMap<String, Value>,
     pub client_instance_id: Option<String>,
     pub client_instance_name: Option<String>,
     pub client_installed_version: Option<String>,
@@ -1089,6 +1092,10 @@ pub struct DiscordState {
     pub preferences: DiscordPreferences,
 }
 
+pub fn initialize_discord(host: Host) -> ApiResult<()> {
+    app::initialize_discord(host).map_err(Into::into)
+}
+
 pub fn discord_state() -> ApiResult<DiscordState> {
     convert::<_, DiscordState>(Ok::<_, app::CommandError>(app::get_discord_state()))
 }
@@ -1589,16 +1596,39 @@ pub async fn project(
     convert(app::get_modrinth_project(host, request).await)
 }
 
+pub async fn project_page(
+    kind: &'static str,
+    project: String,
+) -> ApiResult<aurora_launcher_lib::modrinth::ProjectPage> {
+    let request = request(json!({"contentType": kind, "projectId": project}))?;
+    app::get_modrinth_project_page(request)
+        .await
+        .map_err(Into::into)
+}
+
+pub async fn project_changelog(project: String, version: String) -> ApiResult<Option<String>> {
+    let request = request(json!({"projectId": project, "versionId": version}))?;
+    convert(app::get_modrinth_changelog(request).await)
+}
+
+pub async fn project_image(host: Host, url: String) -> Option<Vec<u8>> {
+    let source = app::get_modrinth_project_image(host, &url).await;
+    decode_project_png(source.as_deref())
+}
+
 /// Only normalized, bounded PNGs from the core's isolated artwork decoder.
 pub async fn project_artwork(host: Host, project: String) -> ApiResult<Option<Vec<u8>>> {
-    use base64::Engine;
     let request = request(json!({"projectId": project}))?;
     let value: Value = convert(app::resolve_project_artwork(host, request).await)?;
-    Ok(value["source"]
-        .as_str()
+    Ok(decode_project_png(value["source"].as_str()))
+}
+
+fn decode_project_png(source: Option<&str>) -> Option<Vec<u8>> {
+    use base64::Engine;
+    source
         .and_then(|s| s.strip_prefix("data:image/png;base64,"))
-        .filter(|s| s.len() <= 2 * 1024 * 1024)
-        .and_then(|s| base64::engine::general_purpose::STANDARD.decode(s).ok()))
+        .filter(|s| s.len() <= (2 * 1024 * 1024_usize).div_ceil(3) * 4)
+        .and_then(|s| base64::engine::general_purpose::STANDARD.decode(s).ok())
 }
 
 pub async fn provider_inventory(host: Host, instance: String) -> ApiResult<Value> {
@@ -1890,6 +1920,21 @@ pub async fn check_custom_java(
 // ------------------------------------------------- local .mrpack
 
 /// Identifies a selected local archive as an exact published pack version.
+pub async fn review_local_modpack(host: Host, path: String) -> ApiResult<Value> {
+    let request = request(json!({ "sourcePath": path }))?;
+    convert(app::review_local_modpack(host, request).await)
+}
+
+pub async fn install_local_modpack(
+    host: Host,
+    snapshot: String,
+    fingerprint: String,
+) -> ApiResult<Value> {
+    let request = request(json!({ "snapshot": snapshot, "fingerprint": fingerprint }))?;
+    let summary = Box::pin(app::install_local_modpack(host, request)).await;
+    convert(summary)
+}
+
 pub async fn identify_local_modpack(host: Host, path: String) -> ApiResult<Value> {
     let request = request(json!({ "sourcePath": path }))?;
     convert(app::identify_local_modpack(host, request).await)

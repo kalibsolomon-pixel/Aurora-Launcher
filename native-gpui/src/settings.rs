@@ -51,6 +51,7 @@ use gpui_kit::{
 use crate::api::{self, ApiResult};
 use crate::backend::guarded;
 use crate::borealis;
+use crate::client_updates::ClientUpdates;
 use crate::controls::{
     AuroraButton, AuroraInput, AuroraSelect, AuroraSlider, AuroraToggle, ButtonSize, ButtonVariant,
 };
@@ -386,7 +387,7 @@ pub fn launcher_progress_text(payload: &serde_json::Value) -> Option<String> {
     })
 }
 
-fn launcher_offer(value: &serde_json::Value) -> Option<String> {
+pub(crate) fn launcher_offer(value: &serde_json::Value) -> Option<String> {
     (value.get("kind")?.as_str()? == "updateAvailable").then(|| {
         value
             .get("candidate")?
@@ -433,17 +434,19 @@ fn shortcut_text(state: &str, managed_by: &str) -> String {
 
 fn discord_status(state: &api::DiscordState) -> String {
     if !state.configured {
-        return "This build has no Discord application ID, so presence cannot connect. Choices are saved; nothing is sent.".into();
+        return "This build needs a valid Discord application ID to connect.".into();
     }
     match (state.preferences.enabled, state.connection.as_str()) {
-        (false, _) => "Ready. Aurora's Discord application is configured. Turn on Rich Presence to share activity.".into(),
+        (false, _) => "Turn on Rich Presence to connect to Discord and share activity.".into(),
         (true, "connected") => "Connected to the Discord app on this computer.".into(),
         (true, "notDetected") => {
-            "Discord is not running. Aurora checks again occasionally while this is on.".into()
+            "Open the Discord desktop app. Aurora will keep checking for a connection.".into()
         }
-        (true, "failed") => "Discord could not be reached. Use Reconnect to try again.".into(),
-        (true, "closed") => "Disconnected from Discord.".into(),
-        (true, _) => "Waiting for the Discord app on this computer.".into(),
+        (true, "failed") => {
+            "Discord did not accept the connection or activity. Use Reconnect to try again.".into()
+        }
+        (true, "closed") => "Aurora lost its connection to Discord and will retry.".into(),
+        (true, _) => "Connecting to the Discord app on this computer.".into(),
     }
 }
 
@@ -663,7 +666,7 @@ enum Message {
     AppearanceRead(ApiResult<api::Appearance>),
     AppearanceSaved(u64, ApiResult<api::Appearance>),
     DiscordRead(ApiResult<api::DiscordState>),
-    DiscordSaved(u64, ApiResult<api::DiscordState>),
+    DiscordSaved(ApiResult<api::DiscordState>),
     DesktopRead(ApiResult<api::DesktopIntegration>),
     DesktopSaved(ApiResult<api::DesktopIntegration>),
     FolderOpened(ApiResult<()>),
@@ -691,7 +694,6 @@ pub struct Settings {
     appearance: AppearanceState,
     appearance_read: u64,
     discord_read: u64,
-    discord_event: u64,
     desktop_read: u64,
     discord: Option<api::DiscordState>,
     discord_busy: bool,
@@ -701,6 +703,8 @@ pub struct Settings {
     desktop_error: Option<String>,
     data_root: Option<String>,
     updates: Option<api::UpdateOverview>,
+    updates_pending: bool,
+    client_updates: Option<Entity<ClientUpdates>>,
     update_busy: bool,
     downloaded_version: Option<String>,
     install_blocked: bool,
@@ -787,7 +791,6 @@ impl Settings {
             appearance: AppearanceState::default(),
             appearance_read: 0,
             discord_read: 0,
-            discord_event: 0,
             desktop_read: 0,
             discord: None,
             discord_busy: false,
@@ -797,6 +800,8 @@ impl Settings {
             desktop_error: None,
             data_root: None,
             updates: None,
+            updates_pending: false,
+            client_updates: None,
             update_busy: false,
             downloaded_version: None,
             install_blocked: true,
@@ -1203,7 +1208,6 @@ impl Settings {
         preferences.server_address = preferences.server && preferences.server_address;
         self.discord_busy = true;
         self.discord_read += 1;
-        let event_revision = self.discord_event;
         self.discord_error = None;
         cx.notify();
         let (tx, rx) = tokio::sync::oneshot::channel();
@@ -1214,7 +1218,7 @@ impl Settings {
         cx.spawn(async move |weak, cx| {
             if let Ok(result) = rx.await {
                 let _ = weak.update(cx, |view, cx| {
-                    view.receive(Message::DiscordSaved(event_revision, result), cx)
+                    view.receive(Message::DiscordSaved(result), cx)
                 });
             }
         })
@@ -1227,7 +1231,7 @@ impl Settings {
         }
         self.discord_busy = true;
         self.discord_read += 1;
-        let event_revision = self.discord_event;
+        self.discord_error = None;
         cx.notify();
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.rt.spawn(async move {
@@ -1237,7 +1241,7 @@ impl Settings {
         cx.spawn(async move |weak, cx| {
             if let Ok(result) = rx.await {
                 let _ = weak.update(cx, |view, cx| {
-                    view.receive(Message::DiscordSaved(event_revision, result), cx)
+                    view.receive(Message::DiscordSaved(result), cx)
                 });
             }
         })
@@ -1294,6 +1298,17 @@ impl Settings {
     }
 
     // -- updates ------------------------------------------------------------
+
+    pub fn set_updates_pending(&mut self, pending: bool, cx: &mut Context<Self>) {
+        if self.updates_pending != pending {
+            self.updates_pending = pending;
+            cx.notify();
+        }
+    }
+
+    pub fn set_client_updates(&mut self, updates: Option<Entity<ClientUpdates>>) {
+        self.client_updates = updates;
+    }
 
     pub fn set_install_blocked(&mut self, blocked: bool, cx: &mut Context<Self>) {
         if self.install_blocked != blocked {
@@ -1406,17 +1421,13 @@ impl Settings {
                     Err(error) => self.discord_error = Some(error.message),
                 }
             }
-            Message::DiscordSaved(event_revision, result) => {
+            Message::DiscordSaved(result) => {
                 self.discord_busy = false;
                 match result {
-                    Ok(mut state) => {
-                        if event_revision != self.discord_event {
-                            if let Some(current) = &self.discord {
-                                state.connection = current.connection.clone();
-                                state.configured = current.configured;
-                            }
-                        }
-                        self.discord = Some(state);
+                    Ok(state) => {
+                        // Retries or preference updates may have settled while
+                        // the result was queued for the UI thread.
+                        self.discord = Some(api::discord_state().unwrap_or(state));
                         self.discord_error = None;
                     }
                     Err(error) => self.discord_error = Some(error.message),
@@ -1494,15 +1505,8 @@ impl Settings {
     ) {
         match name {
             "discord-state" => {
-                if let Ok(mut state) = serde_json::from_value::<api::DiscordState>(payload.clone())
-                {
-                    self.discord_event += 1;
+                if let Ok(state) = api::discord_state() {
                     self.discord_read += 1;
-                    if self.discord_busy {
-                        if let Some(current) = &self.discord {
-                            state.preferences = current.preferences.clone();
-                        }
-                    }
                     self.discord = Some(state);
                     cx.notify();
                 }
@@ -2019,7 +2023,7 @@ fn discord_badge(state: Option<&api::DiscordState>) -> Option<(&'static str, ui:
     } else {
         match state.connection.as_str() {
             "connected" => ("Connected", ui::Tone::Success),
-            "notDetected" => ("Discord not running", ui::Tone::Warning),
+            "notDetected" => ("Discord unavailable", ui::Tone::Warning),
             "failed" => ("Connection failed", ui::Tone::Danger),
             "closed" => ("Disconnected", ui::Tone::Neutral),
             _ => ("Connecting", ui::Tone::Accent),
@@ -2087,7 +2091,7 @@ impl Render for Settings {
             "Appearance",
             "Discord",
             "Desktop",
-            "Updates & about",
+            "Updates & About",
             "Game",
         ]
         .into_iter()
@@ -2097,6 +2101,14 @@ impl Render for Settings {
                 AuroraButton::new(("settings-section", index), label)
                     .variant(ButtonVariant::Ghost)
                     .selected(self.section == index)
+                    .notification(index == 3 && self.updates_pending)
+                    .disabled(
+                        index != 3
+                            && self
+                                .client_updates
+                                .as_ref()
+                                .is_some_and(|updates| updates.read(cx).is_busy()),
+                    )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.cancel_previews(cx);
                         this.section = index;
@@ -2365,7 +2377,7 @@ impl Render for Settings {
                     .as_ref()
                     .map(|s| s.preferences.clone())
                     .unwrap_or_default();
-                let discord_disabled = self.discord_busy || no_host;
+                let discord_disabled = self.discord_busy || no_host || state.is_none();
                 let header_actions = div()
                     .flex()
                     .items_center()
@@ -2390,33 +2402,30 @@ impl Render for Settings {
                 ));
                 let weak_toggle = weak.clone();
                 card = card.child(
-                ui::setting_row(
-                    t,
-                    "Rich Presence",
-                    Some(
-                        "Shows that you are playing through Aurora in your Discord status. Nothing is shared until this is on."
-                            .into(),
-                    ),
-                    !preferences.enabled && self.discord_error.is_none(),
-                )
-                .child(control_slot(
-                    AuroraToggle::new("discord-enabled")
-                        .label("Discord Rich Presence")
-                        .checked(preferences.enabled)
-                        .disabled(discord_disabled)
-                        .on_change({
-                            let weak_toggle = weak_toggle.clone();
-                            move |next: bool, _event, _window, app| {
-                                let _ = weak_toggle.update(app, |this, cx| {
-                                    this.save_discord(
-                                        move |preferences| preferences.enabled = next,
-                                        cx,
-                                    );
-                                });
-                            }
-                        }),
-                )),
-            );
+                    ui::setting_row(
+                        t,
+                        "Rich Presence",
+                        Some("Share when you are in the launcher or playing Minecraft.".into()),
+                        !preferences.enabled && self.discord_error.is_none(),
+                    )
+                    .child(control_slot(
+                        AuroraToggle::new("discord-enabled")
+                            .label("Discord Rich Presence")
+                            .checked(preferences.enabled)
+                            .disabled(discord_disabled)
+                            .on_change({
+                                let weak_toggle = weak_toggle.clone();
+                                move |next: bool, _event, _window, app| {
+                                    let _ = weak_toggle.update(app, |this, cx| {
+                                        this.save_discord(
+                                            move |preferences| preferences.enabled = next,
+                                            cx,
+                                        );
+                                    });
+                                }
+                            }),
+                    )),
+                );
                 if preferences.enabled {
                     let rows = [
                         ("discord-instance-name", "Instance name", "instance_name"),
@@ -2699,80 +2708,36 @@ impl Render for Settings {
         if self.section == 3 {
             // --- Updates -------------------------------------------------------
             {
-                let mut card = section_card(t).child(card_header(
-                    t,
-                    "Updates",
-                    Some("Whether the launcher and Aurora Client are current.".into()),
-                    div(),
-                ));
-                if let Some(overview) = &self.updates {
-                    let (launcher_label, launcher_tone) =
-                        availability_badge(&overview.launcher.availability);
-                    let launcher_detail = [
-                        Some(format!(
-                            "Installed version {}",
-                            overview.launcher.installed_version
-                        )),
-                        availability_detail(&overview.launcher.availability),
-                    ]
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>()
-                    .join(" · ");
-                    card = card.child(
-                        ui::setting_row(t, "Launcher", Some(launcher_detail.into()), false).child(
-                            control_slot(ui::status_badge(t, launcher_label, launcher_tone)),
-                        ),
-                    );
-                    let (client_label, client_tone) = availability_badge(&overview.client);
-                    card = card.child(
+                let check = AuroraButton::new("check-updates", "Check now")
+                    .accessibility_label("Check for launcher and Aurora Client updates")
+                    .size(ButtonSize::Small)
+                    .icon("refresh")
+                    .disabled(self.update_busy || no_host)
+                    .on_click(cx.listener(|this, _, _, cx| this.check_updates(cx)));
+                let availability = self
+                    .updates
+                    .as_ref()
+                    .map(|overview| &overview.launcher.availability);
+                let (label, tone) =
+                    availability.map_or(("Not checked", ui::Tone::Neutral), availability_badge);
+                let installed = self
+                    .updates
+                    .as_ref()
+                    .map_or(env!("CARGO_PKG_VERSION"), |overview| {
+                        overview.launcher.installed_version.as_str()
+                    });
+                let detail = availability.and_then(availability_detail);
+                let mut card = section_card(t)
+                    .child(card_header(t, "Launcher updates", None, div().child(check)))
+                    .child(
                         ui::setting_row(
                             t,
-                            "Aurora Client",
-                            availability_detail(&overview.client).map(SharedString::from),
+                            format!("Installed version {installed}"),
+                            detail.map(SharedString::from),
                             false,
                         )
-                        .child(control_slot(ui::status_badge(
-                            t,
-                            client_label,
-                            client_tone,
-                        ))),
+                        .child(control_slot(ui::status_badge(t, label, tone))),
                     );
-                } else {
-                    card = card.child(
-                        ui::setting_row(
-                            t,
-                            "Update status",
-                            Some("Update status is not checked yet.".into()),
-                            false,
-                        )
-                        .child(control_slot(ui::status_badge(
-                            t,
-                            "Not checked",
-                            ui::Tone::Neutral,
-                        ))),
-                    );
-                }
-                card = card.child(
-                ui::setting_row(
-                    t,
-                    "Check for updates",
-                    Some(
-                        "Updates are installed only after you download and verify the signed installer."
-                            .into(),
-                    ),
-                    true,
-                )
-                .child(control_slot(
-                    AuroraButton::new("check-updates", "Check now")
-                        .size(ButtonSize::Small)
-                        .icon("refresh")
-                        .disabled(self.update_busy || no_host)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.check_updates(cx);
-                        })),
-                )),
-            );
                 if let Some(version) = self
                     .updates
                     .as_ref()
@@ -2798,6 +2763,9 @@ impl Render for Settings {
             }
         }
         if self.section == 3 {
+            if let Some(updates) = &self.client_updates {
+                page = page.child(updates.clone());
+            }
             // --- About ---------------------------------------------------------
             page = page.child(
                 ui::card(t).child(
