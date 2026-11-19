@@ -1596,16 +1596,39 @@ pub async fn project(
     convert(app::get_modrinth_project(host, request).await)
 }
 
+pub async fn project_page(
+    kind: &'static str,
+    project: String,
+) -> ApiResult<aurora_launcher_lib::modrinth::ProjectPage> {
+    let request = request(json!({"contentType": kind, "projectId": project}))?;
+    app::get_modrinth_project_page(request)
+        .await
+        .map_err(Into::into)
+}
+
+pub async fn project_changelog(project: String, version: String) -> ApiResult<Option<String>> {
+    let request = request(json!({"projectId": project, "versionId": version}))?;
+    convert(app::get_modrinth_changelog(request).await)
+}
+
+pub async fn project_image(host: Host, url: String) -> Option<Vec<u8>> {
+    let source = app::get_modrinth_project_image(host, &url).await;
+    decode_project_png(source.as_deref())
+}
+
 /// Only normalized, bounded PNGs from the core's isolated artwork decoder.
 pub async fn project_artwork(host: Host, project: String) -> ApiResult<Option<Vec<u8>>> {
-    use base64::Engine;
     let request = request(json!({"projectId": project}))?;
     let value: Value = convert(app::resolve_project_artwork(host, request).await)?;
-    Ok(value["source"]
-        .as_str()
+    Ok(decode_project_png(value["source"].as_str()))
+}
+
+fn decode_project_png(source: Option<&str>) -> Option<Vec<u8>> {
+    use base64::Engine;
+    source
         .and_then(|s| s.strip_prefix("data:image/png;base64,"))
-        .filter(|s| s.len() <= 2 * 1024 * 1024)
-        .and_then(|s| base64::engine::general_purpose::STANDARD.decode(s).ok()))
+        .filter(|s| s.len() <= (2 * 1024 * 1024_usize).div_ceil(3) * 4)
+        .and_then(|s| base64::engine::general_purpose::STANDARD.decode(s).ok())
 }
 
 pub async fn provider_inventory(host: Host, instance: String) -> ApiResult<Value> {

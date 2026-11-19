@@ -17,8 +17,8 @@ use std::hash::Hash;
 use std::sync::Arc;
 
 use gpui::{
-    Div, InteractiveElement as _, ParentElement as _, Pixels, RenderImage, Stateful, Styled as _,
-    div, img, px,
+    Div, InteractiveElement as _, ObjectFit, ParentElement as _, Pixels, RenderImage, Stateful,
+    Styled as _, StyledImage as _, div, img, px,
 };
 
 use crate::{api, images, theme::AuroraTheme};
@@ -170,14 +170,42 @@ pub fn tile(
         .justify_center()
         .overflow_hidden()
         .rounded(palette.radius)
-        .bg(palette.surface_hover);
+        .bg(palette.control)
+        .border_1()
+        .border_color(palette.border_subtle);
     match image {
-        Some(image) => base.child(img(image).size(side)),
+        Some(image) => base.child(img(image).size_full().object_fit(ObjectFit::Contain)),
         None => base
             .text_size(px(f32::from(side) * 0.45))
             .text_color(palette.accent)
             .child(glyph.to_owned()),
     }
+}
+
+pub const CARD_ART_SIDE: f32 = 96.;
+
+/// Shared content card with artwork leading the text and space for actions
+/// below it, so buttons never compete with the title at narrow widths.
+pub fn project_card(
+    palette: &AuroraTheme,
+    art: impl gpui::IntoElement,
+    text: impl gpui::IntoElement,
+    actions: impl gpui::IntoElement,
+) -> Div {
+    crate::ui::card(palette)
+        .w_full()
+        .min_w(px(0.))
+        .gap(px(12.))
+        .p(px(16.))
+        .child(
+            div()
+                .flex()
+                .items_start()
+                .gap(px(16.))
+                .child(art)
+                .child(div().flex_1().min_w(px(0.)).child(text)),
+        )
+        .child(actions)
 }
 
 #[cfg(test)]

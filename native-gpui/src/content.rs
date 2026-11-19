@@ -47,6 +47,12 @@ pub enum ContentEvent {
         instance: String,
         kind: i32,
     },
+    Project {
+        instance: Box<api::InstanceSummary>,
+        kind: usize,
+        project_id: String,
+        title: String,
+    },
 }
 impl EventEmitter<ContentEvent> for Content {}
 
@@ -154,7 +160,6 @@ fn provenance(p: &Option<api::Provenance>) -> String {
         .unwrap_or_else(|| "No provider provenance".into())
 }
 /// Match Discover's artwork size and row rhythm across every content category.
-const CONTENT_ROW_HEIGHT: f32 = 100.;
 /// Note prefix for a mod other enabled mods depend on; shown as a badge.
 const REQUIRED_NOTE: &str = "Required by other mods: ";
 /// "Cannot change this mod: A requires x; B requires x." → "Required by A, B".
@@ -1339,42 +1344,6 @@ fn list_placeholder(
         })
 }
 
-/// A quiet icon-only row action; the label is the accessible name.
-/// Uniform artwork tile: a rounded `control` well with a hairline border and
-/// the image filling it, so every row reads alike whatever the icon's own
-/// padding or transparency.
-fn art_tile(
-    id: impl Into<gpui::ElementId>,
-    image: Option<std::sync::Arc<gpui::RenderImage>>,
-    glyph: &str,
-    side: f32,
-    t: &crate::theme::AuroraTheme,
-) -> gpui::Stateful<gpui::Div> {
-    let base = div()
-        .id(id)
-        .size(px(side))
-        .flex_none()
-        .flex()
-        .items_center()
-        .justify_center()
-        .overflow_hidden()
-        .rounded(px(10.))
-        .bg(t.control)
-        .border_1()
-        .border_color(t.border_subtle);
-    match image {
-        Some(image) => base.child(
-            gpui::img(image)
-                .size_full()
-                .object_fit(gpui::ObjectFit::Cover),
-        ),
-        None => base
-            .text_size(px(side * 0.45))
-            .text_color(t.ring)
-            .child(glyph.to_owned()),
-    }
-}
-
 fn icon_button(
     t: &crate::theme::AuroraTheme,
     id: impl Into<gpui::ElementId>,
@@ -1637,7 +1606,11 @@ impl Render for Content {
                             ),
                     )
                 });
-            let mut list = ui::list_card(t).when(self.actions_open, |list| list.child(toolbar));
+            let mut list = div()
+                .flex()
+                .flex_col()
+                .gap(px(12.))
+                .when(self.actions_open, |list| list.child(toolbar));
             let query = self.filter.read(cx).value();
             let visible: Vec<_> = self
                 .entries
@@ -1748,9 +1721,7 @@ impl Render for Content {
                     Some("Try a different name or file name, or clear the filter."),
                 ));
             }
-            let total = visible.len();
-            let last_index = total.saturating_sub(1);
-            for (index, entry) in visible.into_iter().enumerate() {
+            for entry in visible {
                 let e = entry.clone();
                 let v = view.clone();
                 let target = self.target().unwrap();
@@ -1782,10 +1753,8 @@ impl Render for Content {
                 let mut text = div()
                     .flex()
                     .flex_col()
-                    .flex_1()
-                    .w(px(0.))
                     .gap(px(6.))
-                    .line_height(px(18.))
+                    .line_height(px(20.))
                     .min_w(px(0.))
                     .child(
                         div()
@@ -1796,8 +1765,8 @@ impl Render for Content {
                             .child(
                                 div()
                                     .min_w(px(0.))
-                                    .text_size(px(ui::TEXT_BODY + 1.))
-                                    .line_height(px(20.))
+                                    .text_size(px(ui::TEXT_TITLE - 4.))
+                                    .line_height(px(24.))
                                     .font_weight(gpui::FontWeight::SEMIBOLD)
                                     .text_color(palette.foreground)
                                     .when(disabled_row, |d| d.opacity(0.8))
@@ -1941,32 +1910,55 @@ impl Render for Content {
                         cx.notify();
                     });
                 });
-                let hover = palette.control;
-                list = list.child(
-                    ui::row(t, index == last_index)
-                        .gap(px(14.))
-                        .min_h(px(CONTENT_ROW_HEIGHT))
-                        .flex_shrink_0()
-                        .py(px(8.))
-                        .hover(move |style| style.bg(hover))
-                        .child(art_tile(
-                            gpui::SharedString::from(format!("icon-{}", entry.id)),
-                            icon,
-                            &entry.letter,
-                            48.,
-                            &palette,
-                        ))
-                        .child(text)
-                        .child(
-                            div()
-                                .flex()
-                                .flex_shrink_0()
-                                .items_center()
-                                .gap(px(16.))
-                                .child(toggle)
-                                .child(div().w(px(88.)).flex().justify_end().child(remove)),
-                        ),
-                );
+                let details = entry.project.as_ref().and_then(|project_id| {
+                    let instance = self
+                        .state
+                        .as_ref()?
+                        .instances
+                        .iter()
+                        .find(|instance| self.selected.as_ref() == Some(&instance.id))?
+                        .clone();
+                    let project_id = project_id.clone();
+                    let title = entry.name.clone();
+                    let kind = self.kind.index() as usize;
+                    Some(
+                        AuroraButton::new(
+                            gpui::SharedString::from(format!("details-{}", entry.id)),
+                            "Details",
+                        )
+                        .size(ButtonSize::Small)
+                        .icon("open_in_new")
+                        .accessibility_label(format!("Details for {title}"))
+                        .on_click(cx.listener(move |_, _, _, cx| {
+                            cx.emit(ContentEvent::Project {
+                                instance: Box::new(instance.clone()),
+                                kind,
+                                project_id: project_id.clone(),
+                                title: title.clone(),
+                            });
+                        })),
+                    )
+                });
+                list = list.child(artwork::project_card(
+                    t,
+                    artwork::tile(
+                        gpui::SharedString::from(format!("icon-{}", entry.id)),
+                        icon,
+                        &entry.letter,
+                        px(artwork::CARD_ART_SIDE),
+                        &palette,
+                    ),
+                    text,
+                    div()
+                        .flex()
+                        .flex_wrap()
+                        .justify_end()
+                        .items_center()
+                        .gap(px(8.))
+                        .children(details)
+                        .child(toggle)
+                        .child(remove),
+                ));
             }
             // ------------------------------------------------------ local import
             let mut import = ui::card(t)

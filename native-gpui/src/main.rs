@@ -1337,6 +1337,24 @@ impl Launcher {
                     ContentEvent::Discover { instance, kind } => {
                         this.open_discover_for(instance.clone(), *kind, window, cx);
                     }
+                    ContentEvent::Project {
+                        instance,
+                        kind,
+                        project_id,
+                        title,
+                    } => {
+                        if let Some(discover) = &this.discover {
+                            discover.update(cx, |discover, cx| {
+                                discover.open_content_project(
+                                    (**instance).clone(),
+                                    *kind,
+                                    project_id.clone(),
+                                    title.clone(),
+                                    cx,
+                                );
+                            });
+                        }
+                    }
                 }
                 cx.notify();
             },
@@ -1485,7 +1503,7 @@ impl Launcher {
                 self.syncing = Some(syncing);
             }
         }
-        if page == 5 || page == 8 {
+        if page == 5 || page == 8 || (page == 3 && self.discover.is_none()) {
             if let Some(discover) = &self.discover {
                 if self.page != page {
                     discover.update(cx, |discover, cx| discover.refresh(cx));
@@ -1552,7 +1570,9 @@ impl Launcher {
                         cx.notify();
                     },
                 ));
-                discover.update(cx, |discover, cx| discover.refresh(cx));
+                if page != 3 {
+                    discover.update(cx, |discover, cx| discover.refresh(cx));
+                }
                 self.discover = Some(discover);
             }
         }
