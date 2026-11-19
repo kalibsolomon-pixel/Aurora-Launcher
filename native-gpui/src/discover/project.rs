@@ -123,6 +123,22 @@ impl VersionFilters {
             .collect()
     }
 
+    /// Default to the newest installable stable release for the current
+    /// Minecraft/loader pair, else the newest installable version. The user
+    /// can still pick any listed version; nothing is installed implicitly.
+    fn select_default_version(&mut self, releases: &[ProjectRelease]) {
+        let matching = self.matching(releases);
+        let installable = || {
+            matching
+                .iter()
+                .filter(|item| item.version.unsupported_reason.is_none())
+        };
+        self.version = installable()
+            .find(|item| item.version.version_type == "release")
+            .or_else(|| installable().next())
+            .map(|item| item.version.id.clone());
+    }
+
     fn choose_minecraft(
         &mut self,
         value: String,
@@ -148,6 +164,7 @@ impl VersionFilters {
             .and_then(|loader| options.iter().find(|value| value.as_str() == loader))
             .or_else(|| (options.len() == 1).then(|| &options[0]))
             .cloned();
+        self.select_default_version(releases);
     }
 }
 
@@ -510,7 +527,11 @@ impl ProjectWindow {
             }
             Picker::Loader => {
                 self.filters.loader = Some(value);
-                self.filters.version = None;
+                if let Some(Ok(page)) = &self.page {
+                    self.filters.select_default_version(&page.releases);
+                } else {
+                    self.filters.version = None;
+                }
             }
             Picker::Version => self.filters.version = Some(value),
             Picker::Changelog => self.load_changelog(value),
@@ -932,8 +953,9 @@ impl ProjectWindow {
                     )
                     .children(release.dependencies.iter().map(|dependency| {
                         let name = dependency
-                            .file_name
+                            .project_title
                             .as_deref()
+                            .or(dependency.file_name.as_deref())
                             .or(dependency.project_id.as_deref())
                             .or(dependency.version_id.as_deref())
                             .unwrap_or("Unspecified");
@@ -1080,7 +1102,7 @@ impl ProjectWindow {
                 .gap(px(6.))
                 .children(blocks.iter().map(|child| self.block(child, t, cx, index)))
                 .into_any_element(),
-            markdown::Block::Code(code) | markdown::Block::Html(code) => div()
+            markdown::Block::Code(code) => div()
                 .rounded(t.radius)
                 .bg(t.sunken)
                 .p(px(12.))
@@ -1254,7 +1276,8 @@ mod tests {
         assert_eq!(filters.matching(&releases)[0].version.id, "A");
         filters.choose_minecraft("1.21.2".into(), &releases, 0, None);
         assert_eq!(filters.loader.as_deref(), Some("forge"));
-        assert_eq!(filters.version, None);
+        // The previous pin is replaced by the newest release for the new pair.
+        assert_eq!(filters.version.as_deref(), Some("B"));
         assert_eq!(
             filters
                 .matching(&releases)
@@ -1263,6 +1286,22 @@ mod tests {
                 .collect::<Vec<_>>(),
             ["B", "C"]
         );
+    }
+
+    #[test]
+    fn default_version_prefers_newest_installable_release() {
+        let mut beta = release("beta", &["1.21.1"], &["fabric"]);
+        beta.version.version_type = "beta".into();
+        let mut blocked = release("blocked", &["1.21.1"], &["fabric"]);
+        blocked.version.unsupported_reason = Some("unsupported".into());
+        let releases = [beta, blocked, release("stable", &["1.21.1"], &["fabric"])];
+        let mut filters = VersionFilters::default();
+        filters.choose_minecraft("1.21.1".into(), &releases, 0, None);
+        assert_eq!(filters.version.as_deref(), Some("stable"));
+        // Without a stable release the newest installable version is chosen.
+        let releases = [releases[0].clone(), releases[1].clone()];
+        filters.select_default_version(&releases);
+        assert_eq!(filters.version.as_deref(), Some("beta"));
     }
 
     #[test]
@@ -1284,7 +1323,7 @@ mod tests {
             Some(&instance),
         );
         assert_eq!(filters.loader.as_deref(), Some("fabric"));
-        assert_eq!(filters.version, None);
+        assert_eq!(filters.version.as_deref(), Some("exact"));
         assert_eq!(install_block(0, Some(&instance), &filters), None);
         filters.loader = Some("quilt".into());
         assert_eq!(filters.matching(&releases)[0].version.id, "exact");

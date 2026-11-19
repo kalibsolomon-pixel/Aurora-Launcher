@@ -706,6 +706,46 @@ impl Client {
         })
     }
 
+    /// Display titles for dependency projects in one bounded batch request.
+    /// Display-only and best effort: any failure leaves titles unknown.
+    async fn project_titles<'a>(
+        &self,
+        ids: impl Iterator<Item = &'a str>,
+    ) -> HashMap<String, String> {
+        const MAX_IDS: usize = 64;
+        let mut unique = Vec::new();
+        for id in ids {
+            if unique.len() == MAX_IDS {
+                break;
+            }
+            if validate_id(id).is_ok() && !unique.contains(&id) {
+                unique.push(id);
+            }
+        }
+        if unique.is_empty() {
+            return HashMap::new();
+        }
+        let Ok(mut url) = self.endpoint(&["projects"]) else {
+            return HashMap::new();
+        };
+        let Ok(ids) = serde_json::to_string(&unique) else {
+            return HashMap::new();
+        };
+        url.query_pairs_mut().append_pair("ids", &ids);
+        match self.get::<Vec<ProjectTitleDto>>(url).await {
+            Ok(projects) => projects
+                .into_iter()
+                .filter(|project| unique.contains(&project.id.as_str()))
+                .map(|project| {
+                    let title: String = project.title.chars().take(128).collect();
+                    (project.id, title)
+                })
+                .filter(|(_, title)| !title.trim().is_empty())
+                .collect(),
+            Err(_) => HashMap::new(),
+        }
+    }
+
     /// The project page can browse other Minecraft versions and loaders. Its
     /// catalog is display-only; install review still resolves the exact version
     /// against the instance and verifies all of its files and dependencies.
@@ -736,7 +776,7 @@ impl Client {
                 .then_with(|| b.id.cmp(&a.id))
         });
         let mut seen = HashSet::new();
-        let releases = versions
+        let mut releases: Vec<ProjectRelease> = versions
             .into_iter()
             .filter(|version| {
                 version.project_id == project_id
@@ -783,6 +823,7 @@ impl Client {
                         .into_iter()
                         .map(|dependency| ProjectDependency {
                             project_id: dependency.project_id.filter(|id| validate_id(id).is_ok()),
+                            project_title: None,
                             version_id: dependency.version_id.filter(|id| validate_id(id).is_ok()),
                             file_name: dependency.file_name,
                             kind: dependency.dependency_type,
@@ -791,6 +832,24 @@ impl Client {
                 }
             })
             .collect();
+        let titles = self
+            .project_titles(
+                releases
+                    .iter()
+                    .flat_map(|release| &release.dependencies)
+                    .filter_map(|dependency| dependency.project_id.as_deref()),
+            )
+            .await;
+        for dependency in releases
+            .iter_mut()
+            .flat_map(|release| &mut release.dependencies)
+        {
+            dependency.project_title = dependency
+                .project_id
+                .as_ref()
+                .and_then(|id| titles.get(id))
+                .cloned();
+        }
         let links = [
             ("Source", project.source_url),
             ("Issues", project.issues_url),
@@ -1851,6 +1910,8 @@ pub struct ProjectRelease {
 #[serde(rename_all = "camelCase")]
 pub struct ProjectDependency {
     pub project_id: Option<String>,
+    /// Display title from Modrinth, when the lookup succeeded.
+    pub project_title: Option<String>,
     pub version_id: Option<String>,
     pub file_name: Option<String>,
     pub kind: String,
@@ -1909,6 +1970,12 @@ struct CategoryTagDto {
     name: String,
     project_type: Option<String>,
 }
+#[derive(Debug, Deserialize)]
+struct ProjectTitleDto {
+    id: String,
+    title: String,
+}
+
 #[derive(Debug, Deserialize)]
 struct ProjectDto {
     id: String,
@@ -3961,6 +4028,13 @@ mod tests {
                 json!([release, version("RELEASE2", "FOREIGN1", json!([]))]),
             ),
             ("/v2/version/RELEASE1".into(), release),
+            (
+                "/v2/projects".into(),
+                json!([
+                    {"id": "DEPEND01", "title": "Dependency API"},
+                    {"id": "UNASKED1", "title": "Not requested"}
+                ]),
+            ),
         ]));
         let client = Client::for_testing(&format!("{}/v2/", server.base_url()));
         let page = client.project_page(BrowseKind::Mod, id).await.unwrap();
@@ -3974,6 +4048,10 @@ mod tests {
         assert_eq!(
             page.releases[0].dependencies[0].project_id.as_deref(),
             Some("DEPEND01")
+        );
+        assert_eq!(
+            page.releases[0].dependencies[0].project_title.as_deref(),
+            Some("Dependency API")
         );
         assert_eq!(
             client
