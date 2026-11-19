@@ -49,13 +49,21 @@ pub(crate) fn metadata(path: &Path) -> Result<Metadata, ContentError> {
     checked(fs::symlink_metadata(path).map_err(ContentError::Io)?)
 }
 
+/// Files are pinned against writes, rename and delete while they are read.
 #[cfg(windows)]
-fn open_checked(path: &Path) -> Result<File, ContentError> {
+const SHARE_FILE: u32 = 1;
+/// Directories are pinned only against rename and delete: other programs may
+/// still add or rename entries inside every ancestor (up to the drive root).
+#[cfg(windows)]
+const SHARE_DIRECTORY: u32 = 1 | 2;
+
+#[cfg(windows)]
+fn open_checked(path: &Path, share: u32) -> Result<File, ContentError> {
     use std::os::windows::fs::OpenOptionsExt;
-    // Pin against writes and rename/delete. Open reparse points themselves.
+    // Open reparse points themselves so `checked` can reject them.
     let file = OpenOptions::new()
         .read(true)
-        .share_mode(1)
+        .share_mode(share)
         .custom_flags(0x0220_0000)
         .open(path)
         .map_err(ContentError::Io)?;
@@ -94,7 +102,7 @@ struct Directory {
 impl Directory {
     fn root(path: &Path) -> Result<Self, ContentError> {
         #[cfg(windows)]
-        let handle = open_checked(path)?;
+        let handle = open_checked(path, SHARE_DIRECTORY)?;
         #[cfg(unix)]
         let handle = open_at(libc::AT_FDCWD, path)?;
         Self::new(handle, path)
@@ -114,7 +122,7 @@ impl Directory {
     fn open(&self, name: &Path) -> Result<File, ContentError> {
         #[cfg(windows)]
         {
-            open_checked(&self.path.join(name))
+            open_checked(&self.path.join(name), SHARE_FILE)
         }
         #[cfg(unix)]
         {
@@ -125,10 +133,12 @@ impl Directory {
 
     fn child(&self, name: &Path) -> Result<Self, ContentError> {
         #[cfg(windows)]
-        let path = self.path.join(name);
+        {
+            let path = self.path.join(name);
+            Self::new(open_checked(&path, SHARE_DIRECTORY)?, &path)
+        }
         #[cfg(unix)]
-        let path = name;
-        Self::new(self.open(name)?, &path)
+        Self::new(self.open(name)?, name)
     }
 
     fn walk(
@@ -423,6 +433,19 @@ mod tests {
         fs::create_dir(source.join(".minecraft")).unwrap();
         assert!(folder.files(true).is_err());
         assert!(Folder::open(&source.join(".minecraft")).is_err());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn open_folder_blocks_rename_but_not_sibling_writes() {
+        let scratch = Scratch::new().unwrap();
+        let selected = scratch.0.join("pack");
+        fs::create_dir(&selected).unwrap();
+        let folder = Folder::open(&selected).unwrap();
+        assert!(fs::rename(&selected, scratch.0.join("moved")).is_err());
+        fs::write(scratch.0.join("sibling.txt"), b"ok").unwrap();
+        fs::rename(scratch.0.join("sibling.txt"), scratch.0.join("renamed.txt")).unwrap();
+        drop(folder);
     }
 
     #[test]
