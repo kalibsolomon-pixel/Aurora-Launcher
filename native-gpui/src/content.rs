@@ -508,16 +508,20 @@ fn extension_is(path: &std::path::Path, wanted: &[&str]) -> bool {
 /// validates the archive itself. Anything else is refused with the reason.
 fn classify_content_drop(paths: &[PathBuf]) -> Result<String, &'static str> {
     match paths {
-        [] => Err("Drop a .jar or .zip file to import it."),
-        [path] if extension_is(path, &CONTENT_EXTENSIONS) => path
-            .to_str()
-            .map(str::to_owned)
-            .ok_or("That file's path can't be read. Move the file and try again."),
+        [] => Err("Drop a .jar, .zip, or content folder."),
+        [path]
+            if std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_dir())
+                || extension_is(path, &CONTENT_EXTENSIONS) =>
+        {
+            path.to_str()
+                .map(str::to_owned)
+                .ok_or("That file's path can't be read. Move the file and try again.")
+        }
         [path] if extension_is(path, &["mrpack"]) => {
             Err("Modpacks (.mrpack) are imported from the Instances page.")
         }
-        [_] => Err("Only .jar and .zip files can be imported as content."),
-        _ => Err("Drop one file at a time."),
+        [_] => Err("Choose a .jar, .zip, or content folder."),
+        _ => Err("Drop one file or folder at a time."),
     }
 }
 
@@ -983,7 +987,7 @@ impl Content {
         self.load();
         self.sync_updates(cx);
     }
-    fn choose_file(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn choose_path(&mut self, folder: bool, window: &mut Window, cx: &mut Context<Self>) {
         let Some(target) = self.target().filter(|_| self.host.is_some()) else {
             return;
         };
@@ -992,23 +996,13 @@ impl Content {
             return;
         }
         let serial = self.review_serial;
-        let Some(owner) = file_picker::owner(window) else {
-            self.receive_pick(
-                target,
-                serial,
-                Err(api::ApiError::new(
-                    "local_import_failed",
-                    "The file picker is unavailable in this window.",
-                )),
-                cx,
-            );
-            return;
-        };
+        let picker =
+            file_picker::import_path(file_picker::LocalImportKind::Content, folder, window, cx);
         self.sync_updates(cx);
         cx.notify();
         let (tx, rx) = tokio::sync::oneshot::channel();
         self.runtime.spawn(async move {
-            let result = guarded(file_picker::choose_content_path(Some(owner))).await;
+            let result = guarded(picker).await;
             let _ = tx.send(result);
         });
         cx.spawn(async move |weak, cx| {
@@ -1708,7 +1702,15 @@ impl Render for Content {
                                         .selected(self.local_import.open)
                                         .disabled(busy || previewing)
                                         .on_click(cx.listener(|this, _, window, cx| {
-                                            this.choose_file(window, cx);
+                                            this.choose_path(false, window, cx);
+                                        })),
+                                )
+                                .child(
+                                    AuroraButton::new("content-import-folder", "Choose folder")
+                                        .size(ButtonSize::Small)
+                                        .disabled(busy || previewing)
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.choose_path(true, window, cx);
                                         })),
                                 ),
                         )
@@ -1974,7 +1976,7 @@ impl Render for Content {
                         .child(ui::section_header(
                             t,
                             "Import local content",
-                            Some("Choose a .jar or .zip, or drop it here. You'll review it before it's installed.".into()),
+                            Some("Choose or drop a .jar, .zip, or content folder. You'll review it before it's installed.".into()),
                         ))
                         .child(
                             AuroraButton::new("content-import-close", "Close import")
@@ -1993,7 +1995,7 @@ impl Render for Content {
                         .gap(px(10.))
                         .child(
                             ui::muted(t, if previewing {
-                                "Reading file…".to_owned()
+                                "Reviewing content…".to_owned()
                             } else {
                                 std::path::Path::new(&self.local_import.path)
                                     .file_name()
@@ -2007,11 +2009,11 @@ impl Render for Content {
                             .text_ellipsis(),
                         )
                         .child(
-                            AuroraButton::new("content-import-choose", "Choose another file")
+                            AuroraButton::new("content-import-choose", "Choose file")
                                 .icon("upload_file")
                                 .disabled(busy || previewing)
                                 .on_click(cx.listener(|this, _, window, cx| {
-                                    this.choose_file(window, cx);
+                                    this.choose_path(false, window, cx);
                                 })),
                         ),
                 );
@@ -2048,6 +2050,17 @@ impl Render for Content {
                             value["sizeBytes"].as_u64().unwrap_or(0)
                         ),
                     ));
+                if let Some(names) = value["fileNames"]
+                    .as_array()
+                    .filter(|names| names.len() > 1)
+                {
+                    let names = names
+                        .iter()
+                        .filter_map(Value::as_str)
+                        .collect::<Vec<_>>()
+                        .join(", ");
+                    block = block.child(ui::muted(t, names).whitespace_normal());
+                }
                 if let Some(note) = value["note"].as_str().filter(|n| !n.is_empty()) {
                     block = block.child(ui::muted(t, note.to_owned()));
                 }
@@ -2610,18 +2623,18 @@ mod tests {
 
     #[test]
     fn dropped_content_rejects_everything_else_with_a_reason() {
-        assert_eq!(drop_of(&[]), Err("Drop a .jar or .zip file to import it."));
+        assert_eq!(drop_of(&[]), Err("Drop a .jar, .zip, or content folder."));
         assert_eq!(
             drop_of(&["a.jar", "b.jar"]),
-            Err("Drop one file at a time.")
+            Err("Drop one file or folder at a time.")
         );
         assert_eq!(
             drop_of(&["a.txt"]),
-            Err("Only .jar and .zip files can be imported as content.")
+            Err("Choose a .jar, .zip, or content folder.")
         );
         assert_eq!(
             drop_of(&["no-extension"]),
-            Err("Only .jar and .zip files can be imported as content.")
+            Err("Choose a .jar, .zip, or content folder.")
         );
         assert_eq!(
             drop_of(&["pack.mrpack"]),

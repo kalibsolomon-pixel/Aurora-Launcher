@@ -1,35 +1,4 @@
-//! Local `.mrpack` import entry for the GPUI host.
-//!
-//! An explicit "Import modpack" action opens the launcher's owned Windows
-//! file picker and then asks the core to identify the selected archive as an
-//! exact published Modrinth pack version through
-//! [`api::identify_local_modpack`]. A recognized archive is reported to the
-//! integrating parent with the exact nonempty `projectId`/`versionId` and an
-//! explanatory local-file note, so the parent can open the reviewed Discover
-//! pack workflow pinned to that exact version. A single `.mrpack` dropped
-//! from the file manager onto the import row skips the picker and enters the
-//! same identification (see [`PackImport::import_dropped`]).
-//!
-//! Contract kept here:
-//! - Nothing installs, extracts or launches in this module. The core may
-//!   cache verified archive bytes; no launcher or instance record is created.
-//!   An unrecognized or malformed archive is
-//!   refused with an explanation; no provider identity is ever invented and
-//!   there is no unverified-import fallback.
-//! - One identification at a time. The chooser runs under the same explicit
-//!   busy window; a cancelled chooser is a quiet terminal settlement and
-//!   never clears other state. A stale or duplicate terminal reply is
-//!   ignored, so it can never open a pack twice or clear newer busy state.
-//! - `set_blocked` only gates new starts; an already-running identification
-//!   still completes normally. Diagnostic runs without a host perform no
-//!   actions and no requests.
-//! - The completion is delivered through an awaited oneshot channel, never
-//!   by polling.
-//!
-//! The preserved Slint host is the behavior authority:
-//! `native/src/content_import.rs` (`import_modpack`, `local_pack_note`) and
-//! `native/src/discover.rs` (`open_local_pack`, `pack_loader_label`); the
-//! parent owns Discover navigation, mirroring `open_local_pack`'s effect.
+//! Review local archives and extracted modpack folders before installation.
 
 #![allow(dead_code)]
 
@@ -45,6 +14,7 @@ use serde_json::Value;
 use crate::api::{self, ApiError, ApiResult};
 use crate::backend::guarded;
 use crate::controls::AuroraButton;
+use crate::downloads::{JobRequest, PreparedJob};
 use crate::file_picker;
 use crate::theme;
 use crate::ui;
@@ -54,6 +24,7 @@ use crate::ui;
 pub enum PackImportEvent {
     /// The module's busy state changed. Each transition is reported once.
     BusyChanged(bool),
+    InstallFolder(PreparedJob),
     /// An exact published Modrinth pack version was recognized for the
     /// selected local file. Both IDs are nonempty; the parent opens the
     /// reviewed Discover pack workflow pinned to this exact version.
@@ -85,6 +56,7 @@ enum PackImportCompletion {
     Cancelled,
     /// An exact recognized published version, with nonempty IDs.
     Opened(PackIdentity),
+    Folder(Value),
     /// The chooser or identification failed; `String` is the actionable
     /// message shown to the user.
     Failed(String),
@@ -131,6 +103,7 @@ impl PackImportCore {
         self.busy = false;
         match result {
             Ok(None) => PackImportCompletion::Cancelled,
+            Ok(Some(found)) if found["provider"] == "local" => PackImportCompletion::Folder(found),
             Ok(Some(found)) => {
                 let text = |key: &str| found[key].as_str().unwrap_or("").to_owned();
                 let note = local_pack_note(&found);
@@ -156,14 +129,11 @@ impl PackImportCore {
 
 /// Where the archive comes from: the owned picker or a dropped file.
 enum ModpackSource {
-    Picker(isize),
+    Picker(std::pin::Pin<Box<dyn std::future::Future<Output = ApiResult<Option<String>>> + Send>>),
     Path(String),
 }
 
-/// Classifies files dropped onto the import surface. Exactly one `.mrpack`
-/// (the picker's filter, checked case-insensitively like the core) becomes
-/// the path to identify; anything else is refused with the reason, using the
-/// core's own wording for a wrong file type.
+/// Exactly one supported archive or directory enters core review.
 pub(crate) fn classify_modpack_drop(paths: &[PathBuf]) -> Result<String, &'static str> {
     let is_mrpack = |path: &PathBuf| {
         path.extension()
@@ -171,12 +141,15 @@ pub(crate) fn classify_modpack_drop(paths: &[PathBuf]) -> Result<String, &'stati
             .is_some_and(|extension| extension.eq_ignore_ascii_case("mrpack"))
     };
     match paths {
-        [] => Err("Drop a Modrinth modpack archive (.mrpack) to import it."),
-        [path] if is_mrpack(path) => path
-            .to_str()
-            .map(str::to_owned)
-            .ok_or("That file's path can't be read. Move the file and try again."),
-        [_] => Err("Choose a Modrinth modpack archive (.mrpack)."),
+        [path]
+            if std::fs::symlink_metadata(path).is_ok_and(|metadata| metadata.is_dir())
+                || is_mrpack(path) =>
+        {
+            path.to_str()
+                .map(str::to_owned)
+                .ok_or("The selected path can't be read.")
+        }
+        [] | [_] => Err("Choose a .mrpack file or extracted modpack folder."),
         _ => Err("Drop one modpack at a time."),
     }
 }
@@ -231,6 +204,7 @@ pub struct PackImport {
     /// The parent's gate on new starts; never discards a running completion.
     blocked: bool,
     error: Option<String>,
+    folder_review: Option<Value>,
 }
 
 impl PackImport {
@@ -248,6 +222,7 @@ impl PackImport {
             core: PackImportCore::new(),
             blocked: false,
             error: None,
+            folder_review: None,
         }
     }
 
@@ -266,7 +241,7 @@ impl PackImport {
 
     /// The explicit action: owned file picker, then exact identification.
     /// A diagnostic run without a host performs no action.
-    pub fn import(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn import(&mut self, folder: bool, window: &mut Window, cx: &mut Context<Self>) {
         if self.host.is_none() {
             return;
         }
@@ -276,25 +251,12 @@ impl PackImport {
         self.error = None;
         cx.emit(PackImportEvent::BusyChanged(true));
         cx.notify();
-        let Some(owner) = file_picker::owner(window) else {
-            self.receive(
-                serial,
-                Err(ApiError::new(
-                    "local_import_failed",
-                    "The file picker is unavailable in this window.",
-                )),
-                cx,
-            );
-            return;
-        };
-        self.identify(serial, ModpackSource::Picker(owner), cx);
+        let picker =
+            file_picker::import_path(file_picker::LocalImportKind::Modpack, folder, window, cx);
+        self.identify(serial, ModpackSource::Picker(Box::pin(picker)), cx);
     }
 
-    /// Archives dropped from the file manager enter the same identification
-    /// as the picker: exactly one `.mrpack`, under the same busy window, and
-    /// nothing installs before the Discover review. Refusals (wrong type,
-    /// several files, a busy or gated import) are explained and start nothing.
-    /// The parent may also forward a drop on a larger surface here.
+    /// Drops enter the same review as selections from the picker.
     pub fn import_dropped(&mut self, paths: &[PathBuf], cx: &mut Context<Self>) {
         if self.host.is_none() {
             return;
@@ -329,15 +291,13 @@ impl PackImport {
         self.rt.spawn(async move {
             let result = guarded(async move {
                 let path = match source {
-                    ModpackSource::Picker(owner) => {
-                        match file_picker::choose_modpack_path(Some(owner)).await? {
-                            Some(path) => path,
-                            None => return Ok(None),
-                        }
-                    }
+                    ModpackSource::Picker(picker) => match picker.await? {
+                        Some(path) => path,
+                        None => return Ok(None),
+                    },
                     ModpackSource::Path(path) => path,
                 };
-                api::identify_local_modpack(host, path).await.map(Some)
+                api::review_local_modpack(host, path).await.map(Some)
             })
             .await;
             let _ = tx.send(result);
@@ -361,13 +321,16 @@ impl PackImport {
             PackImportCompletion::Cancelled => {}
             PackImportCompletion::Opened(identity) => {
                 self.error = None;
+                self.folder_review = None;
                 cx.emit(PackImportEvent::OpenLocalPack {
                     project_id: identity.project_id,
                     version_id: identity.version_id,
                     note: identity.note,
                 });
             }
+            PackImportCompletion::Folder(review) => self.folder_review = Some(review),
             PackImportCompletion::Failed(message) => {
+                self.folder_review = None;
                 self.error = Some(message);
             }
         }
@@ -397,9 +360,14 @@ impl Render for PackImport {
                     .icon("upload")
                     .disabled(disabled)
                     .on_click(cx.listener(|this, _event, window, cx| {
-                        this.import(window, cx);
+                        this.import(false, window, cx);
                     })),
             );
+        actions = actions.child(
+            AuroraButton::new("pack-import-folder", "Choose folder")
+                .disabled(disabled)
+                .on_click(cx.listener(|this, _event, window, cx| this.import(true, window, cx))),
+        );
         // "New instance" belongs to the creator; the page header hosts it.
         if let Some(new_instance) = crate::instance_creator::new_instance_button(cx) {
             actions = actions.child(new_instance);
@@ -415,7 +383,7 @@ impl Render for PackImport {
                     div()
                         .text_size(px(ui::TEXT_CAPTION))
                         .text_color(palette.muted_foreground)
-                        .child("Checking the selected file…"),
+                        .child("Reviewing the selected modpack…"),
                 )
         } else {
             div()
@@ -462,13 +430,54 @@ impl Render for PackImport {
                     .child(ui::page_header(
                         &palette,
                         "Instances",
-                        Some(
-                            "Create and manage instances. Import or drop a .mrpack modpack.".into(),
-                        ),
+                        Some("Import or drop a .mrpack file or extracted modpack folder.".into()),
                     ))
                     .child(actions),
             )
             .children(busy.then_some(hint));
+
+        if let Some(review) = &self.folder_review {
+            let title = review["name"].as_str().unwrap_or("Local modpack");
+            let count = |key: &str| review[key].as_array().map_or(0, Vec::len);
+            let detail = format!(
+                "Version {} · Minecraft {} · {}",
+                review["packVersion"].as_str().unwrap_or(""),
+                review["minecraftVersion"].as_str().unwrap_or(""),
+                pack_loader_label(review)
+            );
+            let snapshot = review["projectId"].as_str().unwrap_or("").to_owned();
+            let fingerprint = review["fingerprint"].as_str().unwrap_or("").to_owned();
+            let job = PreparedJob {
+                title: title.to_owned(),
+                detail: detail.clone(),
+                request: JobRequest::LocalPack {
+                    snapshot,
+                    fingerprint,
+                },
+            };
+            root = root.child(ui::card(&palette)
+                .gap(px(8.))
+                .child(ui::section_header(&palette, title.to_owned(), Some(detail.into())))
+                .child(ui::muted(&palette, format!(
+                    "Required downloads {} · Overrides {} · Excluded files {} · Skipped overrides {}",
+                    count("unresolved"), count("overrides"), count("excluded"), count("skippedOverrides"),
+                )))
+                .child(ui::caption(&palette, "This folder creates a new instance. Its publisher is unverified."))
+                .child(div().flex().gap(px(8.))
+                    .child(AuroraButton::new("install-pack-folder", "Install modpack")
+                        .disabled(disabled)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.folder_review = None;
+                            cx.emit(PackImportEvent::InstallFolder(job.clone()));
+                            cx.notify();
+                        })))
+                    .child(AuroraButton::new("cancel-pack-folder", "Cancel")
+                        .disabled(busy)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.folder_review = None;
+                            cx.notify();
+                        })))));
+        }
 
         if let Some(error) = &self.error {
             root = root.child(
@@ -551,15 +560,15 @@ mod tests {
         );
         assert_eq!(
             drop_of(&["a.zip"]),
-            Err("Choose a Modrinth modpack archive (.mrpack).")
+            Err("Choose a .mrpack file or extracted modpack folder.")
         );
         assert_eq!(
             drop_of(&["a.jar"]),
-            Err("Choose a Modrinth modpack archive (.mrpack).")
+            Err("Choose a .mrpack file or extracted modpack folder.")
         );
         assert_eq!(
             drop_of(&["mrpack"]),
-            Err("Choose a Modrinth modpack archive (.mrpack).")
+            Err("Choose a .mrpack file or extracted modpack folder.")
         );
         assert_eq!(
             drop_of(&["a.mrpack", "b.mrpack"]),
@@ -571,7 +580,7 @@ mod tests {
         );
         assert_eq!(
             drop_of(&[]),
-            Err("Drop a Modrinth modpack archive (.mrpack) to import it.")
+            Err("Choose a .mrpack file or extracted modpack folder.")
         );
     }
 

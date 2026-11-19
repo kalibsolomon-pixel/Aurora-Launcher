@@ -350,6 +350,7 @@ pub struct Platform {
 #[derive(Debug, Clone, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct PackPin {
+    pub provider: Option<String>,
     pub name: String,
     pub pack_version: String,
 }
@@ -1896,6 +1897,21 @@ pub async fn check_custom_java(
 // ------------------------------------------------- local .mrpack
 
 /// Identifies a selected local archive as an exact published pack version.
+pub async fn review_local_modpack(host: Host, path: String) -> ApiResult<Value> {
+    let request = request(json!({ "sourcePath": path }))?;
+    convert(app::review_local_modpack(host, request).await)
+}
+
+pub async fn install_local_modpack(
+    host: Host,
+    snapshot: String,
+    fingerprint: String,
+) -> ApiResult<Value> {
+    let request = request(json!({ "snapshot": snapshot, "fingerprint": fingerprint }))?;
+    let summary = Box::pin(app::install_local_modpack(host, request)).await;
+    convert(summary)
+}
+
 pub async fn identify_local_modpack(host: Host, path: String) -> ApiResult<Value> {
     let request = request(json!({ "sourcePath": path }))?;
     convert(app::identify_local_modpack(host, request).await)

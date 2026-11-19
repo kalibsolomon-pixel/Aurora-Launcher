@@ -128,17 +128,18 @@ pub struct PackRegistryIdentity {
 
 impl PackRegistryIdentity {
     fn validate(&self) -> Result<(), InvalidInstanceRecord> {
-        if self.provider != "modrinth"
-            || self.project_id.len() != 8
-            || !self
-                .project_id
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric())
-            || self.version_id.len() != 8
-            || !self
-                .version_id
-                .bytes()
-                .all(|byte| byte.is_ascii_alphanumeric())
+        let valid_id = match self.provider.as_str() {
+            "modrinth" => [&self.project_id, &self.version_id]
+                .iter()
+                .all(|id| id.len() == 8 && id.bytes().all(|byte| byte.is_ascii_alphanumeric())),
+            "local" => {
+                self.project_id.len() == 64
+                    && self.project_id.bytes().all(|byte| byte.is_ascii_hexdigit())
+                    && self.version_id == "snapshot"
+            }
+            _ => false,
+        };
+        if !valid_id
             || self.name.trim().is_empty()
             || self.name.len() > 256
             || self.pack_version.trim().is_empty()

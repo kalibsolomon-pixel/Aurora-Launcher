@@ -1750,6 +1750,14 @@ pub(crate) async fn install_pack_provider_plans(
             "a new pack instance already holds provider content".into(),
         ));
     }
+    if plans.is_empty() {
+        // All components were supplied by the archive or by digest-pinned
+        // downloads. Validate the installed mods without creating provider state.
+        return with_instance_lock(instance, || {
+            validate_projected_artifacts(managed, instance, &[], None)?;
+            Ok(Vec::new())
+        });
+    }
     let revision = local_inventory_revision(managed, instance)?;
     let acquired =
         acquire_provider_plans_within(managed, plans, MAX_NEW_PACK_PROVIDER_PLANS).await?;
@@ -3244,11 +3252,7 @@ fn validate_provider_mod_against_inventory(
 pub(crate) fn validate_local_import(
     managed: &ManagedPaths,
     instance: &InstanceId,
-    kind: ContentType,
-    name: &str,
-    digest: &str,
-    path: &Path,
-    bytes: u64,
+    files: &[crate::local_content::ImportFile],
 ) -> Result<(), ContentError> {
     let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
         .map_err(|e| ContentError::StateMalformed(e.to_string()))?;
@@ -3256,36 +3260,35 @@ pub(crate) fn validate_local_import(
         .find(instance)
         .ok_or(ContentError::UnsafePath)?
         .installed();
-    let record = ProviderRecord {
-        content_type: kind,
-        provider: "local-validation".into(),
-        project_id: digest.into(),
-        version_id: digest.into(),
-        file_id: digest.into(),
-        file_name: name.into(),
-        sha256: digest.into(),
-        display_version: None,
-        compatibility: ContentCompatibility {
-            minecraft_versions: vec![installed.minecraft_version.clone()],
-            loader: installed.platform.provider_loader().ok().map(str::to_owned),
-            environment: Some("client".into()),
-        },
-        dependencies: vec![],
-        explicitly_retained: true,
-        requires: vec![],
-        origin: ProviderOrigin::Direct,
-        installed_at_unix_seconds: None,
-        pinned: false,
-        update_channel: UpdateChannel::Stable,
-    };
-    validate_provider_mod_artifact(managed, instance, &record, path, bytes)?;
-    if kind == ContentType::Mod {
-        validate_projected_artifacts(
-            managed,
-            instance,
-            &[(record, path.to_path_buf(), bytes)],
-            None,
-        )?;
+    let mut mods = Vec::new();
+    for file in files.iter().filter(|file| file.kind == ContentType::Mod) {
+        let record = ProviderRecord {
+            content_type: file.kind,
+            provider: "local-validation".into(),
+            project_id: file.digest.clone(),
+            version_id: file.digest.clone(),
+            file_id: file.digest.clone(),
+            file_name: file.name.clone(),
+            sha256: file.digest.clone(),
+            display_version: None,
+            compatibility: ContentCompatibility {
+                minecraft_versions: vec![installed.minecraft_version.clone()],
+                loader: installed.platform.provider_loader().ok().map(str::to_owned),
+                environment: Some("client".into()),
+            },
+            dependencies: vec![],
+            explicitly_retained: true,
+            requires: vec![],
+            origin: ProviderOrigin::Direct,
+            installed_at_unix_seconds: None,
+            pinned: false,
+            update_channel: UpdateChannel::Stable,
+        };
+        validate_provider_mod_artifact(managed, instance, &record, &file.path, file.size)?;
+        mods.push((record, file.path.clone(), file.size));
+    }
+    if !mods.is_empty() {
+        validate_projected_artifacts(managed, instance, &mods, None)?;
     }
     Ok(())
 }

@@ -11,6 +11,7 @@ pub mod content_updates;
 mod cosmetic_image;
 #[cfg(all(debug_assertions, feature = "f3ra-desktop-acceptance"))]
 mod desktop_acceptance;
+mod import_source;
 pub mod local_content;
 pub mod local_pack;
 // Bounded read-only NBT walking for saved-game discovery (servers.dat and
