@@ -2981,7 +2981,8 @@ impl Render for HomeWidgets {
                 title,
                 index,
                 now,
-                pitch_x,
+                width as f32 * pitch_x - GRID_GAP,
+                height as f32 * pitch_y - GRID_GAP,
                 editing,
                 blocked,
                 busy,
@@ -3262,7 +3263,8 @@ impl HomeWidgets {
         title: &'static str,
         _index: usize,
         now: u64,
-        pitch_x: f32,
+        card_px: f32,
+        card_height: f32,
         editing: bool,
         blocked: bool,
         busy: bool,
@@ -3275,12 +3277,6 @@ impl HomeWidgets {
         let palette = theme::theme(cx).clone();
         let view = cx.entity();
         let id = widget.id.clone();
-        // Rendered width of this card, used only to pick a header layout.
-        let card_px = requested_dims(widget)
-            .0
-            .clamp(1, self.core.render_columns()) as f32
-            * pitch_x
-            - GRID_GAP;
         let wide = card_px >= 360.;
 
         // Transient work never reads as part of the title: it is a quiet
@@ -3802,7 +3798,8 @@ impl HomeWidgets {
                         .flex_1()
                         .min_h(px(0.))
                         .overflow_y_scroll()
-                        .track_scroll(&scroll);
+                        .track_scroll(&scroll)
+                        .pr(px(10.));
                     let last_index = rows.len().saturating_sub(1);
                     for (index, row) in rows.into_iter().enumerate() {
                         let mode = if server_view == ServerView::Saved {
@@ -3817,8 +3814,10 @@ impl HomeWidgets {
                         let motd = row.motd.replace('\n', " · ");
                         list = list.child(
                             list_row(&palette, index == last_index)
+                                .h(px(80.))
+                                .flex_none()
                                 .id(format!("server-row-{}", row.id))
-                                .child(avatar(&palette, row.picture.clone(), "dns"))
+                                .child(avatar(&palette, row.picture.clone(), "dns", 44.))
                                 .child(
                                     div()
                                         .flex()
@@ -3826,14 +3825,18 @@ impl HomeWidgets {
                                         .gap(px(1.))
                                         .flex_1()
                                         .min_w(px(0.))
-                                        .child(row_title(&palette, row.name.clone()))
-                                        .child(row_detail(&palette, row.detail.clone()))
+                                        .child(
+                                            row_title(&palette, row.name.clone())
+                                                .text_size(px(ui::TEXT_SECTION))
+                                                .font_weight(FontWeight::SEMIBOLD),
+                                        )
                                         .when(!motd.is_empty(), |this| {
                                             this.child(
                                                 row_detail(&palette, motd.clone())
-                                                    .text_color(palette.subtle_foreground),
+                                                    .text_color(palette.muted_foreground),
                                             )
-                                        }),
+                                        })
+                                        .child(row_detail(&palette, row.detail.clone())),
                                 )
                                 .child(
                                     star_button(
@@ -3870,7 +3873,19 @@ impl HomeWidgets {
                                 ),
                         );
                     }
-                    card = card.child(list);
+                    card = card.child(
+                        div()
+                            .relative()
+                            .flex()
+                            .flex_col()
+                            .flex_1()
+                            .min_h(px(0.))
+                            .child(list)
+                            .child(
+                                ui::scrollbar(&palette, "home-servers-scrollbar", &scroll)
+                                    .mode(gpui_kit::base::ScrollbarMode::Always),
+                            ),
+                    );
                 }
             }
             "recent-worlds" => {
@@ -3931,7 +3946,7 @@ impl HomeWidgets {
                         list = list.child(
                             list_row(&palette, index == last_index)
                                 .id(format!("world-row-{}", row.id))
-                                .child(avatar(&palette, row.picture.clone(), "landscape"))
+                                .child(avatar(&palette, row.picture.clone(), "landscape", 32.))
                                 .child(
                                     div()
                                         .flex()
@@ -4014,6 +4029,9 @@ impl HomeWidgets {
             // The entity appears one task after the card is first shown.
             "media" => {
                 if let Some(media) = &self.media {
+                    media.update(cx, |media, cx| {
+                        media.set_card_size(card_px, card_height, cx)
+                    });
                     card = card.child(media.clone());
                 }
             }
@@ -4126,17 +4144,17 @@ fn row_detail(t: &theme::AuroraTheme, text: String) -> Div {
 }
 
 /// A server or world picture, or a quiet icon tile when it has none.
-fn avatar(t: &theme::AuroraTheme, picture: Option<Arc<RenderImage>>, icon: &str) -> Div {
+fn avatar(t: &theme::AuroraTheme, picture: Option<Arc<RenderImage>>, icon: &str, size: f32) -> Div {
     match picture {
         Some(picture) => div()
             .flex_shrink_0()
-            .size(px(32.))
+            .size(px(size))
             .rounded(px(8.))
             .overflow_hidden()
             .border_1()
             .border_color(t.border_subtle)
-            .child(img(picture).size(px(30.))),
-        None => ui::icon_tile(t, Some(icon), 32., false),
+            .child(img(picture).size(px(size - 2.))),
+        None => ui::icon_tile(t, Some(icon), size, false),
     }
 }
 
