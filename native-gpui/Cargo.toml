@@ -23,6 +23,7 @@ base64 = "0.22"
 # GPUI's existing image type is also needed for decoded core-owned RGBA.
 image = { version = "=0.25.10", default-features = false }
 raw-window-handle = "0.6"
+pulldown-cmark = { version = "0.13", default-features = false }
 
 [target.'cfg(windows)'.build-dependencies]
 winresource = { version = "0.1", default-features = false }
