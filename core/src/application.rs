@@ -4532,6 +4532,80 @@ pub async fn identify_local_modpack(
     .map_err(|error| CommandError::new(error.code, error.message))
 }
 
+#[derive(Debug, Serialize)]
+#[serde(untagged)]
+pub enum LocalModpackReview {
+    Published(crate::local_pack::LocalPackMatch),
+    Folder(crate::modpacks::PackPreview),
+}
+
+pub async fn review_local_modpack(
+    app: Host,
+    request: LocalModpackRequest,
+) -> Result<LocalModpackReview, CommandError> {
+    let path = std::path::Path::new(&request.source_path);
+    if !crate::import_source::metadata(path)?.is_dir() {
+        return identify_local_modpack(app, request)
+            .await
+            .map(LocalModpackReview::Published);
+    }
+    let managed = managed_paths(&app)?;
+    let digest = crate::local_pack::snapshot_directory(&managed, path).await?;
+    let resolved =
+        tokio::task::spawn_blocking(move || crate::modpacks::resolve_local(&managed, &digest))
+            .await
+            .map_err(|_| {
+                CommandError::new("local_pack_unreadable", "The pack review did not complete.")
+            })??;
+    Ok(LocalModpackReview::Folder(resolved.preview))
+}
+
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct LocalModpackInstallRequest {
+    snapshot: String,
+    fingerprint: String,
+}
+
+pub async fn install_local_modpack(
+    app: Host,
+    request: LocalModpackInstallRequest,
+) -> Result<InstanceSummary, CommandError> {
+    let managed = managed_paths(&app)?;
+    let digest = crate::integrity::ArtifactDigest::parse(&request.snapshot).map_err(|_| {
+        CommandError::new(
+            "pack_preview_required",
+            "Review the folder before installing it.",
+        )
+    })?;
+    let resolved = tokio::task::spawn_blocking({
+        let managed = managed.clone();
+        move || crate::modpacks::resolve_local(&managed, &digest)
+    })
+    .await
+    .map_err(|_| {
+        CommandError::new(
+            "local_pack_unreadable",
+            "The pack snapshot could not be read.",
+        )
+    })??;
+    let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+        .map_err(|error| CommandError::new("pack_configuration_invalid", error.to_string()))?;
+    let record = Box::pin(crate::modpacks::install_resolved(
+        &managed,
+        &endpoints,
+        resolved,
+        &[],
+        &request.fingerprint,
+        &mut |phase| {
+            crate::content_jobs::set_stage(phase);
+            let _ = app.emit("modpack-progress", serde_json::json!({ "phase": phase }));
+        },
+    ))
+    .await?;
+    Ok(InstanceSummary::from_record(&record))
+}
+
 /// One-click UX over the same resolution, fingerprint, and transaction path as
 /// the reviewed install. No search-result metadata becomes install authority.
 #[derive(Debug, Clone, Deserialize)]

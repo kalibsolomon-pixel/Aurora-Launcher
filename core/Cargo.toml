@@ -144,7 +144,7 @@ windows = { version = "0.61", default-features = false, features = [
     "Win32_UI_WindowsAndMessaging",
 ] }
 
-[target.'cfg(target_os = "linux")'.dependencies]
+[target.'cfg(unix)'.dependencies]
 libc = "0.2"
 
 # Deterministic async native tests. Icon invariants also use the PNG decoder

@@ -161,7 +161,9 @@ impl InstalledPack {
             )));
         }
         let id = &self.identity;
-        if id.provider != "modrinth"
+        if !matches!(id.provider.as_str(), "modrinth" | "local")
+            || (id.provider == "local"
+                && (id.project_id != id.artifact_sha256 || id.version_id != "snapshot"))
             || id.project_id.is_empty()
             || id.version_id.is_empty()
             || id.name.is_empty()

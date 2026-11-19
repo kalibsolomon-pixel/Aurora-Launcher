@@ -2809,6 +2809,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         |this: &mut Launcher, _, event: &PackImportEvent, window, cx| {
                             match event {
                                 PackImportEvent::BusyChanged(busy) => this.pack_import_busy = *busy,
+                                PackImportEvent::InstallFolder(job) => {
+                                    this.open_page(8, window, cx);
+                                    let queued = this.downloads.as_ref().is_some_and(|downloads| {
+                                        downloads.update(cx, |downloads, cx| downloads.submit(job.clone(), cx))
+                                    });
+                                    if !queued {
+                                        this.status = "The installation could not be queued. Review the folder again.".into();
+                                    }
+                                }
                                 PackImportEvent::OpenLocalPack { project_id, version_id, note } => {
                                     this.open_page(5, window, cx);
                                     let opened = this.discover.as_ref().is_some_and(|discover| {
@@ -3043,12 +3052,17 @@ mod tests {
     }
 
     #[test]
-    fn instances_page_drop_outline_accepts_only_one_mrpack() {
+    fn instances_page_drop_outline_accepts_one_mrpack_or_folder() {
         let pack = |name: &str| PathBuf::from(name);
         let is_single_modpack =
             |paths: &[PathBuf]| pack_import::classify_modpack_drop(paths).is_ok();
         assert!(is_single_modpack(&[pack("C:\\packs\\Fabulous.mrpack")]));
         assert!(is_single_modpack(&[pack("pack.MRPACK")]));
+        let folder = std::env::temp_dir().join(format!("aurora-pack-drop-{}", std::process::id()));
+        std::fs::create_dir(&folder).unwrap();
+        let accepts_folder = is_single_modpack(std::slice::from_ref(&folder));
+        std::fs::remove_dir(&folder).unwrap();
+        assert!(accepts_folder);
         assert!(!is_single_modpack(&[]));
         assert!(!is_single_modpack(&[pack("pack.zip")]));
         assert!(!is_single_modpack(&[pack("pack")]));

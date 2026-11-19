@@ -1201,7 +1201,14 @@ impl ContentUpdates {
                     kind,
                     revision,
                 });
-                (target, instance.display_name, instance.pack.map(|p| p.name))
+                (
+                    target,
+                    instance.display_name,
+                    instance
+                        .pack
+                        .filter(|pack| pack.provider.as_deref() != Some("local"))
+                        .map(|pack| pack.name),
+                )
             }
             None => (None, String::new(), None),
         };
