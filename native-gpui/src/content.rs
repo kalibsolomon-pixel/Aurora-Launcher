@@ -16,7 +16,7 @@ use crate::{
     artwork::{self, ArtworkCache, RawArtwork},
     backend::guarded,
     content_updates::{ContentUpdates, ContentUpdatesEvent},
-    controls::{AuroraButton, AuroraInput, AuroraSelect, AuroraToggle, ButtonSize, ButtonVariant},
+    controls::{AuroraButton, AuroraInput, AuroraToggle, ButtonSize, ButtonVariant},
     file_picker, ui,
 };
 use aurora_launcher_lib::host::Host;
@@ -28,10 +28,8 @@ use gpui_kit::base::{
     input::{InputEvent, InputState},
 };
 use serde_json::Value;
-use std::cell::Cell;
 use std::collections::HashSet;
 use std::path::PathBuf;
-use std::rc::Rc;
 use tokio::runtime::Handle;
 
 /// Icons requested per core call (the Slint host's `ICON_BATCH`).
@@ -615,11 +613,6 @@ pub struct Content {
     actions_open: bool,
     updates: Entity<ContentUpdates>,
     _update_events: Subscription,
-    instance_open: bool,
-    instance_highlight: usize,
-    instance_trigger: gpui::FocusHandle,
-    instance_content: gpui::FocusHandle,
-    instance_bounds: Rc<Cell<Option<gpui::Bounds<gpui::Pixels>>>>,
 }
 impl Content {
     pub fn new(
@@ -714,11 +707,6 @@ impl Content {
             actions_open: false,
             updates,
             _update_events: update_events,
-            instance_open: false,
-            instance_highlight: 0,
-            instance_trigger: cx.focus_handle(),
-            instance_content: cx.focus_handle(),
-            instance_bounds: Rc::new(Cell::new(None)),
         };
         this.refresh(cx);
         this
@@ -850,19 +838,8 @@ impl Content {
                         self.loading = false;
                         self.revision = self.revision.wrapping_add(1);
                     }
-                    let first_state = self.state.is_none();
-                    // The launcher's own selection, offered once as the starting point.
-                    let preferred = state
-                        .config
-                        .selected_instance_id
-                        .clone()
-                        .filter(|id| state.instances.iter().any(|i| &i.id == id));
                     self.state = Some(state);
-                    if first_state && self.selected.is_none() {
-                        if let Some(id) = preferred {
-                            self.select(id, cx);
-                        }
-                    }
+                    self.sync_updates(cx);
                 }
                 Err(e) => self.message = error(e),
             },
@@ -961,21 +938,11 @@ impl Content {
         }
         self.sync_updates(cx);
     }
-    fn select(&mut self, id: String, cx: &mut Context<Self>) {
-        if self.is_busy(cx) {
-            return;
-        }
-        self.invalidate_review();
-        self.revision = self.revision.wrapping_add(1);
-        self.selected = Some(id);
-        self.removing = None;
-        self.icons.reset();
-        self.load();
-        self.sync_updates(cx);
+    pub fn shows(&self, instance: &str) -> bool {
+        self.selected.as_deref() == Some(instance)
     }
-    /// Shows `instance` on the `kind` tab (Discover's "Back to instance").
-    /// Like `select`, it waits out a running mutation and says so instead of
-    /// silently keeping the old selection.
+
+    /// Shows the requested kind for the Instances detail's explicit target.
     pub fn show(&mut self, instance: String, kind: i32, cx: &mut Context<Self>) {
         if self.is_busy(cx) {
             self.message =
@@ -986,6 +953,9 @@ impl Content {
         self.invalidate_review();
         self.revision = self.revision.wrapping_add(1);
         self.selected = Some(instance);
+        self.message.clear();
+        self.actions_open = false;
+        self.updates_open = false;
         self.kind = Kind::from_index(kind);
         self.removing = None;
         self.icons.reset();
@@ -1544,68 +1514,6 @@ impl Render for Content {
         let palette = crate::theme::theme(cx).clone();
         let t = &palette;
         let available = self.host.is_some();
-        // Compact instance chooser: one select in the page header row.
-        let instance_picker = self
-            .state
-            .as_ref()
-            .filter(|state| !state.instances.is_empty())
-            .map(|state| {
-                let ids: Vec<String> = state.instances.iter().map(|i| i.id.clone()).collect();
-                let options: Vec<gpui::SharedString> = state
-                    .instances
-                    .iter()
-                    .map(|i| gpui::SharedString::from(i.display_name.clone()))
-                    .collect();
-                let selected = self
-                    .selected
-                    .as_deref()
-                    .and_then(|id| ids.iter().position(|candidate| candidate == id));
-                div()
-                    .flex()
-                    .flex_shrink_0()
-                    .flex_col()
-                    .gap(px(4.))
-                    .child(ui::caption(t, "Instance"))
-                    .child(
-                        AuroraSelect::new(
-                            "content-instance",
-                            "Instance",
-                            options,
-                            &self.instance_trigger,
-                            &self.instance_content,
-                            self.instance_bounds.clone(),
-                        )
-                        .width(px(260.))
-                        .selected(selected)
-                        .highlight(self.instance_highlight)
-                        .open(self.instance_open && !busy)
-                        .disabled(busy)
-                        .on_open_change(cx.processor(|this, open, _window, cx| {
-                            if this.instance_open != open {
-                                this.instance_open = open;
-                                if open {
-                                    this.instance_highlight = 0;
-                                }
-                                cx.notify();
-                            }
-                        }))
-                        .on_highlight(cx.processor(|this, index, _window, cx| {
-                            if this.instance_highlight != index {
-                                this.instance_highlight = index;
-                                cx.notify();
-                            }
-                        }))
-                        .on_confirm(cx.processor(
-                            move |this, index: usize, _window, cx| {
-                                this.instance_open = false;
-                                if let Some(id) = ids.get(index) {
-                                    this.select(id.clone(), cx);
-                                }
-                                cx.notify();
-                            },
-                        )),
-                    )
-            });
         // Files dropped from the file manager feed the local import review.
         // The outline shows whether the dragged file would be accepted.
         let (accept, reject) = (palette.accent, palette.danger);
@@ -1625,24 +1533,7 @@ impl Render for Content {
             })
             .on_drop(cx.listener(|this, paths: &ExternalPaths, _, cx| {
                 this.drop_files(paths.paths(), cx);
-            }))
-            .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_end()
-                    .justify_between()
-                    .gap(px(16.))
-                    .child(div().flex_1().min_w(px(280.)).child(ui::page_header(
-                        t,
-                        "Content",
-                        Some(
-                            "Manage the mods, resource packs and shaders installed in each instance."
-                                .into(),
-                        ),
-                    )))
-                    .when_some(instance_picker, |this, picker| this.child(picker)),
-            );
+            }));
         if !self.message.is_empty() {
             root = root.child(
                 div()

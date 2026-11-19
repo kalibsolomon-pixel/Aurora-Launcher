@@ -429,11 +429,9 @@ impl Render for Screenshots {
                 "Press F2 in game to take a screenshot. It will appear here after Refresh.",
             ));
         } else {
-            // This mirrors the editor's fixed master column and page gutters.
+            // The gallery fills the detail page inside the card padding.
             let available = (f32::from(window.viewport_size().width)
-                - 276.
-                - 272.
-                - ui::PAGE_GAP
+                - crate::navigation::PAGE_CHROME
                 - 2. * ui::CARD_PADDING
                 - 2.)
                 .max(196.);

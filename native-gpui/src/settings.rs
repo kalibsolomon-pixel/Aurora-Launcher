@@ -51,6 +51,7 @@ use gpui_kit::{
 use crate::api::{self, ApiResult};
 use crate::backend::guarded;
 use crate::borealis;
+use crate::client_updates::ClientUpdates;
 use crate::controls::{
     AuroraButton, AuroraInput, AuroraSelect, AuroraSlider, AuroraToggle, ButtonSize, ButtonVariant,
 };
@@ -386,7 +387,7 @@ pub fn launcher_progress_text(payload: &serde_json::Value) -> Option<String> {
     })
 }
 
-fn launcher_offer(value: &serde_json::Value) -> Option<String> {
+pub(crate) fn launcher_offer(value: &serde_json::Value) -> Option<String> {
     (value.get("kind")?.as_str()? == "updateAvailable").then(|| {
         value
             .get("candidate")?
@@ -702,6 +703,8 @@ pub struct Settings {
     desktop_error: Option<String>,
     data_root: Option<String>,
     updates: Option<api::UpdateOverview>,
+    updates_pending: bool,
+    client_updates: Option<Entity<ClientUpdates>>,
     update_busy: bool,
     downloaded_version: Option<String>,
     install_blocked: bool,
@@ -797,6 +800,8 @@ impl Settings {
             desktop_error: None,
             data_root: None,
             updates: None,
+            updates_pending: false,
+            client_updates: None,
             update_busy: false,
             downloaded_version: None,
             install_blocked: true,
@@ -1293,6 +1298,17 @@ impl Settings {
     }
 
     // -- updates ------------------------------------------------------------
+
+    pub fn set_updates_pending(&mut self, pending: bool, cx: &mut Context<Self>) {
+        if self.updates_pending != pending {
+            self.updates_pending = pending;
+            cx.notify();
+        }
+    }
+
+    pub fn set_client_updates(&mut self, updates: Option<Entity<ClientUpdates>>) {
+        self.client_updates = updates;
+    }
 
     pub fn set_install_blocked(&mut self, blocked: bool, cx: &mut Context<Self>) {
         if self.install_blocked != blocked {
@@ -2075,7 +2091,7 @@ impl Render for Settings {
             "Appearance",
             "Discord",
             "Desktop",
-            "Updates & about",
+            "Updates & About",
             "Game",
         ]
         .into_iter()
@@ -2085,6 +2101,14 @@ impl Render for Settings {
                 AuroraButton::new(("settings-section", index), label)
                     .variant(ButtonVariant::Ghost)
                     .selected(self.section == index)
+                    .notification(index == 3 && self.updates_pending)
+                    .disabled(
+                        index != 3
+                            && self
+                                .client_updates
+                                .as_ref()
+                                .is_some_and(|updates| updates.read(cx).is_busy()),
+                    )
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.cancel_previews(cx);
                         this.section = index;
@@ -2684,80 +2708,36 @@ impl Render for Settings {
         if self.section == 3 {
             // --- Updates -------------------------------------------------------
             {
-                let mut card = section_card(t).child(card_header(
-                    t,
-                    "Updates",
-                    Some("Whether the launcher and Aurora Client are current.".into()),
-                    div(),
-                ));
-                if let Some(overview) = &self.updates {
-                    let (launcher_label, launcher_tone) =
-                        availability_badge(&overview.launcher.availability);
-                    let launcher_detail = [
-                        Some(format!(
-                            "Installed version {}",
-                            overview.launcher.installed_version
-                        )),
-                        availability_detail(&overview.launcher.availability),
-                    ]
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>()
-                    .join(" · ");
-                    card = card.child(
-                        ui::setting_row(t, "Launcher", Some(launcher_detail.into()), false).child(
-                            control_slot(ui::status_badge(t, launcher_label, launcher_tone)),
-                        ),
-                    );
-                    let (client_label, client_tone) = availability_badge(&overview.client);
-                    card = card.child(
+                let check = AuroraButton::new("check-updates", "Check now")
+                    .accessibility_label("Check for launcher and Aurora Client updates")
+                    .size(ButtonSize::Small)
+                    .icon("refresh")
+                    .disabled(self.update_busy || no_host)
+                    .on_click(cx.listener(|this, _, _, cx| this.check_updates(cx)));
+                let availability = self
+                    .updates
+                    .as_ref()
+                    .map(|overview| &overview.launcher.availability);
+                let (label, tone) =
+                    availability.map_or(("Not checked", ui::Tone::Neutral), availability_badge);
+                let installed = self
+                    .updates
+                    .as_ref()
+                    .map_or(env!("CARGO_PKG_VERSION"), |overview| {
+                        overview.launcher.installed_version.as_str()
+                    });
+                let detail = availability.and_then(availability_detail);
+                let mut card = section_card(t)
+                    .child(card_header(t, "Launcher updates", None, div().child(check)))
+                    .child(
                         ui::setting_row(
                             t,
-                            "Aurora Client",
-                            availability_detail(&overview.client).map(SharedString::from),
+                            format!("Installed version {installed}"),
+                            detail.map(SharedString::from),
                             false,
                         )
-                        .child(control_slot(ui::status_badge(
-                            t,
-                            client_label,
-                            client_tone,
-                        ))),
+                        .child(control_slot(ui::status_badge(t, label, tone))),
                     );
-                } else {
-                    card = card.child(
-                        ui::setting_row(
-                            t,
-                            "Update status",
-                            Some("Update status is not checked yet.".into()),
-                            false,
-                        )
-                        .child(control_slot(ui::status_badge(
-                            t,
-                            "Not checked",
-                            ui::Tone::Neutral,
-                        ))),
-                    );
-                }
-                card = card.child(
-                ui::setting_row(
-                    t,
-                    "Check for updates",
-                    Some(
-                        "Updates are installed only after you download and verify the signed installer."
-                            .into(),
-                    ),
-                    true,
-                )
-                .child(control_slot(
-                    AuroraButton::new("check-updates", "Check now")
-                        .size(ButtonSize::Small)
-                        .icon("refresh")
-                        .disabled(self.update_busy || no_host)
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.check_updates(cx);
-                        })),
-                )),
-            );
                 if let Some(version) = self
                     .updates
                     .as_ref()
@@ -2783,6 +2763,9 @@ impl Render for Settings {
             }
         }
         if self.section == 3 {
+            if let Some(updates) = &self.client_updates {
+                page = page.child(updates.clone());
+            }
             // --- About ---------------------------------------------------------
             page = page.child(
                 ui::card(t).child(

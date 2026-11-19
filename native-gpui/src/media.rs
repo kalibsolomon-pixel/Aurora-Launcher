@@ -427,6 +427,7 @@ pub struct Media {
     core: MediaCore,
     worker: Option<WorkerHandle>,
     replies: async_channel::Sender<WorkerReply>,
+    layout: MediaLayout,
 }
 impl Media {
     /// Builds the widget inactive. Nothing is started, read or rendered
@@ -462,6 +463,15 @@ impl Media {
             runtime,
             worker: None,
             replies,
+            layout: MediaLayout::for_card(0., 0.),
+        }
+    }
+
+    pub fn set_card_size(&mut self, width: f32, height: f32, cx: &mut Context<Self>) {
+        let layout = MediaLayout::for_card(width, height);
+        if self.layout != layout {
+            self.layout = layout;
+            cx.notify();
         }
     }
 
@@ -551,6 +561,31 @@ impl Drop for Media {
     }
 }
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct MediaLayout {
+    art: f32,
+    large_type: bool,
+    stacked: bool,
+}
+
+impl MediaLayout {
+    fn for_card(width: f32, height: f32) -> Self {
+        let width = (width - 34.).max(0.);
+        let height = (height - 66.).max(0.);
+        let stacked = width < 290. && height >= 130.;
+        let max_width = if stacked {
+            (width * 0.24).min(64.)
+        } else {
+            width - 130.
+        };
+        Self {
+            art: height.min(max_width).clamp(0., 128.).floor(),
+            large_type: width >= 350. && height >= 112.,
+            stacked,
+        }
+    }
+}
+
 impl Render for Media {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let palette = theme(cx).clone();
@@ -637,129 +672,123 @@ impl Render for Media {
                         entity.update(cx, |this, cx| this.send_command(command.clone(), cx));
                     }
                 };
-                root = root
+                let layout = self.layout;
+                let art_size = px(layout.art);
+                let artwork = div()
+                    .size(art_size)
+                    .flex_none()
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .rounded(palette.radius)
+                    .overflow_hidden()
+                    .bg(palette.control)
+                    .child(match art {
+                        Some(art) => img(art).size_full().into_any_element(),
+                        None => crate::symbols::icon(
+                            Some("music_note"),
+                            px((layout.art * 0.42).min(40.)),
+                            palette.muted_foreground,
+                        )
+                        .into_any_element(),
+                    });
+                let transport = div()
+                    .flex()
+                    .items_center()
+                    .flex_wrap()
+                    .gap(px(6.))
                     .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(14.))
-                            .min_w_0()
-                            .child(match art {
-                                Some(art) => div()
-                                    .flex_shrink_0()
-                                    .size(px(56.))
-                                    .rounded(px(10.))
-                                    .overflow_hidden()
-                                    .border_1()
-                                    .border_color(palette.border_subtle)
-                                    .child(img(art).size(px(54.))),
-                                None => div()
-                                    .flex()
-                                    .flex_shrink_0()
-                                    .items_center()
-                                    .justify_center()
-                                    .size(px(56.))
-                                    .rounded(px(10.))
-                                    .bg(palette.control)
-                                    .border_1()
-                                    .border_color(palette.border_subtle)
-                                    .child(crate::symbols::icon(
-                                        Some("music_note"),
-                                        px(26.),
-                                        palette.muted_foreground,
-                                    )),
-                            })
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(2.))
-                                    .flex_1()
-                                    .min_w_0()
-                                    .child(
-                                        div()
-                                            .overflow_hidden()
-                                            .text_ellipsis()
-                                            .whitespace_nowrap()
-                                            .text_size(px(14.))
-                                            .font_weight(FontWeight::SEMIBOLD)
-                                            .text_color(palette.foreground)
-                                            .child(view.title.clone()),
-                                    )
-                                    .when(!view.artist.is_empty(), |col| {
-                                        col.child(
-                                            div()
-                                                .overflow_hidden()
-                                                .text_ellipsis()
-                                                .whitespace_nowrap()
-                                                .text_size(px(12.))
-                                                .text_color(palette.muted_foreground)
-                                                .child(view.artist.clone()),
-                                        )
-                                    })
-                                    .when(!view.source.is_empty(), |col| {
-                                        col.child(
-                                            div()
-                                                .overflow_hidden()
-                                                .text_ellipsis()
-                                                .whitespace_nowrap()
-                                                .text_size(px(11.))
-                                                .text_color(palette.subtle_foreground)
-                                                .child(view.source.clone()),
-                                        )
-                                    }),
-                            ),
+                        transport_button(
+                            &palette,
+                            "media-previous",
+                            "skip_previous",
+                            "Previous track",
+                            !view.can_previous,
+                            false,
+                        )
+                        .on_click(command(MediaCommand::Previous)),
                     )
                     .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .gap(px(8.))
-                            .child(
-                                transport_button(
-                                    &palette,
-                                    "media-previous",
-                                    "skip_previous",
-                                    "Previous track",
-                                    !view.can_previous,
-                                    false,
-                                )
-                                .on_click(command(MediaCommand::Previous)),
+                        transport_button(
+                            &palette,
+                            "media-toggle",
+                            if view.playing { "pause" } else { "play_arrow" },
+                            if view.playing { "Pause" } else { "Play" },
+                            !view.can_toggle,
+                            true,
+                        )
+                        .on_click(command(MediaCommand::Toggle)),
+                    )
+                    .child(
+                        transport_button(
+                            &palette,
+                            "media-next",
+                            "skip_next",
+                            "Next track",
+                            !view.can_next,
+                            false,
+                        )
+                        .on_click(command(MediaCommand::Next)),
+                    )
+                    .when(view.sessions > 1, |row| {
+                        row.child(
+                            transport_button(
+                                &palette,
+                                "media-cycle",
+                                "sync",
+                                "Next player",
+                                false,
+                                false,
                             )
-                            .child(
-                                transport_button(
-                                    &palette,
-                                    "media-toggle",
-                                    if view.playing { "pause" } else { "play_arrow" },
-                                    if view.playing { "Pause" } else { "Play" },
-                                    !view.can_toggle,
-                                    true,
-                                )
-                                .on_click(command(MediaCommand::Toggle)),
-                            )
-                            .child(
-                                transport_button(
-                                    &palette,
-                                    "media-next",
-                                    "skip_next",
-                                    "Next track",
-                                    !view.can_next,
-                                    false,
-                                )
-                                .on_click(command(MediaCommand::Next)),
-                            )
-                            // Session count decides whether switching players
-                            // is offered at all; the worker rechecks.
-                            .when(view.sessions > 1, |row| {
-                                row.child(
-                                    AuroraButton::new("media-cycle", "Next player")
-                                        .size(ButtonSize::Small)
-                                        .icon("sync")
-                                        .on_click(command(MediaCommand::Cycle)),
-                                )
-                            }),
-                    );
+                            .on_click(command(MediaCommand::Cycle)),
+                        )
+                    });
+                let text = |value: String, size, color| {
+                    div()
+                        .min_w_0()
+                        .truncate()
+                        .text_size(px(size))
+                        .text_color(color)
+                        .child(value)
+                };
+                let mut metadata = div()
+                    .flex()
+                    .flex_col()
+                    .flex_1()
+                    .gap(px(2.))
+                    .min_w_0()
+                    .child(
+                        text(
+                            view.title.clone(),
+                            if layout.large_type { 20. } else { 15. },
+                            palette.foreground,
+                        )
+                        .font_weight(FontWeight::SEMIBOLD),
+                    )
+                    .when(!view.artist.is_empty(), |column| {
+                        column.child(text(
+                            view.artist.clone(),
+                            if layout.large_type { 15. } else { 13. },
+                            palette.muted_foreground,
+                        ))
+                    })
+                    .when(!view.source.is_empty(), |column| {
+                        column.child(text(view.source.clone(), 12., palette.subtle_foreground))
+                    });
+                let mut transport = Some(transport);
+                if !layout.stacked {
+                    metadata = metadata.child(div().mt(px(6.)).children(transport.take()));
+                }
+                root = root.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(12.))
+                        .min_w_0()
+                        .children((layout.art >= 32.).then_some(artwork))
+                        .child(metadata),
+                );
+                root = root.children(transport);
             }
         }
         root
@@ -1280,6 +1309,19 @@ mod tests {
 
     fn queue(commands: &[MediaCommand]) -> VecDeque<MediaCommand> {
         commands.iter().cloned().collect()
+    }
+
+    #[test]
+    fn media_art_respects_the_rendered_card_and_leaves_space_for_controls() {
+        let wide = MediaLayout::for_card(460., 216.);
+        assert_eq!(wide.art, 128.);
+        assert!(wide.large_type);
+        let narrow = MediaLayout::for_card(280., 216.);
+        assert!(narrow.stacked);
+        assert!(narrow.art < wide.art);
+        let short = MediaLayout::for_card(460., 126.);
+        assert!(!short.stacked);
+        assert_eq!(short.art, 60.);
     }
 
     #[test]

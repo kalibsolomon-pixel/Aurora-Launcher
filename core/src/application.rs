@@ -7361,12 +7361,13 @@ async fn play_instance_with_target(
 use crate::updates::CheckDomain;
 use crate::updates::launcher as launcher_updates;
 
-/// The combined update overview shown by Settings and Home.
+/// The combined launcher and per-instance update overview.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateOverviewDto {
     launcher: launcher_updates::LauncherUpdateStatus,
     client: crate::updates::UpdateAvailability,
+    clients: std::collections::BTreeMap<String, crate::updates::UpdateAvailability>,
     client_instance_id: Option<String>,
     client_instance_name: Option<String>,
     client_installed_version: Option<String>,
@@ -7381,13 +7382,32 @@ fn update_overview(app: &Host) -> Result<UpdateOverviewDto, CommandError> {
     let state = crate::updates::center()
         .lock()
         .unwrap_or_else(|poisoned| poisoned.into_inner());
-    let client = match (&selected, &state.client_instance_id) {
-        (Some(selected), Some(recorded)) if selected == recorded => state
-            .client
-            .clone()
-            .unwrap_or(crate::updates::UpdateAvailability::NotChecked),
-        (Some(_), _) => crate::updates::UpdateAvailability::NotChecked,
-        (None, _) => crate::updates::UpdateAvailability::NotApplicable {
+    use crate::updates::UpdateAvailability;
+    let clients: std::collections::BTreeMap<_, _> = registry
+        .iter()
+        .flat_map(|registry| registry.instances())
+        .filter_map(|record| {
+            let id = record.id().to_string();
+            let availability = state.clients.get(&id)?;
+            if let UpdateAvailability::UpdateAvailable { current, .. } = availability {
+                if !record
+                    .installed()
+                    .aurora
+                    .as_ref()
+                    .is_some_and(|pin| &pin.version == current)
+                {
+                    return None;
+                }
+            }
+            Some((id, availability.clone()))
+        })
+        .collect();
+    let client = match &selected {
+        Some(id) => clients
+            .get(id)
+            .cloned()
+            .unwrap_or(UpdateAvailability::NotChecked),
+        None => UpdateAvailability::NotApplicable {
             reason: "no instance is selected".to_owned(),
         },
     };
@@ -7409,6 +7429,7 @@ fn update_overview(app: &Host) -> Result<UpdateOverviewDto, CommandError> {
             phase: state.launcher_phase,
         },
         client,
+        clients,
         client_instance_id: selected,
         client_instance_name,
         client_installed_version: config.selected_instance_id().and_then(|id| {
@@ -7455,18 +7476,22 @@ async fn run_update_check(app: &Host, startup: bool) -> Result<UpdateOverviewDto
     .await;
 
     let managed = managed_paths(app)?;
-    let config = crate::config::load(&managed.config_file())?.unwrap_or_default();
-    if let Some(instance) = config.selected_instance_id() {
+    if let Ok(registry) = InstanceRegistry::load(&managed.instance_registry_file()) {
         let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
             .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
         if crate::updates::begin_check(CheckDomain::Client) == crate::updates::CheckStart::Started {
-            let availability =
-                crate::updates::client::check_client_update(&managed, &endpoints, instance).await;
-            crate::updates::finish_check(CheckDomain::Client, availability);
-            let mut state = crate::updates::center()
-                .lock()
-                .unwrap_or_else(|poisoned| poisoned.into_inner());
-            state.client_instance_id = Some(instance.to_string());
+            let mut checks = std::collections::BTreeMap::new();
+            for record in registry
+                .instances()
+                .iter()
+                .filter(|record| record.installed().aurora.is_some())
+            {
+                let id = record.id();
+                let availability =
+                    crate::updates::client::check_client_update(&managed, &endpoints, id).await;
+                checks.insert(id.to_string(), availability);
+            }
+            crate::updates::finish_client_checks(checks);
         }
     }
     let _performance = crate::performance::scope(crate::performance::Event::UpdatePublication);
@@ -7520,8 +7545,15 @@ pub async fn preview_client_update(
         let remote = crate::updates::client::fetch_update_manifest(&managed, &endpoints, &instance)
             .await
             .map_err(|error| CommandError::new(error.code(), error.message()))?;
-        crate::updates::client::preview_update(&managed, &endpoints, &instance, &remote)
-            .map_err(|error| CommandError::new(error.code(), error.message()))
+        let preview =
+            crate::updates::client::preview_update(&managed, &endpoints, &instance, &remote)
+                .map_err(|error| CommandError::new(error.code(), error.message()))?;
+        publish_client_availability(
+            &app,
+            &instance,
+            crate::updates::client::preview_availability(&preview),
+        );
+        Ok(preview)
     })
     .await
 }
@@ -7587,13 +7619,27 @@ pub async fn apply_client_update(
     .await;
     crate::updates::finish_transaction(CheckDomain::Client);
     let record = result?;
-    let mut state = crate::updates::center()
-        .lock()
-        .unwrap_or_else(|poisoned| poisoned.into_inner());
-    state.client = Some(crate::updates::UpdateAvailability::UpToDate);
-    state.client_instance_id = Some(instance.to_string());
-    drop(state);
+    publish_client_availability(
+        &app,
+        &instance,
+        crate::updates::UpdateAvailability::UpToDate,
+    );
     Ok(InstanceSummary::from_record(&record))
+}
+
+fn publish_client_availability(
+    app: &Host,
+    instance: &crate::instances::InstanceId,
+    availability: crate::updates::UpdateAvailability,
+) {
+    crate::updates::center()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+        .clients
+        .insert(instance.to_string(), availability);
+    if let Ok(overview) = update_overview(app) {
+        let _ = app.emit("update-status", &overview);
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
