@@ -22,9 +22,10 @@ use gpui_kit::base::{
 };
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::{
-    App, Axis, Bounds, ClickEvent, Edges, ElementId, Entity, FocusHandle, Hsla, InteractiveElement,
-    IntoElement, KeyDownEvent, ParentElement, Pixels, RenderOnce, Role, ScrollHandle, SharedString,
-    StatefulInteractiveElement, Styled, Window, deferred, div, px, relative,
+    AnyElement, App, Axis, Bounds, ClickEvent, Edges, ElementId, Entity, FocusHandle, Hsla,
+    InteractiveElement, IntoElement, KeyDownEvent, ParentElement, Pixels, RenderOnce, Role,
+    ScrollHandle, SharedString, StatefulInteractiveElement, Styled, Window, deferred, div, px,
+    relative,
 };
 
 use crate::theme::theme;
@@ -48,7 +49,6 @@ pub enum ButtonVariant {
     Danger,
     Ghost,
     /// Sidebar navigation: full width, left aligned, accent wash when selected.
-    Nav,
     /// Accent-tinted secondary action for repeated per-row actions (Install,
     /// Play) where a solid primary per row would be too loud.
     Soft,
@@ -77,6 +77,7 @@ pub struct AuroraButton {
     id: ElementId,
     label: SharedString,
     accessibility_label: Option<SharedString>,
+    notification: bool,
     variant: ButtonVariant,
     size: ButtonSize,
     icon: Option<&'static str>,
@@ -92,6 +93,7 @@ impl AuroraButton {
             id: id.into(),
             label: label.into(),
             accessibility_label: None,
+            notification: false,
             variant: ButtonVariant::Default,
             size: ButtonSize::Medium,
             icon: None,
@@ -110,6 +112,11 @@ impl AuroraButton {
     /// Context for repeated row actions without repeating it in the visible label.
     pub fn accessibility_label(mut self, label: impl Into<SharedString>) -> Self {
         self.accessibility_label = Some(label.into());
+        self
+    }
+
+    pub fn notification(mut self, pending: bool) -> Self {
+        self.notification = pending;
         self
     }
 
@@ -152,7 +159,6 @@ impl RenderOnce for AuroraButton {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let t = theme(cx);
         let clear = gpui_kit::transparent_black();
-        let nav = self.variant == ButtonVariant::Nav;
         let primary = self.variant == ButtonVariant::Primary;
         let (bg, fg, hover_bg, border) = match self.variant {
             // Filled, borderless: one secondary style everywhere.
@@ -175,7 +181,6 @@ impl RenderOnce for AuroraButton {
             ),
             // Transparent at rest so translucent Borealis surfaces show through.
             ButtonVariant::Ghost => (clear, t.foreground, t.control, clear),
-            ButtonVariant::Nav => (clear, t.muted_foreground, t.control, clear),
             ButtonVariant::Soft => (
                 Hsla { a: 0.28, ..t.ring },
                 t.foreground,
@@ -203,9 +208,7 @@ impl RenderOnce for AuroraButton {
             (t.sunken, t.subtle_foreground, t.border_subtle);
         let icon_color = if self.disabled {
             disabled_fg
-        } else if nav && self.selected {
-            t.ring
-        } else if primary || nav {
+        } else if primary {
             fg
         } else {
             Hsla { a: 0.85, ..fg }
@@ -226,12 +229,11 @@ impl RenderOnce for AuroraButton {
             .flex()
             .flex_shrink_0()
             .items_center()
-            .gap(px(if nav { 10. } else { 7. }))
-            .when(nav || self.full_width, |b| b.w_full())
-            .when(nav, |b| b.justify_start())
-            .when(!nav, |b| b.justify_center())
+            .gap(px(7.))
+            .when(self.full_width, |b| b.w_full())
+            .justify_center()
             .h(px(height))
-            .px(px(if nav { 10. } else { pad }))
+            .px(px(pad))
             .rounded(t.radius)
             .text_size(px(text))
             .font_weight(weight)
@@ -239,7 +241,7 @@ impl RenderOnce for AuroraButton {
             .text_color(fg)
             .border_1()
             .border_color(border)
-            .hover(|style| style.bg(if nav && self.selected { soft } else { hover_bg }))
+            .hover(|style| style.bg(hover_bg))
             .active(|style| style.opacity(0.88))
             .focus_visible(|style| style.border_color(ring))
             .styles(|styles| {
@@ -247,10 +249,7 @@ impl RenderOnce for AuroraButton {
                     .selected(|style| {
                         style
                             .bg(soft)
-                            .border_color(Hsla {
-                                a: if nav { 0.35 } else { 0.55 },
-                                ..ring
-                            })
+                            .border_color(Hsla { a: 0.55, ..ring })
                             .text_color(selected_fg)
                     })
                     .disabled(|style| {
@@ -264,7 +263,12 @@ impl RenderOnce for AuroraButton {
             .when_some(self.icon, |b, icon| {
                 b.child(crate::symbols::icon(Some(icon), px(icon_size), icon_color))
             })
-            .child(self.label);
+            .child(self.label)
+            .when(self.notification, |button| {
+                button
+                    .aria_description("Updates available")
+                    .child(crate::ui::update_dot(t))
+            });
 
         if let Some(on_click) = self.on_click {
             button = button.on_click(move |event, window, cx| on_click(event, window, cx));
@@ -790,6 +794,11 @@ pub struct AuroraSelect {
     label: SharedString,
     options: Vec<SharedString>,
     selected: Option<usize>,
+    rows: Option<Vec<AnyElement>>,
+    placeholder: SharedString,
+    title_trigger: bool,
+    trigger_value: Option<SharedString>,
+    menu_width: Option<Pixels>,
     highlight: usize,
     open: bool,
     disabled: bool,
@@ -817,6 +826,11 @@ impl AuroraSelect {
             label: label.into(),
             options,
             selected: None,
+            rows: None,
+            placeholder: "—".into(),
+            title_trigger: false,
+            trigger_value: None,
+            menu_width: None,
             highlight: 0,
             open: false,
             disabled: false,
@@ -829,6 +843,21 @@ impl AuroraSelect {
             on_highlight: None,
             on_confirm: None,
         }
+    }
+
+    /// Rich rows for the instance switcher. Options still supply the plain
+    /// labels and the selected value exposed to assistive technology.
+    pub fn instance_switcher(mut self, rows: Vec<AnyElement>, menu_width: Pixels) -> Self {
+        self.rows = Some(rows);
+        self.placeholder = "Choose an instance".into();
+        self.title_trigger = true;
+        self.menu_width = Some(menu_width);
+        self
+    }
+
+    pub fn trigger_value(mut self, value: Option<SharedString>) -> Self {
+        self.trigger_value = value;
+        self
     }
 
     pub fn selected(mut self, selected: Option<usize>) -> Self {
@@ -899,7 +928,11 @@ impl RenderOnce for AuroraSelect {
         });
         let scroll = viewport.update(cx, |state, _| {
             if open && (!state.open || state.highlight != self.highlight) {
-                state.scroll.scroll_to_item(self.highlight);
+                let last_row =
+                    self.options
+                        .len()
+                        .saturating_sub(if self.title_trigger { 2 } else { 1 });
+                state.scroll.scroll_to_item(self.highlight.min(last_row));
             }
             state.open = open;
             state.highlight = self.highlight;
@@ -910,11 +943,8 @@ impl RenderOnce for AuroraSelect {
             .max(window.viewport_size().height - bounds.bottom() - px(12.))
             .max(px(30.));
         let t = theme(cx);
-        let current = self
-            .selected
-            .and_then(|ix| self.options.get(ix))
-            .cloned()
-            .unwrap_or_else(|| "—".into());
+        let current = self.selected.and_then(|ix| self.options.get(ix)).cloned();
+        let current = self.trigger_value.or(current).unwrap_or(self.placeholder);
         let focused = self.trigger_focus.is_focused(window)
             || self.content_focus.contains_focused(window, cx);
 
@@ -949,17 +979,28 @@ impl RenderOnce for AuroraSelect {
             .justify_between()
             .gap(px(6.))
             .w_full()
-            .h(px(34.))
+            .h(px(if self.title_trigger { 42. } else { 34. }))
             .px(px(12.))
             .rounded(t.radius)
-            .bg(t.control)
+            .bg(if self.title_trigger {
+                t.raised
+            } else {
+                t.control
+            })
             .border_1()
             .border_color(if self.open || focused {
                 t.ring
             } else {
                 t.border_subtle
             })
-            .text_size(px(13.))
+            .text_size(px(if self.title_trigger {
+                crate::ui::TEXT_TITLE
+            } else {
+                13.
+            }))
+            .when(self.title_trigger, |trigger| {
+                trigger.font_weight(gpui_kit::FontWeight::SEMIBOLD)
+            })
             .when(self.disabled, |style| style.opacity(0.45))
             .hover(|style| style.bg(t.surface_hover))
             .child(
@@ -971,7 +1012,11 @@ impl RenderOnce for AuroraSelect {
                     .whitespace_nowrap()
                     .child(current.clone()),
             )
-            .child(div().text_color(t.muted_foreground).child("▾"))
+            .child(crate::symbols::icon(
+                Some("expand_more"),
+                px(18.),
+                t.muted_foreground,
+            ))
             .on_click({
                 let on_open_change = self.on_open_change.clone();
                 let content = self.content_focus.clone();
@@ -993,6 +1038,51 @@ impl RenderOnce for AuroraSelect {
                 }
             });
 
+        let mut rows = self.rows.into_iter().flatten();
+        let mut items: Vec<_> = self
+            .options
+            .iter()
+            .enumerate()
+            .map(|(ix, option)| {
+                let commit = commit.clone();
+                let on_highlight = self.on_highlight.clone();
+                let selected = self.selected == Some(ix);
+                let highlighted = self.highlight == ix;
+                div()
+                    .id((self.id.clone(), format!("{ix}")))
+                    .role(Role::ListBoxOption)
+                    .aria_label(option.clone())
+                    .aria_selected(selected)
+                    .when(highlighted, |this| this.aria_active_descendant())
+                    .px(px(10.))
+                    .py(px(6.))
+                    .rounded(px(6.))
+                    .flex_shrink_0()
+                    .text_ellipsis()
+                    .text_size(px(13.))
+                    .when(highlighted, |this| this.bg(t.surface_hover))
+                    .when(selected, |this| this.text_color(t.accent))
+                    .hover(|style| style.bg(t.surface_hover))
+                    .on_hover(move |hovered, window, cx| {
+                        if *hovered {
+                            if let Some(handler) = on_highlight.as_ref() {
+                                handler(ix, window, cx);
+                            }
+                        }
+                    })
+                    .on_click(move |_, window, cx| commit(ix, window, cx))
+                    .child(
+                        rows.next()
+                            .unwrap_or_else(|| option.clone().into_any_element()),
+                    )
+            })
+            .collect();
+
+        let footer = if self.title_trigger {
+            items.pop()
+        } else {
+            None
+        };
         let list = div()
             .id((self.id.clone(), "menu"))
             .occlude()
@@ -1000,8 +1090,6 @@ impl RenderOnce for AuroraSelect {
             .flex()
             .flex_col()
             .max_h(available_height.min(px(288.)))
-            .overflow_y_scroll()
-            .track_scroll(&scroll)
             .p(px(4.))
             .rounded(t.radius)
             .border_1()
@@ -1010,7 +1098,15 @@ impl RenderOnce for AuroraSelect {
             .shadow_lg()
             .on_mouse_down_out({
                 let close = close.clone();
-                move |_, window, cx| close(window, cx)
+                let trigger_bounds = self.bounds.clone();
+                move |event, window, cx| {
+                    if !trigger_bounds
+                        .get()
+                        .is_some_and(|bounds| bounds.contains(&event.position))
+                    {
+                        close(window, cx);
+                    }
+                }
             })
             .on_action({
                 let on_highlight = self.on_highlight.clone();
@@ -1040,35 +1136,17 @@ impl RenderOnce for AuroraSelect {
                     commit(highlight, window, cx);
                 }
             })
-            .children(self.options.iter().enumerate().map(|(ix, option)| {
-                let commit = commit.clone();
-                let on_highlight = self.on_highlight.clone();
-                let selected = self.selected == Some(ix);
-                let highlighted = self.highlight == ix;
+            .child(
                 div()
-                    .id((self.id.clone(), format!("{ix}")))
-                    .role(Role::ListBoxOption)
-                    .aria_selected(selected)
-                    .when(highlighted, |this| this.aria_active_descendant())
-                    .px(px(10.))
-                    .py(px(6.))
-                    .rounded(px(6.))
-                    .flex_shrink_0()
-                    .text_ellipsis()
-                    .text_size(px(13.))
-                    .when(highlighted, |this| this.bg(t.surface_hover))
-                    .when(selected, |this| this.text_color(t.accent))
-                    .hover(|style| style.bg(t.surface_hover))
-                    .on_hover(move |hovered, window, cx| {
-                        if *hovered {
-                            if let Some(handler) = on_highlight.as_ref() {
-                                handler(ix, window, cx);
-                            }
-                        }
-                    })
-                    .on_click(move |_, window, cx| commit(ix, window, cx))
-                    .child(option.clone())
-            }));
+                    .id((self.id.clone(), "menu-rows"))
+                    .flex()
+                    .flex_col()
+                    .min_h(px(0.))
+                    .overflow_y_scroll()
+                    .track_scroll(&scroll)
+                    .children(items),
+            )
+            .children(footer);
 
         Select::new(self.id.clone())
             .open(open)
@@ -1108,7 +1186,11 @@ impl RenderOnce for AuroraSelect {
                             .align(Align::Start)
                             .offset(px(4.))
                             .margin(px(8.))
-                            .child(div().w(bounds.size.width).child(list)),
+                            .child(
+                                div()
+                                    .w(self.menu_width.unwrap_or(bounds.size.width))
+                                    .child(list),
+                            ),
                     )
                     .with_priority(POPUP_PRIORITY),
                 )

@@ -1020,15 +1020,7 @@ pub async fn check_client_update(
     crate::performance::measure(crate::performance::Event::ClientUpdateDiscovery, async {
         match fetch_update_manifest(managed, endpoints, id).await {
             Ok(remote) => match preview_update(managed, endpoints, id, &remote) {
-                Ok(preview) if preview.outcome == "updateAvailable" => {
-                    let candidate = preview.candidate.expect("outcome carries a candidate");
-                    UpdateAvailability::UpdateAvailable {
-                        current: preview.installed_version,
-                        candidate: candidate.version,
-                        notes: candidate.notes,
-                    }
-                }
-                Ok(_) => UpdateAvailability::UpToDate,
+                Ok(preview) => preview_availability(&preview),
                 Err(ClientUpdateError::Inapplicable(reason)) => {
                     UpdateAvailability::NotApplicable { reason }
                 }
@@ -1041,6 +1033,21 @@ pub async fn check_client_update(
         }
     })
     .await
+}
+
+pub(crate) fn preview_availability(preview: &ClientUpdatePreview) -> UpdateAvailability {
+    match preview
+        .candidate
+        .as_ref()
+        .filter(|_| preview.outcome == "updateAvailable")
+    {
+        Some(candidate) => UpdateAvailability::UpdateAvailable {
+            current: preview.installed_version.clone(),
+            candidate: candidate.version.clone(),
+            notes: candidate.notes.clone(),
+        },
+        None => UpdateAvailability::UpToDate,
+    }
 }
 
 /// Check, review and apply resolve the same published source and re-verify bytes.

@@ -179,7 +179,7 @@ fn recovery_label(status: &str) -> &'static str {
         _ => "Recovery completed.",
     }
 }
-fn instance_note(instance: &api::InstanceSummary) -> String {
+pub(crate) fn instance_note(instance: &api::InstanceSummary) -> String {
     if let Some(recovery) = &instance.recovery {
         if recovery.status != "completed" || instance.state != "ready" {
             return format!("{} {}", recovery_label(&recovery.status), recovery.message)
@@ -557,7 +557,8 @@ pub struct InstanceEditor {
     _icon_events: Subscription,
     selects: [SelectState; 4],
     /// Design screenshots only: the sample instance was opened once.
-    showcase_seeded: bool,
+    pending_instance: Option<String>,
+    pending_recovery: bool,
 }
 impl InstanceEditor {
     pub fn new(
@@ -659,7 +660,8 @@ impl InstanceEditor {
                 SelectState::new(cx),
                 SelectState::new(cx),
             ],
-            showcase_seeded: false,
+            pending_instance: None,
+            pending_recovery: false,
         };
         this.refresh(cx);
         this
@@ -678,13 +680,38 @@ impl InstanceEditor {
             let _ = tx.send(Reply::State(serial, r)).await;
         });
     }
-    pub fn on_page_open(&mut self, cx: &mut Context<Self>) {
-        if self.section == 5 {
-            let selected = self.selected.clone();
-            self.screenshots
-                .update(cx, |gallery, cx| gallery.open(selected, cx));
-        }
+    pub fn is_busy(&self) -> bool {
+        self.busy
     }
+
+    pub fn open_instance(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
+        self.pending_instance = None;
+        self.pending_recovery = false;
+        if self.selected.as_deref() == Some(&id) {
+            if self.section == 5 {
+                self.screenshots
+                    .update(cx, |gallery, cx| gallery.open(Some(id), cx));
+            }
+        } else if self
+            .state
+            .as_ref()
+            .is_some_and(|state| state.instances.iter().any(|i| i.id == id))
+        {
+            self.section = if crate::showcase()
+                && std::env::var("AURORA_SHOWCASE_SECTION").as_deref() == Ok("screenshots")
+            {
+                5
+            } else {
+                0
+            };
+            self.choose(id, window, cx);
+        } else {
+            self.pending_instance = Some(id);
+            self.refresh(cx);
+        }
+        cx.notify();
+    }
+
     pub fn on_host_event(
         &mut self,
         name: &str,
@@ -1777,6 +1804,14 @@ impl InstanceEditor {
     /// review for `instance_id` when that instance is the one shown. Returns
     /// whether the editor took the request; the same draft and busy guards as
     /// the editor's Inspect recovery button apply.
+    pub fn review_recovery_on_open(&mut self, instance_id: &str, cx: &mut Context<Self>) -> bool {
+        if self.pending_instance.as_deref() == Some(instance_id) {
+            self.pending_recovery = true;
+            return true;
+        }
+        self.review_recovery(instance_id, cx)
+    }
+
     pub fn review_recovery(&mut self, instance_id: &str, cx: &mut Context<Self>) -> bool {
         if self.selected.as_deref() != Some(instance_id) || self.host.is_none() {
             return false;
@@ -1906,16 +1941,6 @@ const SHORT_W: f32 = 240.;
 const WIDE_W: f32 = 240.;
 /// Widest a stacked (full-width) text field grows.
 const STACK_W: f32 = 420.;
-/// The instance list column of the master-detail layout.
-const LIST_W: f32 = 272.;
-/// Sidebar plus the page gutters, subtracted from the window width.
-const PAGE_CHROME: f32 = 276.;
-/// Distance from the window top to the master-detail row (page header, import
-/// hint and gaps) plus the page's bottom padding. The row takes the rest of the
-/// viewport so each column scrolls on its own and no void opens under the list.
-const ROW_TOP_CHROME: f32 = 164. + 40.;
-/// The master-detail row never gets shorter than this.
-const ROW_MIN_H: f32 = 420.;
 /// Unwrapped text reports its full line as its minimum width, so free text is
 /// capped: it wraps here instead of widening the whole page.
 const TEXT_MAX: f32 = 420.;
@@ -2148,64 +2173,13 @@ fn hint_note(t: &AuroraTheme, text: String) -> Div {
 }
 
 /// Whether an instance needs the user's attention (install or recovery).
-fn needs_attention(instance: &api::InstanceSummary) -> bool {
+pub(crate) fn needs_attention(instance: &api::InstanceSummary) -> bool {
     needs_install(instance)
         || instance.state != "ready"
         || instance
             .recovery
             .as_ref()
             .is_some_and(|recovery| recovery.status != "completed")
-}
-
-/// Status pills for an instance: active, loader extras and install state.
-fn instance_badges(
-    t: &AuroraTheme,
-    instance: &api::InstanceSummary,
-    active: bool,
-    compact: bool,
-) -> Option<Div> {
-    let mut badges = div().flex().flex_shrink_0().items_center().gap(px(6.));
-    let mut any = false;
-    if active {
-        any = true;
-        badges = badges.child(ui::status_badge(t, "Active", ui::Tone::Accent));
-    }
-    if !compact {
-        if let Some(aurora) = &instance.aurora {
-            any = true;
-            badges = badges.child(ui::badge(
-                t,
-                format!("Aurora {}", aurora.version),
-                ui::Tone::Accent,
-            ));
-        }
-        if let Some(pack) = &instance.pack {
-            any = true;
-            badges = badges.child(ui::badge(
-                t,
-                format!("{} {}", pack.name, pack.pack_version),
-                ui::Tone::Neutral,
-            ));
-        }
-    }
-    if instance
-        .recovery
-        .as_ref()
-        .is_some_and(|recovery| recovery.status != "completed")
-    {
-        any = true;
-        badges = badges.child(ui::badge(t, "Recovery needed", ui::Tone::Warning));
-    } else if instance.state == "installing" {
-        any = true;
-        badges = badges.child(ui::badge(t, "Install incomplete", ui::Tone::Warning));
-    } else if needs_install(instance) {
-        any = true;
-        badges = badges.child(ui::badge(t, "Update pending", ui::Tone::Warning));
-    } else if instance.state != "ready" {
-        any = true;
-        badges = badges.child(ui::badge(t, instance.state.clone(), ui::Tone::Warning));
-    }
-    any.then_some(badges)
 }
 
 /// The surface of a dialog popup.
@@ -2256,24 +2230,16 @@ impl Render for InstanceEditor {
                     .update(cx, |field, cx| field.set_value(name, window, cx));
             }
         }
-        // Design screenshots run against disposable data: open one instance so
-        // the page shows its editor. `AURORA_SHOWCASE_INSTANCE=<index>|none`.
-        if crate::showcase() && !self.showcase_seeded {
-            if let Some(state) = &self.state {
-                self.showcase_seeded = true;
-                let wanted = std::env::var("AURORA_SHOWCASE_INSTANCE").unwrap_or_default();
-                if wanted != "none" {
-                    let index = wanted.parse::<usize>().unwrap_or(0);
-                    if let Some(id) = state.instances.get(index).map(|i| i.id.clone()) {
-                        self.choose(id, window, cx);
-                        if std::env::var("AURORA_SHOWCASE_SECTION").as_deref() == Ok("screenshots")
-                        {
-                            self.section = 5;
-                            let selected = self.selected.clone();
-                            self.screenshots
-                                .update(cx, |gallery, cx| gallery.open(selected, cx));
-                        }
-                    }
+        if self.pending_instance.as_ref().is_some_and(|id| {
+            self.state
+                .as_ref()
+                .is_some_and(|state| state.instances.iter().any(|i| &i.id == id))
+        }) {
+            if let Some(id) = self.pending_instance.take() {
+                let review_recovery = self.pending_recovery;
+                self.open_instance(id.clone(), window, cx);
+                if review_recovery {
+                    self.review_recovery(&id, cx);
                 }
             }
         }
@@ -2290,159 +2256,7 @@ impl Render for InstanceEditor {
         }
         let draft_clean = self.draft_matches_base(cx);
         let t = crate::theme::theme(cx).clone();
-        // The page column sizes itself to its widest content, so give the
-        // master-detail a definite width: the window minus the sidebar and the
-        // page gutters. Everything inside then wraps instead of widening it.
-        let page_width = (window.viewport_size().width - px(PAGE_CHROME)).max(px(560.));
-        let row_height = (window.viewport_size().height - px(ROW_TOP_CHROME)).max(px(ROW_MIN_H));
-        let mut root = div()
-            .flex()
-            .flex_col()
-            .w(page_width)
-            .min_w(px(0.))
-            .gap(px(ui::PAGE_GAP));
-
-        // ---- The instance list (master column) -----------------------------
-        let mut list_col: Option<Div> = None;
-        // The General section's runtime summary lives under the list.
-        let mut side_runtime: Option<Div> = None;
-        if let Some(state) = &self.state {
-            if state.instances.is_empty() {
-                root = root.child(ui::empty_state(
-                    &t,
-                    "grid_view",
-                    "No instances yet",
-                    "Create an instance or import a modpack to get started.",
-                ));
-            } else {
-                let count = state.instances.len();
-                let list = ui::card(&t).p(px(8.)).gap(px(2.)).child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .gap(px(8.))
-                        .px(px(8.))
-                        .pt(px(6.))
-                        .pb(px(8.))
-                        .child(
-                            div()
-                                .text_size(px(ui::TEXT_BODY))
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
-                                .text_color(t.foreground)
-                                .child("Your instances"),
-                        )
-                        .child(ui::caption(
-                            &t,
-                            if count == 1 {
-                                "1 instance".to_owned()
-                            } else {
-                                format!("{count} instances")
-                            },
-                        )),
-                );
-                let mut rows = div()
-                    .id("instance-list-rows")
-                    .flex()
-                    .flex_col()
-                    .gap(px(2.))
-                    .max_h(row_height - px(110.))
-                    .min_h(px(0.))
-                    .overflow_y_scroll();
-                for instance in state.instances.iter() {
-                    let id = instance.id.clone();
-                    let view = this.clone();
-                    let selected = self.selected.as_deref() == Some(&id);
-                    let active = state.config.selected_instance_id.as_deref() == Some(&id);
-                    let label = format!("{} — {}", instance.display_name, instance.subtitle());
-                    let detail = format!(
-                        "{} · {}",
-                        instance.minecraft_version,
-                        instance.platform_label()
-                    );
-                    rows = rows.child(
-                        ui::list_button(
-                            &t,
-                            SharedString::from(format!("instance-{}", id)),
-                            selected,
-                        )
-                        .accessibility_label(label)
-                        .disabled(busy)
-                        .on_click(move |_, window, cx| {
-                            view.update(cx, |v, cx| v.choose(id.clone(), window, cx));
-                        })
-                        .child(ui::icon_tile(
-                            &t,
-                            icon_for(&state.icons, &instance.id),
-                            32.,
-                            selected,
-                        ))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .gap(px(1.))
-                                .flex_1()
-                                .min_w(px(0.))
-                                .child(
-                                    div()
-                                        .flex()
-                                        .items_center()
-                                        .gap(px(6.))
-                                        .child(
-                                            div()
-                                                .flex_1()
-                                                .min_w(px(0.))
-                                                .truncate()
-                                                .text_size(px(ui::TEXT_BODY))
-                                                .line_height(px(19.))
-                                                .font_weight(gpui::FontWeight::MEDIUM)
-                                                .text_color(t.foreground)
-                                                .child(instance.display_name.clone()),
-                                        )
-                                        .when(needs_attention(instance), |row| {
-                                            row.child(symbols::icon(
-                                                Some("warning"),
-                                                px(13.),
-                                                t.warning,
-                                            ))
-                                        })
-                                        .when(active, |row| {
-                                            row.child(
-                                                div()
-                                                    .flex()
-                                                    .flex_shrink_0()
-                                                    .items_center()
-                                                    .gap(px(4.))
-                                                    .text_size(px(ui::TEXT_MICRO))
-                                                    .font_weight(gpui::FontWeight::MEDIUM)
-                                                    .text_color(t.ring)
-                                                    .child(
-                                                        div()
-                                                            .size(px(6.))
-                                                            .rounded_full()
-                                                            .bg(t.ring),
-                                                    )
-                                                    .child("Active"),
-                                            )
-                                        }),
-                                )
-                                .child(
-                                    div()
-                                        .truncate()
-                                        .text_size(px(ui::TEXT_CAPTION))
-                                        .line_height(px(17.))
-                                        .text_color(t.muted_foreground)
-                                        .child(detail),
-                                ),
-                        ),
-                    );
-                }
-                // One master card: the scrolling list, then (below) a pinned
-                // summary footer.
-                list_col = Some(list.child(rows).flex_shrink_0().w(px(LIST_W)));
-            }
-        }
+        let mut root = div().flex().flex_col().w_full().min_w(px(0.));
         let mut detail = div()
             .id("instance-detail")
             .flex()
@@ -2452,13 +2266,17 @@ impl Render for InstanceEditor {
             .min_w(px(0.));
 
         // ---- The selected instance ---------------------------------------
-        if let Some(id) = self.selected.clone() {
+        if let Some(id) = self
+            .selected
+            .clone()
+            .filter(|_| self.pending_instance.is_none())
+        {
             let instance = self.selected_instance().cloned();
+            let stored_icon = self.stored_icon().map(str::to_owned);
             let active = self
                 .state
                 .as_ref()
                 .is_some_and(|s| s.config.selected_instance_id.as_deref() == Some(&id));
-            let stored_icon = self.stored_icon().map(str::to_owned);
             let action_button = |id: &'static str,
                                  label: &'static str,
                                  icon: Option<&'static str>,
@@ -2476,82 +2294,13 @@ impl Render for InstanceEditor {
                 button
             };
 
-            // Header: who this is and whether it is in a good state. The
-            // version and loader live in the list, so they are not repeated.
-            if let Some(instance) = &instance {
-                let attention = needs_attention(instance);
-                let (icon, tone) = if attention {
-                    ("warning", t.warning)
-                } else {
-                    ("check_circle", t.success)
-                };
-                let note = instance_note(instance);
-                let mut head =
-                    ui::card(&t).gap(px(14.)).child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .gap(px(14.))
-                            .child(ui::icon_tile(&t, stored_icon.as_deref(), 44., true))
-                            .child(
-                                div()
-                                    .flex()
-                                    .flex_col()
-                                    .gap(px(5.))
-                                    .flex_1()
-                                    .min_w(px(0.))
-                                    .child(
-                                        div()
-                                            .min_w(px(0.))
-                                            .max_w(px(TEXT_MAX))
-                                            .text_size(px(18.))
-                                            .font_weight(gpui::FontWeight::SEMIBOLD)
-                                            .text_color(t.foreground)
-                                            .child(instance.display_name.clone()),
-                                    )
-                                    // The list already marks the active instance.
-                                    .children(instance_badges(&t, instance, false, false))
-                                    .when(!attention, |col| {
-                                        col.child(
-                                            div()
-                                                .flex()
-                                                .items_start()
-                                                .gap(px(6.))
-                                                .child(div().pt(px(1.)).child(symbols::icon(
-                                                    Some(icon),
-                                                    px(14.),
-                                                    tone,
-                                                )))
-                                                .child(
-                                                    div()
-                                                        .flex_1()
-                                                        .min_w(px(0.))
-                                                        .text_size(px(ui::TEXT_CAPTION))
-                                                        .text_color(t.muted_foreground)
-                                                        .child(note.clone()),
-                                                ),
-                                        )
-                                    }),
-                            )
-                            .child(div().flex().flex_shrink_0().gap(px(8.)).when(
-                                !active,
-                                |buttons| {
-                                    buttons.child(
-                                        action_button(
-                                            "select",
-                                            "Make active",
-                                            None,
-                                            ButtonVariant::Soft,
-                                        )
-                                        .size(ButtonSize::Small),
-                                    )
-                                },
-                            )),
-                    );
-                if attention {
-                    head = head.child(callout(&t, icon, tone, true, note));
-                }
-                detail = detail.child(head);
+            if !active {
+                detail = detail.child(
+                    div().child(
+                        action_button("select", "Make active", None, ButtonVariant::Soft)
+                            .size(ButtonSize::Small),
+                    ),
+                );
             }
 
             let mut tabs = div()
@@ -2761,7 +2510,7 @@ impl Render for InstanceEditor {
                                     )
                             }),
                     );
-                side_runtime = Some(
+                detail = detail.child(
                     ui::card(&t)
                         .gap(px(12.))
                         .child(ui::section_header(
@@ -3283,25 +3032,10 @@ impl Render for InstanceEditor {
             root = root.child(callout(&t, "info", t.ring, false, self.message.clone()));
         }
 
-        if let Some(list) = list_col {
-            root = root.child(
-                div()
-                    .flex()
-                    .w_full()
-                    .min_w(px(0.))
-                    .gap(px(ui::PAGE_GAP))
-                    .child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .flex_shrink_0()
-                            .gap(px(ui::PAGE_GAP))
-                            .child(list)
-                            .children(side_runtime),
-                    )
-                    .child(detail),
-            );
+        if self.pending_instance.is_some() && self.message.is_empty() {
+            root = root.child(ui::muted(&t, "Loading instance settings…"));
         }
+        root = root.child(detail);
 
         // ---- Dialogs ------------------------------------------------------
         let palette = t.clone();

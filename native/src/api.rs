@@ -587,6 +587,8 @@ pub struct ShortcutStatus {
 pub struct UpdateOverview {
     pub launcher: LauncherUpdateStatus,
     pub client: Value,
+    #[serde(default)]
+    pub clients: std::collections::BTreeMap<String, Value>,
     pub client_instance_id: Option<String>,
     pub client_instance_name: Option<String>,
     pub client_installed_version: Option<String>,

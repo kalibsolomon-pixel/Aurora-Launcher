@@ -1119,7 +1119,7 @@ impl Render for Syncing {
             .flex_col()
             .gap(px(16.))
             // Bound intrinsic text widths to the actual content viewport.
-            .w((window.viewport_size().width - px(276.)).max(px(560.)))
+            .w((window.viewport_size().width - px(crate::navigation::PAGE_CHROME)).max(px(560.)))
             .min_w(px(0.))
             .text_color(palette.foreground)
             .child(ui::page_header(

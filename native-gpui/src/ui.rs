@@ -100,6 +100,11 @@ pub fn section_header(
         })
 }
 
+/// Accent mark beside a control whose accessible description carries the status.
+pub fn update_dot(t: &AuroraTheme) -> Div {
+    div().size(px(8.)).flex_none().rounded_full().bg(t.accent)
+}
+
 /// Small uppercase group label (sidebar groups, dense forms).
 pub fn eyebrow(t: &AuroraTheme, text: impl Into<SharedString>) -> Div {
     div()

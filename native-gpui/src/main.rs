@@ -20,6 +20,7 @@ mod images;
 mod instance_creator;
 mod instance_editor;
 mod media;
+mod navigation;
 mod pack_import;
 mod pulsar;
 mod screenshots;
@@ -54,8 +55,8 @@ use controls::{AuroraButton, ButtonSize, ButtonVariant};
 use discover::{Discover, DiscoverEvent};
 use downloads::{Downloads, DownloadsEvent};
 use gpui::{
-    App, Bounds, Context, ExternalPaths, Role, Window, WindowBounds, WindowOptions, div,
-    prelude::*, px, size,
+    App, Bounds, Context, ExternalPaths, Window, WindowBounds, WindowOptions, div, prelude::*, px,
+    size,
 };
 use home_widgets::{HomeWidgets, HomeWidgetsEvent};
 use instance_creator::{InstanceCreator, InstanceCreatorEvent};
@@ -200,6 +201,7 @@ fn update_overview_payload(overview: &api::UpdateOverview) -> serde_json::Value 
             "availability": overview.launcher.availability,
         },
         "client": overview.client,
+        "clients": overview.clients,
         "clientInstanceId": overview.client_instance_id,
         "clientInstanceName": overview.client_instance_name,
         "clientInstalledVersion": overview.client_installed_version,
@@ -328,6 +330,13 @@ enum LoadPlan {
     },
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum InstanceTab {
+    Overview,
+    Content,
+    Settings,
+}
+
 struct Launcher {
     /// The window background behind the chrome and pages; absent only in
     /// fixtures that have no window.
@@ -351,12 +360,17 @@ struct Launcher {
     rt: tokio::runtime::Handle,
     tx: async_channel::Sender<Message>,
     page: u8,
+    instance_detail: Option<(String, InstanceTab)>,
+    reset_instance_scroll: bool,
+    showcase_instance_opened: bool,
     reset_discover_scroll: bool,
     serial: u64,
     busy: bool,
     account_busy: bool,
     skin_busy: bool,
     client_update_busy: bool,
+    client_update_instance: Option<String>,
+    launcher_update_pending: bool,
     downloads_busy: bool,
     home_busy: bool,
     pack_import_busy: bool,
@@ -418,13 +432,63 @@ impl Launcher {
     }
 
     fn client_update_target(&self) -> Option<api::InstanceSummary> {
-        let id = self.selected_id()?;
-        self.launcher
-            .as_ref()?
-            .instances
-            .iter()
-            .find(|instance| instance.id == id)
+        let state = self.launcher.as_ref()?;
+        self.client_update_instance
+            .as_ref()
+            .and_then(|id| state.instances.iter().find(|instance| &instance.id == id))
+            .or_else(|| {
+                state
+                    .instances
+                    .iter()
+                    .find(|instance| self.client_offer(instance).is_some())
+            })
+            .or_else(|| {
+                let id = self.selected_id()?;
+                state.instances.iter().find(|instance| instance.id == id)
+            })
             .cloned()
+    }
+
+    fn client_offer<'a>(&'a self, instance: &api::InstanceSummary) -> Option<&'a str> {
+        if instance.state != "ready" {
+            return None;
+        }
+        let availability = self
+            .update_status
+            .as_ref()?
+            .get("clients")?
+            .get(&instance.id)?;
+        if availability.get("kind")?.as_str()? != "updateAvailable"
+            || availability.get("current")?.as_str()? != instance.aurora.as_ref()?.version
+        {
+            return None;
+        }
+        availability
+            .get("candidate")?
+            .as_str()
+            .filter(|version| !version.is_empty())
+    }
+
+    fn updates_pending(&self) -> bool {
+        self.launcher_update_pending
+            || self.launcher.as_ref().is_some_and(|state| {
+                state
+                    .instances
+                    .iter()
+                    .any(|instance| self.client_offer(instance).is_some())
+            })
+    }
+
+    fn set_update_status(&mut self, payload: serde_json::Value) {
+        let availability = &payload["launcher"]["availability"];
+        match availability["kind"].as_str() {
+            Some("updateAvailable") => {
+                self.launcher_update_pending = settings::launcher_offer(availability).is_some()
+            }
+            Some("upToDate" | "notApplicable") => self.launcher_update_pending = false,
+            _ => {}
+        }
+        self.update_status = Some(payload);
     }
 
     /// Feeds the Borealis layer from the current appearance snapshot, so the
@@ -522,6 +586,14 @@ impl Launcher {
                 || game_running
                 || self.downloads_running(cx)
                 || self
+                    .instance_editor
+                    .as_ref()
+                    .is_some_and(|editor| editor.read(cx).is_busy())
+                || self
+                    .content
+                    .as_ref()
+                    .is_some_and(|content| content.read(cx).is_busy(cx))
+                || self
                     .pack_import
                     .as_ref()
                     .is_some_and(|view| view.read(cx).is_busy())
@@ -529,7 +601,22 @@ impl Launcher {
                     .discover
                     .as_ref()
                     .is_some_and(|view| view.read(cx).is_busy());
+            let choices = self
+                .launcher
+                .as_ref()
+                .into_iter()
+                .flat_map(|state| &state.instances)
+                .filter(|instance| instance.aurora.is_some() && instance.state == "ready")
+                .map(|instance| {
+                    (
+                        instance.id.clone(),
+                        instance.display_name.clone(),
+                        self.client_offer(instance).map(str::to_owned),
+                    )
+                })
+                .collect();
             updates.update(cx, |updates, cx| {
+                updates.set_choices(choices);
                 updates.set_target(target, self.serial, cx);
                 updates.set_blocked(blocked, cx);
             });
@@ -558,7 +645,11 @@ impl Launcher {
                     .content
                     .as_ref()
                     .is_some_and(|v| v.read(cx).is_busy(cx));
-            settings.update(cx, |settings, cx| settings.set_install_blocked(blocked, cx));
+            let pending = self.updates_pending();
+            settings.update(cx, |settings, cx| {
+                settings.set_install_blocked(blocked, cx);
+                settings.set_updates_pending(pending, cx);
+            });
         }
         if let Some(home) = &self.home_widgets {
             let blocked = self.busy
@@ -937,11 +1028,11 @@ impl Launcher {
         match action {
             BlockerAction::InstallJava => self.action("runtime", id, cx),
             BlockerAction::ReviewRecovery => {
-                self.open_page(3, window, cx);
-                // The editor owns the actionable review; Home keeps its
-                // read-only preview only when the editor cannot take it.
-                let taken = self.instance_editor.as_ref().is_some_and(|editor| {
-                    editor.update(cx, |editor, cx| editor.review_recovery(&id, cx))
+                self.open_instance(id.clone(), InstanceTab::Settings, 0, window, cx);
+                let taken = self.instance_detail.as_ref().is_some_and(|(target, tab)| {
+                    self.page == 3 && target == &id && *tab == InstanceTab::Settings
+                }) && self.instance_editor.as_ref().is_some_and(|editor| {
+                    editor.update(cx, |editor, cx| editor.review_recovery_on_open(&id, cx))
                 });
                 if !taken {
                     self.inspect_recovery(id);
@@ -1161,7 +1252,60 @@ impl Launcher {
             discover.update(cx, |discover, cx| discover.open_for(instance, kind, cx));
         }
     }
-    /// Open Content for an explicit instance and kind from another page.
+    fn open_instance(
+        &mut self,
+        instance: String,
+        tab: InstanceTab,
+        kind: i32,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        if !self
+            .launcher
+            .as_ref()
+            .is_some_and(|state| state.instances.iter().any(|record| record.id == instance))
+            || self
+                .instance_editor
+                .as_ref()
+                .is_some_and(|editor| editor.read(cx).is_busy())
+        {
+            return;
+        }
+        if tab == InstanceTab::Content
+            && self.content.as_ref().is_some_and(|content| {
+                let content = content.read(cx);
+                content.is_busy(cx) && !content.shows(&instance)
+            })
+        {
+            self.status = "Finish the current content operation before switching instances.".into();
+            return;
+        }
+        if self.page != 3 {
+            self.open_page(3, window, cx);
+        }
+        if self.page != 3 {
+            return;
+        }
+        if tab == InstanceTab::Content {
+            self.ensure_content(window, cx);
+            if let Some(content) = &self.content {
+                content.update(cx, |content, cx| {
+                    if !content.is_busy(cx) {
+                        content.show(instance.clone(), kind, cx);
+                    }
+                });
+            }
+        } else if tab == InstanceTab::Settings {
+            if let Some(editor) = &self.instance_editor {
+                editor.update(cx, |editor, cx| {
+                    editor.open_instance(instance.clone(), window, cx)
+                });
+            }
+        }
+        self.instance_detail = Some((instance, tab));
+        self.reset_instance_scroll = true;
+    }
+
     fn return_to_content(
         &mut self,
         instance: String,
@@ -1169,14 +1313,37 @@ impl Launcher {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.open_page(4, window, cx);
-        if self.page != 4 {
+        self.open_instance(instance, InstanceTab::Content, kind, window, cx);
+    }
+    fn ensure_content(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.content.is_some() {
             return;
         }
-        if let Some(content) = &self.content {
-            content.update(cx, |content, cx| content.show(instance, kind, cx));
-        }
+        let content = cx.new(|cx| Content::new(self.host.clone(), self.rt.clone(), window, cx));
+        self._subscriptions.push(cx.subscribe_in(
+            &content,
+            window,
+            |this, _, event: &ContentEvent, window, cx| {
+                match event {
+                    ContentEvent::Changed => {
+                        this.reload_guarded(cx);
+                        if let Some(discover) = &this.discover {
+                            discover.update(cx, |discover, cx| discover.content_changed(cx));
+                        }
+                        if let Some(editor) = &this.instance_editor {
+                            editor.update(cx, |editor, cx| editor.refresh(cx));
+                        }
+                    }
+                    ContentEvent::Discover { instance, kind } => {
+                        this.open_discover_for(instance.clone(), *kind, window, cx);
+                    }
+                }
+                cx.notify();
+            },
+        ));
+        self.content = Some(content);
     }
+
     fn open_pulsar_for(&mut self, instance: String, window: &mut Window, cx: &mut Context<Self>) {
         self.open_page(9, window, cx);
         if self.page == 9 {
@@ -1189,10 +1356,9 @@ impl Launcher {
         if !navigation_accepted(self.page, page, self.client_update_running(cx)) {
             return;
         }
-        if page == 3 && self.page != 3 {
-            if let Some(editor) = &self.instance_editor {
-                editor.update(cx, |editor, cx| editor.on_page_open(cx));
-            }
+        if page == 3 {
+            self.instance_detail = None;
+            self.reset_instance_scroll = true;
         }
         // An unreleased Motion draft and an open accent picker never outlive a
         // navigation, including the one that leaves Settings.
@@ -1390,39 +1556,6 @@ impl Launcher {
                 self.discover = Some(discover);
             }
         }
-        if page == 4 {
-            if let Some(content) = &self.content {
-                if self.page != page {
-                    content.update(cx, |content, cx| content.refresh(cx));
-                }
-            } else {
-                let content =
-                    cx.new(|cx| Content::new(self.host.clone(), self.rt.clone(), window, cx));
-                self._subscriptions.push(cx.subscribe_in(
-                    &content,
-                    window,
-                    |this, _, event: &ContentEvent, window, cx| {
-                        match event {
-                            ContentEvent::Changed => {
-                                this.reload_guarded(cx);
-                                if let Some(discover) = &this.discover {
-                                    discover
-                                        .update(cx, |discover, cx| discover.content_changed(cx));
-                                }
-                                if let Some(editor) = &this.instance_editor {
-                                    editor.update(cx, |editor, cx| editor.refresh(cx));
-                                }
-                            }
-                            ContentEvent::Discover { instance, kind } => {
-                                this.open_discover_for(instance.clone(), *kind, window, cx);
-                            }
-                        }
-                        cx.notify();
-                    },
-                ));
-                self.content = Some(content);
-            }
-        }
         if page == 2 && self.settings.is_none() {
             let settings =
                 cx.new(|cx| Settings::new(self.host.clone(), self.rt.clone(), window, cx));
@@ -1462,6 +1595,9 @@ impl Launcher {
                     settings.on_host_event("update-status", payload, cx)
                 });
             }
+            settings.update(cx, |settings, _| {
+                settings.set_client_updates(self.client_updates.clone())
+            });
             self.settings = Some(settings);
         }
         self.page = page;
@@ -1503,7 +1639,15 @@ impl Launcher {
                 }
                 self.load_error = None;
                 match s.launcher {
-                    Ok(v) => self.launcher = Some(v),
+                    Ok(state) => {
+                        if self.instance_detail.as_ref().is_some_and(|(id, _)| {
+                            !state.instances.iter().any(|instance| &instance.id == id)
+                        }) {
+                            self.instance_detail = None;
+                            self.reset_instance_scroll = true;
+                        }
+                        self.launcher = Some(state);
+                    }
                     Err(e) => {
                         self.launcher = None;
                         self.load_error = Some(e.message);
@@ -1568,7 +1712,7 @@ impl Launcher {
             Message::StartupUpdates(result) => {
                 // Failures are ignored like the Slint host; a newer event wins.
                 if let (Ok(overview), None) = (result, &self.update_status) {
-                    self.update_status = Some(update_overview_payload(&overview));
+                    self.set_update_status(update_overview_payload(&overview));
                 }
             }
             Message::Launched(id, process_serial, result) => {
@@ -1656,7 +1800,7 @@ impl Launcher {
                 if name == "update-status" {
                     // Settings may not exist yet; keep the latest well-formed status.
                     if settings::update_status_event(&name, &payload).is_some() {
-                        self.update_status = Some(payload);
+                        self.set_update_status(payload);
                     }
                     return;
                 }
@@ -1682,6 +1826,7 @@ impl Launcher {
     fn home_children(
         &self,
         palette: &theme::AuroraTheme,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Vec<gpui::AnyElement> {
         let muted = palette.muted_foreground;
@@ -1724,61 +1869,29 @@ impl Launcher {
             .as_deref()
             .and_then(|id| launcher.instances.iter().find(|i| i.id == id));
         let t = palette;
-        let mut details = div()
+        let mut head = div()
             .flex()
             .flex_col()
-            .gap(px(12.))
+            .gap(px(6.))
             .flex_1()
             .min_w(px(0.))
-            .child(
-                div().flex().flex_col().gap(px(4.)).child(
-                    div()
-                        .text_size(px(ui::TEXT_DISPLAY))
-                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                        .text_color(t.foreground)
-                        .text_ellipsis()
-                        .child(instance.map_or_else(
-                            || "Choose an instance".to_owned(),
-                            |i| i.display_name.clone(),
-                        )),
-                ),
-            );
+            .child(self.instance_switcher(launcher, selected.as_deref(), window, cx));
         if let Some(instance) = instance {
-            let mut badges = div()
+            let mut metadata = div()
                 .flex()
+                .items_center()
                 .flex_wrap()
-                .gap(px(6.))
-                .child(ui::badge(
-                    t,
-                    format!("Minecraft {}", instance.minecraft_version),
-                    ui::Tone::Neutral,
-                ))
-                .child(ui::badge(t, instance.platform_label(), ui::Tone::Neutral));
-            if let Some(aurora) = &instance.aurora {
-                badges = badges.child(ui::badge(
-                    t,
-                    format!("Aurora {}", aurora.version),
-                    ui::Tone::Accent,
-                ));
-            }
-            if let Some(pack) = &instance.pack {
-                badges = badges.child(ui::badge(
-                    t,
-                    format!("{} {}", pack.name, pack.pack_version),
-                    ui::Tone::Neutral,
-                ));
-            }
+                .gap(px(8.))
+                .child(ui::caption(t, instance_metadata(instance)));
             if let Some((label, tone)) = self.readiness_badge(&instance.id) {
-                if label != "Sign in needed" {
-                    badges = badges.child(ui::status_badge(t, label, tone));
-                }
+                metadata = metadata.child(ui::status_badge(t, label, tone));
             }
-            details = details.child(badges);
+            head = head.child(metadata);
         }
         let hero_icon = instance.map(|instance| {
             instance_icon(
                 stored_icon(&launcher.icons, &instance.id),
-                48.,
+                64.,
                 true,
                 palette,
             )
@@ -1795,7 +1908,7 @@ impl Launcher {
                     .items_start()
                     .gap(px(16.))
                     .children(hero_icon)
-                    .child(details),
+                    .child(head),
             );
         if let Some(id) = selected.clone() {
             let play_id = id.clone();
@@ -1809,8 +1922,8 @@ impl Launcher {
                 div()
                     .flex()
                     .items_center()
+                    .flex_wrap()
                     .gap(px(10.))
-                    .pt(px(4.))
                     .child(
                         div().child(
                             self.button(
@@ -1867,50 +1980,45 @@ impl Launcher {
                             .variant(ButtonVariant::Default)
                             .size(ButtonSize::Large)
                             .icon("tune")
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_page(3, window, cx);
+                            .on_click(cx.listener(move |this, _, window, cx| {
+                                this.open_instance(
+                                    id.clone(),
+                                    InstanceTab::Settings,
+                                    0,
+                                    window,
+                                    cx,
+                                );
                                 cx.notify();
                             })),
                     ),
             );
         }
-        // Secondary activity stays together below the launch controls.
         let stats = match (&self.home_widgets, instance) {
             (Some(home), Some(instance)) => home.read(cx).hero_stats(&instance.id),
             _ => Vec::new(),
         };
-        let stats = (!stats.is_empty()).then(|| {
-            div()
-                .flex()
-                .flex_shrink_0()
-                .gap(px(16.))
-                .pt(px(8.))
-                .border_t_1()
-                .border_color(t.border_subtle)
-                .children(
-                    stats
-                        .into_iter()
-                        .map(|(label, value)| ui::stat(t, label, value).flex_1()),
-                )
-        });
-        let hero_index = out.len();
+        let stacked = window.viewport_size().width < px(900.);
         out.push(
-            div()
-                .flex()
-                .flex_col()
-                .gap(px(12.))
-                .p(px(16.))
-                .h_full()
-                .rounded(px(16.))
-                .bg(gpui::linear_gradient(
-                    100.,
-                    gpui::linear_color_stop(t.raised, 0.),
-                    gpui::linear_color_stop(t.card, 1.),
-                ))
-                .border_1()
-                .border_color(t.border_subtle)
+            ui::card(t)
+                .when(!stacked, |card| {
+                    card.flex_row().items_center().justify_between()
+                })
+                .gap(px(20.))
                 .child(details)
-                .children(stats)
+                .when(!stats.is_empty(), |card| {
+                    card.child(
+                        div()
+                            .flex()
+                            .flex_shrink_0()
+                            .gap(px(20.))
+                            .border_color(t.border_subtle)
+                            .when(stacked, |row| row.border_t_1().pt(px(12.)).w_full())
+                            .when(!stacked, |row| row.border_l_1().pl(px(20.)))
+                            .children(stats.into_iter().map(|(label, value)| {
+                                ui::stat(t, label, value).when(stacked, |stat| stat.flex_1())
+                            })),
+                    )
+                })
                 .into_any_element(),
         );
         if let Some(id) = selected.clone() {
@@ -2016,110 +2124,6 @@ impl Launcher {
                 }
             }
         }
-        if launcher.instances.len() > 1 || selected.is_none() {
-            let mut tiles = div().flex().flex_col().gap(px(2.));
-            for (i, item) in launcher
-                .instances
-                .iter()
-                .filter(|item| selected.as_deref() != Some(item.id.as_str()))
-                .take(3)
-                .enumerate()
-            {
-                let id = item.id.clone();
-                let chosen = selected.as_deref() == Some(item.id.as_str());
-                tiles = tiles.child(
-                    ui::list_button(t, ("instance", i), chosen)
-                        .aria_label(item.display_name.clone())
-                        .disabled(self.controls_blocked())
-                        .child(instance_icon(
-                            stored_icon(&launcher.icons, &item.id),
-                            30.,
-                            chosen,
-                            palette,
-                        ))
-                        .child(
-                            ui::title_block(
-                                t,
-                                item.display_name.clone(),
-                                Some(
-                                    format!(
-                                        "{} · {}",
-                                        item.minecraft_version,
-                                        item.platform_label()
-                                    )
-                                    .into(),
-                                ),
-                            )
-                            .flex_1(),
-                        )
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.action("select", id.clone(), cx);
-                            cx.notify();
-                        })),
-                );
-            }
-            let switcher = div()
-                .flex()
-                .flex_col()
-                .flex_shrink_0()
-                .w(px(248.))
-                .gap(px(8.))
-                .p(px(10.))
-                .rounded(px(16.))
-                .bg(t.card)
-                .border_1()
-                .border_color(t.border_subtle)
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .justify_between()
-                        .px(px(8.))
-                        .pt(px(6.))
-                        .child(
-                            div()
-                                .text_size(px(ui::TEXT_BODY))
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
-                                .text_color(t.foreground)
-                                .child("Other instances"),
-                        )
-                        .child(ui::caption(
-                            t,
-                            format!(
-                                "{} available",
-                                launcher.instances.len() - usize::from(selected.is_some())
-                            ),
-                        )),
-                )
-                .child(tiles)
-                .when(launcher.instances.len() > 3, |switcher| {
-                    switcher.child(
-                        AuroraButton::new("home-all-instances", "View all instances")
-                            .variant(ButtonVariant::Ghost)
-                            .size(ButtonSize::Small)
-                            .full_width()
-                            .icon("arrow_forward")
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.open_page(3, window, cx);
-                                cx.notify();
-                            })),
-                    )
-                });
-            if hero_index < out.len() {
-                let hero = out.remove(hero_index);
-                out.insert(
-                    hero_index,
-                    div()
-                        .flex()
-                        .gap(px(16.))
-                        .child(div().flex_1().min_w(px(0.)).child(hero))
-                        .child(switcher)
-                        .into_any_element(),
-                );
-            } else {
-                out.push(switcher.into_any_element());
-            }
-        }
         out
     }
 
@@ -2180,6 +2184,67 @@ impl Launcher {
         }
     }
 }
+fn instance_metadata(instance: &api::InstanceSummary) -> String {
+    let mut text = format!(
+        "Minecraft {} · {}",
+        instance.minecraft_version,
+        instance.platform_label()
+    );
+    if let Some(aurora) = &instance.aurora {
+        text.push_str(&format!(" · Aurora {}", aurora.version));
+    }
+    text
+}
+
+impl Launcher {
+    fn refresh_page(&mut self, cx: &mut Context<Self>) {
+        self.reload_guarded(cx);
+        if self.page == 0 {
+            if let Some(home) = &self.home_widgets {
+                home.update(cx, |home, cx| home.refresh(cx));
+            }
+        }
+        if let Some(updates) = &self.client_updates {
+            updates.update(cx, |updates, cx| updates.refresh(cx));
+        }
+        if self.page == 2 {
+            if let Some(settings) = &self.settings {
+                settings.update(cx, |settings, cx| settings.refresh(cx));
+            }
+        }
+        if self.page == 3 {
+            if let Some(editor) = &self.instance_editor {
+                editor.update(cx, |editor, cx| editor.refresh(cx));
+            }
+            if let Some(content) = &self.content {
+                content.update(cx, |content, cx| content.refresh(cx));
+            }
+        }
+        if self.page == 9 {
+            if let Some(pulsar) = &self.pulsar {
+                pulsar.update(cx, |pulsar, cx| pulsar.refresh(cx));
+            }
+        }
+        if self.page == 5 {
+            if let Some(discover) = &self.discover {
+                discover.update(cx, |discover, cx| discover.refresh(cx));
+            }
+        }
+        if self.page == 6 {
+            if let Some(syncing) = &self.syncing {
+                syncing.update(cx, |syncing, cx| syncing.refresh(cx));
+            }
+        }
+        if self.page == 7 {
+            if let Some(skins) = &self.skins {
+                skins.update(cx, |skins, cx| skins.refresh(cx));
+            }
+        }
+        self.sync_mutation_guards(cx);
+        cx.notify();
+    }
+}
+
 impl Render for Launcher {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         theme::apply(self.appearance.as_ref(), cx);
@@ -2188,129 +2253,6 @@ impl Render for Launcher {
             .downloads
             .as_ref()
             .map_or(0, |downloads| downloads.read(cx).active_count());
-        let compact_pulsar = self.page == 9 && window.viewport_size().width < px(950.);
-        let nav = [
-            ("Home", 0, "home"),
-            ("Instances", 3, "grid_view"),
-            ("Discover", 5, "explore"),
-            ("Content", 4, "extension"),
-            ("Downloads", 8, "download"),
-            ("Pulsar", 9, "swords"),
-            ("Skins", 7, "checkroom"),
-            ("Accounts", 1, "account_circle"),
-            ("Sync", 6, "sync"),
-            ("Settings", 2, "settings"),
-        ]
-        .into_iter()
-        .map(|(label, page, icon)| {
-            // The Downloads item doubles as the activity indicator (Slint's
-            // downloads-nav): lit while work is queued or running, with a
-            // count badge. It only reads the shared queue's count.
-            let active = if page == 8 { downloads_active } else { 0 };
-            let button = self
-                .button(label, if compact_pulsar { "" } else { label })
-                .accessibility_label(label)
-                .variant(ButtonVariant::Nav)
-                .icon(icon)
-                .selected(self.page == page)
-                .disabled(self.client_update_running(cx) && self.page != page)
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    this.open_page(page, window, cx);
-                    cx.notify();
-                }));
-            if page != 8 {
-                if !compact_pulsar {
-                    return button.into_any_element();
-                }
-                return div()
-                    .id(("launcher-nav-tip", page as usize))
-                    .child(button)
-                    .tooltip(move |_, cx| cx.new(|_| NavHint(label.into())).into())
-                    .into_any_element();
-            }
-            div()
-                .id("downloads-nav")
-                .role(Role::Group)
-                .aria_label(downloads::nav_label(active))
-                .relative()
-                .flex()
-                .flex_col()
-                .child(button)
-                .when(compact_pulsar, |d| {
-                    d.tooltip(|_, cx| cx.new(|_| NavHint("Downloads".into())).into())
-                })
-                .when(active > 0, |item| {
-                    item.child(
-                        div()
-                            .absolute()
-                            .top(px(8.))
-                            .right(px(10.))
-                            .min_w(px(18.))
-                            .h(px(18.))
-                            .px(px(5.))
-                            .rounded_full()
-                            .flex()
-                            .items_center()
-                            .justify_center()
-                            .bg(palette.accent)
-                            .text_color(palette.accent_foreground)
-                            .text_size(px(10.))
-                            .child(active.to_string()),
-                    )
-                })
-                .into_any_element()
-        })
-        .collect::<Vec<_>>();
-        let mut nav = nav.into_iter();
-        let mut nav_group = |title: Option<&'static str>, count: usize| {
-            div()
-                .flex()
-                .flex_col()
-                .gap(px(2.))
-                .when_some(title.filter(|_| !compact_pulsar), |group, title| {
-                    group.child(
-                        ui::eyebrow(&palette, title)
-                            .px(px(10.))
-                            .pt(px(if window.viewport_size().height < px(600.) {
-                                8.
-                            } else {
-                                16.
-                            }))
-                            .pb(px(6.)),
-                    )
-                })
-                .children(nav.by_ref().take(count).collect::<Vec<_>>())
-        };
-        let play_group = nav_group(Some("PLAY"), 2);
-        let library_group = nav_group(Some("LIBRARY"), 4);
-        let profile_group = nav_group(Some("PROFILE"), 2);
-        let system_group = nav_group(None, 2);
-        let brand = div()
-            .flex()
-            .items_center()
-            .gap(px(10.))
-            .h(px(52.))
-            .px(px(if compact_pulsar { 0. } else { 6. }))
-            .child(
-                gpui::img(images::aurora_logo())
-                    .w(px(if compact_pulsar { 32. } else { 44. }))
-                    .h(px(if compact_pulsar { 25.6 } else { 35.2 }))
-                    .flex_shrink_0(),
-            )
-            .when(!compact_pulsar, |brand| {
-                brand.child(
-                    div()
-                        .flex()
-                        .flex_col()
-                        .child(
-                            div()
-                                .text_size(px(14.))
-                                .font_weight(gpui::FontWeight::SEMIBOLD)
-                                .child("Aurora"),
-                        )
-                        .child(ui::caption(&palette, "Launcher")),
-                )
-            });
         let page_scroll = window
             .use_keyed_state(("page-scroll", self.page as usize), cx, |_, _| {
                 gpui::ScrollHandle::new()
@@ -2320,11 +2262,34 @@ impl Render for Launcher {
         if self.page == 5 && std::mem::take(&mut self.reset_discover_scroll) {
             page_scroll.set_offset(gpui::point(px(0.), px(0.)));
         }
+        if self.page == 3
+            && showcase()
+            && !self.showcase_instance_opened
+            && self.instance_detail.is_none()
+            && std::env::var("AURORA_SHOWCASE_SECTION").as_deref() == Ok("screenshots")
+        {
+            let wanted = std::env::var("AURORA_SHOWCASE_INSTANCE").unwrap_or_default();
+            if wanted != "none" {
+                let index = wanted.parse::<usize>().unwrap_or(0);
+                if let Some(id) = self
+                    .launcher
+                    .as_ref()
+                    .and_then(|state| state.instances.get(index))
+                    .map(|instance| instance.id.clone())
+                {
+                    self.showcase_instance_opened = true;
+                    self.open_instance(id, InstanceTab::Settings, 0, window, cx);
+                }
+            }
+        }
+        if self.page == 3 && std::mem::take(&mut self.reset_instance_scroll) {
+            page_scroll.set_offset(gpui::point(px(0.), px(0.)));
+        }
         let mut content = div()
             .flex()
             .flex_col()
             .gap(px(ui::PAGE_GAP))
-            .px(px(if compact_pulsar { 20. } else { 32. }))
+            .px(px(navigation::PAGE_GUTTER))
             .pt(px(4.))
             .pb(px(40.))
             .flex_1()
@@ -2386,12 +2351,7 @@ impl Render for Launcher {
                                 header.child(home.read(cx).customize_button(home.clone()))
                             }),
                     )
-                    .children(self.home_children(&palette, cx));
-                if let Some(updates) = &self.client_updates {
-                    if updates.read(cx).is_visible() {
-                        content = content.child(updates.clone());
-                    }
-                }
+                    .children(self.home_children(&palette, window, cx));
                 if let Some(home) = &self.home_widgets {
                     content = content.child(home.clone());
                 }
@@ -2412,20 +2372,7 @@ impl Render for Launcher {
                 }
             }
             3 => {
-                if let Some(import) = &self.pack_import {
-                    content = content.child(import.clone());
-                }
-                if let Some(creator) = &self.instance_creator {
-                    content = content.child(creator.clone());
-                }
-                if let Some(editor) = &self.instance_editor {
-                    content = content.child(editor.clone());
-                }
-            }
-            4 => {
-                if let Some(page) = &self.content {
-                    content = content.child(page.clone());
-                }
+                content = content.children(self.instances_children(&palette, window, cx));
             }
             5 => {
                 if let Some(page) = &self.discover {
@@ -2457,7 +2404,11 @@ impl Render for Launcher {
                 }
             }
         }
-        if self.page == 3 && self.fatal_error.is_none() && self.pack_import.is_some() {
+        if self.page == 3
+            && self.instance_detail.is_none()
+            && self.fatal_error.is_none()
+            && self.pack_import.is_some()
+        {
             // The whole Instances page takes a dropped `.mrpack`; the import
             // row inside it handles drops on itself first. The outline says
             // whether the dragged file would be accepted, like the row's.
@@ -2494,99 +2445,7 @@ impl Render for Launcher {
             .text_color(palette.foreground)
             .font_family("Segoe UI")
             .children(self.borealis.clone())
-            .child(
-                div()
-                    .w(px(if compact_pulsar { 60. } else { 212. }))
-                    .flex_shrink_0()
-                    .h_full()
-                    .px(px(if compact_pulsar { 6. } else { 12. }))
-                    .pt(px(6.))
-                    .pb(px(12.))
-                    .bg(palette.sidebar)
-                    .border_r_1()
-                    .border_color(palette.border_subtle)
-                    .flex()
-                    .flex_col()
-                    // The header also moves the window (the Slint logo area).
-                    .child(chrome::drag_region(brand.id("brand")))
-                    .child(play_group)
-                    .child(library_group)
-                    .child(profile_group)
-                    .child(div().flex_1())
-                    .child(system_group)
-                    .child(
-                        div()
-                            .h(px(1.))
-                            .my(px(8.))
-                            .mx(px(10.))
-                            .bg(palette.border_subtle),
-                    )
-                    .child(
-                        self.button(
-                            "refresh",
-                            if compact_pulsar {
-                                ""
-                            } else {
-                                "Refresh launcher"
-                            },
-                        )
-                        .accessibility_label("Refresh launcher")
-                        .variant(ButtonVariant::Subtle)
-                        .size(ButtonSize::Small)
-                        .icon("refresh")
-                        .disabled(
-                            self.busy
-                                || self.account_busy
-                                || self.skin_busy
-                                || self.client_update_running(cx)
-                                || self.load_in_flight
-                                || self.host.is_none(),
-                        )
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.reload_guarded(cx);
-                            if this.page == 0 {
-                                if let Some(home) = &this.home_widgets {
-                                    home.update(cx, |home, cx| home.refresh(cx));
-                                }
-                            }
-                            if let Some(updates) = &this.client_updates {
-                                updates.update(cx, |updates, cx| updates.refresh(cx));
-                            }
-                            if this.page == 2 {
-                                if let Some(settings) = &this.settings {
-                                    settings.update(cx, |settings, cx| settings.refresh(cx));
-                                }
-                            }
-                            if this.page == 4 {
-                                if let Some(content) = &this.content {
-                                    content.update(cx, |content, cx| content.refresh(cx));
-                                }
-                            }
-                            if this.page == 9 {
-                                if let Some(pulsar) = &this.pulsar {
-                                    pulsar.update(cx, |pulsar, cx| pulsar.refresh(cx));
-                                }
-                            }
-                            if this.page == 5 {
-                                if let Some(discover) = &this.discover {
-                                    discover.update(cx, |discover, cx| discover.refresh(cx));
-                                }
-                            }
-                            if this.page == 6 {
-                                if let Some(syncing) = &this.syncing {
-                                    syncing.update(cx, |syncing, cx| syncing.refresh(cx));
-                                }
-                            }
-                            if this.page == 7 {
-                                if let Some(skins) = &this.skins {
-                                    skins.update(cx, |skins, cx| skins.refresh(cx));
-                                }
-                            }
-                            this.sync_mutation_guards(cx);
-                            cx.notify();
-                        })),
-                    ),
-            )
+            .child(self.navigation_rail(&palette, downloads_active, window, cx))
             .child(
                 div()
                     .flex_1()
@@ -2755,7 +2614,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         }),
                         cx.subscribe(&client_updates, |this: &mut Launcher, _, event: &ClientUpdatesEvent, cx| {
                             match event {
-                                ClientUpdatesEvent::BusyChanged(busy) => this.client_update_busy = *busy,
+                                ClientUpdatesEvent::BusyChanged(busy) => {
+                                    this.client_update_busy = *busy;
+                                    if *busy && this.client_update_instance.is_none() {
+                                        this.client_update_instance = this.client_update_target().map(|target| target.id);
+                                    }
+                                },
+                                ClientUpdatesEvent::SelectInstance(id) => this.client_update_instance = Some(id.clone()),
                                 ClientUpdatesEvent::Changed => {
                                     this.reload_guarded(cx);
                                     if let Some(editor) = &this.instance_editor {
@@ -2846,12 +2711,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         rt,
                         tx,
                         page: 0,
+                        instance_detail: None,
+                        reset_instance_scroll: false,
+                        showcase_instance_opened: false,
                         reset_discover_scroll: false,
                         serial: 0,
                         busy: false,
                         account_busy: false,
                         skin_busy: false,
                         client_update_busy: false,
+                        client_update_instance: None,
+                        launcher_update_pending: false,
                         downloads_busy: false,
                         home_busy: false,
                         pack_import_busy: false,
@@ -3085,12 +2955,17 @@ mod tests {
             },
             tx,
             page: 0,
+            instance_detail: None,
+            reset_instance_scroll: false,
+            showcase_instance_opened: false,
             reset_discover_scroll: false,
             serial: 2,
             busy: false,
             account_busy: false,
             skin_busy: false,
             client_update_busy: false,
+            client_update_instance: None,
+            launcher_update_pending: false,
             downloads_busy: false,
             home_busy: false,
             pack_import_busy: false,
@@ -3694,6 +3569,7 @@ mod tests {
         let original = serde_json::json!({
             "launcher": {"installedVersion": "2.1.1", "availability": {"kind": "upToDate"}},
             "client": {"kind": "updateAvailable"},
+            "clients": {},
             "clientInstanceId": "old", "clientInstanceName": "Fixture",
             "clientInstalledVersion": "1.0.0"
         });
@@ -3722,6 +3598,41 @@ mod tests {
             serde_json::json!({"bad": true}),
         ));
         assert_eq!(state.update_status.as_ref(), Some(&newer));
+    }
+
+    #[test]
+    fn offers_for_any_ready_instance_keep_the_settings_indicator_active() {
+        let mut state = view();
+        select_fixture(&mut state);
+        let mut other = state.launcher.as_ref().unwrap().instances[0].clone();
+        other.id = "other".into();
+        other.aurora = Some(
+            serde_json::from_value(serde_json::json!({
+                "version": "3.5.1", "channel": "stable"
+            }))
+            .unwrap(),
+        );
+        state.launcher.as_mut().unwrap().instances.push(other);
+        state.set_update_status(serde_json::json!({
+            "launcher": {"availability": {"kind": "updateAvailable", "candidate": "2.4.0"}},
+            "clients": {"other": {"kind": "updateAvailable", "current": "3.5.1", "candidate": "3.6.0"}},
+        }));
+        assert!(state.updates_pending());
+        assert_eq!(state.client_update_target().unwrap().id, "other");
+        state.set_update_status(serde_json::json!({
+            "launcher": {"availability": {"kind": "upToDate"}},
+            "clients": {"other": {"kind": "updateAvailable", "current": "3.5.1", "candidate": "3.6.0"}},
+        }));
+        assert!(state.updates_pending());
+        state.launcher.as_mut().unwrap().instances[1]
+            .aurora
+            .as_mut()
+            .unwrap()
+            .version = "3.6.0".into();
+        assert!(
+            !state.updates_pending(),
+            "an applied offer cannot survive the pin change"
+        );
     }
 
     fn appearance_fixture(background: &str, motion: u8) -> api::Appearance {
@@ -3791,20 +3702,5 @@ mod tests {
         assert!(!navigation_accepted(2, 0, true));
         assert!(!navigation_accepted(0, 2, true));
         assert!(navigation_accepted(2, 2, true));
-    }
-}
-
-struct NavHint(gpui::SharedString);
-impl Render for NavHint {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let t = theme::theme(cx);
-        div()
-            .px(px(10.))
-            .py(px(6.))
-            .rounded(t.radius)
-            .bg(t.card)
-            .text_color(t.foreground)
-            .text_size(px(ui::TEXT_BODY))
-            .child(self.0.clone())
     }
 }

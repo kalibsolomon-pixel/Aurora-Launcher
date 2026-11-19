@@ -2198,7 +2198,8 @@ impl Render for Skins {
         } else {
             // The parent reserves 212px for navigation and 32px page padding
             // on either side. Recompute on resize; no saved layout is changed.
-            let available = f32::from(window.viewport_size().width) - 212. - 64.;
+            let available =
+                f32::from(window.viewport_size().width) - crate::navigation::PAGE_CHROME;
             let columns = ((available + 16.) / 236.).floor().clamp(1., 4.) as u16;
             let mut grid = div()
                 .id("skins-library")
