@@ -298,8 +298,9 @@ pub fn scan(managed: &ManagedPaths, instance: &InstanceId) -> Result<ModInventor
     if managed_file.is_none()
         && let Some(state) = &bootstrap
     {
-        for artifact in
-            std::iter::once(state.artifact()).chain(state.fabric_api().map(|api| api.artifact()))
+        for artifact in std::iter::once(state.artifact())
+            .chain(state.fabric_api().map(|api| api.artifact()))
+            .chain(state.ephemera().map(|ephemera| ephemera.artifact()))
         {
             let name = artifact
                 .relative_path()

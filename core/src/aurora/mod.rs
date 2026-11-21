@@ -66,6 +66,8 @@ pub struct AuroraInstalledState {
     artifact: AuroraInstalledArtifact,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     fabric_api: Option<InstalledFabricApi>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ephemera: Option<InstalledEphemera>,
     installation_id: String,
     installed_at_unix_seconds: u64,
 }
@@ -82,6 +84,24 @@ impl InstalledFabricApi {
     pub fn version(&self) -> &str {
         &self.version
     }
+    pub fn artifact(&self) -> &AuroraInstalledArtifact {
+        &self.artifact
+    }
+}
+
+/// A verified Ephemera rendering-engine mod managed alongside Aurora Client.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstalledEphemera {
+    version: String,
+    artifact: AuroraInstalledArtifact,
+}
+
+impl InstalledEphemera {
+    pub fn version(&self) -> &str {
+        &self.version
+    }
+
     pub fn artifact(&self) -> &AuroraInstalledArtifact {
         &self.artifact
     }
@@ -145,6 +165,7 @@ impl AuroraInstalledState {
             fabric_loader_version: release.fabric_loader_version().into(),
             artifact,
             fabric_api,
+            ephemera: None,
             installation_id: uuid::Uuid::new_v4().to_string(),
             installed_at_unix_seconds: std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -177,6 +198,10 @@ impl AuroraInstalledState {
         self.fabric_api.as_ref()
     }
 
+    pub fn ephemera(&self) -> Option<&InstalledEphemera> {
+        self.ephemera.as_ref()
+    }
+
     pub fn installation_id(&self) -> &str {
         &self.installation_id
     }
@@ -187,6 +212,10 @@ impl AuroraInstalledState {
     /// release.
     pub(crate) fn set_provider_fabric_api(&mut self, fabric_api: Option<InstalledFabricApi>) {
         self.fabric_api = fabric_api;
+    }
+
+    pub(crate) fn set_ephemera(&mut self, ephemera: Option<InstalledEphemera>) {
+        self.ephemera = ephemera;
     }
 
     /// Parses and validates an installed-state document. Unknown schema
@@ -250,6 +279,26 @@ impl AuroraInstalledState {
             if fabric_api.artifact.size_bytes == 0 {
                 return Err(AuroraStateError::Malformed {
                     reason: "the Fabric API size must be greater than zero".to_owned(),
+                });
+            }
+        }
+        if let Some(ephemera) = &state.ephemera {
+            let expected_path = format!("mods/ephemera-{}.jar", ephemera.version);
+            if ephemera.version.is_empty() || ephemera.artifact.relative_path != expected_path {
+                return Err(AuroraStateError::Malformed {
+                    reason: "the Ephemera managed path or version is invalid".to_owned(),
+                });
+            }
+            validate_ephemera_relative_path(&ephemera.artifact.relative_path)
+                .map_err(|reason| AuroraStateError::Malformed { reason })?;
+            ArtifactDigest::parse(&ephemera.artifact.sha256).map_err(|error| {
+                AuroraStateError::Malformed {
+                    reason: format!("the Ephemera SHA-256 is invalid: {error}"),
+                }
+            })?;
+            if ephemera.artifact.size_bytes == 0 {
+                return Err(AuroraStateError::Malformed {
+                    reason: "the Ephemera size must be greater than zero".to_owned(),
                 });
             }
         }
@@ -323,6 +372,10 @@ fn validate_managed_relative_path(path: &str) -> Result<(), String> {
 
 fn validate_fabric_api_relative_path(path: &str) -> Result<(), String> {
     validate_managed_mod_path(path, "fabric-api-")
+}
+
+fn validate_ephemera_relative_path(path: &str) -> Result<(), String> {
+    validate_managed_mod_path(path, "ephemera-")
 }
 
 fn validate_managed_mod_path(path: &str, prefix: &str) -> Result<(), String> {
@@ -635,6 +688,9 @@ pub async fn install_aurora(
             sha256: expected.as_hex(),
         },
         fabric_api: installed_fabric_api,
+        ephemera: previous_state
+            .as_ref()
+            .and_then(|state| state.ephemera().cloned()),
         installation_id: format!(
             "aurora-install-{}-{}",
             std::time::SystemTime::now()
@@ -869,7 +925,345 @@ pub fn validate_artifact(
         verify_file(&path, &digest, Some(fabric_api.artifact().size_bytes()))
             .map_err(|error| format!("Fabric API verification failed: {error}"))?;
     }
+    if let Some(ephemera) = state.ephemera() {
+        let path = managed.instance_paths(instance).root().join(
+            ephemera
+                .artifact()
+                .relative_path()
+                .split('/')
+                .collect::<PathBuf>(),
+        );
+        let digest = ArtifactDigest::parse(ephemera.artifact().sha256())
+            .map_err(|error| error.to_string())?;
+        verify_file(&path, &digest, Some(ephemera.artifact().size_bytes()))
+            .map_err(|error| format!("Ephemera verification failed: {error}"))?;
+    }
     Ok(())
+}
+
+/// Mods that replace Minecraft's terrain renderer and therefore cannot run
+/// alongside Ephemera.
+const CONFLICTING_RENDERER_MOD_IDS: &[&str] = &["sodium", "iris", "vulkanmod", "nvidium"];
+
+/// Returns the first enabled conflicting renderer mod ID present in the
+/// instance's `mods/` directory, if any.
+pub fn conflicting_renderer_mod(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<Option<String>, AuroraInstallError> {
+    let paths = managed.instance_paths(instance);
+    if !paths.mods().is_dir() {
+        return Ok(None);
+    }
+    let inventory = crate::instance_mods::scan(managed, instance).map_err(|error| {
+        AuroraInstallError::Materialization {
+            path: "mods".into(),
+            reason: error.to_string(),
+        }
+    })?;
+    for entry in inventory.entries.iter().filter(|entry| entry.enabled) {
+        if let Some(meta) = &entry.metadata {
+            if let Some(conflict) = CONFLICTING_RENDERER_MOD_IDS
+                .iter()
+                .find(|&&id| meta.id == id || meta.nested_mod_ids.iter().any(|n| n == id))
+            {
+                return Ok(Some((*conflict).to_owned()));
+            }
+        }
+    }
+    Ok(None)
+}
+
+/// Read-only status of launcher-managed Ephemera on one instance.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EphemeraStatus {
+    pub installed: bool,
+    pub version: Option<String>,
+    pub file_name: Option<String>,
+    /// One of `"active"`, `"disabled"`, `"modified"`, `"missing"`, `"notInstalled"`.
+    pub status: String,
+    pub conflicting_mod: Option<String>,
+}
+
+/// Inspects the launcher-managed Ephemera status for one instance without
+/// modifying any files.
+pub fn ephemera_status(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<EphemeraStatus, AuroraInstallError> {
+    let conflicting_mod = conflicting_renderer_mod(managed, instance)?;
+    let Some(state) = load_installed_state(managed, instance)? else {
+        return Ok(EphemeraStatus {
+            installed: false,
+            version: None,
+            file_name: None,
+            status: "notInstalled".into(),
+            conflicting_mod,
+        });
+    };
+    let Some(ephemera) = state.ephemera() else {
+        return Ok(EphemeraStatus {
+            installed: false,
+            version: None,
+            file_name: None,
+            status: "notInstalled".into(),
+            conflicting_mod,
+        });
+    };
+    let file_name = ephemera
+        .artifact()
+        .relative_path()
+        .strip_prefix("mods/")
+        .unwrap_or(ephemera.artifact().relative_path())
+        .to_owned();
+    let instance_paths = managed.instance_paths(instance);
+    let mods = instance_paths.mods();
+    let active = mods.join(&file_name);
+    let disabled = mods.join(format!("{file_name}.disabled"));
+    let has_active = std::fs::symlink_metadata(&active).is_ok();
+    let has_disabled = std::fs::symlink_metadata(&disabled).is_ok();
+    let status = if has_active && has_disabled {
+        "modified"
+    } else if !has_active && !has_disabled {
+        "missing"
+    } else {
+        let path = if has_active { &active } else { &disabled };
+        let valid = ArtifactDigest::parse(ephemera.artifact().sha256()).is_ok_and(|digest| {
+            verify_file(path, &digest, Some(ephemera.artifact().size_bytes())).is_ok()
+        });
+        if !valid {
+            "modified"
+        } else if has_active {
+            "active"
+        } else {
+            "disabled"
+        }
+    };
+    Ok(EphemeraStatus {
+        installed: has_active || has_disabled,
+        version: Some(ephemera.version().to_owned()),
+        file_name: Some(file_name),
+        status: status.into(),
+        conflicting_mod,
+    })
+}
+
+/// Outcome of attempting to install or update launcher-managed Ephemera on an
+/// Aurora instance.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum EphemeraInstallOutcome {
+    Installed(InstalledEphemera),
+    SkippedConflict { conflicting_mod: String },
+    SkippedExisting,
+}
+
+/// Acquires a verified Ephemera release through [`ArtifactCache`], materializes
+/// it to `mods/ephemera-<version>.jar`, re-verifies its SHA-256, and records
+/// ownership atomically in `aurora-installed.json`.
+///
+/// Automatically skips if a conflicting renderer mod (`sodium`, `iris`,
+/// `vulkanmod`, `nvidium`) or an unmanaged Ephemera copy is already installed.
+pub async fn install_managed_ephemera(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    release: &crate::distribution::ephemera::EphemeraRelease,
+    options: &DownloadOptions,
+) -> Result<EphemeraInstallOutcome, AuroraInstallError> {
+    let mut state = load_installed_state(managed, instance)?.ok_or_else(|| {
+        AuroraInstallError::ReleaseInvalid(
+            "Aurora Client must be installed before bundling Ephemera.".into(),
+        )
+    })?;
+    if let Some(conflicting_mod) = conflicting_renderer_mod(managed, instance)? {
+        return Ok(EphemeraInstallOutcome::SkippedConflict { conflicting_mod });
+    }
+
+    let relative = crate::distribution::ephemera::managed_artifact_relative_path(release.version())
+        .map_err(AuroraInstallError::ReleaseInvalid)?;
+    validate_ephemera_relative_path(&relative).map_err(AuroraInstallError::ReleaseInvalid)?;
+
+    // Never overwrite or duplicate an existing user-installed or provider-managed Ephemera jar.
+    let instance_paths = managed.instance_paths(instance);
+    if instance_paths.mods().is_dir() {
+        let managed_file_name = state
+            .ephemera()
+            .and_then(|e| e.artifact().relative_path().strip_prefix("mods/"))
+            .map(str::to_owned);
+        let inventory = crate::instance_mods::scan(managed, instance).map_err(|error| {
+            AuroraInstallError::Materialization {
+                path: relative.clone(),
+                reason: error.to_string(),
+            }
+        })?;
+        let has_unmanaged_ephemera = inventory.entries.iter().any(|entry| {
+            let is_current_managed = managed_file_name.as_deref().is_some_and(|name| {
+                entry.file_name.eq_ignore_ascii_case(name)
+                    || entry
+                        .file_name
+                        .eq_ignore_ascii_case(&format!("{name}.disabled"))
+            });
+            !is_current_managed
+                && entry
+                    .metadata
+                    .as_ref()
+                    .is_some_and(|meta| meta.id == "ephemera")
+        });
+        if has_unmanaged_ephemera {
+            return Ok(EphemeraInstallOutcome::SkippedExisting);
+        }
+    }
+
+    let expected = ArtifactDigest::parse(release.artifact().sha256())
+        .map_err(|error| AuroraInstallError::ReleaseInvalid(error.to_string()))?;
+    let source = ArtifactSource::https_or_loopback(
+        release.artifact().url(),
+        release.artifact().sha256(),
+        release.artifact().size_bytes(),
+    )
+    .map_err(|error| AuroraInstallError::ArtifactInvalid(error.to_string()))?;
+
+    let cache = ArtifactCache::new(managed.clone());
+    let verified = cache
+        .acquire_with(&source, options)
+        .await
+        .map_err(AuroraInstallError::Acquisition)?;
+
+    let target = instance_paths
+        .root()
+        .join(relative.split('/').collect::<PathBuf>());
+    if !target.starts_with(instance_paths.mods()) {
+        return Err(AuroraInstallError::Materialization {
+            path: relative.clone(),
+            reason: "the derived Ephemera path escaped the managed mods directory".into(),
+        });
+    }
+    if let Some(parent) = target.parent() {
+        std::fs::create_dir_all(parent).map_err(|error| AuroraInstallError::Materialization {
+            path: relative.clone(),
+            reason: error.to_string(),
+        })?;
+    }
+
+    materialize_bootstrap(
+        managed,
+        instance,
+        &verified.path,
+        &target,
+        &expected,
+        verified.bytes,
+    )?;
+    let bytes = verify_file(&target, &expected, Some(verified.bytes)).map_err(|error| {
+        AuroraInstallError::Materialization {
+            path: relative.clone(),
+            reason: format!("the materialized Ephemera artifact failed verification: {error}"),
+        }
+    })?;
+
+    // Retire an older launcher-managed Ephemera JAR only after the new copy verified.
+    if let Some(previous) = state.ephemera() {
+        if previous.artifact().relative_path() != relative {
+            let old_path = instance_paths.root().join(
+                previous
+                    .artifact()
+                    .relative_path()
+                    .split('/')
+                    .collect::<PathBuf>(),
+            );
+            if let Ok(old_digest) = ArtifactDigest::parse(previous.artifact().sha256()) {
+                if verify_file(
+                    &old_path,
+                    &old_digest,
+                    Some(previous.artifact().size_bytes()),
+                )
+                .is_ok()
+                {
+                    let _ = std::fs::remove_file(&old_path);
+                }
+            }
+        }
+    }
+
+    let installed = InstalledEphemera {
+        version: release.version().to_owned(),
+        artifact: AuroraInstalledArtifact {
+            relative_path: relative,
+            size_bytes: bytes,
+            sha256: expected.as_hex(),
+        },
+    };
+    state.set_ephemera(Some(installed.clone()));
+    write_installed_state(managed, instance, &state)?;
+    Ok(EphemeraInstallOutcome::Installed(installed))
+}
+
+/// Removes launcher-managed Ephemera from one instance and clears its ownership
+/// record from `aurora-installed.json`. Refuses to delete user-modified bytes.
+pub fn remove_managed_ephemera(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<bool, AuroraInstallError> {
+    let Some(mut state) = load_installed_state(managed, instance)? else {
+        return Ok(false);
+    };
+    let Some(ephemera) = state.ephemera().cloned() else {
+        return Ok(false);
+    };
+    let file_name = ephemera
+        .artifact()
+        .relative_path()
+        .strip_prefix("mods/")
+        .ok_or_else(|| {
+            AuroraInstallError::ReleaseInvalid("invalid Ephemera managed path".into())
+        })?;
+    let instance_paths = managed.instance_paths(instance);
+    let mods = instance_paths.mods();
+    let expected = ArtifactDigest::parse(ephemera.artifact().sha256())
+        .map_err(|error| AuroraInstallError::ReleaseInvalid(error.to_string()))?;
+
+    for candidate in [
+        mods.join(file_name),
+        mods.join(format!("{file_name}.disabled")),
+    ] {
+        match std::fs::symlink_metadata(&candidate) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(error) => {
+                return Err(AuroraInstallError::Materialization {
+                    path: ephemera.artifact().relative_path().to_owned(),
+                    reason: error.to_string(),
+                });
+            }
+            Ok(meta) if !meta.is_file() || meta.file_type().is_symlink() => {
+                return Err(AuroraInstallError::Materialization {
+                    path: ephemera.artifact().relative_path().to_owned(),
+                    reason: "Ephemera file is not a regular contained file; inspect it manually."
+                        .into(),
+                });
+            }
+            Ok(_) => {
+                verify_file(
+                    &candidate,
+                    &expected,
+                    Some(ephemera.artifact().size_bytes()),
+                )
+                .map_err(|_| AuroraInstallError::Materialization {
+                    path: ephemera.artifact().relative_path().to_owned(),
+                    reason: "Ephemera bytes were modified externally; remove it manually in Mods."
+                        .into(),
+                })?;
+                std::fs::remove_file(&candidate).map_err(|error| {
+                    AuroraInstallError::Materialization {
+                        path: ephemera.artifact().relative_path().to_owned(),
+                        reason: error.to_string(),
+                    }
+                })?;
+            }
+        }
+    }
+
+    state.set_ephemera(None);
+    write_installed_state(managed, instance, &state)?;
+    Ok(true)
 }
 
 /// A failed Aurora installation.
@@ -1233,5 +1627,193 @@ mod tests {
                 &broken[..broken.len().min(50)]
             );
         }
+    }
+
+    #[test]
+    fn installed_state_accepts_optional_ephemera_and_keeps_legacy_schema1_compatible() {
+        let legacy = r#"{
+  "schemaVersion": 1,
+  "auroraVersion": "3.7.0",
+  "channel": "stable",
+  "minecraftVersion": "26.2",
+  "fabricLoaderVersion": "0.20.1",
+  "artifact": { "relativePath": "mods/aurora-3.7.0.jar", "sizeBytes": 57, "sha256": "41765f8d32372d242b51a5509f467480be661c19d127ea203e5bdf9d5da4f2c3" },
+  "installationId": "aurora-install-1-1",
+  "installedAtUnixSeconds": 1789455335
+}"#;
+        let parsed = AuroraInstalledState::from_json(legacy).unwrap();
+        assert!(parsed.ephemera().is_none());
+        assert!(!parsed.to_json().contains("ephemera"));
+
+        let with_ephemera = r#"{
+  "schemaVersion": 1,
+  "auroraVersion": "3.7.0",
+  "channel": "stable",
+  "minecraftVersion": "26.2",
+  "fabricLoaderVersion": "0.20.1",
+  "artifact": { "relativePath": "mods/aurora-3.7.0.jar", "sizeBytes": 57, "sha256": "41765f8d32372d242b51a5509f467480be661c19d127ea203e5bdf9d5da4f2c3" },
+  "ephemera": {
+    "version": "0.2.0",
+    "artifact": { "relativePath": "mods/ephemera-0.2.0.jar", "sizeBytes": 128, "sha256": "41765f8d32372d242b51a5509f467480be661c19d127ea203e5bdf9d5da4f2c3" }
+  },
+  "installationId": "aurora-install-1-1",
+  "installedAtUnixSeconds": 1789455335
+}"#;
+        let parsed = AuroraInstalledState::from_json(with_ephemera).unwrap();
+        let eph = parsed.ephemera().expect("ephemera entry must parse");
+        assert_eq!(eph.version(), "0.2.0");
+        assert_eq!(eph.artifact().relative_path(), "mods/ephemera-0.2.0.jar");
+
+        for broken in [
+            with_ephemera.replace("mods/ephemera-0.2.0.jar", "mods/other-0.2.0.jar"),
+            with_ephemera.replace("\"sizeBytes\": 128", "\"sizeBytes\": 0"),
+            with_ephemera.replace("\"version\": \"0.2.0\"", "\"version\": \"\""),
+        ] {
+            assert!(AuroraInstalledState::from_json(&broken).is_err());
+        }
+    }
+
+    #[tokio::test]
+    async fn managed_ephemera_install_verify_damage_and_remove_lifecycle() {
+        let aurora_body = b"aurora client bytes".to_vec();
+        let ephemera_body = b"ephemera verified engine jar bytes".to_vec();
+        let aurora_served = aurora_body.clone();
+        let ephemera_served = ephemera_body.clone();
+        let server = TestServer::spawn(Arc::new(move |request| {
+            if request.path.contains("ephemera") {
+                TestResponse::ok(&ephemera_served)
+            } else {
+                TestResponse::ok(&aurora_served)
+            }
+        }));
+        let (root, managed, instance) = test_managed("ephemera-lifecycle");
+        let rel = release(
+            &format!("{}/aurora-0.3.0.jar", server.base_url()),
+            &sha256_of(&aurora_body),
+            Some(aurora_body.len() as u64),
+        );
+        install_aurora(&managed, &instance, &rel, &quick_options())
+            .await
+            .unwrap();
+
+        let eph_artifact = crate::distribution::ReleaseArtifact::new(
+            format!("{}/ephemera-0.2.0-mc26.2.jar", server.base_url()),
+            sha256_of(&ephemera_body),
+            Some(ephemera_body.len() as u64),
+        )
+        .unwrap();
+        let eph_release = crate::distribution::ephemera::EphemeraRelease::new(
+            "0.2.0",
+            "26.2",
+            25,
+            eph_artifact,
+            None,
+        )
+        .unwrap();
+
+        let outcome = install_managed_ephemera(&managed, &instance, &eph_release, &quick_options())
+            .await
+            .unwrap();
+        assert!(matches!(outcome, EphemeraInstallOutcome::Installed(_)));
+
+        let status = ephemera_status(&managed, &instance).unwrap();
+        assert!(status.installed);
+        assert_eq!(status.version.as_deref(), Some("0.2.0"));
+        assert_eq!(status.status, "active");
+        assert!(status.conflicting_mod.is_none());
+
+        let state = load_installed_state(&managed, &instance).unwrap().unwrap();
+        assert!(validate_artifact(&managed, &instance, &state).is_ok());
+
+        let eph_path = managed
+            .instance_paths(&instance)
+            .mods()
+            .join("ephemera-0.2.0.jar");
+        std::fs::write(&eph_path, b"corrupted").unwrap();
+        assert!(validate_artifact(&managed, &instance, &state).is_err());
+        assert_eq!(
+            ephemera_status(&managed, &instance).unwrap().status,
+            "modified"
+        );
+        // Refuses to delete externally modified bytes.
+        assert!(remove_managed_ephemera(&managed, &instance).is_err());
+
+        // Restore verified bytes -> clean removal succeeds.
+        std::fs::write(&eph_path, &ephemera_body).unwrap();
+        assert!(remove_managed_ephemera(&managed, &instance).unwrap());
+        assert!(!eph_path.exists());
+        assert!(
+            load_installed_state(&managed, &instance)
+                .unwrap()
+                .unwrap()
+                .ephemera()
+                .is_none()
+        );
+        let _ = root;
+    }
+
+    #[tokio::test]
+    async fn managed_ephemera_skips_when_sodium_or_iris_is_present() {
+        use std::io::Write;
+        let aurora_body = b"aurora client bytes".to_vec();
+        let ephemera_body = b"ephemera bytes".to_vec();
+        let aurora_served = aurora_body.clone();
+        let server = TestServer::spawn(Arc::new(move |_| TestResponse::ok(&aurora_served)));
+        let (root, managed, instance) = test_managed("ephemera-sodium-skip");
+        let rel = release(
+            &format!("{}/aurora-0.3.0.jar", server.base_url()),
+            &sha256_of(&aurora_body),
+            Some(aurora_body.len() as u64),
+        );
+        install_aurora(&managed, &instance, &rel, &quick_options())
+            .await
+            .unwrap();
+
+        // Place a valid Fabric JAR declaring id "sodium" in mods/.
+        let mut archive = zip::ZipWriter::new(std::io::Cursor::new(Vec::new()));
+        archive
+            .start_file("fabric.mod.json", zip::write::SimpleFileOptions::default())
+            .unwrap();
+        archive
+            .write_all(br#"{"schemaVersion":1,"id":"sodium","version":"0.9.2"}"#)
+            .unwrap();
+        let sodium_bytes = archive.finish().unwrap().into_inner();
+        std::fs::write(
+            managed
+                .instance_paths(&instance)
+                .mods()
+                .join("sodium-0.9.2.jar"),
+            &sodium_bytes,
+        )
+        .unwrap();
+
+        let eph_artifact = crate::distribution::ReleaseArtifact::new(
+            format!("{}/ephemera-0.2.0-mc26.2.jar", server.base_url()),
+            sha256_of(&ephemera_body),
+            Some(ephemera_body.len() as u64),
+        )
+        .unwrap();
+        let eph_release = crate::distribution::ephemera::EphemeraRelease::new(
+            "0.2.0",
+            "26.2",
+            25,
+            eph_artifact,
+            None,
+        )
+        .unwrap();
+
+        let outcome = install_managed_ephemera(&managed, &instance, &eph_release, &quick_options())
+            .await
+            .unwrap();
+        assert_eq!(
+            outcome,
+            EphemeraInstallOutcome::SkippedConflict {
+                conflicting_mod: "sodium".into()
+            }
+        );
+        let status = ephemera_status(&managed, &instance).unwrap();
+        assert!(!status.installed);
+        assert_eq!(status.conflicting_mod.as_deref(), Some("sodium"));
+        let _ = root;
     }
 }

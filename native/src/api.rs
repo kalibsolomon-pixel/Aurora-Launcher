@@ -382,6 +382,8 @@ pub struct InstanceConfiguration {
     pub fullscreen: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferred_account_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ephemera_enabled: Option<bool>,
     #[serde(flatten)]
     pub other: serde_json::Map<String, Value>,
 }
@@ -1328,14 +1330,43 @@ pub async fn create_instance(
     minecraft: String,
     loader: Value,
     aurora: bool,
+    ephemera: Option<bool>,
 ) -> ApiResult<InstanceSummary> {
-    let request = request(json!({
+    let mut payload = json!({
         "displayName": name,
         "minecraftVersion": minecraft,
         "loader": loader,
         "auroraEnabled": aurora,
-    }))?;
+    });
+    if let Some(enabled) = ephemera {
+        payload["ephemeraEnabled"] = json!(enabled);
+    }
+    let request = request(payload)?;
     convert(app::create_instance(host, request).await)
+}
+
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct EphemeraStatus {
+    pub installed: bool,
+    pub version: Option<String>,
+    pub file_name: Option<String>,
+    pub status: String,
+    pub conflicting_mod: Option<String>,
+}
+
+pub async fn ephemera_status(host: Host, instance_id: String) -> ApiResult<EphemeraStatus> {
+    let req = request(json!({ "instanceId": instance_id }))?;
+    blocking(move || convert(app::get_instance_ephemera_status(host, req))).await?
+}
+
+pub async fn set_ephemera(
+    host: Host,
+    instance_id: String,
+    enabled: bool,
+) -> ApiResult<EphemeraStatus> {
+    let req = request(json!({ "instanceId": instance_id, "enabled": enabled }))?;
+    convert(app::set_instance_ephemera(host, req).await)
 }
 
 pub async fn aurora_compatibility(

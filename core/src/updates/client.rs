@@ -867,6 +867,7 @@ fn commit_update(
                 previous.as_ref().and_then(|old| old.fabric_api().cloned()),
             );
         }
+        state.set_ephemera(previous.as_ref().and_then(|old| old.ephemera().cloned()));
         aurora::write_installed_state(managed, id, &state)
             .map_err(|error| invalid(error.to_string()))?;
         aurora::write_instance_release(managed, id, release)

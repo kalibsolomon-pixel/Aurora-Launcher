@@ -1963,6 +1963,7 @@ pub(crate) fn validate_instance_under_game_lock(
                     // stay absent; only active original files must reverify.
                     for artifact in std::iter::once(state.artifact())
                         .chain(state.fabric_api().map(|api| api.artifact()))
+                        .chain(state.ephemera().map(|ephemera| ephemera.artifact()))
                     {
                         let mods =
                             crate::instance_mods::validate_mods_directory(managed, record.id())
