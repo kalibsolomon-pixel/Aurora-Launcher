@@ -173,8 +173,7 @@ impl Pulsar {
         content: Div,
         cx: &mut Context<Self>,
     ) -> Div {
-        // Per-fight explanations (ids prefixed "fight-") start open.
-        let open = self.disclosures.contains(id) != id.starts_with("fight-");
+        let open = self.disclosures.contains(id);
         let key = id.to_owned();
         div()
             .flex()
@@ -450,11 +449,12 @@ impl Pulsar {
         header_action: Option<gpui::AnyElement>,
         _cx: &mut Context<Self>,
     ) -> Div {
-        let five_columns = m.len() == 5 && self.width >= 950.;
+        let even_row = matches!(m.len(), 5 | 6) && self.width >= 950.;
         let mut group = div()
             .flex()
-            .gap(px(16.))
-            .when(!five_columns, |d| d.flex_wrap());
+            .gap_x(px(20.))
+            .gap_y(px(14.))
+            .when(!even_row, |d| d.flex_wrap());
         for (index, metric) in m.values().enumerate() {
             let key = metric.definition.key.clone();
             let metric_tip = format!("{}: {}", metric.definition.label, metric.definition.help);
@@ -479,8 +479,8 @@ impl Pulsar {
                     .when(m.len() <= 3 && self.width >= 680., |d| {
                         d.w(px(0.)).flex_1().min_w(px(140.))
                     })
-                    .when(five_columns, |d| d.w(px(0.)).flex_1().min_w(px(0.)))
-                    .when(m.len() == 5 && !five_columns, |d| {
+                    .when(even_row, |d| d.w(px(0.)).flex_1().min_w(px(0.)))
+                    .when(m.len() == 5 && !even_row, |d| {
                         if index == 4 {
                             d.w_full()
                         } else {
@@ -492,7 +492,8 @@ impl Pulsar {
                             .flex()
                             .items_center()
                             .gap(px(4.))
-                            .h(px(if m.len() == 5 { 32. } else { 20. }))
+                            .min_h(px(20.))
+                            .mb(px(2.))
                             .child(
                                 ui::caption(
                                     t,
@@ -507,6 +508,7 @@ impl Pulsar {
                                         "emptyMisses" => "Aimed swings without a hit".into(),
                                         "eligibleMisses" => "Counted misses".into(),
                                         "uniqueAttacks" => "Distinct inputs".into(),
+                                        "damageTakenPerSec" => "Damage per second".into(),
                                         _ => display_label(&metric.definition.label),
                                     },
                                 )

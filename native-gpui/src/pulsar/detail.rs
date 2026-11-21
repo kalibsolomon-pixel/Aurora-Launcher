@@ -112,27 +112,26 @@ impl Pulsar {
                     super::presentation::outcome(s),
                 ));
         }
-        let mut page = div()
+        let mut top_row = div()
             .flex()
-            .flex_col()
-            .gap(px(12.))
-            .min_w(px(0.))
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap(px(8.))
             .child(
-                div().flex().child(
-                    button("fight-back", "Back to library")
-                        .icon("arrow_back")
-                        .on_click(cx.listener(|this, _, _, cx| {
-                            this.close_detail();
-                            cx.notify();
-                        })),
-                ),
-            )
-            .child(header);
+                button("fight-back", "Back to library")
+                    .icon("arrow_back")
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.close_detail();
+                        cx.notify();
+                    })),
+            );
         if let Some(s) = summary {
-            page = page.child(
+            top_row = top_row.child(
                 div()
                     .flex()
                     .flex_wrap()
+                    .items_center()
                     .gap(px(4.))
                     .child(
                         button("fight-export", "Export\u{2026}")
@@ -143,7 +142,6 @@ impl Pulsar {
                                 cx.notify();
                             })),
                     )
-                    .child(div().flex_1())
                     .child(
                         div()
                             .relative()
@@ -221,6 +219,13 @@ impl Pulsar {
                     ),
             );
         }
+        let mut page = div()
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .min_w(px(0.))
+            .child(top_row)
+            .child(header);
         if let Some(error) = &self.error {
             page = page.child(ui::card(t).child(ui::title_block(
                 t,
@@ -231,15 +236,8 @@ impl Pulsar {
         if !self.message.is_empty() {
             page = page.child(ui::caption(t, self.message.clone()));
         }
-        let mut strip = div()
-            .flex()
+        let mut strip = crate::ui::segmented_tabs(t)
             .flex_wrap()
-            .gap(px(2.))
-            .p(px(2.))
-            .rounded(t.radius)
-            .bg(t.sunken)
-            .border_1()
-            .border_color(t.border_subtle)
             .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
                 let delta = match e.keystroke.key.as_str() {
                     "left" => 5,
