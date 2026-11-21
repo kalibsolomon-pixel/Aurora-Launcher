@@ -43,6 +43,19 @@ pub struct SavedWorld {
     pub version_name: Option<String>,
     /// Minecraft `Data.DataVersion`.
     pub data_version: Option<i32>,
+    /// Approximate on-disk size of this save directory.
+    pub size_bytes: u64,
+    /// Count of ZIP datapacks installed in `datapacks/`.
+    pub datapack_count: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatapackEntry {
+    pub file_name: String,
+    pub display_name: String,
+    pub enabled: bool,
+    pub size_bytes: u64,
 }
 
 /// Lists one managed instance's saves. Directories are never followed through
@@ -140,6 +153,8 @@ fn read_level(world: &Path, directory: &WorldSaveId) -> Option<SavedWorld> {
                     (!clean.is_empty() && clean.len() <= 64).then_some(clean)
                 })
         });
+    let size_bytes = bounded_dir_size(world, 0);
+    let datapack_count = count_datapacks(&world.join("datapacks"));
     Some(SavedWorld {
         directory: directory.clone(),
         display_name,
@@ -147,6 +162,215 @@ fn read_level(world: &Path, directory: &WorldSaveId) -> Option<SavedWorld> {
         game_mode,
         version_name,
         data_version,
+        size_bytes,
+        datapack_count,
+    })
+}
+
+fn bounded_dir_size(path: &Path, depth: u8) -> u64 {
+    if depth > 6 {
+        return 0;
+    }
+    let Ok(entries) = std::fs::read_dir(path) else {
+        return 0;
+    };
+    let mut total = 0u64;
+    for entry in entries.take(2048).flatten() {
+        let p = entry.path();
+        let Ok(meta) = std::fs::symlink_metadata(&p) else {
+            continue;
+        };
+        if meta.file_type().is_symlink() {
+            continue;
+        }
+        if meta.is_file() {
+            total = total.saturating_add(meta.len());
+        } else if meta.is_dir() {
+            total = total.saturating_add(bounded_dir_size(&p, depth + 1));
+        }
+    }
+    total
+}
+
+fn count_datapacks(dir: &Path) -> usize {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    entries
+        .take(256)
+        .flatten()
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().to_ascii_lowercase();
+            name.ends_with(".zip") || name.ends_with(".zip.disabled")
+        })
+        .count()
+}
+
+pub fn list_datapacks(
+    paths: &ManagedPaths,
+    instance: &InstanceId,
+    world: &WorldSaveId,
+) -> Result<Vec<DatapackEntry>, ReadError> {
+    let saves = paths.instance_paths(instance).root().join("saves");
+    let world_dir = crate::install::coordination::checked_directory(
+        paths.data_root(),
+        &saves.join(world.as_str()),
+    )
+    .map_err(|_| ReadError::Redirected)?;
+    let dp_dir = world_dir.join("datapacks");
+    if !dp_dir.exists() {
+        return Ok(Vec::new());
+    }
+    crate::install::coordination::checked_directory(paths.data_root(), &dp_dir)
+        .map_err(|_| ReadError::Redirected)?;
+    let entries = std::fs::read_dir(&dp_dir).map_err(|_| ReadError::Malformed)?;
+    let mut out = Vec::new();
+    for entry in entries.take(256).flatten() {
+        let p = entry.path();
+        let Ok(meta) = std::fs::symlink_metadata(&p) else {
+            continue;
+        };
+        if !meta.is_file() || meta.file_type().is_symlink() {
+            continue;
+        }
+        let Some(name) = entry.file_name().to_str().map(str::to_owned) else {
+            continue;
+        };
+        let lower = name.to_ascii_lowercase();
+        let (enabled, base) = if lower.ends_with(".zip") {
+            (true, name.clone())
+        } else if let Some(stripped) = name.strip_suffix(".disabled")
+            && stripped.to_ascii_lowercase().ends_with(".zip")
+        {
+            (false, stripped.to_owned())
+        } else {
+            continue;
+        };
+        let display_name = base
+            .strip_suffix(".zip")
+            .or_else(|| base.strip_suffix(".ZIP"))
+            .unwrap_or(&base)
+            .to_owned();
+        out.push(DatapackEntry {
+            file_name: name,
+            display_name,
+            enabled,
+            size_bytes: meta.len(),
+        });
+    }
+    out.sort_by(|a, b| {
+        a.display_name
+            .to_lowercase()
+            .cmp(&b.display_name.to_lowercase())
+    });
+    Ok(out)
+}
+
+pub fn set_datapack_enabled(
+    paths: &ManagedPaths,
+    instance: &InstanceId,
+    world: &WorldSaveId,
+    file_name: &str,
+    enabled: bool,
+) -> Result<(), String> {
+    crate::instance_content::validate_file_name(file_name).map_err(|e| e.to_string())?;
+    let _process = crate::launch::process::lock_stopped(instance.as_str())
+        .map_err(|_| "Quit Minecraft before changing world datapacks.".to_owned())?;
+    let saves = paths.instance_paths(instance).root().join("saves");
+    let world_dir = crate::install::coordination::checked_directory(
+        paths.data_root(),
+        &saves.join(world.as_str()),
+    )
+    .map_err(|_| "World directory is missing or redirected.".to_owned())?;
+    let dp_dir = world_dir.join("datapacks");
+    let current = dp_dir.join(file_name);
+    if !current.is_file() {
+        return Err("Datapack file no longer exists.".into());
+    }
+    let target_name = if enabled {
+        file_name
+            .strip_suffix(".disabled")
+            .unwrap_or(file_name)
+            .to_owned()
+    } else if file_name.ends_with(".disabled") {
+        file_name.to_owned()
+    } else {
+        format!("{file_name}.disabled")
+    };
+    if target_name == file_name {
+        return Ok(());
+    }
+    let target = dp_dir.join(&target_name);
+    if target.exists() {
+        return Err("A datapack with the target filename already exists.".into());
+    }
+    std::fs::rename(&current, &target).map_err(|e| format!("Could not toggle datapack: {e}"))
+}
+
+pub fn remove_datapack(
+    paths: &ManagedPaths,
+    instance: &InstanceId,
+    world: &WorldSaveId,
+    file_name: &str,
+) -> Result<(), String> {
+    crate::instance_content::validate_file_name(file_name).map_err(|e| e.to_string())?;
+    let _process = crate::launch::process::lock_stopped(instance.as_str())
+        .map_err(|_| "Quit Minecraft before removing world datapacks.".to_owned())?;
+    let saves = paths.instance_paths(instance).root().join("saves");
+    let world_dir = crate::install::coordination::checked_directory(
+        paths.data_root(),
+        &saves.join(world.as_str()),
+    )
+    .map_err(|_| "World directory is missing or redirected.".to_owned())?;
+    let target = world_dir.join("datapacks").join(file_name);
+    let meta = std::fs::symlink_metadata(&target)
+        .map_err(|_| "Datapack file no longer exists.".to_owned())?;
+    if !meta.is_file() || meta.file_type().is_symlink() {
+        return Err("Refusing to remove non-regular datapack file.".into());
+    }
+    std::fs::remove_file(&target).map_err(|e| format!("Could not remove datapack: {e}"))
+}
+
+pub fn install_datapack_from_verified_file(
+    paths: &ManagedPaths,
+    instance: &InstanceId,
+    world: &WorldSaveId,
+    file_name: &str,
+    verified_source: &Path,
+) -> Result<DatapackEntry, String> {
+    crate::instance_content::validate_file_name(file_name).map_err(|e| e.to_string())?;
+    if !file_name.to_ascii_lowercase().ends_with(".zip") {
+        return Err("Datapacks must be .zip archives.".into());
+    }
+    let _process = crate::launch::process::lock_stopped(instance.as_str())
+        .map_err(|_| "Quit Minecraft before installing world datapacks.".to_owned())?;
+    let saves = paths.instance_paths(instance).root().join("saves");
+    let world_dir = crate::install::coordination::checked_directory(
+        paths.data_root(),
+        &saves.join(world.as_str()),
+    )
+    .map_err(|_| "World directory is missing or redirected.".to_owned())?;
+    let dp_dir = world_dir.join("datapacks");
+    std::fs::create_dir_all(&dp_dir)
+        .map_err(|e| format!("Could not create datapacks directory: {e}"))?;
+    let dst = dp_dir.join(file_name);
+    let tmp = dp_dir.join(format!(".tmp-{}.zip", uuid::Uuid::new_v4().simple()));
+    std::fs::copy(verified_source, &tmp).map_err(|e| format!("Could not stage datapack: {e}"))?;
+    std::fs::rename(&tmp, &dst).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        format!("Could not install datapack: {e}")
+    })?;
+    let size_bytes = std::fs::metadata(&dst).map(|m| m.len()).unwrap_or(0);
+    let display_name = file_name
+        .strip_suffix(".zip")
+        .or_else(|| file_name.strip_suffix(".ZIP"))
+        .unwrap_or(file_name)
+        .to_owned();
+    Ok(DatapackEntry {
+        file_name: file_name.to_owned(),
+        display_name,
+        enabled: true,
+        size_bytes,
     })
 }
 

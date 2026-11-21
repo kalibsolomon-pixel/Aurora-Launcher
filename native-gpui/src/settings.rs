@@ -687,6 +687,9 @@ enum ShortcutOperation {
 
 pub struct Settings {
     show_game_log: Option<bool>,
+    on_launch_behavior: api::OnLaunchBehavior,
+    launch_behavior_busy: bool,
+    storage_view: Option<Entity<crate::storage::StorageView>>,
     log_preference_busy: bool,
     section: usize,
     host: Option<Host>,
@@ -782,8 +785,16 @@ impl Settings {
                 }
             }),
         ];
+        let storage_view = host.as_ref().map(|_| {
+            let h = host.clone();
+            let rt = runtime.clone();
+            cx.new(|cx| crate::storage::StorageView::new(h, rt, cx))
+        });
         let mut view = Self {
             show_game_log: None,
+            on_launch_behavior: api::OnLaunchBehavior::KeepOpen,
+            launch_behavior_busy: false,
+            storage_view,
             log_preference_busy: false,
             section: 0,
             host: host.clone(),
@@ -841,7 +852,12 @@ impl Settings {
     }
 
     pub fn select_section(&mut self, section: usize, cx: &mut Context<Self>) {
-        self.section = section.min(3);
+        self.section = section.min(5);
+        if self.section == 5
+            && let Some(storage) = &self.storage_view
+        {
+            storage.update(cx, |view, cx| view.refresh(cx));
+        }
         cx.notify();
     }
 
@@ -866,6 +882,23 @@ impl Settings {
                     match result {
                         Ok(show) => view.show_game_log = Some(show),
                         Err(e) => view.desktop_error = Some(e.message),
+                    }
+                    cx.notify();
+                },
+            );
+        }
+        if !self.launch_behavior_busy {
+            self.launch_behavior_busy = true;
+            self.request_read(
+                cx,
+                {
+                    let host = host.clone();
+                    async move { api::on_launch_behavior(host, None).await }
+                },
+                |view, result, cx| {
+                    view.launch_behavior_busy = false;
+                    if let Ok(behavior) = result {
+                        view.on_launch_behavior = behavior;
                     }
                     cx.notify();
                 },
@@ -2088,6 +2121,7 @@ impl Render for Settings {
         for (index, label) in [
             (0usize, "Appearance"),
             (3, "Updates"),
+            (5, "Storage"),
             (1, "Discord"),
             (2, "Desktop"),
             (4, "Game"),
@@ -2726,9 +2760,68 @@ impl Render for Settings {
                         ),
                     ),
             );
+            let mut behavior_tabs = ui::segmented_tabs(t);
+            for (idx, (label, choice)) in [
+                ("Keep open", api::OnLaunchBehavior::KeepOpen),
+                ("Minimize", api::OnLaunchBehavior::Minimize),
+                ("Hide to tray", api::OnLaunchBehavior::HideToTray),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let selected = self.on_launch_behavior == choice;
+                let weak_b = cx.entity().downgrade();
+                behavior_tabs = behavior_tabs.child(
+                    AuroraButton::new(("launch-behavior", idx), label)
+                        .variant(ButtonVariant::Ghost)
+                        .size(ButtonSize::Small)
+                        .selected(selected)
+                        .disabled(no_host || self.launch_behavior_busy)
+                        .on_click(move |_, _, app| {
+                            let _ = weak_b.update(app, |this, cx| {
+                                let Some(host) = this.host.clone() else {
+                                    return;
+                                };
+                                this.launch_behavior_busy = true;
+                                this.request_read(
+                                    cx,
+                                    api::on_launch_behavior(host, Some(choice)),
+                                    |this, res, cx| {
+                                        this.launch_behavior_busy = false;
+                                        match res {
+                                            Ok(saved) => this.on_launch_behavior = saved,
+                                            Err(e) => this.desktop_error = Some(e.message),
+                                        }
+                                        cx.notify();
+                                    },
+                                );
+                                cx.notify();
+                            });
+                        }),
+                );
+            }
+            panel = panel.child(
+                section_card(t).child(
+                    ui::setting_row(
+                        t,
+                        "When Minecraft launches",
+                        Some(
+                            "Minimize or hide to the Windows tray while playing; Aurora automatically restores when the game exits."
+                                .into(),
+                        ),
+                        true,
+                    )
+                    .child(behavior_tabs),
+                ),
+            );
             if let Some(error) = &self.desktop_error {
                 panel = panel.child(card_error(t, error.clone()));
             }
+        }
+        if self.section == 5
+            && let Some(storage) = &self.storage_view
+        {
+            panel = panel.child(storage.clone());
         }
         if self.section == 3 {
             // --- Updates -------------------------------------------------------

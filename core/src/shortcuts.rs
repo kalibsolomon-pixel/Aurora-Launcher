@@ -342,6 +342,52 @@ impl ShortcutContext {
             }
         }
     }
+
+    /// Creates a per-instance desktop shortcut that launches Aurora directly
+    /// into the requested instance (`--launch-instance <id>`).
+    pub fn create_instance_desktop_shortcut(
+        &self,
+        instance_id: &str,
+        display_name: &str,
+    ) -> Result<PathBuf, ShortcutError> {
+        let safe_name = sanitize_instance_shortcut_name(display_name);
+        let slot = self.desktop_dir.join(format!("{safe_name}.lnk"));
+        match classify_shortcut(&self.evidence(&slot), &self.target_exe) {
+            ShortcutPresence::Conflict => Err(ShortcutError::Conflict),
+            ShortcutPresence::Present | ShortcutPresence::Absent => {
+                let args = format!("--launch-instance {instance_id}");
+                let desc = format!("{PRODUCT_NAME} — {display_name}");
+                windows_impl::write_shortcut_with_args(
+                    &slot,
+                    &self.target_exe,
+                    &self.working_dir(),
+                    &desc,
+                    Some(&args),
+                )?;
+                Ok(slot)
+            }
+        }
+    }
+}
+
+pub fn sanitize_instance_shortcut_name(display_name: &str) -> String {
+    let cleaned: String = display_name
+        .chars()
+        .map(|c| match c {
+            '<' | '>' | ':' | '"' | '/' | '\\' | '|' | '?' | '*' => ' ',
+            c if c.is_control() => ' ',
+            c => c,
+        })
+        .collect::<String>()
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ");
+    let trimmed = cleaned.trim().trim_end_matches('.');
+    if trimmed.is_empty() {
+        format!("{PRODUCT_NAME} Instance")
+    } else {
+        trimmed.chars().take(64).collect()
+    }
 }
 
 /// Resolves the user's Desktop known folder through the Windows API.
@@ -497,6 +543,16 @@ mod windows_impl {
         working_dir: &Path,
         description: &str,
     ) -> Result<(), ShortcutError> {
+        write_shortcut_with_args(slot, target, working_dir, description, None)
+    }
+
+    pub(super) fn write_shortcut_with_args(
+        slot: &Path,
+        target: &Path,
+        working_dir: &Path,
+        description: &str,
+        arguments: Option<&str>,
+    ) -> Result<(), ShortcutError> {
         let _apartment = ComApartment::enter();
 
         // SAFETY: as in read_shortcut_target.
@@ -517,6 +573,10 @@ mod windows_impl {
                 .map_err(|error| ShortcutError::Shell(sanitize(&error.to_string())))?;
             link.SetDescription(&wide_str(description))
                 .map_err(|error| ShortcutError::Shell(sanitize(&error.to_string())))?;
+            if let Some(args) = arguments {
+                link.SetArguments(&wide_str(args))
+                    .map_err(|error| ShortcutError::Shell(sanitize(&error.to_string())))?;
+            }
         }
 
         let persist: IPersistFile = link
@@ -559,6 +619,16 @@ mod windows_impl {
         _target: &Path,
         _working_dir: &Path,
         _description: &str,
+    ) -> Result<(), ShortcutError> {
+        Err(ShortcutError::UnsupportedPlatform)
+    }
+
+    pub(super) fn write_shortcut_with_args(
+        _slot: &Path,
+        _target: &Path,
+        _working_dir: &Path,
+        _description: &str,
+        _arguments: Option<&str>,
     ) -> Result<(), ShortcutError> {
         Err(ShortcutError::UnsupportedPlatform)
     }

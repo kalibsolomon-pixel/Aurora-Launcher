@@ -64,3 +64,23 @@ pub fn import_path(
         }
     }
 }
+
+/// Native Save-File dialog using GPUI's platform prompt.
+pub fn save_path(
+    suggested_name: &str,
+    cx: &gpui::App,
+) -> impl std::future::Future<Output = crate::api::ApiResult<Option<String>>> + Send + use<> {
+    let dir = std::env::var_os("USERPROFILE")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from("."));
+    let prompt = cx.prompt_for_new_path(&dir, Some(suggested_name));
+    async move {
+        let failed = || {
+            crate::api::ApiError::new("save_dialog_failed", "Could not open the save file dialog.")
+        };
+        let selected = prompt.await.map_err(|_| failed())?.map_err(|_| failed())?;
+        selected
+            .map(|p| p.into_os_string().into_string().map_err(|_| failed()))
+            .transpose()
+    }
+}

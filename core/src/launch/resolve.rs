@@ -31,6 +31,8 @@ pub struct LaunchOptions {
     /// Custom windowed resolution; enables Mojang's
     /// `has_custom_resolution` feature arguments.
     window: Option<(u16, u16)>,
+    /// Launch Minecraft directly in fullscreen (`--fullscreen`).
+    fullscreen: bool,
 }
 
 impl LaunchOptions {
@@ -43,7 +45,13 @@ impl LaunchOptions {
             memory_mib: Some(memory_mib),
             additional_jvm_arguments,
             window,
+            fullscreen: false,
         }
+    }
+
+    pub fn with_fullscreen(mut self, fullscreen: bool) -> Self {
+        self.fullscreen = fullscreen;
+        self
     }
 
     /// The feature profile these options imply: a custom window enables
@@ -266,7 +274,8 @@ impl fmt::Debug for LaunchSpec {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct LaunchPlan {
     required_java_major: u32,
     minecraft_version: String,
@@ -281,13 +290,18 @@ pub struct LaunchPlan {
     platform: PlatformProfile,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct LaunchLogging {
     file_name: String,
     argument: String,
 }
 
 impl LaunchPlan {
+    pub fn required_java_major(&self) -> u32 {
+        self.required_java_major
+    }
+
     pub fn from_game_plan(plan: &GameInstallPlan, platform: PlatformProfile) -> Self {
         let minecraft = plan.minecraft();
         Self {
@@ -640,7 +654,14 @@ pub fn resolve_launch_spec_with_java(
         jvm_arguments.push(ResolvedArgument::Plain(argument.clone()));
     }
 
-    let game_arguments = resolve_groups(&plan.game_arguments, features, &values)?;
+    let mut game_arguments = resolve_groups(&plan.game_arguments, features, &values)?;
+    if options.fullscreen
+        && !game_arguments
+            .iter()
+            .any(|arg| arg.expose() == "--fullscreen")
+    {
+        game_arguments.push(ResolvedArgument::Plain("--fullscreen".into()));
+    }
 
     Ok(LaunchSpec {
         instance_id: instance_id.to_string(),

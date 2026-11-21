@@ -25,6 +25,12 @@ const MAX_GRAPH: usize = 64;
 const MAX_HASH_BATCH: usize = 64;
 
 #[derive(Debug, Clone)]
+pub struct DatapackArtifact {
+    pub file_name: String,
+    pub source: Sha512ArtifactSource,
+}
+
+#[derive(Debug, Clone)]
 pub struct Context {
     pub minecraft_version: String,
     pub loader: String,
@@ -41,6 +47,7 @@ pub enum BrowseKind {
     Modpack,
     ResourcePack,
     ShaderPack,
+    DataPack,
 }
 
 impl BrowseKind {
@@ -50,13 +57,14 @@ impl BrowseKind {
             Self::Modpack => "modpack",
             Self::ResourcePack => "resourcepack",
             Self::ShaderPack => "shader",
+            Self::DataPack => "datapack",
         }
     }
 
     pub fn content_type(self) -> Option<ContentType> {
         match self {
             Self::Mod => Some(ContentType::Mod),
-            Self::Modpack => None,
+            Self::Modpack | Self::DataPack => None,
             Self::ResourcePack => Some(ContentType::ResourcePack),
             Self::ShaderPack => Some(ContentType::ShaderPack),
         }
@@ -297,6 +305,8 @@ impl Client {
         }
         if kind == BrowseKind::ResourcePack {
             facets.push(vec!["loaders:minecraft".to_owned()]);
+        } else if kind == BrowseKind::DataPack {
+            facets.push(vec!["loaders:datapack".to_owned()]);
         }
         // Thematic categories are separate facet groups (AND between groups);
         // loader remains its own facet, never mixed into a category group.
@@ -439,6 +449,37 @@ impl Client {
             game_versions: version.game_versions,
             loaders: version.loaders,
             sha512,
+            source,
+        })
+    }
+
+    pub async fn datapack_artifact(
+        &self,
+        project_id: &str,
+        version_id: &str,
+    ) -> Result<DatapackArtifact, Error> {
+        let project = self.project(project_id).await?;
+        if project.project_type != "datapack" {
+            return Err(Error::InvalidRequest);
+        }
+        let version = self.version(version_id).await?;
+        if version.project_id != project.id {
+            return Err(Error::InvalidRequest);
+        }
+        let file = version
+            .files
+            .iter()
+            .find(|f| f.primary && f.filename.to_ascii_lowercase().ends_with(".zip"))
+            .or_else(|| {
+                version
+                    .files
+                    .iter()
+                    .find(|f| f.filename.to_ascii_lowercase().ends_with(".zip"))
+            })
+            .ok_or(Error::InvalidResponse)?;
+        let source = self.official_file_source(&file.url, &file.hashes.sha512, file.size)?;
+        Ok(DatapackArtifact {
+            file_name: file.filename.clone(),
             source,
         })
     }
@@ -1511,6 +1552,10 @@ fn compatible_browse(context: &Context, kind: BrowseKind, version: &VersionDto) 
                     && client_environment(&version.environment)
             }
             BrowseKind::ResourcePack => version.loaders.iter().any(|value| value == "minecraft"),
+            BrowseKind::DataPack => version
+                .loaders
+                .iter()
+                .any(|value| value == "datapack" || value == "minecraft"),
             BrowseKind::ShaderPack | BrowseKind::Modpack => true,
         }
 }

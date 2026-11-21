@@ -1,6 +1,8 @@
 use super::presentation::ui;
-use super::{Pulsar, tabs};
+use super::{Pulsar, Reply, tabs};
 use crate::{
+    api,
+    backend::guarded,
     controls::{
         AuroraButton, AuroraCheckbox, AuroraInput, AuroraSelect, ButtonSize, ButtonVariant,
     },
@@ -436,11 +438,90 @@ impl Pulsar {
             this.query.offset = 0;
             this.load(false, cx);
         }));
+        let date_label = ["All time", "Last 7d", "Last 30d"][self.date_preset as usize % 3];
+        let date_btn = small("history-date-filter", format!("Range: {date_label}"))
+            .variant(ButtonVariant::Default)
+            .selected(self.date_preset != 0)
+            .on_click(cx.listener(|this, _, _, cx| {
+                this.date_preset = (this.date_preset + 1) % 3;
+                let now_ms = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_millis() as i64)
+                    .unwrap_or(0);
+                this.query.date_from_ms = match this.date_preset {
+                    1 => Some(now_ms - 7 * 86_400_000),
+                    2 => Some(now_ms - 30 * 86_400_000),
+                    _ => None,
+                };
+                this.query.offset = 0;
+                this.load(false, cx);
+            }));
+        let bookmarked_btn = small(
+            "history-bookmark-filter",
+            if self.query.bookmarked_only {
+                "★ Bookmarked"
+            } else {
+                "☆ Bookmarks"
+            },
+        )
+        .variant(ButtonVariant::Default)
+        .selected(self.query.bookmarked_only)
+        .on_click(cx.listener(|this, _, _, cx| {
+            this.query.bookmarked_only = !this.query.bookmarked_only;
+            this.query.offset = 0;
+            this.load(false, cx);
+        }));
+        let export_csv_btn = small("history-export-csv", "Export CSV")
+            .icon("download")
+            .disabled(self.busy || self.library.rows.is_empty())
+            .on_click(cx.listener(|this, _, _, cx| {
+                let Some(host) = this.host.clone() else {
+                    return;
+                };
+                let query = this.query.clone();
+                let tx = this.tx.clone();
+                let rt = this.runtime.clone();
+                let prompt = crate::file_picker::save_path("pulsar-stats.csv", cx);
+                this.busy = true;
+                rt.spawn(async move {
+                    if let Ok(Some(dest)) = prompt.await {
+                        let r = guarded(api::pulsar_export_stats(
+                            host,
+                            StatsExportRequest {
+                                query,
+                                format: "csv".into(),
+                                destination: dest,
+                            },
+                        ))
+                        .await;
+                        let _ = tx.send(Reply::Action(r, false)).await;
+                    } else {
+                        let _ = tx
+                            .send(Reply::Action(
+                                Ok(ActionReceipt {
+                                    path: None,
+                                    revision: 0,
+                                    message: String::new(),
+                                }),
+                                false,
+                            ))
+                            .await;
+                    }
+                });
+                cx.notify();
+            }));
         let mut body = div()
             .flex()
             .flex_col()
             .gap(px(8.))
-            .child(tools.child(result).child(compare))
+            .child(
+                tools
+                    .child(result)
+                    .child(date_btn)
+                    .child(bookmarked_btn)
+                    .child(export_csv_btn)
+                    .child(compare),
+            )
             .when(chosen.is_some(), |d| d.child(actions))
             .child(ui::caption(
                 t,
@@ -1316,6 +1397,30 @@ impl Pulsar {
         }
 
         if self.detail_request.is_some() {
+            let active_summary = self.detail.as_ref().map(|d| &d.summary).or_else(|| {
+                self.selected
+                    .as_ref()
+                    .and_then(|k| self.library.rows.iter().find(|r| &r.key == k))
+            });
+            if let Some(s) = active_summary
+                && self.ann_loaded_key.as_ref() != Some(&s.key)
+            {
+                let tags = s
+                    .annotation
+                    .as_ref()
+                    .map(|a| a.tags.join(", "))
+                    .unwrap_or_default();
+                let note = s
+                    .annotation
+                    .as_ref()
+                    .map(|a| a.note.clone())
+                    .unwrap_or_default();
+                self.ann_loaded_key = Some(s.key.clone());
+                self.ann_tags
+                    .update(cx, |input, cx| input.set_value(tags, window, cx));
+                self.ann_note
+                    .update(cx, |input, cx| input.set_value(note, window, cx));
+            }
             return self.detail_body(&t, narrow, cx);
         }
 

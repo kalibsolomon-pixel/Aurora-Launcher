@@ -44,9 +44,8 @@ pub fn supported_sizes(id: &str) -> Option<&'static [WidgetSize]> {
     match id {
         "instance-details" | "content-summary" => Some(&[Small, Wide, Large]),
         "session" => Some(&[Small, Wide]),
-        "playtime" | "recent-worlds" | "recent-servers" | "skin-manager" | "cape-selector" => {
-            Some(&[Small, Wide, Large])
-        }
+        "playtime" | "recent-worlds" | "recent-servers" | "skin-manager" | "cape-selector"
+        | "pulsar-recent" => Some(&[Small, Wide, Large]),
         _ => None,
     }
 }

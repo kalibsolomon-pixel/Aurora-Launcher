@@ -480,6 +480,10 @@ enum Reply {
     AuroraApplied(api::ApiResult<api::InstanceSummary>),
     RecoveryPreview(u64, String, u64, api::ApiResult<api::RecoveryPreview>),
     RecoveryApplied(api::ApiResult<api::RecoveryPreview>),
+    Duplicated(api::ApiResult<api::InstanceSummary>),
+    ExportPreview(api::ApiResult<api::ExportPreview>),
+    Exported(api::ApiResult<api::ExportReceipt>),
+    ShortcutCreated(api::ApiResult<String>),
 }
 
 /// The last registry view of the selected instance; a change bumps the
@@ -559,6 +563,15 @@ pub struct InstanceEditor {
     /// Design screenshots only: the sample instance was opened once.
     pending_instance: Option<String>,
     pending_recovery: bool,
+    fullscreen: bool,
+    preferred_account: Option<String>,
+    accounts: Vec<api::AccountSummary>,
+    dup_open: bool,
+    dup_name: Entity<InputState>,
+    dup_opts: api::DuplicateOptions,
+    export_open: bool,
+    export_opts: api::ExportOptions,
+    export_preview: Option<api::ExportPreview>,
 }
 impl InstanceEditor {
     pub fn new(
@@ -602,6 +615,7 @@ impl InstanceEditor {
         let screenshots = cx.new(|cx| {
             crate::screenshots::Screenshots::new(host.clone(), runtime.clone(), window, cx)
         });
+        let dup_name = cx.new(|cx| InputState::new(window, cx).placeholder("New instance name"));
         let mut this = Self {
             section: 0,
             screenshots,
@@ -662,6 +676,15 @@ impl InstanceEditor {
             ],
             pending_instance: None,
             pending_recovery: false,
+            fullscreen: false,
+            preferred_account: None,
+            accounts: Vec::new(),
+            dup_open: false,
+            dup_name,
+            dup_opts: api::DuplicateOptions::default(),
+            export_open: false,
+            export_opts: api::ExportOptions::default(),
+            export_preview: None,
         };
         this.refresh(cx);
         this
@@ -680,6 +703,10 @@ impl InstanceEditor {
             let _ = tx.send(Reply::State(serial, r)).await;
         });
     }
+    pub fn set_accounts(&mut self, accounts: Vec<api::AccountSummary>) {
+        self.accounts = accounts;
+    }
+
     pub fn is_busy(&self) -> bool {
         self.busy
     }
@@ -983,6 +1010,51 @@ impl InstanceEditor {
                 cx.emit(InstanceEditorEvent::Changed);
                 self.refresh(cx);
             }
+            Reply::Duplicated(result) => {
+                self.busy = false;
+                match result {
+                    Ok(summary) => {
+                        self.dup_open = false;
+                        self.message = format!("Duplicated as \"{}\".", summary.display_name);
+                        cx.emit(InstanceEditorEvent::Changed);
+                        self.refresh(cx);
+                    }
+                    Err(e) => self.message = error(e),
+                }
+            }
+            Reply::ExportPreview(result) => {
+                self.busy = false;
+                match result {
+                    Ok(preview) => {
+                        self.export_preview = Some(preview);
+                        self.message.clear();
+                    }
+                    Err(e) => {
+                        self.export_preview = None;
+                        self.message = error(e);
+                    }
+                }
+            }
+            Reply::Exported(result) => {
+                self.busy = false;
+                match result {
+                    Ok(receipt) => {
+                        self.export_open = false;
+                        self.message = format!(
+                            "Exported {} ({} Modrinth refs, {} overrides).",
+                            receipt.destination, receipt.referenced_files, receipt.override_files
+                        );
+                    }
+                    Err(e) => self.message = error(e),
+                }
+            }
+            Reply::ShortcutCreated(result) => {
+                self.busy = false;
+                match result {
+                    Ok(path) => self.message = format!("Desktop shortcut created: {path}"),
+                    Err(e) => self.message = error(e),
+                }
+            }
         }
     }
     /// Applies a state read without ever replacing the user's draft; only the
@@ -1150,6 +1222,8 @@ impl InstanceEditor {
         self.icon_open = false;
         self.load_advice();
         let c = instance.configuration;
+        self.fullscreen = c.fullscreen;
+        self.preferred_account = c.preferred_account_id.clone();
         for (field, value) in [
             (&self.name, instance.display_name),
             (&self.memory, c.memory_mib.to_string()),
@@ -1601,6 +1675,11 @@ impl InstanceEditor {
             &self.height.read(cx).value(),
             &self.java.read(cx).value(),
         )
+        .map(|mut c| {
+            c.fullscreen = self.fullscreen;
+            c.preferred_account_id = self.preferred_account.clone();
+            c
+        })
         .ok()
     }
     fn draft_matches_base(&self, cx: &gpui::App) -> bool {
@@ -1662,7 +1741,12 @@ impl InstanceEditor {
                 &self.width.read(cx).value(),
                 &self.height.read(cx).value(),
                 &path,
-            ) {
+            )
+            .map(|mut c| {
+                c.fullscreen = self.fullscreen;
+                c.preferred_account_id = self.preferred_account.clone();
+                c
+            }) {
                 Ok(c) => Some((base, c)),
                 Err(e) => {
                     self.message = e;
@@ -1833,6 +1917,92 @@ impl InstanceEditor {
         }
         self.inspect_recovery(cx);
         true
+    }
+
+    fn open_export_review(&mut self, cx: &mut Context<Self>) {
+        if self.busy {
+            return;
+        }
+        let (Some(host), Some(id)) = (self.host.clone(), self.selected.clone()) else {
+            return;
+        };
+        self.export_open = true;
+        self.export_preview = None;
+        let opts = self.export_opts.clone();
+        self.run(async move {
+            Reply::ExportPreview(guarded(api::preview_pack_export(host, id, opts)).await)
+        });
+        cx.notify();
+    }
+
+    fn run_duplicate(&mut self, cx: &mut Context<Self>) {
+        if self.busy {
+            return;
+        }
+        let (Some(host), Some(id)) = (self.host.clone(), self.selected.clone()) else {
+            return;
+        };
+        let new_name = self.dup_name.read(cx).value().trim().to_owned();
+        if new_name.is_empty() {
+            self.message = "Enter a name for the duplicated instance.".into();
+            cx.notify();
+            return;
+        }
+        let opts = self.dup_opts.clone();
+        self.run(async move {
+            Reply::Duplicated(guarded(api::duplicate_instance(host, id, new_name, opts)).await)
+        });
+        cx.notify();
+    }
+
+    fn run_export(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
+        if self.busy {
+            return;
+        }
+        let (Some(host), Some(id)) = (self.host.clone(), self.selected.clone()) else {
+            return;
+        };
+        let default_name = self
+            .selected_instance()
+            .map(|i| {
+                format!(
+                    "{}.mrpack",
+                    i.display_name
+                        .replace(['\\', '/', ':', '*', '?', '"', '<', '>', '|'], "_")
+                )
+            })
+            .unwrap_or_else(|| "modpack.mrpack".into());
+        let opts = self.export_opts.clone();
+        let tx = self.tx.clone();
+        let rt = self.runtime.clone();
+        let rx = crate::file_picker::save_path(&default_name, cx);
+        cx.spawn(async move |weak, cx| {
+            let Ok(Some(output_path)) = rx.await else {
+                return;
+            };
+            let _ = weak.update(cx, |this: &mut Self, cx| {
+                this.busy = true;
+                cx.notify();
+            });
+            rt.spawn(async move {
+                let r = guarded(api::export_instance_pack(host, id, opts, output_path)).await;
+                let _ = tx.send(Reply::Exported(r)).await;
+            });
+        })
+        .detach();
+    }
+
+    fn create_shortcut(&mut self, cx: &mut Context<Self>) {
+        if self.busy {
+            return;
+        }
+        let (Some(host), Some(id)) = (self.host.clone(), self.selected.clone()) else {
+            return;
+        };
+        self.run(async move {
+            Reply::ShortcutCreated(guarded(api::create_instance_desktop_shortcut(host, id)).await)
+        });
+        cx.notify();
     }
 
     fn inspect_recovery(&mut self, cx: &mut Context<Self>) {
@@ -2221,6 +2391,8 @@ impl Render for InstanceEditor {
         let busy = self.busy;
         if let Some((config, name)) = self.acknowledged.take() {
             if let Some(config) = config {
+                self.fullscreen = config.fullscreen;
+                self.preferred_account = config.preferred_account_id.clone();
                 for (field, value) in [
                     (&self.memory, config.memory_mib.to_string()),
                     (
@@ -2687,6 +2859,77 @@ impl Render for InstanceEditor {
                                         .into_any_element(),
                                     false,
                                 ),
+                                (
+                                    "Launch fullscreen",
+                                    Some("Passes --fullscreen directly to Minecraft".into()),
+                                    {
+                                        let fs_view = this.clone();
+                                        AuroraToggle::new("instance-fullscreen")
+                                            .checked(self.fullscreen)
+                                            .disabled(busy)
+                                            .on_change(move |checked, _, _, cx| {
+                                                fs_view.update(cx, |v, cx| {
+                                                    v.fullscreen = checked;
+                                                    cx.notify();
+                                                });
+                                            })
+                                            .into_any_element()
+                                    },
+                                    false,
+                                ),
+                                (
+                                    "Preferred account",
+                                    Some(
+                                        "Default account used when launching this instance".into(),
+                                    ),
+                                    {
+                                        let current_label = self
+                                            .preferred_account
+                                            .as_deref()
+                                            .and_then(|aid| {
+                                                self.accounts
+                                                    .iter()
+                                                    .find(|a| a.account_id == aid)
+                                                    .map(|a| a.minecraft_name.clone())
+                                            })
+                                            .unwrap_or_else(|| "Active launcher account".into());
+                                        AuroraButton::new("instance-pref-account", current_label)
+                                            .size(ButtonSize::Small)
+                                            .disabled(busy || self.accounts.is_empty())
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                if this.accounts.is_empty() {
+                                                    return;
+                                                }
+                                                let next = match &this.preferred_account {
+                                                    None => {
+                                                        Some(this.accounts[0].account_id.clone())
+                                                    }
+                                                    Some(cur) => {
+                                                        let pos = this
+                                                            .accounts
+                                                            .iter()
+                                                            .position(|a| &a.account_id == cur);
+                                                        match pos {
+                                                            Some(i)
+                                                                if i + 1 < this.accounts.len() =>
+                                                            {
+                                                                Some(
+                                                                    this.accounts[i + 1]
+                                                                        .account_id
+                                                                        .clone(),
+                                                                )
+                                                            }
+                                                            _ => None,
+                                                        }
+                                                    }
+                                                };
+                                                this.preferred_account = next;
+                                                cx.notify();
+                                            }))
+                                            .into_any_element()
+                                    },
+                                    false,
+                                ),
                             ],
                         ))
                         // The advice for this instance, read once when it was opened.
@@ -2753,9 +2996,16 @@ impl Render for InstanceEditor {
             {
                 // Installation and recovery.
                 let recovery_view = this.clone();
+                let dup_view = this.clone();
+                let export_view = this.clone();
+                let shortcut_view = this.clone();
+                let inst_name_dup = instance
+                    .as_ref()
+                    .map(|i| i.display_name.clone())
+                    .unwrap_or_default();
                 panel = panel.child(form_card(
                     &t,
-                    card_head(&t, Some("build"), "Maintenance", None, None),
+                    card_head(&t, Some("build"), "Maintenance & tools", None, None),
                     div().grid().grid_cols(2).gap(px(12.)).pt(px(6.)).children([
                         action_button(
                             "validate",
@@ -2777,6 +3027,31 @@ impl Render for InstanceEditor {
                             .disabled(busy)
                             .on_click(move |_, _, cx| {
                                 recovery_view.update(cx, |v, cx| v.inspect_recovery(cx));
+                            })
+                            .into_any_element(),
+                        AuroraButton::new("duplicate-instance", "Duplicate instance…")
+                            .disabled(busy)
+                            .on_click(move |_, window, cx| {
+                                let suggested = format!("{inst_name_dup} Copy");
+                                dup_view.update(cx, |v, cx| {
+                                    v.dup_name
+                                        .update(cx, |f, cx| f.set_value(suggested, window, cx));
+                                    v.dup_opts = api::DuplicateOptions::default();
+                                    v.dup_open = true;
+                                    cx.notify();
+                                });
+                            })
+                            .into_any_element(),
+                        AuroraButton::new("export-mrpack", "Export .mrpack…")
+                            .disabled(busy)
+                            .on_click(move |_, _, cx| {
+                                export_view.update(cx, |v, cx| v.open_export_review(cx));
+                            })
+                            .into_any_element(),
+                        AuroraButton::new("create-shortcut", "Create desktop shortcut")
+                            .disabled(busy)
+                            .on_click(move |_, _, cx| {
+                                shortcut_view.update(cx, |v, cx| v.create_shortcut(cx));
                             })
                             .into_any_element(),
                     ]),
@@ -3158,12 +3433,278 @@ impl Render for InstanceEditor {
         let icon_panel = self.icon_panel(review_width, cx);
         let icon_changed_view = this.clone();
         let icon_veto_view = this.clone();
+
+        let dup_close_view = this.clone();
+        let dup_run_view = this.clone();
+        let dup_changed_view = this.clone();
+        let dup_veto_view = this.clone();
+        let dup_opt_toggle =
+            |id: &'static str,
+             label: &'static str,
+             checked: bool,
+             update: fn(&mut api::DuplicateOptions, bool)| {
+                let v = this.clone();
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(12.))
+                    .child(ui::muted(&palette, label))
+                    .child(
+                        AuroraToggle::new(id)
+                            .label(label)
+                            .checked(checked)
+                            .disabled(busy)
+                            .on_change(move |c, _, _, cx| {
+                                v.update(cx, |ed, cx| {
+                                    update(&mut ed.dup_opts, c);
+                                    cx.notify();
+                                });
+                            }),
+                    )
+            };
+        let dup_panel = dialog_surface(&palette, review_width)
+            .child(ui::section_header(
+                &palette,
+                "Duplicate instance",
+                Some("Create an isolated copy with its own instance ID.".into()),
+            ))
+            .child(AuroraInput::new(&self.dup_name).label("New instance name"))
+            .child(dup_opt_toggle(
+                "dup-mods",
+                "Copy mods",
+                self.dup_opts.copy_mods,
+                |o, c| o.copy_mods = c,
+            ))
+            .child(dup_opt_toggle(
+                "dup-config",
+                "Copy config",
+                self.dup_opts.copy_config,
+                |o, c| o.copy_config = c,
+            ))
+            .child(dup_opt_toggle(
+                "dup-rp",
+                "Copy resource packs",
+                self.dup_opts.copy_resource_packs,
+                |o, c| o.copy_resource_packs = c,
+            ))
+            .child(dup_opt_toggle(
+                "dup-sp",
+                "Copy shader packs",
+                self.dup_opts.copy_shader_packs,
+                |o, c| o.copy_shader_packs = c,
+            ))
+            .child(dup_opt_toggle(
+                "dup-servers",
+                "Copy server list",
+                self.dup_opts.copy_servers,
+                |o, c| o.copy_servers = c,
+            ))
+            .child(dup_opt_toggle(
+                "dup-options",
+                "Copy options.txt",
+                self.dup_opts.copy_options,
+                |o, c| o.copy_options = c,
+            ))
+            .child(dup_opt_toggle(
+                "dup-saves",
+                "Copy singleplayer worlds",
+                self.dup_opts.copy_saves,
+                |o, c| o.copy_saves = c,
+            ))
+            .child(dup_opt_toggle(
+                "dup-shots",
+                "Copy screenshots",
+                self.dup_opts.copy_screenshots,
+                |o, c| o.copy_screenshots = c,
+            ))
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .gap(px(8.))
+                    .child(
+                        AuroraButton::new("dup-cancel", "Cancel")
+                            .disabled(busy)
+                            .on_click(move |_, _, cx| {
+                                dup_close_view.update(cx, |v, cx| {
+                                    v.dup_open = false;
+                                    cx.notify();
+                                });
+                            }),
+                    )
+                    .child(
+                        AuroraButton::new("dup-confirm", "Duplicate")
+                            .variant(ButtonVariant::Primary)
+                            .disabled(busy)
+                            .on_click(move |_, _, cx| {
+                                dup_run_view.update(cx, |v, cx| v.run_duplicate(cx));
+                            }),
+                    ),
+            );
+
+        let exp_close_view = this.clone();
+        let exp_run_view = this.clone();
+        let exp_changed_view = this.clone();
+        let exp_veto_view = this.clone();
+        let exp_opt_toggle =
+            |id: &'static str,
+             label: &'static str,
+             checked: bool,
+             update: fn(&mut api::ExportOptions, bool)| {
+                let v = this.clone();
+                div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(12.))
+                    .child(ui::muted(&palette, label))
+                    .child(
+                        AuroraToggle::new(id)
+                            .label(label)
+                            .checked(checked)
+                            .disabled(busy)
+                            .on_change(move |c, _, _, cx| {
+                                v.update(cx, |ed, cx| {
+                                    update(&mut ed.export_opts, c);
+                                    ed.open_export_review(cx);
+                                });
+                            }),
+                    )
+            };
+        let export_summary = match (&self.export_preview, self.busy) {
+            (Some(p), _) => format!(
+                "{} Modrinth references · {} override files ({:.1} MB){}",
+                p.referenced_modrinth_files,
+                p.override_files_count,
+                p.override_bytes as f64 / (1024.0 * 1024.0),
+                if p.excluded_notes.is_empty() {
+                    String::new()
+                } else {
+                    format!("\nExcluded: {}", p.excluded_notes.join("; "))
+                }
+            ),
+            (None, true) => "Inspecting files for export…".into(),
+            (None, false) => "Select what to include in the .mrpack archive.".into(),
+        };
+        let export_panel = dialog_surface(&palette, review_width)
+            .child(ui::section_header(
+                &palette,
+                "Export .mrpack",
+                Some(
+                    "Saves, logs, credentials, and Aurora bootstrap JARs are always excluded."
+                        .into(),
+                ),
+            ))
+            .child(exp_opt_toggle(
+                "exp-config",
+                "Include config/",
+                self.export_opts.include_config,
+                |o, c| o.include_config = c,
+            ))
+            .child(exp_opt_toggle(
+                "exp-options",
+                "Include options.txt",
+                self.export_opts.include_options_txt,
+                |o, c| o.include_options_txt = c,
+            ))
+            .child(exp_opt_toggle(
+                "exp-servers",
+                "Include servers.dat",
+                self.export_opts.include_servers_dat,
+                |o, c| o.include_servers_dat = c,
+            ))
+            .child(exp_opt_toggle(
+                "exp-rp",
+                "Include resourcepacks/",
+                self.export_opts.include_resource_packs,
+                |o, c| o.include_resource_packs = c,
+            ))
+            .child(exp_opt_toggle(
+                "exp-sp",
+                "Include shaderpacks/",
+                self.export_opts.include_shader_packs,
+                |o, c| o.include_shader_packs = c,
+            ))
+            .child(exp_opt_toggle(
+                "exp-untracked",
+                "Include untracked user mods as overrides",
+                self.export_opts.include_untracked_mods,
+                |o, c| o.include_untracked_mods = c,
+            ))
+            .child(
+                div()
+                    .p(px(10.))
+                    .rounded(palette.radius)
+                    .bg(palette.sunken)
+                    .border_1()
+                    .border_color(palette.border_subtle)
+                    .text_size(px(ui::TEXT_CAPTION))
+                    .text_color(palette.muted_foreground)
+                    .child(export_summary),
+            )
+            .child(
+                div()
+                    .flex()
+                    .justify_end()
+                    .gap(px(8.))
+                    .child(
+                        AuroraButton::new("exp-cancel", "Close")
+                            .disabled(busy)
+                            .on_click(move |_, _, cx| {
+                                exp_close_view.update(cx, |v, cx| {
+                                    v.export_open = false;
+                                    cx.notify();
+                                });
+                            }),
+                    )
+                    .child(
+                        AuroraButton::new("exp-save", "Save .mrpack…")
+                            .variant(ButtonVariant::Primary)
+                            .disabled(busy || self.export_preview.is_none())
+                            .on_click(move |_, window, cx| {
+                                exp_run_view.update(cx, |v, cx| v.run_export(window, cx));
+                            }),
+                    ),
+            );
         // Dialogs render out of flow; hold them in a zero-size box so the
         // closed ones add no gaps to the page.
         root.child(
             div()
                 .absolute()
                 .size_0()
+                .child(
+                    Dialog::new(cx)
+                        .open(self.dup_open)
+                        .accessibility_label("Duplicate instance")
+                        .close_on_backdrop_press(false)
+                        .on_ok(|_, _, _| false)
+                        .on_cancel(move |_, _, cx| !dup_veto_view.read(cx).busy)
+                        .on_open_change(move |open, _, _, cx| {
+                            dup_changed_view.update(cx, |v, cx| {
+                                v.dup_open = open;
+                                cx.notify();
+                            });
+                        })
+                        .backdrop(div().absolute().size_full().bg(gpui::rgba(0x000000a6)))
+                        .popup(dup_panel),
+                )
+                .child(
+                    Dialog::new(cx)
+                        .open(self.export_open)
+                        .accessibility_label("Export .mrpack")
+                        .close_on_backdrop_press(false)
+                        .on_ok(|_, _, _| false)
+                        .on_cancel(move |_, _, cx| !exp_veto_view.read(cx).busy)
+                        .on_open_change(move |open, _, _, cx| {
+                            exp_changed_view.update(cx, |v, cx| {
+                                v.export_open = open;
+                                cx.notify();
+                            });
+                        })
+                        .backdrop(div().absolute().size_full().bg(gpui::rgba(0x000000a6)))
+                        .popup(export_panel),
+                )
                 .child(
                     Dialog::new(cx)
                         .open(self.icon_open)

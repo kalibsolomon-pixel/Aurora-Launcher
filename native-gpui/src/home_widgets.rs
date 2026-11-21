@@ -71,6 +71,8 @@ pub enum HomeWidgetsEvent {
         target_id: String,
         instance_id: String,
     },
+    /// Open the Pulsar page (from the Pulsar recent fights Home widget).
+    OpenPulsar,
 }
 impl EventEmitter<HomeWidgetsEvent> for HomeWidgets {}
 
@@ -79,12 +81,13 @@ impl EventEmitter<HomeWidgetsEvent> for HomeWidgets {}
 // ---------------------------------------------------------------------------
 
 /// The widgets this host renders, in their default order (id, title).
-const NATIVE: [(&str, &str); 5] = [
+const NATIVE: [(&str, &str); 6] = [
     ("playtime", "Playtime"),
     ("recent-servers", "Servers"),
     ("recent-worlds", "Singleplayer worlds"),
     ("instance-details", "Instance details"),
     ("media", "Media"),
+    ("pulsar-recent", "Pulsar fights"),
 ];
 /// Shown on a Home that was never customized.
 const DEFAULT_ON: [&str; 2] = ["playtime", "recent-servers"];
@@ -1945,6 +1948,8 @@ pub struct HomeWidgets {
     window: AnyWindowHandle,
     /// Launching needs a sign-in first; quick-play actions are secondary.
     needs_sign_in: bool,
+    pulsar_recent: Option<api::RecentFightsWidgetSummary>,
+    pulsar_loading: bool,
 }
 
 impl HomeWidgets {
@@ -2021,6 +2026,8 @@ impl HomeWidgets {
             media_creating: false,
             window: window.window_handle(),
             needs_sign_in: false,
+            pulsar_recent: None,
+            pulsar_loading: false,
         };
         view.reload(cx);
         view
@@ -2123,7 +2130,30 @@ impl HomeWidgets {
         }
         self.core.pending_refresh = false;
         self.start_history(cx);
+        self.refresh_pulsar_widget(cx);
         cx.notify();
+    }
+
+    fn refresh_pulsar_widget(&mut self, cx: &mut Context<Self>) {
+        let Some(host) = self.host.clone() else {
+            return;
+        };
+        if !self.core.visible().contains(&"pulsar-recent") || self.pulsar_loading {
+            return;
+        }
+        self.pulsar_loading = true;
+        let instance = self.core.selected_instance_id().map(str::to_owned);
+        self.run(
+            cx,
+            async move { api::pulsar_recent_widget(host, instance, 5).await },
+            |view, result, cx| {
+                view.pulsar_loading = false;
+                if let Ok(summary) = result {
+                    view.pulsar_recent = Some(summary);
+                }
+                cx.notify();
+            },
+        );
     }
 
     /// Routes one host event. A finished supervised launch invalidates the
@@ -4092,6 +4122,87 @@ impl HomeWidgets {
                     });
                     card = card.child(media.clone());
                 }
+            }
+            "pulsar-recent" => {
+                let t = &palette;
+                let mut body = div().flex().flex_col().gap(px(8.)).w_full();
+                if let Some(summary) = &self.pulsar_recent {
+                    body = body.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .child(ui::caption(
+                                t,
+                                format!(
+                                    "{} fights · {}W / {}L / {}D",
+                                    summary.total_fights,
+                                    summary.wins,
+                                    summary.losses,
+                                    summary.draws
+                                ),
+                            ))
+                            .child(
+                                AuroraButton::new("widget-open-pulsar", "Open Pulsar")
+                                    .variant(ButtonVariant::Ghost)
+                                    .size(ButtonSize::Small)
+                                    .on_click(cx.listener(|_, _, _, cx| {
+                                        cx.emit(HomeWidgetsEvent::OpenPulsar);
+                                    })),
+                            ),
+                    );
+                    if summary.recent.is_empty() {
+                        body = body.child(ui::muted(
+                            t,
+                            "No recorded Pulsar fights yet. Play with Aurora Client to record combat analytics.",
+                        ));
+                    } else {
+                        for row in summary.recent.iter().take(5) {
+                            let acc = row
+                                .metrics
+                                .get("accuracy")
+                                .and_then(|m| m.value)
+                                .map(|v| format!("{v:.0}% acc"))
+                                .unwrap_or_else(|| "—".into());
+                            let tone = match row.outcome.as_str() {
+                                "WIN" => ui::Tone::Success,
+                                "LOSS" => ui::Tone::Danger,
+                                _ => ui::Tone::Neutral,
+                            };
+                            body = body.child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .justify_between()
+                                    .gap(px(8.))
+                                    .py(px(4.))
+                                    .border_t_1()
+                                    .border_color(t.border_subtle)
+                                    .child(
+                                        div()
+                                            .flex_1()
+                                            .min_w_0()
+                                            .text_size(px(ui::TEXT_BODY - 1.))
+                                            .text_color(t.foreground)
+                                            .text_ellipsis()
+                                            .child(row.opponent.clone()),
+                                    )
+                                    .child(ui::caption(t, acc))
+                                    .child(ui::badge(t, row.result_label.clone(), tone)),
+                            );
+                        }
+                    }
+                } else {
+                    body = body.child(ui::muted(
+                        t,
+                        if self.pulsar_loading {
+                            "Loading recent Pulsar fights…"
+                        } else {
+                            "No Pulsar recordings loaded yet."
+                        },
+                    ));
+                }
+                card = card.child(body);
             }
             _ => {}
         }

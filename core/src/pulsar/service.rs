@@ -73,9 +73,23 @@ fn metric_sort(a: Option<f64>, b: Option<f64>) -> Ordering {
         _ => Ordering::Equal,
     }
 }
-pub(crate) fn filtered<'a>(index: &'a Index, q: &LibraryQuery) -> Result<Vec<&'a Entry>, Error> {
+pub(crate) fn filtered_with_annotations<'a>(
+    index: &'a Index,
+    q: &LibraryQuery,
+    annotations: Option<&super::annotations::AnnotationsStore>,
+) -> Result<Vec<&'a Entry>, Error> {
     validate_query(q)?;
     let search = q.search.trim().to_lowercase();
+    let tag_filter = q
+        .tag
+        .as_deref()
+        .map(|t| t.trim().to_lowercase())
+        .filter(|t| !t.is_empty());
+    let server_filter = q
+        .server
+        .as_deref()
+        .map(|s| s.trim().to_lowercase())
+        .filter(|s| !s.is_empty());
     let mut entries: Vec<_> = index
         .entries
         .iter()
@@ -86,6 +100,30 @@ pub(crate) fn filtered<'a>(index: &'a Index, q: &LibraryQuery) -> Result<Vec<&'a
         })
         .filter(|e| {
             let f = &e.record;
+            if q.date_from_ms
+                .is_some_and(|from| f.start_epoch_millis < from)
+            {
+                return false;
+            }
+            if q.date_to_ms.is_some_and(|to| f.start_epoch_millis > to) {
+                return false;
+            }
+            if let Some(srv) = &server_filter {
+                let actual = f.evidence().server.as_deref().unwrap_or("").to_lowercase();
+                if !actual.contains(srv) {
+                    return false;
+                }
+            }
+            let ann =
+                annotations.and_then(|s| s.fights.get(&super::annotations::composite_key(&e.key)));
+            if q.bookmarked_only && !ann.is_some_and(|a| a.bookmarked) {
+                return false;
+            }
+            if let Some(tag) = &tag_filter
+                && !ann.is_some_and(|a| a.tags.iter().any(|t| t.eq_ignore_ascii_case(tag)))
+            {
+                return false;
+            }
             let outcome = f.outcome.as_deref().unwrap_or("UNKNOWN");
             let matches = match q.outcome {
                 OutcomeFilter::All => true,
@@ -105,6 +143,10 @@ pub(crate) fn filtered<'a>(index: &'a Index, q: &LibraryQuery) -> Result<Vec<&'a
                     )
                     .to_lowercase()
                     .contains(&search)
+                    || ann.is_some_and(|a| {
+                        a.note.to_lowercase().contains(&search)
+                            || a.tags.iter().any(|t| t.to_lowercase().contains(&search))
+                    })
                     || f.session.as_ref().is_some_and(|s| {
                         s.participants.iter().any(|p| {
                             format!(
@@ -143,6 +185,9 @@ pub(crate) fn filtered<'a>(index: &'a Index, q: &LibraryQuery) -> Result<Vec<&'a
         .then(b.start_epoch_millis.cmp(&a.start_epoch_millis))
     });
     Ok(entries)
+}
+pub(crate) fn filtered<'a>(index: &'a Index, q: &LibraryQuery) -> Result<Vec<&'a Entry>, Error> {
+    filtered_with_annotations(index, q, None)
 }
 pub(crate) fn summary(paths: &ManagedPaths, e: &Entry) -> FightSummary {
     let f = &e.record;
@@ -205,10 +250,16 @@ pub(crate) fn summary(paths: &ManagedPaths, e: &Entry) -> FightSummary {
         report_available: reports::available(paths, e),
         stale: e.stale,
         provenance: e.provenance.clone(),
+        annotation: super::annotations::load(paths).ok().and_then(|s| {
+            s.fights
+                .get(&super::annotations::composite_key(&e.key))
+                .cloned()
+        }),
     }
 }
 fn library(paths: &ManagedPaths, index: &Index, q: &LibraryQuery) -> Result<LibraryView, Error> {
-    let entries = filtered(index, q)?;
+    let annotations = super::annotations::load(paths).ok();
+    let entries = filtered_with_annotations(index, q, annotations.as_ref())?;
     let limit = if q.limit == 0 { 200 } else { q.limit };
     let sources = sources(paths);
     let mut scopes: BTreeMap<String, InstanceScope> = BTreeMap::new();
@@ -922,4 +973,133 @@ pub fn compare(paths: &ManagedPaths, request: CompareRequest) -> Result<CompareV
         })
         .collect();
     Ok(CompareView{left:left.summary,right:right.summary,metrics,notices:vec!["Differences are right minus left. Frozen policies and evidence coverage can differ; descriptive metrics are not skill scores.".into()]})
+}
+
+pub fn set_annotation(
+    paths: &ManagedPaths,
+    request: AnnotationRequest,
+) -> Result<super::annotations::FightAnnotation, Error> {
+    super::annotations::set_annotation(
+        paths,
+        &request.key,
+        request.bookmarked,
+        &request.tags,
+        &request.note,
+    )
+}
+
+pub fn recent_widget_summary(
+    paths: &ManagedPaths,
+    instance_id: Option<String>,
+    limit: usize,
+) -> Result<RecentFightsWidgetSummary, Error> {
+    let index = store::read_index(paths)?;
+    let query = LibraryQuery {
+        instance_id,
+        limit: limit.clamp(1, 20),
+        ..LibraryQuery::default()
+    };
+    let entries = filtered(&index, &query)?;
+    let mut wins = 0usize;
+    let mut losses = 0usize;
+    let mut draws = 0usize;
+    for entry in &entries {
+        match entry.record.outcome.as_deref() {
+            Some("WIN") => wins += 1,
+            Some("LOSS") => losses += 1,
+            Some("DRAW") => draws += 1,
+            _ => {}
+        }
+    }
+    let recent = entries
+        .iter()
+        .take(limit.clamp(1, 20))
+        .map(|e| summary(paths, e))
+        .collect();
+    Ok(RecentFightsWidgetSummary {
+        total_fights: entries.len(),
+        wins,
+        losses,
+        draws,
+        recent,
+    })
+}
+
+pub fn export_stats(
+    paths: &ManagedPaths,
+    request: StatsExportRequest,
+) -> Result<ActionReceipt, Error> {
+    let dest = std::path::Path::new(&request.destination);
+    if !dest.is_absolute() {
+        return Err(Error::new(
+            "pulsar_export_destination",
+            "Choose an absolute destination file path.",
+        ));
+    }
+    let index = store::read_index(paths)?;
+    let annotations = super::annotations::load(paths).ok();
+    let entries = filtered_with_annotations(&index, &request.query, annotations.as_ref())?;
+    let rows: Vec<FightSummary> = entries.iter().map(|e| summary(paths, e)).collect();
+
+    let payload = if request.format.eq_ignore_ascii_case("csv") {
+        let mut csv = String::from(
+            "date,instanceId,fightId,opponent,server,outcome,hits,accuracy,reach,duration_s,bookmarked,tags\n",
+        );
+        let csv_escape = |s: &str| {
+            if s.contains([',', '"', '\n', '\r']) {
+                format!("\"{}\"", s.replace('"', "\"\""))
+            } else {
+                s.to_owned()
+            }
+        };
+        for row in &rows {
+            let metric_str = |k: &str| {
+                row.metrics
+                    .get(k)
+                    .and_then(|m| m.value)
+                    .map(|v| format!("{v:.3}"))
+                    .unwrap_or_default()
+            };
+            let bookmarked = row.annotation.as_ref().is_some_and(|a| a.bookmarked);
+            let tags = row
+                .annotation
+                .as_ref()
+                .map(|a| a.tags.join(";"))
+                .unwrap_or_default();
+            csv.push_str(&format!(
+                "{},{},{},{},{},{},{},{},{},{},{},{}\n",
+                csv_escape(&row.date_group),
+                csv_escape(&row.key.instance_id),
+                csv_escape(&row.key.fight_id),
+                csv_escape(&row.opponent),
+                csv_escape(row.server.as_deref().unwrap_or("")),
+                csv_escape(&row.outcome),
+                metric_str("hits"),
+                metric_str("accuracy"),
+                metric_str("reach"),
+                metric_str("duration"),
+                bookmarked,
+                csv_escape(&tags),
+            ));
+        }
+        csv
+    } else {
+        serde_json::to_string_pretty(&rows)
+            .map_err(|e| Error::new("pulsar_export_failed", e.to_string()))?
+    };
+
+    if let Some(parent) = dest.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    let tmp = dest.with_extension(format!("tmp-{}", uuid::Uuid::new_v4().simple()));
+    std::fs::write(&tmp, payload)?;
+    std::fs::rename(&tmp, dest).map_err(|e| {
+        let _ = std::fs::remove_file(&tmp);
+        Error::new("pulsar_export_failed", e.to_string())
+    })?;
+    Ok(ActionReceipt {
+        path: Some(request.destination),
+        revision: index.revision,
+        message: format!("Exported {} fight summaries.", rows.len()),
+    })
 }

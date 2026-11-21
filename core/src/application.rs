@@ -1,6 +1,9 @@
+#[path = "application/extensions.rs"]
+mod extensions;
 #[path = "application/game_logs.rs"]
 mod game_logs;
 use crate::host::Host;
+pub use extensions::*;
 pub use game_logs::*;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
@@ -346,6 +349,10 @@ pub struct InstanceConfigurationDto {
     /// Absent: Aurora's managed Java. `{ "kind": "custom", "path": … }`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub java: Option<crate::instances::settings::JavaSelection>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fullscreen: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preferred_account_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -371,6 +378,8 @@ impl InstanceConfigurationDto {
                 height: window.height(),
             }),
             java: configuration.java().cloned(),
+            fullscreen: configuration.fullscreen(),
+            preferred_account_id: configuration.preferred_account_id().map(str::to_owned),
         }
     }
 
@@ -389,6 +398,8 @@ impl InstanceConfigurationDto {
         configuration.set_aurora_enabled(self.aurora_enabled);
         configuration.set_performance_mode(self.performance_mode);
         configuration.set_java(self.java);
+        configuration.set_fullscreen(self.fullscreen);
+        configuration.set_preferred_account_id(self.preferred_account_id);
         Ok(configuration)
     }
 }
@@ -4596,14 +4607,28 @@ pub async fn review_local_modpack(
     app: Host,
     request: LocalModpackRequest,
 ) -> Result<LocalModpackReview, CommandError> {
-    let path = std::path::Path::new(&request.source_path);
-    if !crate::import_source::metadata(path)?.is_dir() {
-        return identify_local_modpack(app, request)
-            .await
-            .map(LocalModpackReview::Published);
-    }
+    let source_path = PathBuf::from(&request.source_path);
     let managed = managed_paths(&app)?;
-    let digest = crate::local_pack::snapshot_directory(&managed, path).await?;
+    if !crate::import_source::metadata(&source_path)?.is_dir() {
+        match identify_local_modpack(app, request).await {
+            Ok(matched) => return Ok(LocalModpackReview::Published(matched)),
+            Err(err) if err.code == "local_pack_unrecognized" => {
+                // Direct reviewed import of a custom/unhosted .mrpack archive.
+                let digest =
+                    crate::local_pack::snapshot_mrpack_file(&managed, &source_path).await?;
+                let resolved = tokio::task::spawn_blocking(move || {
+                    crate::modpacks::resolve_local(&managed, &digest)
+                })
+                .await
+                .map_err(|_| {
+                    CommandError::new("local_pack_unreadable", "The pack review did not complete.")
+                })??;
+                return Ok(LocalModpackReview::Folder(resolved.preview));
+            }
+            Err(err) => return Err(err),
+        }
+    }
+    let digest = crate::local_pack::snapshot_directory(&managed, &source_path).await?;
     let resolved =
         tokio::task::spawn_blocking(move || crate::modpacks::resolve_local(&managed, &digest))
             .await
@@ -6649,6 +6674,8 @@ pub struct PlayBlockerDto {
 pub struct PlayReadinessDto {
     ready: bool,
     can_prepare: bool,
+    #[serde(default)]
+    can_launch_offline: bool,
     instance_id: String,
     account_id: Option<String>,
     account_name: Option<String>,
@@ -6900,9 +6927,15 @@ async fn calculate_play_readiness(
                 message: problem.message,
             });
     }
+    let can_launch_offline = readiness.instance
+        == crate::launch::state::LaunchInstanceStatus::Ready
+        && readiness.account == crate::launch::state::LaunchAccountStatus::Ready
+        && !readiness.process.blocks_launch()
+        && crate::launch::offline::has_valid_receipt(managed, instance_id);
     Ok(PlayReadinessDto {
         ready: readiness.ready(),
         can_prepare: readiness.can_prepare(),
+        can_launch_offline,
         instance_id: instance_id.to_string(),
         account_id: account_id.map(str::to_owned),
         account_name,
@@ -7092,7 +7125,8 @@ async fn play_instance_with_target(
                 configuration
                     .window()
                     .map(|window| (window.width(), window.height())),
-            );
+            )
+            .with_fullscreen(configuration.fullscreen());
             let features = launch_options.feature_profile();
 
             // Custom Java is executed and validated afresh for every launch;
@@ -7220,10 +7254,15 @@ async fn play_instance_with_target(
             .await?;
 
             emit_launch_phase(&app, "assemblingArguments");
-            let launch_plan = crate::launch::resolve::LaunchPlan::from_game_plan(
+            let current_platform = crate::minecraft::rules::PlatformProfile::current()?;
+            let _ = crate::launch::offline::save_receipt(
+                &managed,
+                &instance,
                 &game_plan,
-                crate::minecraft::rules::PlatformProfile::current()?,
+                current_platform,
             );
+            let launch_plan =
+                crate::launch::resolve::LaunchPlan::from_game_plan(&game_plan, current_platform);
             prepared.with_validated(&managed, |installed| {
                 // Retain Windows write/delete exclusion through the normal spawn.
                 let _custom_java_guard = custom_java
@@ -8338,6 +8377,7 @@ mod tests {
         let readiness = PlayReadinessDto {
             ready: false,
             can_prepare: false,
+            can_launch_offline: false,
             instance_id: "fixture".to_owned(),
             account_id: None,
             account_name: None,

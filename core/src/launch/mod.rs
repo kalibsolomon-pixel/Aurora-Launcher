@@ -5,6 +5,7 @@ pub(crate) mod activity_log;
 pub(crate) mod boundary;
 pub mod diagnostics;
 pub mod logs;
+pub mod offline;
 pub mod process;
 pub mod resolve;
 pub mod state;

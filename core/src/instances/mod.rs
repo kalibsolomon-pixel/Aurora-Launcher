@@ -23,7 +23,9 @@
 //! [`deletion`] and preserves shared launcher resources.
 
 pub mod deletion;
+pub mod duplicate;
 pub mod lifecycle;
+pub mod organization;
 pub mod performance;
 pub mod platform;
 pub mod recovery;

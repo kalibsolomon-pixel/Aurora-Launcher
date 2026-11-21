@@ -254,6 +254,65 @@ pub(crate) async fn snapshot_directory(
     Ok(sha256)
 }
 
+/// Validates and snapshots a local `.mrpack` archive directly into the
+/// verified SHA-256 store for reviewed local import, without requiring the
+/// archive to be published on Modrinth.
+pub(crate) async fn snapshot_mrpack_file(
+    managed: &ManagedPaths,
+    source: &Path,
+) -> Result<ArtifactDigest, PackInstallError> {
+    let is_mrpack = source
+        .extension()
+        .and_then(|ext| ext.to_str())
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("mrpack"));
+    if !is_mrpack {
+        return Err(fail(
+            "local_pack_invalid",
+            "Choose a Modrinth modpack archive (.mrpack).",
+        ));
+    }
+    let owned = source.to_owned();
+    let (scratch, snapshot, _sha512, sha256, size) = tokio::task::spawn_blocking(move || {
+        let (folder, entry) =
+            crate::import_source::Folder::selected_file(&owned).map_err(source_error)?;
+        let scratch = crate::import_source::Scratch::new().map_err(source_error)?;
+        let (snapshot, mut output) = scratch.file("selected.mrpack").map_err(source_error)?;
+        folder.copy(&entry, &mut output).map_err(source_error)?;
+        drop(output);
+        let (sha512, sha256, size) = digests(&snapshot)?;
+        Ok::<_, PackInstallError>((scratch, snapshot, sha512, sha256, size))
+    })
+    .await
+    .map_err(|_| {
+        fail(
+            "local_pack_unreadable",
+            "The selected file could not be read.",
+        )
+    })??;
+    let cache = ArtifactCache::new(managed.clone());
+    let stored = cache
+        .import_local(&snapshot, &sha256, size)
+        .await
+        .map_err(|_| {
+            fail(
+                "local_pack_unreadable",
+                "The selected file changed while it was being read. Choose it again.",
+            )
+        })?;
+    drop(scratch);
+    let stored_path = stored.path;
+    tokio::task::spawn_blocking(move || crate::mrpack::parse_verified_file(&stored_path))
+        .await
+        .map_err(|_| {
+            fail(
+                "local_pack_unreadable",
+                "The archive could not be inspected.",
+            )
+        })?
+        .map_err(|error| fail(error.code(), error.to_string()))?;
+    Ok(sha256)
+}
+
 #[derive(serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct CurseForgeManifest {
