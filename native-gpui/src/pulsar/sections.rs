@@ -26,7 +26,10 @@ const OFFENSE: &[Section] = &[
     ("Aim", &["aim"]),
     ("Weapon timing", &["timing"]),
     ("Critical hits", &["critical", "Crit", "crit"]),
-    ("Sprint hits", &["sprint"]),
+    (
+        "Sprint hits",
+        &["sprint", "Sprint", "earlySwing", "axeToSword"],
+    ),
 ];
 const DEFENSE: &[Section] = &[
     (
@@ -47,13 +50,29 @@ const DEFENSE: &[Section] = &[
             "shield",
             "Shield",
             "hitsAfterDisable",
+            "disableConversion",
+            "disablePunish",
+            "axeToSword",
+            "localDisable",
             "stuns",
             "localStuns",
             "notCountedIncomingSwings",
         ],
     ),
     ("Jump resets", &["jump"]),
-    ("Damage & knockback", &["damage", "knockback", "Knockback"]),
+    (
+        "Damage & knockback",
+        &[
+            "damage",
+            "knockback",
+            "Knockback",
+            "health",
+            "Health",
+            "Healing",
+            "burst",
+            "Burst",
+        ],
+    ),
 ];
 const FLOW: &[Section] = &[
     (
@@ -78,7 +97,18 @@ const FLOW: &[Section] = &[
             "largestSwing",
         ],
     ),
-    ("Exchanges", &["exchange", "Exchange", "Seconds"]),
+    (
+        "Exchanges",
+        &[
+            "exchange",
+            "Exchange",
+            "Seconds",
+            "firstHit",
+            "tradeRatio",
+            "pvp_exchanges",
+            "pvp_turning",
+        ],
+    ),
 ];
 
 /// Sections for a tab index shared by the pooled and fight-detail strips:

@@ -256,8 +256,58 @@ impl RuntimeInstalledState {
     /// same digest identity. This prevents an edited record from omitting a
     /// planned file while still passing validation of the remaining subset.
     pub fn matches_plan(&self, plan: &JavaRuntimePlan) -> bool {
-        let expected = Self::from_plan(plan, self.installed_at_unix_seconds);
-        self == &expected
+        if self.schema_version != RUNTIME_STATE_SCHEMA_VERSION
+            || self.component != plan.component()
+            || self.required_major_version != plan.required_major_version()
+            || self.platform_os != plan.platform().os().as_str()
+            || self.platform_architecture != plan.platform().architecture().as_str()
+            || self.platform_key != plan.platform_key()
+            || self.runtime_version != plan.runtime_version()
+            || self.released != plan.released()
+            || self.manifest_sha1 != plan.manifest_sha1().as_hex()
+            || self.launch_executable != plan.launch_executable()
+            || self.diagnostic_executable != plan.diagnostic_executable()
+            || self.entries.len() != plan.entries().len()
+        {
+            return false;
+        }
+        self.entries
+            .iter()
+            .zip(plan.entries().iter())
+            .all(|(recorded, planned)| match planned {
+                RuntimeEntry::Directory { path } => {
+                    recorded.kind == RuntimeStateEntryKind::Directory
+                        && recorded.path == *path
+                        && recorded.sha1.is_none()
+                        && recorded.size_bytes.is_none()
+                        && !recorded.executable
+                        && recorded.target.is_none()
+                }
+                RuntimeEntry::File {
+                    path,
+                    artifact,
+                    executable,
+                } => {
+                    recorded.kind == RuntimeStateEntryKind::File
+                        && recorded.path == *path
+                        && recorded.size_bytes == Some(artifact.size_bytes())
+                        && recorded.executable == *executable
+                        && recorded.target.is_none()
+                        && recorded
+                            .sha1
+                            .as_deref()
+                            .and_then(|hex| Sha1Digest::parse(hex).ok())
+                            .is_some_and(|digest| digest == *artifact.sha1())
+                }
+                RuntimeEntry::Link { path, target } => {
+                    recorded.kind == RuntimeStateEntryKind::Link
+                        && recorded.path == *path
+                        && recorded.sha1.is_none()
+                        && recorded.size_bytes.is_none()
+                        && !recorded.executable
+                        && recorded.target.as_deref() == Some(target.as_str())
+                }
+            })
     }
 }
 

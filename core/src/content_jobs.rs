@@ -108,8 +108,11 @@ pub struct Cancelled;
 pub fn checkpoint() -> Result<(), Cancelled> {
     CURRENT
         .try_with(|control| {
+            if !control.signal.is_cancelled() {
+                return Ok(());
+            }
             let mut state = control.state.lock().expect("content job state");
-            if control.signal.is_cancelled() && state.commit_depth == 0 {
+            if state.commit_depth == 0 {
                 state.observed = true;
                 Err(Cancelled)
             } else {
@@ -123,14 +126,20 @@ pub fn checkpoint() -> Result<(), Cancelled> {
 /// [`Control::interrupting_transfers`] observes cancellation here. Other
 /// jobs' active transfers run to their verified result, as before.
 pub fn transfer_checkpoint() -> Result<(), Cancelled> {
-    if CURRENT
-        .try_with(|control| control.interrupt_transfers)
-        .unwrap_or(false)
-    {
-        checkpoint()
-    } else {
-        Ok(())
-    }
+    CURRENT
+        .try_with(|control| {
+            if !control.interrupt_transfers || !control.signal.is_cancelled() {
+                return Ok(());
+            }
+            let mut state = control.state.lock().expect("content job state");
+            if state.commit_depth == 0 {
+                state.observed = true;
+                Err(Cancelled)
+            } else {
+                Ok(())
+            }
+        })
+        .unwrap_or(Ok(()))
 }
 
 pub fn phase(phase: Phase) {

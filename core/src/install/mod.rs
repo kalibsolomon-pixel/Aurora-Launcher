@@ -486,15 +486,19 @@ pub async fn install_game(
         })
         .collect();
     check_cancel(context)?;
-    let library_results = settled_window(
-        &downloadable_libraries,
+    let indexed_libraries: Vec<(usize, &GameLibrary)> =
+        downloadable_libraries.iter().copied().enumerate().collect();
+    let mut library_slots: Vec<Option<PlannedFile>> =
+        (0..indexed_libraries.len()).map(|_| None).collect();
+    settled_each(
+        &indexed_libraries,
         context.small_artifact_concurrency,
         context,
-        |library| acquire_library(&cache, library, context),
-        |library, result| {
+        |(_, library)| acquire_library(&cache, library, context),
+        |(index, library), result| {
             let (source, trust, size, role, origin) = result;
             completed += 1;
-            files.push(PlannedFile {
+            library_slots[*index] = Some(PlannedFile {
                 source,
                 relative: format!("libraries/{}", library.repository_path()),
                 trust,
@@ -510,8 +514,8 @@ pub async fn install_game(
             );
         },
     )
-    .await;
-    library_results?;
+    .await?;
+    files.extend(library_slots.into_iter().flatten());
     check_cancel(context)?;
     let libraries_finished = Instant::now();
 
@@ -546,25 +550,33 @@ pub async fn install_game(
             Some(neoforge.universal().coordinate().as_maven_string()),
         );
 
-        for library in neoforge.installer_libraries() {
-            check_cancel(context)?;
-            let artifact = acquire_neoforge_library(&cache, library, context).await?;
-            completed += 1;
-            files.push(PlannedFile {
-                source: artifact.path.clone(),
-                relative: format!("libraries/{}", library.path()),
-                trust: artifact.trust(),
-                size_bytes: artifact.bytes,
-                role: InstalledFileRole::Library,
-                origin: artifact.origin,
-            });
-            report(
-                InstallPhase::Acquiring,
-                completed,
-                total_items,
-                Some(library.coordinate().as_maven_string()),
-            );
-        }
+        let nf_libs: Vec<(usize, _)> = neoforge.installer_libraries().iter().enumerate().collect();
+        let mut nf_slots: Vec<Option<PlannedFile>> = (0..nf_libs.len()).map(|_| None).collect();
+        settled_each(
+            &nf_libs,
+            context.small_artifact_concurrency,
+            context,
+            |(_, library)| acquire_neoforge_library(&cache, library, context),
+            |(index, library), artifact| {
+                completed += 1;
+                nf_slots[*index] = Some(PlannedFile {
+                    source: artifact.path.clone(),
+                    relative: format!("libraries/{}", library.path()),
+                    trust: artifact.trust(),
+                    size_bytes: artifact.bytes,
+                    role: InstalledFileRole::Library,
+                    origin: artifact.origin,
+                });
+                report(
+                    InstallPhase::Acquiring,
+                    completed,
+                    total_items,
+                    Some(library.coordinate().as_maven_string()),
+                );
+            },
+        )
+        .await?;
+        files.extend(nf_slots.into_iter().flatten());
         installer_path = Some(installer.path);
     }
 
@@ -651,37 +663,48 @@ pub async fn install_game(
             });
         }
 
-        for library in forge
+        let forge_libs: Vec<(usize, _)> = forge
             .installer_libraries()
             .iter()
             .filter(|library| library.artifact().is_downloadable())
-        {
-            check_cancel(context)?;
-            let artifact = acquire_forge_library(&cache, library, context).await?;
-            completed += 1;
-            files.push(PlannedFile {
-                source: artifact.path.clone(),
-                relative: format!("libraries/{}", library.path()),
-                trust: artifact.trust(),
-                size_bytes: artifact.bytes,
-                role: InstalledFileRole::Library,
-                origin: artifact.origin,
-            });
-            report(
-                InstallPhase::Acquiring,
-                completed,
-                total_items,
-                Some(library.coordinate().as_maven_string()),
-            );
-        }
+            .enumerate()
+            .collect();
+        let mut forge_slots: Vec<Option<PlannedFile>> =
+            (0..forge_libs.len()).map(|_| None).collect();
+        settled_each(
+            &forge_libs,
+            context.small_artifact_concurrency,
+            context,
+            |(_, library)| acquire_forge_library(&cache, library, context),
+            |(index, library), artifact| {
+                completed += 1;
+                forge_slots[*index] = Some(PlannedFile {
+                    source: artifact.path.clone(),
+                    relative: format!("libraries/{}", library.path()),
+                    trust: artifact.trust(),
+                    size_bytes: artifact.bytes,
+                    role: InstalledFileRole::Library,
+                    origin: artifact.origin,
+                });
+                report(
+                    InstallPhase::Acquiring,
+                    completed,
+                    total_items,
+                    Some(library.coordinate().as_maven_string()),
+                );
+            },
+        )
+        .await?;
+        files.extend(forge_slots.into_iter().flatten());
         forge_installer_path = Some(installer.path);
     }
 
-    // Asset objects, deduplicated by hash, through the same settled window.
-    let object_refs: Vec<_> = objects.iter().collect();
+    // Asset objects, deduplicated by hash, scheduled in completion order so
+    // large audio/pack objects never stall free download slots behind them.
+    let assets_start = files.len();
     check_cancel(context)?;
-    let asset_results = settled_window(
-        &object_refs,
+    let asset_results = settled_each(
+        &objects,
         context.small_artifact_concurrency,
         context,
         |object| {
@@ -694,13 +717,14 @@ pub async fn install_game(
                     Some(object.size_bytes()),
                 )
                 .map_err(|error| InstallError::InvalidSource(error.to_string()))?;
-                cache
+                let artifact = cache
                     .acquire_sha1(&source, context.download_options())
                     .await
-                    .map_err(InstallError::Acquisition)
+                    .map_err(InstallError::Acquisition)?;
+                Ok((hex, artifact))
             }
         },
-        |object, artifact| {
+        |object, (hex, artifact)| {
             completed += 1;
             files.push(PlannedFile {
                 source: artifact.path.clone(),
@@ -714,12 +738,13 @@ pub async fn install_game(
                 InstallPhase::Acquiring,
                 completed,
                 total_items,
-                Some(format!("asset {}", object.sha1().as_hex())),
+                Some(format!("asset {hex}")),
             );
         },
     )
     .await;
     asset_results?;
+    files[assets_start..].sort_by(|a, b| a.relative.cmp(&b.relative));
     let assets_finished = Instant::now();
     check_cancel(context)?;
     transaction_receipt
@@ -1241,15 +1266,89 @@ pub(crate) fn validate_game_directory(
         return Err(InstallError::Storage(coordination::unsafe_path()));
     }
 
-    let Some(manifest) = load_installed_state(&game_directory).map_err(InstallError::State)? else {
+    let Some(manifest) = load_installed_state(game_directory).map_err(InstallError::State)? else {
         return Ok(ValidationOutcome::NotInstalled);
+    };
+
+    validate_game_directory_with_manifest(game_directory, &manifest)
+}
+
+pub(crate) fn validate_game_directory_with_manifest(
+    game_directory: &Path,
+    manifest: &InstalledGameManifest,
+) -> Result<ValidationOutcome, InstallError> {
+    use std::collections::HashMap;
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    // Validate each unique parent directory once per tree walk instead of
+    // re-canonicalizing the same ~260 asset/library buckets thousands of times.
+    let mut parent_checks: HashMap<PathBuf, Result<(), String>> = HashMap::new();
+    let files = manifest.files();
+    for file in files {
+        let path = game_directory.join(file.path());
+        if let Some(parent) = path.parent() {
+            if !parent_checks.contains_key(parent) {
+                let outcome = coordination::checked_directory(game_directory, parent)
+                    .map(|_| ())
+                    .map_err(|error| error.to_string());
+                parent_checks.insert(parent.to_path_buf(), outcome);
+            }
+        }
+    }
+
+    let workers = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .min(STAGED_VALIDATION_CONCURRENCY)
+        .min(files.len().max(1));
+
+    let results: Vec<Result<u64, String>> = if workers <= 1 || files.len() < 4 {
+        files
+            .iter()
+            .map(|file| {
+                verify_managed_file_with_checked_parents(game_directory, file, &parent_checks)
+            })
+            .collect()
+    } else {
+        let next = AtomicUsize::new(0);
+        let slots: Vec<std::sync::Mutex<Option<Result<u64, String>>>> = (0..files.len())
+            .map(|_| std::sync::Mutex::new(None))
+            .collect();
+        std::thread::scope(|scope| {
+            for _ in 0..workers {
+                let next = &next;
+                let slots = &slots;
+                let parent_checks = &parent_checks;
+                scope.spawn(move || {
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        if index >= files.len() {
+                            break;
+                        }
+                        let outcome = verify_managed_file_with_checked_parents(
+                            game_directory,
+                            &files[index],
+                            parent_checks,
+                        );
+                        *slots[index].lock().expect("validation slot") = Some(outcome);
+                    }
+                });
+            }
+        });
+        slots
+            .into_iter()
+            .map(|slot| {
+                slot.into_inner()
+                    .expect("validation slot")
+                    .expect("every file checked")
+            })
+            .collect()
     };
 
     let mut problems = Vec::new();
     let mut verified_bytes = 0u64;
-
-    for file in manifest.files() {
-        match verify_managed_file(&game_directory, file) {
+    for (file, outcome) in files.iter().zip(results) {
+        match outcome {
             Ok(bytes) => verified_bytes += bytes,
             Err(reason) => problems.push(ValidationProblem {
                 path: file.path().to_owned(),
@@ -1291,6 +1390,26 @@ pub(crate) fn validate_game_directory(
     }))
 }
 
+fn verify_managed_file_with_checked_parents(
+    game_root: &Path,
+    file: &InstalledFile,
+    parent_checks: &std::collections::HashMap<PathBuf, Result<(), String>>,
+) -> Result<u64, String> {
+    let path = game_root.join(file.path());
+    let parent = path
+        .parent()
+        .ok_or_else(|| "installed file has no parent".to_owned())?;
+    match parent_checks.get(parent) {
+        Some(Ok(())) => {}
+        Some(Err(error)) => return Err(error.clone()),
+        None => {
+            coordination::checked_directory(game_root, parent)
+                .map_err(|error| error.to_string())?;
+        }
+    }
+    verify_managed_file_body(&path, file)
+}
+
 /// Re-verifies one installed file against its recorded trust and size.
 fn verify_managed_file(game_root: &Path, file: &InstalledFile) -> Result<u64, String> {
     let path = game_root.join(file.path());
@@ -1298,7 +1417,11 @@ fn verify_managed_file(game_root: &Path, file: &InstalledFile) -> Result<u64, St
         .parent()
         .ok_or_else(|| "installed file has no parent".to_owned())?;
     coordination::checked_directory(game_root, parent).map_err(|error| error.to_string())?;
-    let metadata = std::fs::symlink_metadata(&path).map_err(|error| error.to_string())?;
+    verify_managed_file_body(&path, file)
+}
+
+fn verify_managed_file_body(path: &Path, file: &InstalledFile) -> Result<u64, String> {
+    let metadata = std::fs::symlink_metadata(path).map_err(|error| error.to_string())?;
     if !metadata.is_file() || coordination::redirected(&metadata) {
         return Err("installed file is not a contained regular file".to_owned());
     }
@@ -1306,20 +1429,19 @@ fn verify_managed_file(game_root: &Path, file: &InstalledFile) -> Result<u64, St
         ArtifactTrust::ExpectedDigestVerified { algorithm, digest } => match algorithm {
             DigestAlgorithm::Sha256 => {
                 let expected = ArtifactDigest::parse(digest).map_err(|e| e.to_string())?;
-                verify_file(&path, &expected, Some(file.size_bytes()))
+                verify_file(path, &expected, Some(file.size_bytes()))
                     .map_err(|error| error.to_string())
             }
             DigestAlgorithm::Sha1 => {
                 let expected = Sha1Digest::parse(digest).map_err(|e| e.to_string())?;
-                verify_file_sha1(&path, &expected, Some(file.size_bytes()))
+                verify_file_sha1(path, &expected, Some(file.size_bytes()))
                     .map_err(|error| error.to_string())
             }
         },
         ArtifactTrust::SecureTransportObserved { observed_sha256 }
         | ArtifactTrust::LocallyGenerated { observed_sha256 } => {
             let expected = ArtifactDigest::parse(observed_sha256).map_err(|e| e.to_string())?;
-            verify_file(&path, &expected, Some(file.size_bytes()))
-                .map_err(|error| error.to_string())
+            verify_file(path, &expected, Some(file.size_bytes())).map_err(|error| error.to_string())
         }
     }
 }
@@ -1617,9 +1739,9 @@ fn https_or_loopback_artifact_source(
         .or_else(|_| ArtifactSource::loopback_http_for_testing(url, &sha256.as_hex(), size_bytes))
 }
 
-/// [`crate::transfer::settled_window`] that also stops scheduling on install
+/// [`crate::transfer::settled_each`] that also stops scheduling on install
 /// cancellation and reports a cancellation observed after settling.
-async fn settled_window<'a, T, R, Fut>(
+async fn settled_each<'a, T, R, Fut>(
     items: &'a [T],
     width: usize,
     context: &InstallContext,
@@ -1629,7 +1751,7 @@ async fn settled_window<'a, T, R, Fut>(
 where
     Fut: std::future::Future<Output = Result<R, InstallError>>,
 {
-    crate::transfer::settled_window(
+    crate::transfer::settled_each(
         items,
         width,
         || check_cancel(context).is_ok(),

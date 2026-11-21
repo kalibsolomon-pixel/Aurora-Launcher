@@ -586,6 +586,7 @@ struct Avatars {
     epoch: u64,
     identities: HashMap<String, String>,
     images: HashMap<String, Arc<gpui::RenderImage>>,
+    retired: Vec<Arc<gpui::RenderImage>>,
     image_generations: HashMap<String, u64>,
     cache_pending: Option<u64>,
     cache_ready: bool,
@@ -594,6 +595,12 @@ struct Avatars {
 }
 
 impl Avatars {
+    fn flush_dropped(&mut self, window: &mut Window) {
+        for image in self.retired.drain(..) {
+            let _ = window.drop_image(image);
+        }
+    }
+
     fn listing(&mut self, state: &api::AccountsState, epoch: u64) {
         self.generation = self.generation.wrapping_add(1);
         self.epoch = epoch;
@@ -602,10 +609,14 @@ impl Avatars {
             .iter()
             .map(|a| (a.account_id.clone(), a.status.clone()))
             .collect();
-        self.images.retain(|id, _| {
-            identities
+        self.images.retain(|id, image| {
+            let kept = identities
                 .get(id)
-                .is_some_and(|status| self.identities.get(id) == Some(status))
+                .is_some_and(|status| self.identities.get(id) == Some(status));
+            if !kept {
+                self.retired.push(Arc::clone(image));
+            }
+            kept
         });
         self.image_generations
             .retain(|id, _| self.images.contains_key(id));
@@ -645,7 +656,9 @@ impl Avatars {
                 if let Some(image) = Self::image(entry.avatar) {
                     self.image_generations
                         .insert(entry.account_id.clone(), generation);
-                    self.images.insert(entry.account_id, image);
+                    if let Some(old) = self.images.insert(entry.account_id, image) {
+                        self.retired.push(old);
+                    }
                 }
             }
         }
@@ -660,7 +673,9 @@ impl Avatars {
             && let Some(image) = Self::image(avatar)
         {
             self.image_generations.insert(id.to_owned(), generation);
-            self.images.insert(id.to_owned(), image);
+            if let Some(old) = self.images.insert(id.to_owned(), image) {
+                self.retired.push(old);
+            }
         }
     }
 
@@ -1085,7 +1100,8 @@ impl Accounts {
 impl EventEmitter<AccountsEvent> for Accounts {}
 
 impl Render for Accounts {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.avatars.flush_dropped(window);
         let palette = theme::theme(cx).clone();
         let busy = self.is_busy() || self.blocked;
         let no_host = self.host.is_none();
@@ -1100,11 +1116,7 @@ impl Render for Accounts {
             .gap(px(ui::PAGE_GAP))
             .text_color(palette.foreground);
 
-        let heading = ui::page_header(
-            &palette,
-            "Accounts",
-            Some("The Microsoft accounts you play Minecraft with.".into()),
-        );
+        let heading = ui::page_header(&palette, "Accounts", None);
 
         if no_host {
             content = content.child(heading).child(ui::empty_state(
@@ -1137,14 +1149,25 @@ impl Render for Accounts {
             if self.core.cancel.is_some() {
                 notices.push(("Finishing sign-in cancellation…".into(), ui::Tone::Neutral));
             }
-            Some(
-                AuroraButton::new("sign-in", "Sign in with Microsoft")
-                    .variant(ButtonVariant::Primary)
-                    .icon("person_add")
-                    .disabled(busy || self.core.accounts.is_none() || self.core.cancel.is_some())
-                    .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx)))
-                    .into_any_element(),
-            )
+            let empty_accounts = self
+                .core
+                .accounts
+                .as_ref()
+                .is_some_and(|s| s.accounts.is_empty());
+            if empty_accounts {
+                None
+            } else {
+                Some(
+                    AuroraButton::new("sign-in", "Sign in with Microsoft")
+                        .variant(ButtonVariant::Primary)
+                        .icon("person_add")
+                        .disabled(
+                            busy || self.core.accounts.is_none() || self.core.cancel.is_some(),
+                        )
+                        .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx)))
+                        .into_any_element(),
+                )
+            }
         };
         content = content.child(
             div()
@@ -1213,12 +1236,25 @@ impl Render for Accounts {
         if let Some(state) = self.core.accounts.as_ref() {
             let selected_id = state.selected_account_id.clone();
             if state.accounts.is_empty() {
-                content = content.child(ui::empty_state(
-                    &palette,
-                    "account_circle",
-                    "No accounts yet",
-                    "No accounts yet. Sign in with Microsoft to add one.",
-                ));
+                content = content.child(
+                    ui::empty_state(
+                        &palette,
+                        "account_circle",
+                        "No accounts connected",
+                        "Sign in with your Microsoft account to launch Minecraft, wear skins, and track playtime. Sign-in opens in your system browser — Aurora never sees your password.",
+                    )
+                    .child(
+                        div().pt(px(8.)).child(
+                            AuroraButton::new("empty-sign-in", "Sign in with Microsoft")
+                                .variant(ButtonVariant::Primary)
+                                .icon("person_add")
+                                .disabled(
+                                    busy || self.core.login.is_some() || self.core.cancel.is_some(),
+                                )
+                                .on_click(cx.listener(|this, _, _, cx| this.sign_in(cx))),
+                        ),
+                    ),
+                );
             } else {
                 let mut rows: Vec<&api::AccountSummary> = state.accounts.iter().collect();
                 rows.sort_by_key(|account| {

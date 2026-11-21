@@ -532,6 +532,21 @@ pub fn new_instance_button(cx: &gpui::App) -> Option<AuroraButton> {
     )
 }
 
+pub fn can_open_new_instance(cx: &gpui::App) -> bool {
+    cx.try_global::<CreatorHandle>()
+        .and_then(|h| h.0.upgrade())
+        .is_some_and(|creator| {
+            let state = creator.read(cx);
+            state.host.is_some() && !state.busy
+        })
+}
+
+pub fn open_new_instance(cx: &mut gpui::App) {
+    if let Some(creator) = cx.try_global::<CreatorHandle>().and_then(|h| h.0.upgrade()) {
+        creator.update(cx, |v, cx| v.open_dialog(cx));
+    }
+}
+
 /// Reader-facing platform name for a creatable loader kind.
 fn kind_label(kind: &str) -> String {
     match kind {

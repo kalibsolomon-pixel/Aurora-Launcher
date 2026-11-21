@@ -513,38 +513,57 @@ pub fn parse_verified_file(path: &Path) -> Result<PackPlan, PackError> {
     parse_reader(file)
 }
 
+/// Keeps a verified `.mrpack` archive open across all planned overrides so
+/// installing a modpack parses the ZIP central directory once instead of
+/// reopening the file per override entry.
+pub struct OverrideReader {
+    zip: ZipArchive<std::io::BufReader<File>>,
+}
+
+impl OverrideReader {
+    pub fn open(path: &Path) -> Result<Self, PackError> {
+        let file = File::open(path).map_err(|_| PackError::Io)?;
+        if file.metadata().map_err(|_| PackError::Io)?.len() > MAX_PACK_BYTES {
+            return Err(PackError::ArchiveLimit);
+        }
+        let zip = ZipArchive::new(std::io::BufReader::new(file))
+            .map_err(|_| PackError::InvalidArchive)?;
+        Ok(Self { zip })
+    }
+
+    pub fn read(&mut self, planned: &OverrideFile) -> Result<Vec<u8>, PackError> {
+        let mut entry = self
+            .zip
+            .by_index(planned.archive_index)
+            .map_err(|_| PackError::InvalidArchive)?;
+        let expected = match planned.layer {
+            OverrideLayer::Common => format!("overrides/{}", planned.path),
+            OverrideLayer::Client => format!("client-overrides/{}", planned.path),
+        };
+        if entry.name() != expected || entry.size() != planned.size {
+            return Err(PackError::unsafe_override(
+                &expected,
+                OverrideRefusal::ChangedContent,
+            ));
+        }
+        let bytes = read_bounded(&mut entry, MAX_OVERRIDE_BYTES)?;
+        if bytes.len() as u64 != planned.size
+            || format!("{:x}", Sha256::digest(&bytes)) != planned.sha256
+        {
+            return Err(PackError::unsafe_override(
+                &expected,
+                OverrideRefusal::ChangedContent,
+            ));
+        }
+        Ok(bytes)
+    }
+}
+
 /// Reopen only the planned entry of a verified archive. The second read is
 /// bounded and checked against the digest fixed during planning, so changed
 /// bytes or archive indices cannot turn a preview into different overrides.
 pub fn read_override(path: &Path, planned: &OverrideFile) -> Result<Vec<u8>, PackError> {
-    let file = File::open(path).map_err(|_| PackError::Io)?;
-    if file.metadata().map_err(|_| PackError::Io)?.len() > MAX_PACK_BYTES {
-        return Err(PackError::ArchiveLimit);
-    }
-    let mut zip = ZipArchive::new(file).map_err(|_| PackError::InvalidArchive)?;
-    let mut entry = zip
-        .by_index(planned.archive_index)
-        .map_err(|_| PackError::InvalidArchive)?;
-    let expected = match planned.layer {
-        OverrideLayer::Common => format!("overrides/{}", planned.path),
-        OverrideLayer::Client => format!("client-overrides/{}", planned.path),
-    };
-    if entry.name() != expected || entry.size() != planned.size {
-        return Err(PackError::unsafe_override(
-            &expected,
-            OverrideRefusal::ChangedContent,
-        ));
-    }
-    let bytes = read_bounded(&mut entry, MAX_OVERRIDE_BYTES)?;
-    if bytes.len() as u64 != planned.size
-        || format!("{:x}", Sha256::digest(&bytes)) != planned.sha256
-    {
-        return Err(PackError::unsafe_override(
-            &expected,
-            OverrideRefusal::ChangedContent,
-        ));
-    }
-    Ok(bytes)
+    OverrideReader::open(path)?.read(planned)
 }
 
 fn parse_reader<R: Read + Seek>(reader: R) -> Result<PackPlan, PackError> {

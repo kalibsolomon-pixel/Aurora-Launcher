@@ -310,7 +310,7 @@ fn empty_queue(t: &crate::theme::AuroraTheme, title: String, body: &'static str)
         )
 }
 
-const EMPTY_TEXT: &str = "Installs you start from Discover appear here. Several can run at once; installs into the same instance take turns.";
+const EMPTY_TEXT: &str = "Active and recent installs from Discover appear here.";
 
 fn phase_label(phase: Phase) -> &'static str {
     match phase {
@@ -702,17 +702,22 @@ enum Message {
     },
     /// A lock-contention backoff elapsed for one exact task attempt.
     Backoff { id: u64, attempt: u64 },
+    /// Begin fading a settled notification toast.
+    FadeToast { id: u64, attempt: u64 },
+    /// Remove a settled notification toast after its fade-out window.
+    DismissToast { id: u64, attempt: u64 },
 }
 
-/// The retained GPUI Downloads view. Completions arrive from the shared Tokio
-/// runtime through one awaited channel (no polling, no idle animation); the
-/// view notifies only when a message changed state.
+/// The retained GPUI Downloads queue. Renders as floating fade-out popup
+/// notifications in the corner of the window while tasks run or just settled.
 pub struct Downloads {
     state: DownloadsState,
     host: Option<Host>,
     rt: tokio::runtime::Handle,
     tx: async_channel::Sender<Message>,
     blocked: bool,
+    fading_toasts: std::collections::HashSet<(u64, u64)>,
+    dismissed_toasts: std::collections::HashSet<(u64, u64)>,
 }
 
 impl EventEmitter<DownloadsEvent> for Downloads {}
@@ -745,6 +750,8 @@ impl Downloads {
             rt: runtime,
             tx,
             blocked: false,
+            fading_toasts: std::collections::HashSet::new(),
+            dismissed_toasts: std::collections::HashSet::new(),
         }
     }
 
@@ -866,6 +873,18 @@ impl Downloads {
                         false
                     }
                     Some(Settled::Terminal { ok }) => {
+                        let tx = self.tx.clone();
+                        let hold = if ok {
+                            Duration::from_millis(4200)
+                        } else {
+                            Duration::from_millis(9000)
+                        };
+                        self.rt.spawn(async move {
+                            tokio::time::sleep(hold).await;
+                            let _ = tx.send(Message::FadeToast { id, attempt }).await;
+                            tokio::time::sleep(Duration::from_millis(800)).await;
+                            let _ = tx.send(Message::DismissToast { id, attempt }).await;
+                        });
                         cx.emit(DownloadsEvent::Settled { ok });
                         true
                     }
@@ -883,6 +902,15 @@ impl Downloads {
                     cx.emit(DownloadsEvent::Changed);
                     cx.notify();
                 }
+            }
+            Message::FadeToast { id, attempt } => {
+                self.fading_toasts.insert((id, attempt));
+                cx.notify();
+            }
+            Message::DismissToast { id, attempt } => {
+                self.fading_toasts.remove(&(id, attempt));
+                self.dismissed_toasts.insert((id, attempt));
+                cx.notify();
             }
         }
     }
@@ -1055,39 +1083,151 @@ impl Render for Downloads {
         let palette = theme::theme(cx).clone();
         let t = &palette;
         if self.host.is_none() {
-            return div()
-                .size_full()
-                .flex()
-                .flex_col()
-                .gap(px(ui::PAGE_GAP))
-                .child(ui::page_header(
-                    t,
-                    "Downloads",
-                    Some("Installs you start appear here.".into()),
-                ))
-                .child(ui::empty_state(
-                    t,
-                    "download",
-                    "Downloads are unavailable",
-                    "Downloads is disabled in diagnostic mode. No installs are queued or run.",
-                ))
-                .into_any_element();
+            return div().absolute().size(px(0.)).into_any_element();
         }
-
-        let s = &self.state;
-        let running = s.tasks.iter().filter(|t| t.phase == Phase::Running).count();
-        let pending = s.tasks.iter().filter(|t| t.phase == Phase::Pending).count();
-        // No timer under this host's no-polling rule: the summary states
-        // counts only, never a fabricated byte total.
-        let summary = queue_summary(running, pending);
-        let any_finished = s
+        let visible_tasks: Vec<_> = self
+            .state
             .tasks
             .iter()
-            .any(|t| !matches!(t.phase, Phase::Pending | Phase::Running));
+            .rev()
+            .filter(|task| {
+                matches!(task.phase, Phase::Pending | Phase::Running)
+                    || !self.dismissed_toasts.contains(&(task.id, task.attempt))
+            })
+            .take(4)
+            .collect();
+        if visible_tasks.is_empty() {
+            if crate::showcase() && std::env::var_os("AURORA_SHOWCASE_DOWNLOAD_TOAST").is_some() {
+                let solid_raised = gpui::Hsla { a: 1.0, ..t.raised };
+                let hover_btn = t.control_hover;
+                let ring_btn = t.ring;
+                let close_btn = |btn_id: &'static str, label: &'static str| {
+                    gpui_kit::base::Button::new(btn_id)
+                        .accessibility_label(label)
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .justify_center()
+                        .size(px(24.))
+                        .rounded(t.radius)
+                        .hover(move |s| s.bg(hover_btn))
+                        .focus_visible(move |s| s.border_1().border_color(ring_btn))
+                        .child(crate::symbols::icon(
+                            Some("close"),
+                            px(14.),
+                            t.muted_foreground,
+                        ))
+                };
+                return div()
+                    .id("downloads-toast-stack")
+                    .absolute()
+                    .right(px(18.))
+                    .bottom(px(18.))
+                    .w(px(336.))
+                    .flex()
+                    .flex_col()
+                    .rounded(t.radius_lg)
+                    .bg(solid_raised)
+                    .border_1()
+                    .border_color(t.border)
+                    .shadow_lg()
+                    .overflow_hidden()
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.))
+                            .p(px(12.))
+                            .border_b_1()
+                            .border_color(t.border_subtle)
+                            .opacity(0.80)
+                            .child(ui::icon_tile(t, Some("check_circle"), 32., false))
+                            .child(
+                                ui::title_block(
+                                    t,
+                                    "Fabric API",
+                                    Some("Installed to Aurora PvP".into()),
+                                )
+                                .flex_1()
+                                .min_w(px(0.)),
+                            )
+                            .child(ui::status_badge(t, "Done", ui::Tone::Success))
+                            .child(close_btn(
+                                "showcase-toast-dismiss",
+                                "Dismiss Fabric API notification",
+                            )),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(8.))
+                            .p(px(12.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(8.))
+                                    .child(ui::icon_tile(t, Some("download"), 32., true))
+                                    .child(
+                                        ui::title_block(
+                                            t,
+                                            "Sodium",
+                                            Some("Aurora PvP · 1.2 MB".into()),
+                                        )
+                                        .flex_1()
+                                        .min_w(px(0.)),
+                                    )
+                                    .child(ui::status_badge(t, "Downloading", ui::Tone::Accent))
+                                    .child(close_btn(
+                                        "showcase-toast-cancel",
+                                        "Cancel Sodium download",
+                                    )),
+                            )
+                            .child(
+                                div()
+                                    .h(px(4.))
+                                    .w_full()
+                                    .rounded_full()
+                                    .bg(t.surface_hover)
+                                    .overflow_hidden()
+                                    .child(
+                                        div()
+                                            .h_full()
+                                            .w(gpui_kit::relative(0.64))
+                                            .rounded_full()
+                                            .bg(t.accent),
+                                    ),
+                            ),
+                    )
+                    .into_any_element();
+            }
+            return div().absolute().size(px(0.)).into_any_element();
+        }
 
-        let mut active_rows = Vec::new();
-        let mut finished_rows = Vec::new();
-        for task in s.tasks.iter().rev() {
+        let solid_raised = gpui::Hsla { a: 1.0, ..t.raised };
+        let count = visible_tasks.len();
+        let mut stack = div()
+            .id("downloads-toast-stack")
+            .absolute()
+            .right(px(18.))
+            .bottom(px(18.))
+            .w(px(336.))
+            .flex()
+            .flex_col()
+            .rounded(t.radius_lg)
+            .bg(solid_raised)
+            .border_1()
+            .border_color(t.border)
+            .shadow_lg()
+            .overflow_hidden();
+
+        for (idx, task) in visible_tasks.into_iter().enumerate() {
+            let last = idx + 1 == count;
+            let id = task.id;
+            let attempt = task.attempt;
+            let fading = !matches!(task.phase, Phase::Pending | Phase::Running)
+                && self.fading_toasts.contains(&(id, attempt));
             let (stage, message, streamed) = if task.phase == Phase::Running {
                 let (stage, message) =
                     running_status(task.control.phase(), task.control.stage(), &task.message);
@@ -1099,191 +1239,114 @@ impl Render for Downloads {
             let cancelling = task.cancelling || task.control.phase() == JobPhase::Cancelling;
             let can_cancel = matches!(task.phase, Phase::Pending | Phase::Running) && !cancelling;
             let can_retry = matches!(task.phase, Phase::Failed | Phase::Cancelled);
-            let action = if can_cancel {
-                let id = task.id;
-                Some(
-                    AuroraButton::new(("cancel-download", id as usize), "Cancel")
-                        .size(ButtonSize::Small)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.cancel(id, cx);
-                        }))
-                        .into_any_element(),
-                )
-            } else if can_retry {
-                let id = task.id;
-                // Slint labels both cases "Retry"; the row message already
-                // says when the retry resumes a kept instance.
-                Some(
-                    AuroraButton::new(("retry-download", id as usize), "Retry")
-                        .size(ButtonSize::Small)
-                        .icon("refresh")
-                        .disabled(self.blocked)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.retry(id, cx);
-                        }))
-                        .into_any_element(),
-                )
-            } else {
-                None
+            let settled = !matches!(task.phase, Phase::Pending | Phase::Running);
+            let running = task.phase == Phase::Running;
+            let tone = phase_tone(task.phase);
+            let detail = match streamed {
+                Some(bytes) => format!(
+                    "{} · {:.1} MB",
+                    task.detail,
+                    bytes as f64 / (1024.0 * 1024.0)
+                ),
+                None if !message.is_empty() && !running => message,
+                None => task.detail.clone(),
             };
-            let data = RowData {
-                title: task.title.clone(),
-                detail: match task.finished_at {
-                    Some(at) if !matches!(task.phase, Phase::Pending | Phase::Running) => {
-                        format!("{} · {}", task.detail, finished_ago(at.elapsed()))
-                    }
-                    _ => task.detail.clone(),
-                },
-                phase: task.phase,
-                stage,
-                message,
-                streamed,
-            };
-            if matches!(task.phase, Phase::Pending | Phase::Running) {
-                active_rows.push((data, action));
-            } else {
-                finished_rows.push((data, action));
+            let hover_btn = t.control_hover;
+            let ring_btn = t.ring;
+            let mut header_row = div()
+                .flex()
+                .items_center()
+                .gap(px(8.))
+                .child(ui::icon_tile(t, Some(phase_icon(task.phase)), 32., running))
+                .child(
+                    ui::title_block(t, task.title.clone(), Some(detail.into()))
+                        .flex_1()
+                        .min_w(px(0.)),
+                )
+                .child(ui::status_badge(t, stage, tone));
+            if can_cancel {
+                header_row = header_row.child(
+                    gpui_kit::base::Button::new(("toast-cancel", id as usize))
+                        .accessibility_label(format!("Cancel {}", task.title))
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .justify_center()
+                        .size(px(24.))
+                        .rounded(t.radius)
+                        .hover(move |s| s.bg(hover_btn))
+                        .focus_visible(move |s| s.border_1().border_color(ring_btn))
+                        .child(crate::symbols::icon(
+                            Some("close"),
+                            px(14.),
+                            t.muted_foreground,
+                        ))
+                        .on_click(cx.listener(move |this, _, _, cx| this.cancel(id, cx))),
+                );
+            } else if settled {
+                header_row = header_row.child(
+                    gpui_kit::base::Button::new(("toast-dismiss", id as usize))
+                        .accessibility_label(format!("Dismiss {}", task.title))
+                        .flex()
+                        .flex_none()
+                        .items_center()
+                        .justify_center()
+                        .size(px(24.))
+                        .rounded(t.radius)
+                        .hover(move |s| s.bg(hover_btn))
+                        .focus_visible(move |s| s.border_1().border_color(ring_btn))
+                        .child(crate::symbols::icon(
+                            Some("close"),
+                            px(14.),
+                            t.muted_foreground,
+                        ))
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.fading_toasts.remove(&(id, attempt));
+                            this.dismissed_toasts.insert((id, attempt));
+                            cx.notify();
+                        })),
+                );
             }
-        }
-        let list = |rows: Vec<(RowData, Option<gpui_kit::AnyElement>)>| {
-            let count = rows.len();
-            let mut card = ui::list_card(t);
-            for (index, (data, action)) in rows.into_iter().enumerate() {
-                card = card.child(download_row(t, &data, action, index + 1 == count));
-            }
-            card
-        };
-
-        let mut page = div()
-            .id("downloads-rows")
-            .size_full()
-            .flex()
-            .flex_col()
-            .gap(px(ui::PAGE_GAP))
-            .child(ui::page_header(
-                t,
-                "Downloads",
-                Some("Track installation progress and recent results.".into()),
-            ));
-        if active_rows.is_empty() && finished_rows.is_empty() {
-            page = page.child(
-                div()
-                    .w_full()
-                    .min_h((_window.viewport_size().height - px(164.)).max(px(280.)))
-                    .flex()
-                    .items_center()
-                    .justify_center()
-                    .child(
-                        empty_queue(t, summary.clone(), EMPTY_TEXT)
-                            .justify_center()
-                            .child(
-                                div().pt(px(8.)).child(
-                                    AuroraButton::new(
-                                        "downloads-browse-discover",
-                                        "Browse Discover",
-                                    )
-                                    .variant(ButtonVariant::Primary)
-                                    .size(ButtonSize::Medium)
-                                    .icon("explore")
-                                    .on_click(cx.listener(
-                                        |_, _, _, cx| {
-                                            cx.emit(DownloadsEvent::OpenDiscover);
-                                        },
-                                    )),
-                                ),
-                            ),
-                    ),
-            );
-        }
-        if active_rows.is_empty() && !finished_rows.is_empty() {
-            page = page.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(12.))
-                    .child(ui::section_header(t, "Active", None))
-                    .child(
-                        ui::card(t).child(
+            let mut card = div()
+                .id(("download-toast", id as usize))
+                .flex()
+                .flex_col()
+                .gap(px(8.))
+                .p(px(12.))
+                .when(!last, |d| d.border_b_1().border_color(t.border_subtle))
+                .when(fading, |d| d.opacity(0.32))
+                .child(header_row);
+            if running {
+                card = card.child(
+                    div()
+                        .h(px(4.))
+                        .w_full()
+                        .rounded_full()
+                        .bg(t.surface_hover)
+                        .overflow_hidden()
+                        .child(
                             div()
-                                .flex()
-                                .items_center()
-                                .gap(px(14.))
-                                .child(ui::icon_tile(t, Some("download"), 40., false))
-                                .child(
-                                    ui::title_block(
-                                        t,
-                                        "Nothing downloading",
-                                        Some(
-                                            "Mods, packs and shaders you install from Discover show their progress here."
-                                                .into(),
-                                        ),
-                                    )
-                                    .flex_1()
-                                    .min_w(px(0.)),
-                                )
-                                .child(
-                                    AuroraButton::new("downloads-idle-discover", "Browse Discover")
-                                        .icon("explore")
-                                        .on_click(cx.listener(|_, _, _, cx| {
-                                            cx.emit(DownloadsEvent::OpenDiscover);
-                                        })),
-                                ),
+                                .h_full()
+                                .w(gpui_kit::relative(stage_fraction(stage)))
+                                .rounded_full()
+                                .bg(t.accent),
                         ),
+                );
+            }
+            if can_retry {
+                card = card.child(
+                    div().flex().justify_end().child(
+                        AuroraButton::new(("toast-retry", id as usize), "Retry")
+                            .variant(ButtonVariant::Default)
+                            .size(ButtonSize::Small)
+                            .disabled(self.blocked)
+                            .on_click(cx.listener(move |this, _, _, cx| this.retry(id, cx))),
                     ),
-            );
+                );
+            }
+            stack = stack.child(card);
         }
-        if !active_rows.is_empty() {
-            page = page.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(12.))
-                    .child(ui::section_header(
-                        t,
-                        "Active",
-                        Some(summary.clone().into()),
-                    ))
-                    .child(list(active_rows)),
-            );
-        }
-        if !finished_rows.is_empty() || any_finished {
-            page = page.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .gap(px(12.))
-                    .child(
-                        div()
-                            .flex()
-                            .items_center()
-                            .justify_between()
-                            .gap(px(12.))
-                            .child(ui::section_header(
-                                t,
-                                "Finished",
-                                Some(
-                                    format!(
-                                        "Your last {MAX_FINISHED} finished installs are kept here."
-                                    )
-                                    .into(),
-                                ),
-                            ))
-                            .when(any_finished, |header| {
-                                header.child(
-                                    AuroraButton::new("clear-finished", "Clear finished")
-                                        .size(ButtonSize::Small)
-                                        .variant(ButtonVariant::Ghost)
-                                        .icon("delete")
-                                        .on_click(cx.listener(|this, _, _, cx| {
-                                            this.clear_finished(cx);
-                                        })),
-                                )
-                            }),
-                    )
-                    .child(list(finished_rows)),
-            );
-        }
-        page.into_any_element()
+        stack.into_any_element()
     }
 }
 
@@ -1993,7 +2056,7 @@ mod tests {
     fn the_empty_queue_explains_where_installs_come_from() {
         assert_eq!(
             EMPTY_TEXT,
-            "Installs you start from Discover appear here. Several can run at once; installs into the same instance take turns."
+            "Active and recent installs from Discover appear here."
         );
     }
 

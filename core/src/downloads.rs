@@ -41,8 +41,8 @@ pub const IDLE_READ_TIMEOUT: Duration = Duration::from_secs(30);
 /// The single user agent the launcher presents to artifact hosts.
 const USER_AGENT: &str = concat!("aurora-launcher/", env!("CARGO_PKG_VERSION"));
 
-/// The user agent shared by every launcher transport, including the
-/// authentication client (which otherwise keeps its own redirect policy).
+/// The user agent shared by every launcher transport.
+#[allow(dead_code)]
 pub(crate) fn user_agent() -> &'static str {
     USER_AGENT
 }
@@ -336,7 +336,7 @@ pub async fn download_sha512(
         let _ = tokio::fs::remove_file(destination).await;
         return Err(DownloadError::Sha512Mismatch {
             expected: source.sha512().as_hex(),
-            actual: actual.iter().map(|byte| format!("{byte:02x}")).collect(),
+            actual: crate::integrity::encode_hex(&actual),
         });
     }
     Ok(DownloadedFile {
@@ -674,6 +674,10 @@ fn mrpack_client(options: &DownloadOptions) -> reqwest::Client {
     let max_redirects = options.max_redirects;
     let client = reqwest::Client::builder()
         .user_agent(USER_AGENT)
+        .no_gzip()
+        .pool_max_idle_per_host(16)
+        .tcp_keepalive(Some(Duration::from_secs(30)))
+        .http2_adaptive_window(true)
         .connect_timeout(options.connect_timeout)
         .read_timeout(options.idle_read_timeout)
         .redirect(reqwest::redirect::Policy::custom(move |attempt| {
@@ -756,12 +760,15 @@ async fn stream_body_inner(
     destination: &Path,
     mut verify: impl FnMut(&[u8]) -> Result<(), VerificationFailure>,
 ) -> Result<(), DownloadError> {
-    use tokio::io::AsyncWriteExt;
+    use tokio::io::{AsyncWriteExt, BufWriter};
+
+    const STAGING_WRITE_BUFFER_BYTES: usize = 256 * 1024;
 
     let mut response = response;
-    let mut file = tokio::fs::File::create(destination)
+    let file = tokio::fs::File::create(destination)
         .await
         .map_err(DownloadError::StagingIo)?;
+    let mut writer = BufWriter::with_capacity(STAGING_WRITE_BUFFER_BYTES, file);
 
     while let Some(chunk) = response
         .chunk()
@@ -775,13 +782,15 @@ async fn stream_body_inner(
         crate::content_jobs::transfer_checkpoint().map_err(|_| DownloadError::Cancelled)?;
         crate::content_jobs::record_streamed(chunk.len() as u64);
         verify(&chunk)?;
-        file.write_all(&chunk)
+        writer
+            .write_all(&chunk)
             .await
             .map_err(DownloadError::StagingIo)?;
     }
 
+    writer.flush().await.map_err(DownloadError::StagingIo)?;
     // The staging file must be completely on disk before it can be promoted.
-    if let Err(error) = file.sync_all().await {
+    if let Err(error) = writer.into_inner().sync_all().await {
         return Err(DownloadError::StagingIo(error));
     }
 
@@ -821,9 +830,21 @@ fn validate_transport_url(
 /// Builds the launcher's HTTP client with the documented transport policy
 /// (user agent, timeouts, redirect rules, rustls provider).
 ///
-/// Shared by the artifact transport and the Minecraft metadata fetch so every
-/// outbound request obeys one policy; it confers no trust by itself.
+/// Binary artifact downloads disable transparent gzip decompression so
+/// declared `Content-Length` checks and raw streamed digests always inspect
+/// the exact transfer bytes.
 pub(crate) fn build_client(options: &DownloadOptions) -> reqwest::Client {
+    build_pooled_client(options, false)
+}
+
+/// Builds a runtime-pooled HTTP client for JSON/XML metadata and API endpoints,
+/// enabling transparent gzip decompression and HTTP/2 multiplexing while
+/// enforcing the same redirect and timeout policy.
+pub(crate) fn build_metadata_client(options: &DownloadOptions) -> reqwest::Client {
+    build_pooled_client(options, true)
+}
+
+fn build_pooled_client(options: &DownloadOptions, allow_gzip: bool) -> reqwest::Client {
     use std::collections::HashMap;
     use std::sync::{Mutex, OnceLock};
 
@@ -831,10 +852,10 @@ pub(crate) fn build_client(options: &DownloadOptions) -> reqwest::Client {
     // created. Tests create many short-lived runtimes, so a client from one
     // runtime must never be handed to another after its dispatcher exits.
     static CLIENTS: OnceLock<
-        Mutex<HashMap<(tokio::runtime::Id, DownloadOptions), reqwest::Client>>,
+        Mutex<HashMap<(tokio::runtime::Id, DownloadOptions, bool), reqwest::Client>>,
     > = OnceLock::new();
     let runtime = tokio::runtime::Handle::current().id();
-    let key = (runtime, options.clone());
+    let key = (runtime, options.clone(), allow_gzip);
     let clients = CLIENTS.get_or_init(|| Mutex::new(HashMap::new()));
     let mut clients = clients
         .lock()
@@ -844,13 +865,86 @@ pub(crate) fn build_client(options: &DownloadOptions) -> reqwest::Client {
     }
 
     ensure_rustls_crypto_provider();
-    let client = reqwest::Client::builder()
+    let mut builder = reqwest::Client::builder()
         .user_agent(USER_AGENT)
+        .pool_max_idle_per_host(16)
+        .tcp_keepalive(Some(Duration::from_secs(30)))
+        .http2_adaptive_window(true)
         .connect_timeout(options.connect_timeout)
         .read_timeout(options.idle_read_timeout)
-        .redirect(redirect_policy(options.max_redirects))
+        .redirect(redirect_policy(options.max_redirects));
+    if !allow_gzip {
+        builder = builder.no_gzip();
+    }
+    let client = builder
         .build()
         .expect("download client configuration is valid");
+    clients.insert(key, client.clone());
+    client
+}
+
+/// Runtime-pooled HTTP client with `Policy::none()` (no redirects) for direct
+/// API, authentication, cosmetic, artwork, and avatar requests.
+pub(crate) fn build_direct_client(
+    connect_timeout: Option<Duration>,
+    read_timeout: Option<Duration>,
+    total_timeout: Option<Duration>,
+    https_only: bool,
+    allow_gzip: bool,
+) -> reqwest::Client {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+
+    #[derive(Hash, PartialEq, Eq)]
+    struct Key {
+        runtime: tokio::runtime::Id,
+        connect: Option<Duration>,
+        read: Option<Duration>,
+        total: Option<Duration>,
+        https_only: bool,
+        allow_gzip: bool,
+    }
+
+    static CLIENTS: OnceLock<Mutex<HashMap<Key, reqwest::Client>>> = OnceLock::new();
+    let key = Key {
+        runtime: tokio::runtime::Handle::current().id(),
+        connect: connect_timeout,
+        read: read_timeout,
+        total: total_timeout,
+        https_only,
+        allow_gzip,
+    };
+    let mut clients = CLIENTS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .expect("direct HTTP client pool lock is not poisoned");
+    if let Some(client) = clients.get(&key) {
+        return client.clone();
+    }
+
+    ensure_rustls_crypto_provider();
+    let mut builder = reqwest::Client::builder()
+        .user_agent(USER_AGENT)
+        .pool_max_idle_per_host(16)
+        .tcp_keepalive(Some(Duration::from_secs(30)))
+        .http2_adaptive_window(true)
+        .redirect(reqwest::redirect::Policy::none())
+        .https_only(https_only);
+    if let Some(timeout) = connect_timeout {
+        builder = builder.connect_timeout(timeout);
+    }
+    if let Some(timeout) = read_timeout {
+        builder = builder.read_timeout(timeout);
+    }
+    if let Some(timeout) = total_timeout {
+        builder = builder.timeout(timeout);
+    }
+    if !allow_gzip {
+        builder = builder.no_gzip();
+    }
+    let client = builder
+        .build()
+        .expect("direct HTTP client configuration is valid");
     clients.insert(key, client.clone());
     client
 }

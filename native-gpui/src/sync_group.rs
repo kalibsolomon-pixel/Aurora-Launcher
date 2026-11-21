@@ -180,69 +180,104 @@ impl Syncing {
         cx: &mut Context<Self>,
     ) -> Div {
         let view = cx.entity();
-        let mut card = ui::card(t).gap(px(14.)).child(ui::section_header(
-            t,
-            "Synced group",
-            Some(
-                "Choose a main instance. Instances take its settings when they join the group; after that, a change made in any member reaches the others before they next launch."
-                    .into(),
-            ),
-        ));
+        let mut card = ui::card(t).gap(px(14.));
         let (Some(overview), Some(draft)) = (self.group.overview.clone(), self.group.draft.clone())
         else {
-            return card.child(ui::caption(t, "Loading the synced group…"));
+            return card
+                .child(ui::section_header(t, "Synced group", None))
+                .child(ui::caption(t, "Loading…"));
         };
         let busy = self.group.busy;
         let dirty = self.group.dirty();
-        let (badge, tone) = if dirty {
-            ("Unsaved changes", ui::Tone::Warning)
+        let status_badge = if dirty {
+            Some(("Unsaved", ui::Tone::Warning))
         } else if self.group.active() {
-            ("On", ui::Tone::Success)
+            Some(("On", ui::Tone::Success))
         } else {
-            ("Off", ui::Tone::Neutral)
+            None
         };
+        let dormant = !draft.enabled;
         card = card.child(
-            ui::setting_row(
-                t,
-                "Use a synced group",
-                Some(
-                    if draft.enabled {
-                        "Settings follow the group. File sync below is turned off while the group is on."
-                    } else {
-                        "Off. Each instance keeps its own settings."
-                    }
-                    .into(),
+            div()
+                .flex()
+                .items_center()
+                .justify_between()
+                .gap(px(16.))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(14.))
+                        .flex_1()
+                        .min_w(px(0.))
+                        .child(ui::title_block(
+                            t,
+                            "Synced group",
+                            Some("Share settings and packs from one main instance".into()),
+                        )),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_shrink_0()
+                        .items_center()
+                        .gap(px(12.))
+                        .when_some(status_badge, |row, (label, tone)| {
+                            row.child(ui::status_badge(t, label, tone))
+                        })
+                        .child(
+                            AuroraToggle::new("sync-group-enabled")
+                                .label("Use a synced group")
+                                .checked(draft.enabled)
+                                .disabled(busy)
+                                .on_change({
+                                    let view = view.clone();
+                                    move |next: bool, _, _, cx| {
+                                        view.update(cx, |this, cx| {
+                                            this.edit_group(|d| d.enabled = next, cx)
+                                        });
+                                    }
+                                }),
+                        ),
                 ),
-                false,
-            )
-            .py(px(0.))
-            .child(
-                div()
-                    .flex()
-                    .flex_shrink_0()
-                    .items_center()
-                    .gap(px(16.))
-                    .child(ui::status_badge(t, badge, tone))
-                    .child(
-                        AuroraToggle::new("sync-group-enabled")
-                            .label("Use a synced group")
-                            .checked(draft.enabled)
-                            .disabled(busy)
-                            .on_change({
-                                let view = view.clone();
-                                move |next: bool, _, _, cx| {
-                                    view.update(cx, |this, cx| {
-                                        this.edit_group(|d| d.enabled = next, cx)
-                                    });
-                                }
-                            }),
-                    ),
-            ),
         );
 
+        // Progressive disclosure: hide the full member matrix while Off, showing
+        // one clean left-aligned summary line of what enabling reveals.
+        if dormant && !dirty && overview.history.is_empty() {
+            let suggested = overview
+                .suggested_main
+                .as_deref()
+                .and_then(|id| overview.instances.iter().find(|i| i.id == id))
+                .or_else(|| overview.instances.first())
+                .map(|i| i.name.clone())
+                .unwrap_or_else(|| "Choose after enabling".into());
+            return card.child(
+                div()
+                    .pt(px(10.))
+                    .border_t_1()
+                    .border_color(t.border_subtle)
+                    .child(ui::caption(
+                        t,
+                        format!(
+                            "Suggested main: {suggested} · Syncs settings, Aurora Client profiles and packs"
+                        ),
+                    )),
+            );
+        }
+
         // Instances: membership, main choice and live state.
-        let mut list = div().flex().flex_col().gap(px(6.));
-        for instance in &overview.instances {
+        let mut list = div()
+            .flex()
+            .flex_col()
+            .rounded(t.radius)
+            .bg(t.sunken)
+            .border_1()
+            .border_color(t.border_subtle)
+            .overflow_hidden()
+            .when(dormant, |d| d.opacity(0.60));
+        let instance_count = overview.instances.len();
+        for (idx, instance) in overview.instances.iter().enumerate() {
             let id = instance.id.clone();
             let main = draft.main_instance_id.as_deref() == Some(id.as_str());
             let member = main || draft.members.contains(&id);
@@ -257,51 +292,69 @@ impl Syncing {
                 ));
             }
             if instance.running {
-                badges = badges.child(ui::status_badge(t, "Running", ui::Tone::Neutral));
+                badges = badges.child(ui::status_badge(t, "Running", ui::Tone::Success));
             }
-            let row =
-                div()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .gap(px(12.))
-                    .py(px(4.))
-                    .child(
-                        AuroraCheckbox::new(
-                            SharedString::from(format!("sync-group-member-{id}")),
-                            format!("{} · {}", instance.name, instance.minecraft_version),
-                        )
-                        .checked(member)
-                        .disabled(busy || main)
-                        .on_change({
-                            let view = view.clone();
-                            let id = id.clone();
-                            move |next: bool, _, _, cx| {
+            let row = ui::row(t, idx + 1 == instance_count)
+                .justify_between()
+                .py(px(8.))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(10.))
+                        .flex_1()
+                        .min_w(px(0.))
+                        .child(
+                            AuroraCheckbox::new(
+                                SharedString::from(format!("sync-group-member-{id}")),
+                                format!("{} · {}", instance.name, instance.minecraft_version),
+                            )
+                            .checked(member)
+                            .disabled(busy || main)
+                            .on_change({
+                                let view = view.clone();
                                 let id = id.clone();
-                                view.update(cx, |this, cx| {
-                                    this.edit_group(
-                                        |d| {
-                                            d.members.retain(|m| *m != id);
-                                            if next {
-                                                d.members.push(id);
-                                            }
-                                        },
-                                        cx,
-                                    )
-                                });
-                            }
-                        }),
-                    )
-                    .child(div().flex().items_center().gap(px(10.)).child(badges).when(
-                        !main,
-                        |row| {
+                                move |next: bool, _, _, cx| {
+                                    let id = id.clone();
+                                    view.update(cx, |this, cx| {
+                                        this.edit_group(
+                                            |d| {
+                                                d.members.retain(|m| *m != id);
+                                                if next {
+                                                    d.members.push(id);
+                                                }
+                                            },
+                                            cx,
+                                        )
+                                    });
+                                }
+                            }),
+                        )
+                        .child(
+                            ui::title_block(
+                                t,
+                                instance.name.clone(),
+                                Some(format!("Minecraft {}", instance.minecraft_version).into()),
+                            )
+                            .flex_1()
+                            .min_w(px(0.)),
+                        ),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_shrink_0()
+                        .items_center()
+                        .gap(px(10.))
+                        .child(badges)
+                        .when(!main, |row| {
                             row.child(
                                 AuroraButton::new(
                                     SharedString::from(format!("sync-group-main-{id}")),
                                     "Make main",
                                 )
                                 .size(ButtonSize::Small)
-                                .variant(ButtonVariant::Ghost)
+                                .variant(ButtonVariant::Default)
                                 .disabled(busy)
                                 .on_click({
                                     let view = view.clone();
@@ -322,8 +375,8 @@ impl Syncing {
                                     }
                                 }),
                             )
-                        },
-                    ));
+                        }),
+                );
             list = list.child(row);
         }
         card = card.child(list);
@@ -335,6 +388,8 @@ impl Syncing {
                       edit: fn(&mut api::SyncGroupConfig, bool)| {
             let view = view.clone();
             AuroraCheckbox::new(id, label)
+                .with_visible_label()
+                .dormant(dormant)
                 .checked(checked)
                 .disabled(busy)
                 .on_change(move |next: bool, _, _, cx| {
@@ -345,12 +400,29 @@ impl Syncing {
             .child(
                 div()
                     .flex()
-                    .flex_wrap()
-                    .gap(px(16.))
-                    .child(choice("sync-group-vanilla", "Game settings, controls and graphics", draft.vanilla, |d, v| d.vanilla = v))
-                    .child(choice("sync-group-aurora", "Aurora settings and profiles", draft.aurora, |d, v| d.aurora = v))
-                    .child(choice("sync-group-packs", "Resource and shader packs", draft.packs, |d, v| d.packs = v))
-                    .child(choice("sync-group-join", "New instances join the group", draft.new_instances_join, |d, v| d.new_instances_join = v)),
+                    .flex_col()
+                    .gap(px(8.))
+                    .when(dormant, |d| d.opacity(0.65))
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(8.))
+                            .child(ui::eyebrow(t, "WHAT SYNCS"))
+                            .when(dormant, |row| {
+                                row.child(ui::caption(t, "· Applies when synced group is turned on"))
+                            }),
+                    )
+                    .child(
+                        div()
+                            .grid()
+                            .grid_cols(2)
+                            .gap(px(6.))
+                            .child(choice("sync-group-vanilla", "Game settings, controls and graphics", draft.vanilla, |d, v| d.vanilla = v))
+                            .child(choice("sync-group-aurora", "Aurora settings and profiles", draft.aurora, |d, v| d.aurora = v))
+                            .child(choice("sync-group-packs", "Resource and shader packs", draft.packs, |d, v| d.packs = v))
+                            .child(choice("sync-group-join", "New instances join the group", draft.new_instances_join, |d, v| d.new_instances_join = v)),
+                    ),
             )
             .child(ui::caption(
                 t,

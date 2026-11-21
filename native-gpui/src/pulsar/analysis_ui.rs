@@ -290,17 +290,35 @@ impl Pulsar {
                     .min_by(|a, b| a.0.total_cmp(&b.0))
                     .map(|(_, r)| (r.key.clone(), r.start_epoch_millis))
             });
-        let evidence = Some(match evidence {
+        let has_comparison = self
+            .analysis
+            .as_ref()
+            .is_some_and(|a| a.previous_period.is_some());
+        let evidence = has_comparison.then(|| match evidence {
             Some(e) => format!("{note} \u{b7} {e}"),
             None => note,
         });
-        let performance = self
-            .metrics_panel_with(t, "Recent performance", &primary, &deltas, cx)
-            .child(
+        let weakest_btn = target.map(|(key, _start)| {
+            button("overview-review-misses", "Review weakest fight")
+                .icon("arrow_forward")
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.open_detail(key.clone(), cx);
+                    this.detail_tab = 1;
+                    this.sections[1] = 1;
+                    cx.notify();
+                }))
+        });
+        let mut performance =
+            self.metrics_panel_header(t, "Recent performance", &primary, &deltas, None, cx);
+        if has_comparison {
+            performance = performance.child(
                 div()
-                    .border_l_2()
-                    .border_color(t.ring)
-                    .pl(px(12.))
+                    .px(px(14.))
+                    .py(px(10.))
+                    .rounded(t.radius)
+                    .bg(t.sunken)
+                    .border_1()
+                    .border_color(t.border_subtle)
                     .flex()
                     .flex_wrap()
                     .items_center()
@@ -315,27 +333,9 @@ impl Pulsar {
                             .child(ui::muted(t, insight).font_weight(gpui::FontWeight::MEDIUM))
                             .when_some(evidence, |d, e| d.child(ui::caption(t, e))),
                     )
-                    .when_some(target, |d, (key, start)| {
-                        d.child(
-                            button(
-                                "overview-review-misses",
-                                format!(
-                                    "Open weakest fight \u{b7} {}",
-                                    super::presentation::short_stamp(&super::page::utc_time(start))
-                                ),
-                            )
-                            .icon("arrow_forward")
-                            .on_click(cx.listener(
-                                move |this, _, _, cx| {
-                                    this.open_detail(key.clone(), cx);
-                                    this.detail_tab = 1;
-                                    this.sections[1] = 1;
-                                    cx.notify();
-                                },
-                            )),
-                        )
-                    }),
+                    .when_some(weakest_btn, |d, btn| d.child(btn)),
             );
+        }
         let mut body = div().flex().flex_col().gap(px(12.)).child(performance);
         let key = ["accuracy", "reach", "critical", "interval"][self.trend_metric];
         let mut selectors = div().flex().flex_wrap().gap(px(2.));
@@ -358,6 +358,9 @@ impl Pulsar {
             .find(|c| c.id.contains("trend") && c.id.to_lowercase().contains(key))
         {
             let mut chart = tabs::chart(c);
+            if self.trend_metric == 0 {
+                chart.range = (0., 100.);
+            }
             let years = c
                 .series
                 .iter()
@@ -375,7 +378,7 @@ impl Pulsar {
                 (Some(a), _) => format!("Recording time (UTC, {a})"),
                 _ => "Recording time (UTC)".into(),
             };
-            chart.note = "\u{25cf} Measured   \u{25cb} Genuine zero   \u{2014} Unavailable. Select a point to open its fight.".into();
+            chart.note = String::new();
             let points = c.series.iter().flat_map(|s| &s.points).collect::<Vec<_>>();
             let keys = points.iter().map(|p| p.key.clone()).collect::<Vec<_>>();
             for (sample, point) in chart.samples.iter_mut().zip(&points) {
@@ -391,15 +394,16 @@ impl Pulsar {
                     );
                 }
             }
-            let selected = points.iter().rposition(|p| p.y.is_some());
             let view = cx.entity();
+            let range_controls = self.window_selector(t, cx);
             body = body.child(chart.render_options(
                 t,
                 None,
                 super::charts::Options {
                     preferences: self.preferences,
                     header: Some(selectors),
-                    selected_sample: selected,
+                    header_right: Some(range_controls),
+                    selected_sample: None,
                     activate: Some(std::rc::Rc::new(move |target, _, cx| {
                         if let super::charts::Target::Sample(i) = target {
                             if let Some(Some(key)) = keys.get(i) {
@@ -434,6 +438,18 @@ impl Pulsar {
         deltas: &BTreeMap<String, String>,
         cx: &mut Context<Self>,
     ) -> Div {
+        self.metrics_panel_header(t, title, m, deltas, None, cx)
+    }
+
+    fn metrics_panel_header(
+        &self,
+        t: &AuroraTheme,
+        title: &str,
+        m: &BTreeMap<String, MetricValue>,
+        deltas: &BTreeMap<String, String>,
+        header_action: Option<gpui::AnyElement>,
+        _cx: &mut Context<Self>,
+    ) -> Div {
         let five_columns = m.len() == 5 && self.width >= 950.;
         let mut group = div()
             .flex()
@@ -460,6 +476,9 @@ impl Pulsar {
                     } else {
                         210.
                     }))
+                    .when(m.len() <= 3 && self.width >= 680., |d| {
+                        d.w(px(0.)).flex_1().min_w(px(140.))
+                    })
                     .when(five_columns, |d| d.w(px(0.)).flex_1().min_w(px(0.)))
                     .when(m.len() == 5 && !five_columns, |d| {
                         if index == 4 {
@@ -491,26 +510,7 @@ impl Pulsar {
                                         _ => display_label(&metric.definition.label),
                                     },
                                 )
-                                .flex_1()
                                 .min_w(px(0.)),
-                            )
-                            .child(
-                                button(format!("metric-info-{key}"), "")
-                                    .icon("info")
-                                    .accessibility_label(format!(
-                                        "About {}",
-                                        metric.definition.label
-                                    ))
-                                    .selected(self.metric_info.as_ref() == Some(&key))
-                                    .on_click(cx.listener(move |this, _, _, cx| {
-                                        this.metric_info =
-                                            if this.metric_info.as_ref() == Some(&key) {
-                                                None
-                                            } else {
-                                                Some(key.clone())
-                                            };
-                                        cx.notify();
-                                    })),
                             ),
                     )
                     .child(
@@ -544,11 +544,24 @@ impl Pulsar {
             );
         }
 
+        let header = if let Some(action) = header_action {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_between()
+                .gap(px(12.))
+                .child(ui::section_header(t, title.to_owned(), None))
+                .child(action)
+                .into_any_element()
+        } else {
+            ui::section_header(t, title.to_owned(), None).into_any_element()
+        };
         let mut panel = ui::card(t)
             .p(px(16.))
             .gap(px(12.))
             .when(title == "Recent performance", |d| d.gap(px(8.)).p(px(16.)))
-            .child(ui::section_header(t, title.to_owned(), None))
+            .child(header)
             .child(group);
         if m.get("unexplainedHealthDrops")
             .is_some_and(|v| v.value.is_none())
@@ -785,7 +798,8 @@ impl Pulsar {
         div().flex().flex_wrap().gap(px(24.)).children(
             [
                 (
-                    "Recording",
+                    "duration",
+                    "Duration",
                     format!(
                         "{:.1} s · {} attempts",
                         s.duration_nanos as f64 / 1e9,
@@ -793,6 +807,7 @@ impl Pulsar {
                     ),
                 ),
                 (
+                    "accuracy",
                     "Accuracy",
                     format!(
                         "{} · {} hits",
@@ -800,56 +815,14 @@ impl Pulsar {
                         denominator(m, "hits", "accuracyDenominator")
                     ),
                 ),
-                (
-                    "Within reach window",
-                    format!(
-                        "{} · {} contacts",
-                        value(m, "reachWithin"),
-                        denominator(m, "reachWithinCount", "reachEligible")
-                    ),
-                ),
-                (
-                    "Longest combo and combo count",
-                    format!(
-                        "{} hits · {} combos",
-                        value(m, "longestCombo"),
-                        value(m, "comboCount")
-                    ),
-                ),
-                (
-                    "Your advantage share",
-                    format!(
-                        "{} · {}",
-                        value(m, "dominanceShare"),
-                        m.get("dominanceShare")
-                            .map(|m| if m.value.is_some() {
-                                "measured".to_owned()
-                            } else {
-                                "unavailable".to_owned()
-                            })
-                            .unwrap_or_else(|| "Unavailable".into())
-                    ),
-                ),
+                ("longestCombo", "Longest combo", {
+                    let longest = value(m, "longestCombo");
+                    let hit_word = if longest == "1" { "hit" } else { "hits" };
+                    format!("{longest} {hit_word}")
+                }),
             ]
             .into_iter()
-            .enumerate()
-            .map(|(i, (label, v))| {
-                self.measurement_group(
-                    t,
-                    m,
-                    [
-                        "duration",
-                        "accuracy",
-                        "reachWithin",
-                        "longestCombo",
-                        "dominanceShare",
-                    ][i],
-                    label,
-                    v,
-                    String::new(),
-                    cx,
-                )
-            }),
+            .map(|(key, label, v)| self.measurement_group(t, m, key, label, v, String::new(), cx)),
         )
     }
 
@@ -861,55 +834,67 @@ impl Pulsar {
         label: &str,
         value: String,
         caption: String,
-        cx: &mut Context<Self>,
-    ) -> Div {
-        let selected = self.metric_info.as_deref() == Some(key);
-        let id = key.to_owned();
-        let mut group = div()
-            .min_w(px(210.))
-            .flex_1()
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(4.))
-                    .child(ui::caption(t, label.to_owned()).flex_1().min_w(px(0.)))
-                    .child(
-                        button(format!("group-info-{key}"), "")
-                            .icon("info")
-                            .accessibility_label(format!("About {label}"))
-                            .selected(selected)
-                            .on_click(cx.listener(move |this, _, _, cx| {
-                                this.metric_info = if this.metric_info.as_ref() == Some(&id) {
-                                    None
-                                } else {
-                                    Some(id.clone())
-                                };
-                                cx.notify();
-                            })),
-                    ),
+        _cx: &mut Context<Self>,
+    ) -> gpui::Stateful<Div> {
+        let tip = m.get(key).map(|metric| {
+            format!(
+                "{}: {} {}",
+                metric.definition.label,
+                metric.definition.help,
+                metric.reason.as_deref().unwrap_or("")
             )
+        });
+        let tip_theme = t.clone();
+        let mut group = div()
+            .id(format!("group-readout-{key}"))
+            .when_some(tip, |d, text| {
+                d.tooltip(move |_, cx| {
+                    cx.new(|_| super::charts::Readout {
+                        text: text.clone(),
+                        theme: tip_theme.clone(),
+                    })
+                    .into()
+                })
+            })
+            .min_w(px(200.))
+            .flex_1()
+            .child(ui::caption(t, label.to_owned()).min_w(px(0.)))
             .child(ui::muted(t, value));
         if !caption.is_empty() {
             group = group.child(ui::caption(t, caption));
         }
 
-        if selected {
-            if let Some(metric) = m.get(key) {
-                group = group.child(ui::caption(
-                    t,
-                    format!(
-                        "{} · {} | {} {}",
-                        metric.definition.unit,
-                        metric.definition.confidence,
-                        metric.definition.help,
-                        metric.reason.as_deref().unwrap_or("")
-                    ),
-                ));
-            }
-        }
-
         group
+    }
+
+    pub(super) fn window_selector(&self, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
+        if self.library.total <= 10 {
+            return div().flex().items_center().child(ui::caption(
+                t,
+                super::presentation::count(self.library.total, "recording"),
+            ));
+        }
+        let mut window_bar = crate::ui::segmented_tabs(t);
+        for (i, (label, window)) in [
+            ("Last 10", AnalysisWindow::Last10),
+            ("Last 25", AnalysisWindow::Last25),
+            ("All", AnalysisWindow::All),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let selected = std::mem::discriminant(&self.window) == std::mem::discriminant(&window);
+            window_bar = window_bar.child(
+                button(("pulsar-window", i), label)
+                    .selected(selected)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.window = window.clone();
+                        this.load_sections();
+                        cx.notify();
+                    })),
+            );
+        }
+        window_bar
     }
 
     pub(super) fn compositions(

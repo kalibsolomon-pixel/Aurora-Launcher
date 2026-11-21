@@ -92,6 +92,7 @@ pub fn letter(name: &str) -> String {
 pub struct ArtworkCache<K: Eq + Hash + Clone> {
     images: HashMap<K, Option<Arc<RenderImage>>>,
     order: VecDeque<K>,
+    retired: Vec<Arc<RenderImage>>,
     capacity: usize,
 }
 
@@ -100,6 +101,7 @@ impl<K: Eq + Hash + Clone> ArtworkCache<K> {
         Self {
             images: HashMap::new(),
             order: VecDeque::new(),
+            retired: Vec::new(),
             capacity: capacity.max(1),
         }
     }
@@ -121,13 +123,22 @@ impl<K: Eq + Hash + Clone> ArtworkCache<K> {
         self.images.get(key).cloned().flatten()
     }
 
+    /// Releases evicted/replaced GPU sprite-atlas textures on the owning window.
+    pub fn flush_dropped(&mut self, window: &mut gpui::Window) {
+        for image in self.retired.drain(..) {
+            let _ = window.drop_image(image);
+        }
+    }
+
     /// Records a result, then evicts down to the cap. The oldest entry that
     /// `wanted` does not claim goes first; only when every other entry is
     /// wanted does the oldest wanted one go. The inserted key itself stays.
     pub fn insert(&mut self, key: K, image: Option<Arc<RenderImage>>, wanted: impl Fn(&K) -> bool) {
         self.order.retain(|old| old != &key);
         self.order.push_back(key.clone());
-        self.images.insert(key.clone(), image);
+        if let Some(Some(previous)) = self.images.insert(key.clone(), image) {
+            self.retired.push(previous);
+        }
         while self.images.len() > self.capacity {
             let victim = self
                 .order
@@ -137,17 +148,31 @@ impl<K: Eq + Hash + Clone> ArtworkCache<K> {
             let Some(victim) = victim.and_then(|index| self.order.remove(index)) else {
                 break;
             };
-            self.images.remove(&victim);
+            if let Some(Some(evicted)) = self.images.remove(&victim) {
+                self.retired.push(evicted);
+            }
         }
     }
 
     pub fn retain(&mut self, keep: impl Fn(&K) -> bool) {
-        self.images.retain(|key, _| keep(key));
+        self.images.retain(|key, value| {
+            let kept = keep(key);
+            if !kept {
+                if let Some(evicted) = value.take() {
+                    self.retired.push(evicted);
+                }
+            }
+            kept
+        });
         self.order.retain(|key| self.images.contains_key(key));
     }
 
     pub fn clear(&mut self) {
-        self.images.clear();
+        for (_, value) in self.images.drain() {
+            if let Some(evicted) = value {
+                self.retired.push(evicted);
+            }
+        }
         self.order.clear();
     }
 }

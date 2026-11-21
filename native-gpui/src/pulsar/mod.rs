@@ -23,7 +23,7 @@ pub(super) const TOP_TABS: [&str; 8] = [
     "History",
     "Opponents",
     "Records",
-    "Settings",
+    "Preferences",
 ];
 pub(super) const DETAIL_TABS: [&str; 6] = [
     "Summary", "Offense", "Defense", "Flow", "Playback", "Evidence",
@@ -56,6 +56,7 @@ enum Reply {
 
 pub enum PulsarEvent {
     OpenInstances,
+    Launch(Option<String>),
 }
 impl gpui::EventEmitter<PulsarEvent> for Pulsar {}
 

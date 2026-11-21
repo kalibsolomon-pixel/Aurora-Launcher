@@ -390,6 +390,7 @@ impl Screenshots {
 
 impl Render for Screenshots {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.cache.flush_dropped(window);
         let t = theme::theme(cx).clone();
         let busy = self.state.busy;
         self.rename
@@ -422,12 +423,17 @@ impl Render for Screenshots {
         if self.loading {
             root = root.child(ui::caption(&t, "Loading screenshots…"));
         } else if self.state.shots.is_empty() {
-            root = root.child(ui::empty_state(
-                &t,
-                "photo_library",
-                "No screenshots yet",
-                "Press F2 in game to take a screenshot. It will appear here after Refresh.",
-            ));
+            root = root.child(
+                ui::empty_state(
+                    &t,
+                    "photo_library",
+                    "No screenshots yet",
+                    "Press F2 in game to take a screenshot. It will appear here after Refresh.",
+                )
+                .bg(gpui::transparent_black())
+                .border_0()
+                .py(px(28.)),
+            );
         } else {
             // The gallery fills the detail page inside the card padding.
             let available = (f32::from(window.viewport_size().width)

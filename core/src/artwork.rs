@@ -308,14 +308,13 @@ async fn acquire_artwork(paths: &ManagedPaths, project_id: &str) -> ArtworkResul
 async fn acquire_cdn_artwork(paths: &ManagedPaths, key: &str, url: &str) -> ArtworkResult {
     // Cosmetic CDN locators do not require redirects. Refusing all redirects
     // prevents even an intermediate request to a provider-controlled other host.
-    let http = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .timeout(std::time::Duration::from_secs(10))
-        .user_agent(format!("aurora-launcher/{}", env!("CARGO_PKG_VERSION")))
-        .build();
-    let Ok(http) = http else {
-        return ArtworkResult::retry();
-    };
+    let http = crate::downloads::build_direct_client(
+        None,
+        None,
+        Some(std::time::Duration::from_secs(10)),
+        false,
+        false,
+    );
     let image = match download(&http, url, OFFICIAL_CDN_HOST).await {
         Ok(image) => image,
         Err(DownloadFailure::Retryable) => return ArtworkResult::retry(),

@@ -771,7 +771,11 @@ fn load_launcher_state(managed_paths: &ManagedPaths) -> Result<LauncherState, Co
         );
     }
 
-    let registry = InstanceRegistry::load_and_migrate(&managed_paths.instance_registry_file())?;
+    let registry_path = managed_paths.instance_registry_file();
+    let registry = InstanceRegistry::load_and_migrate(&registry_path)?;
+    let mut cached_registry_stamp = std::fs::metadata(&registry_path)
+        .ok()
+        .map(|meta| (meta.len(), meta.modified().ok()));
 
     let mut state = LauncherState::from_parts(loaded.into_config(), registry)?;
     for summary in &mut state.instances {
@@ -792,19 +796,24 @@ fn load_launcher_state(managed_paths: &ManagedPaths) -> Result<LauncherState, Co
                 crate::install::coordination::LockError::Io(error) => InstallError::Storage(error),
             })?;
             // An installer may have completed while the initial registry was
-            // loaded; publish the record observed under its ownership lock.
-            let latest =
-                InstanceRegistry::load(&managed_paths.instance_registry_file()).map_err(|_| {
+            // loaded; reload only when the registry file actually changed on disk.
+            let current_stamp = std::fs::metadata(&registry_path)
+                .ok()
+                .map(|meta| (meta.len(), meta.modified().ok()));
+            if current_stamp != cached_registry_stamp || current_stamp.is_none() {
+                let latest = InstanceRegistry::load(&registry_path).map_err(|_| {
                     InstallError::RecoveryRequired {
                         reason: "instance registry could not be reloaded safely".into(),
                     }
                 })?;
-            let record = latest
-                .find(&id)
-                .ok_or_else(|| InstallError::RecoveryRequired {
-                    reason: "instance registry changed during state loading; refresh".into(),
-                })?;
-            *summary = InstanceSummary::from_record(record);
+                let record = latest
+                    .find(&id)
+                    .ok_or_else(|| InstallError::RecoveryRequired {
+                        reason: "instance registry changed during state loading; refresh".into(),
+                    })?;
+                *summary = InstanceSummary::from_record(record);
+                cached_registry_stamp = current_stamp;
+            }
             if std::fs::symlink_metadata(paths.root()).is_ok() {
                 crate::install::coordination::checked_directory(
                     managed_paths.data_root(),
@@ -6341,7 +6350,7 @@ pub fn update_skin_preset(
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct PresetThumbnailDto {
-    rgba: Vec<u8>,
+    pub rgba: Vec<u8>,
 }
 pub fn skin_preset_thumbnail(
     app: Host,
@@ -7592,14 +7601,52 @@ async fn run_update_check(app: &Host, startup: bool) -> Result<UpdateOverviewDto
             .map_err(|error| CommandError::new("aurora_manifest_invalid", error.to_string()))?;
         if crate::updates::begin_check(CheckDomain::Client) == crate::updates::CheckStart::Started {
             let mut checks = std::collections::BTreeMap::new();
+            let mut fetched_manifests: std::collections::HashMap<
+                (String, &'static str, String),
+                Result<crate::distribution::ReleaseManifest, crate::updates::UpdateAvailability>,
+            > = std::collections::HashMap::new();
             for record in registry
                 .instances()
                 .iter()
                 .filter(|record| record.installed().aurora.is_some())
             {
                 let id = record.id();
-                let availability =
-                    crate::updates::client::check_client_update(&managed, &endpoints, id).await;
+                let pin = record.installed().aurora.as_ref().expect("filtered above");
+                let key = (
+                    pin.version.clone(),
+                    pin.channel.as_str(),
+                    record.installed().minecraft_version.clone(),
+                );
+                let manifest = match fetched_manifests.get(&key) {
+                    Some(Ok(remote)) => Ok(remote.clone()),
+                    Some(Err(availability)) => Err(availability.clone()),
+                    None => {
+                        let fetched =
+                            crate::updates::client::fetch_update_manifest(&managed, &endpoints, id)
+                                .await
+                                .map_err(|error| match error {
+                                    crate::updates::client::ClientUpdateError::Inapplicable(
+                                        reason,
+                                    ) => {
+                                        crate::updates::UpdateAvailability::NotApplicable { reason }
+                                    }
+                                    other => crate::updates::UpdateAvailability::unavailable(
+                                        other.message(),
+                                    ),
+                                });
+                        fetched_manifests.insert(key, fetched.clone());
+                        fetched
+                    }
+                };
+                let availability = match manifest {
+                    Ok(remote) => {
+                        crate::updates::client::check_client_update_against_manifest(
+                            &managed, &endpoints, id, &remote,
+                        )
+                        .await
+                    }
+                    Err(availability) => availability,
+                };
                 checks.insert(id.to_string(), availability);
             }
             crate::updates::finish_client_checks(checks);

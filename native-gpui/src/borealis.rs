@@ -158,7 +158,7 @@ pub const RAISED_ALPHA: u8 = 0xfa;
 pub const CARD_ALPHA: u8 = 0xee;
 /// The bands are ambience, not content: drawn at this opacity over the opaque
 /// theme background so the canvas stays calm behind text.
-pub const BAND_OPACITY: f32 = 0.18;
+pub const BAND_OPACITY: f32 = 0.14;
 
 /// The saved background ids, in the order of the Settings dropdown.
 pub const BACKGROUNDS: [&str; 2] = ["simple", "borealis"];
@@ -318,7 +318,18 @@ impl Raster {
             .pixels()
             .map(|pixel| {
                 let [r, g, b, a] = pixel.0;
-                [premultiply(r, a), premultiply(g, a), premultiply(b, a), a]
+                // Harmonize legacy teal/green Borealis rasters into the single Aurora violet-indigo
+                // palette so green remains strictly reserved for status indicators.
+                let lum = 0.299 * f32::from(r) + 0.587 * f32::from(g) + 0.114 * f32::from(b);
+                let vr = (lum * 0.62 + f32::from(r) * 0.25).min(255.0) as u8;
+                let vg = (lum * 0.36).min(255.0) as u8;
+                let vb = (lum * 1.15 + f32::from(b) * 0.20).min(255.0) as u8;
+                [
+                    premultiply(vr, a),
+                    premultiply(vg, a),
+                    premultiply(vb, a),
+                    a,
+                ]
             })
             .collect();
         Some(Self {
@@ -328,29 +339,55 @@ impl Raster {
         })
     }
 
+    #[inline(always)]
     fn sample(&self, u: f32, v: f32) -> [f32; 4] {
+        let max_x = (self.width - 1) as isize;
+        let max_y = (self.height - 1) as isize;
         let x = u * self.width as f32 - 0.5;
         let y = v * self.height as f32 - 0.5;
-        let (x0, y0) = (x.floor(), y.floor());
-        let (fx, fy) = (x - x0, y - y0);
-        let at = |x: f32, y: f32| {
-            let x = (x as isize).clamp(0, self.width as isize - 1) as usize;
-            let y = (y as isize).clamp(0, self.height as isize - 1) as usize;
-            self.pixels[y * self.width + x]
-        };
-        let corners = [
-            (at(x0, y0), (1.0 - fx) * (1.0 - fy)),
-            (at(x0 + 1.0, y0), fx * (1.0 - fy)),
-            (at(x0, y0 + 1.0), (1.0 - fx) * fy),
-            (at(x0 + 1.0, y0 + 1.0), fx * fy),
-        ];
-        let mut out = [0.0; 4];
-        for (pixel, weight) in corners {
-            for (out, channel) in out.iter_mut().zip(pixel) {
-                *out += f32::from(channel) * weight / 255.0;
-            }
-        }
-        out
+        let (x0f, y0f) = (x.floor(), y.floor());
+        let (fx, fy) = (x - x0f, y - y0f);
+        let ix0 = x0f as isize;
+        let iy0 = y0f as isize;
+        let x0 = ix0.clamp(0, max_x) as usize;
+        let x1 = (ix0 + 1).clamp(0, max_x) as usize;
+        let y0 = iy0.clamp(0, max_y) as usize * self.width;
+        let y1 = (iy0 + 1).clamp(0, max_y) as usize * self.width;
+
+        let p00 = self.pixels[y0 + x0];
+        let p10 = self.pixels[y0 + x1];
+        let p01 = self.pixels[y1 + x0];
+        let p11 = self.pixels[y1 + x1];
+
+        let inv_fx = 1.0 - fx;
+        let inv_fy = 1.0 - fy;
+        let w00 = inv_fx * inv_fy;
+        let w10 = fx * inv_fy;
+        let w01 = inv_fx * fy;
+        let w11 = fx * fy;
+        const INV_255: f32 = 1.0 / 255.0;
+        [
+            (f32::from(p00[0]) * w00
+                + f32::from(p10[0]) * w10
+                + f32::from(p01[0]) * w01
+                + f32::from(p11[0]) * w11)
+                * INV_255,
+            (f32::from(p00[1]) * w00
+                + f32::from(p10[1]) * w10
+                + f32::from(p01[1]) * w01
+                + f32::from(p11[1]) * w11)
+                * INV_255,
+            (f32::from(p00[2]) * w00
+                + f32::from(p10[2]) * w10
+                + f32::from(p01[2]) * w01
+                + f32::from(p11[2]) * w11)
+                * INV_255,
+            (f32::from(p00[3]) * w00
+                + f32::from(p10[3]) * w10
+                + f32::from(p01[3]) * w01
+                + f32::from(p11[3]) * w11)
+                * INV_255,
+        ]
     }
 }
 

@@ -110,11 +110,15 @@ struct Entry {
     project: Option<String>,
 }
 
+fn matches_filter_normalized(name: &str, file_name: &str, lowered_query: &str) -> bool {
+    lowered_query.is_empty()
+        || name.to_lowercase().contains(lowered_query)
+        || file_name.to_lowercase().contains(lowered_query)
+}
+
+#[cfg(test)]
 fn matches_filter(name: &str, file_name: &str, query: &str) -> bool {
-    let query = query.trim().to_lowercase();
-    query.is_empty()
-        || name.to_lowercase().contains(&query)
-        || file_name.to_lowercase().contains(&query)
+    matches_filter_normalized(name, file_name, &query.trim().to_lowercase())
 }
 
 /// What the core is asked for to draw one row's icon.
@@ -1471,6 +1475,7 @@ impl Render for WarningTooltip {
 
 impl Render for Content {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.icons.cache.flush_dropped(window);
         let view = cx.entity();
         let busy = self.is_busy(cx);
         let previewing = self.preview_request.is_some();
@@ -1612,10 +1617,13 @@ impl Render for Content {
                 .gap(px(12.))
                 .when(self.actions_open, |list| list.child(toolbar));
             let query = self.filter.read(cx).value();
+            let lowered_query = query.trim().to_lowercase();
             let visible: Vec<_> = self
                 .entries
                 .iter()
-                .filter(|entry| matches_filter(&entry.name, &entry.file_name, query.as_ref()))
+                .filter(|entry| {
+                    matches_filter_normalized(&entry.name, &entry.file_name, &lowered_query)
+                })
                 .collect();
             if !self.loading {
                 list = list.child(

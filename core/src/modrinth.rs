@@ -111,16 +111,13 @@ pub struct Client {
 
 impl Client {
     pub fn official() -> Self {
-        static OFFICIAL: OnceLock<Client> = OnceLock::new();
-        OFFICIAL
-            .get_or_init(|| Self {
-                base: Url::parse(BASE).expect("fixed official Modrinth API URL"),
-                http: crate::downloads::build_client(&DownloadOptions {
-                    max_redirects: 0,
-                    ..DownloadOptions::default()
-                }),
-            })
-            .clone()
+        Self {
+            base: Url::parse(BASE).expect("fixed official Modrinth API URL"),
+            http: crate::downloads::build_metadata_client(&DownloadOptions {
+                max_redirects: 0,
+                ..DownloadOptions::default()
+            }),
+        }
     }
 
     #[cfg(test)]
@@ -186,7 +183,10 @@ impl Client {
         {
             return Err(Error::InvalidResponse);
         }
-        let mut body = Vec::new();
+        let initial_cap = response
+            .content_length()
+            .map_or(0, |size| (size as usize).min(MAX_RESPONSE));
+        let mut body = Vec::with_capacity(initial_cap);
         while let Some(chunk) = response.chunk().await.map_err(|_| Error::Network)? {
             if body.len() + chunk.len() > MAX_RESPONSE {
                 return Err(Error::InvalidResponse);
@@ -236,7 +236,10 @@ impl Client {
         {
             return Err(Error::InvalidResponse);
         }
-        let mut payload = Vec::new();
+        let initial_cap = response
+            .content_length()
+            .map_or(0, |size| (size as usize).min(MAX_RESPONSE));
+        let mut payload = Vec::with_capacity(initial_cap);
         while let Some(chunk) = response.chunk().await.map_err(|_| Error::Network)? {
             if payload.len() + chunk.len() > MAX_RESPONSE {
                 return Err(Error::InvalidResponse);
@@ -513,6 +516,44 @@ impl Client {
         })
     }
 
+    /// Batch-fetch Modrinth project types (`GET /v2/projects?ids=[...]`) in
+    /// bounded chunks so modpack planning avoids one request per component.
+    /// Failures fall back cleanly to individual `project()` lookups.
+    pub async fn project_types<'a>(
+        &self,
+        ids: impl Iterator<Item = &'a str>,
+    ) -> HashMap<String, String> {
+        const CHUNK_SIZE: usize = 64;
+        let mut seen = HashSet::new();
+        let mut unique = Vec::new();
+        for id in ids {
+            if validate_id(id).is_ok() && seen.insert(id) {
+                unique.push(id);
+            }
+        }
+        if unique.is_empty() {
+            return HashMap::new();
+        }
+        let mut out = HashMap::with_capacity(unique.len());
+        for chunk in unique.chunks(CHUNK_SIZE) {
+            let Ok(mut url) = self.endpoint(&["projects"]) else {
+                continue;
+            };
+            let Ok(encoded) = serde_json::to_string(chunk) else {
+                continue;
+            };
+            url.query_pairs_mut().append_pair("ids", &encoded);
+            if let Ok(projects) = self.get::<Vec<ProjectDto>>(url).await {
+                for project in projects {
+                    if seen.contains(project.id.as_str()) {
+                        out.insert(project.id, project.project_type);
+                    }
+                }
+            }
+        }
+        out
+    }
+
     /// Turn a hash-recognized pack entry into a normal provider plan, using
     /// Modrinth's file URL rather than the URL embedded in the pack.
     pub async fn pack_component_plan(
@@ -521,6 +562,21 @@ impl Client {
         destination: &str,
         expected_size: u64,
         loader: &str,
+    ) -> Result<ProviderInstallPlan, Error> {
+        self.pack_component_plan_with_type(recognized, destination, expected_size, loader, None)
+            .await
+    }
+
+    /// Same as [`pack_component_plan`], reusing a pre-fetched project type from
+    /// [`project_types`] when available and falling back to an individual
+    /// `GET /v2/project/{id}` lookup otherwise.
+    pub async fn pack_component_plan_with_type(
+        &self,
+        recognized: &RecognizedFile,
+        destination: &str,
+        expected_size: u64,
+        loader: &str,
+        prefetched_project_type: Option<&str>,
     ) -> Result<ProviderInstallPlan, Error> {
         // `loader` is the Modrinth loader tag of the pack's loader family
         // (`PlatformPin::provider_loader`). A mod must carry exactly that tag,
@@ -541,8 +597,15 @@ impl Client {
         {
             return Err(Error::InvalidRequest);
         }
-        let project = self.project(&recognized.project_id).await?;
-        if content_type(&project.project_type)? != kind
+        let fetched_type;
+        let project_type = match prefetched_project_type {
+            Some(project_type) => project_type,
+            None => {
+                fetched_type = self.project(&recognized.project_id).await?.project_type;
+                &fetched_type
+            }
+        };
+        if content_type(project_type)? != kind
             || recognized.file_size != expected_size
             || (kind == ContentType::Mod
                 && (!recognized.loaders.iter().any(|value| value == loader)

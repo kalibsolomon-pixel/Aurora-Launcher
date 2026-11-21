@@ -669,6 +669,13 @@ impl ClientUpdates {
             }
             None => (None, String::new(), String::new(), false),
         };
+        let changed = self.state.target != target
+            || self.state.instance_name != name
+            || self.state.minecraft_version != minecraft
+            || self.state.applicable != applicable;
+        if !changed {
+            return;
+        }
         self.state.retarget(target, name, minecraft, applicable);
         cx.notify();
     }

@@ -628,35 +628,39 @@ fn capture(path: &Path) -> Result<Option<Evidence>, InstallError> {
     };
     profile("manifest_parse", started, 1, 0);
     let started = std::time::Instant::now();
-    let valid = matches!(super::validate_game_directory(path)?,
-        ValidationOutcome::Installed(validation) if validation.status == ValidationStatus::Valid);
+    let valid = matches!(
+        super::validate_game_directory_with_manifest(path, &manifest)?,
+        ValidationOutcome::Installed(validation) if validation.status == ValidationStatus::Valid
+    );
     profile("manifest_deep_validation", started, files.len(), 0);
     let started = std::time::Instant::now();
     let file_count = files.len();
     let mut total_bytes = 0;
     let mut tree = Sha256::new();
-    let mut buffer = [0u8; 64 * 1024];
-    for file_path in files {
-        let relative = file_path
-            .strip_prefix(path)
-            .map_err(|_| repair("tree containment failed"))?
-            .to_str()
-            .ok_or_else(|| repair("non-Unicode managed tree name"))?
-            .replace('\\', "/");
-        tree.update((relative.len() as u64).to_le_bytes());
-        tree.update(relative.as_bytes());
-        let mut file = File::open(&file_path).map_err(InstallError::Storage)?;
-        let size = file.metadata().map_err(InstallError::Storage)?.len();
-        total_bytes += size;
-        tree.update(size.to_le_bytes());
-        loop {
-            let count = file.read(&mut buffer).map_err(InstallError::Storage)?;
-            if count == 0 {
-                break;
+    crate::integrity::with_hash_buffer(|buffer| -> Result<(), InstallError> {
+        for file_path in &files {
+            let relative = file_path
+                .strip_prefix(path)
+                .map_err(|_| repair("tree containment failed"))?
+                .to_str()
+                .ok_or_else(|| repair("non-Unicode managed tree name"))?
+                .replace('\\', "/");
+            tree.update((relative.len() as u64).to_le_bytes());
+            tree.update(relative.as_bytes());
+            let mut file = File::open(file_path).map_err(InstallError::Storage)?;
+            let size = file.metadata().map_err(InstallError::Storage)?.len();
+            total_bytes += size;
+            tree.update(size.to_le_bytes());
+            loop {
+                let count = file.read(buffer).map_err(InstallError::Storage)?;
+                if count == 0 {
+                    break;
+                }
+                tree.update(&buffer[..count]);
             }
-            tree.update(&buffer[..count]);
         }
-    }
+        Ok(())
+    })?;
     profile("tree_sha256", started, file_count, total_bytes);
     Ok(Some(Evidence {
         installation_id: manifest.installation_id().to_owned(),
@@ -721,12 +725,55 @@ pub(crate) fn cleanup_staging(root: &Path) -> Result<(), InstallError> {
 
 fn sync_tree(path: &Path) -> io::Result<()> {
     let started = std::time::Instant::now();
-    for file in checked_tree(path)? {
-        OpenOptions::new()
-            .read(true)
-            .write(true)
-            .open(file)?
-            .sync_all()?;
+    let files = checked_tree(path)?;
+    let workers = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .min(8)
+        .min(files.len().max(1));
+    if workers <= 1 || files.len() < 8 {
+        for file in files {
+            OpenOptions::new()
+                .read(true)
+                .write(true)
+                .open(file)?
+                .sync_all()?;
+        }
+    } else {
+        use std::sync::Mutex;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let next = AtomicUsize::new(0);
+        let first_error: Mutex<Option<io::Error>> = Mutex::new(None);
+        std::thread::scope(|scope| {
+            for _ in 0..workers {
+                let next = &next;
+                let files = &files;
+                let first_error = &first_error;
+                scope.spawn(move || {
+                    loop {
+                        if first_error.lock().expect("sync error").is_some() {
+                            break;
+                        }
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        if index >= files.len() {
+                            break;
+                        }
+                        let outcome = OpenOptions::new()
+                            .read(true)
+                            .write(true)
+                            .open(&files[index])
+                            .and_then(|file| file.sync_all());
+                        if let Err(error) = outcome {
+                            first_error.lock().expect("sync error").get_or_insert(error);
+                            break;
+                        }
+                    }
+                });
+            }
+        });
+        if let Some(error) = first_error.into_inner().expect("sync error") {
+            return Err(error);
+        }
     }
     #[cfg(unix)]
     {

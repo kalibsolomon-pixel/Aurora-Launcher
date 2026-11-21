@@ -124,7 +124,7 @@ pub(super) async fn release_manifest(
     options: &DownloadOptions,
     template: &AuroraRelease,
 ) -> Result<ReleaseManifest, ClientUpdateError> {
-    let mut response = downloads::build_client(options)
+    let mut response = downloads::build_metadata_client(options)
         .get(RELEASES)
         .header("User-Agent", "Aurora-Launcher")
         .send()

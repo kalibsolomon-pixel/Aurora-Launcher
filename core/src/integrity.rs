@@ -43,7 +43,7 @@ impl Sha512Digest {
     }
 
     pub fn as_hex(&self) -> String {
-        self.0.iter().map(|byte| format!("{byte:02x}")).collect()
+        encode_hex(&self.0)
     }
 
     pub fn as_bytes(&self) -> &[u8; 64] {
@@ -51,10 +51,37 @@ impl Sha512Digest {
     }
 }
 
+/// Encodes raw bytes as canonical lowercase hexadecimal with a single allocation.
+pub(crate) fn encode_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut hex = String::with_capacity(bytes.len() * 2);
+    for &byte in bytes {
+        hex.push(HEX[(byte >> 4) as usize] as char);
+        hex.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    hex
+}
+
 impl fmt::Debug for Sha512Digest {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(formatter, "Sha512Digest({})", self.as_hex())
     }
+}
+
+/// Runs `f` with a reusable per-thread streaming read buffer so hashing
+/// thousands of files never churns the heap.
+pub(crate) fn with_hash_buffer<R>(f: impl FnOnce(&mut [u8]) -> R) -> R {
+    use std::cell::RefCell;
+    thread_local! {
+        static HASH_BUF: RefCell<Vec<u8>> = RefCell::new(vec![0u8; STREAM_CHUNK_BYTES]);
+    }
+    HASH_BUF.with(|cell| {
+        let mut buf = cell.borrow_mut();
+        if buf.len() < STREAM_CHUNK_BYTES {
+            buf.resize(STREAM_CHUNK_BYTES, 0);
+        }
+        f(&mut buf)
+    })
 }
 
 /// Recheck a cache object against both the provider expectation and its
@@ -67,19 +94,32 @@ pub fn verify_file_sha512(
     let _performance_hash = crate::performance::hash();
     use std::io::Read as _;
     let mut file = std::fs::File::open(path).map_err(VerifyFileError::Io)?;
+    if let Some(size) = expected_size {
+        let actual_len = file.metadata().map_err(VerifyFileError::Io)?.len();
+        if actual_len != size {
+            return Err(VerifyFileError::Mismatch(
+                VerificationFailure::SizeMismatch {
+                    expected: size,
+                    actual: actual_len,
+                },
+            ));
+        }
+    }
     let mut sha512 = Sha512::new();
     let mut sha256 = Sha256::new();
     let mut bytes = 0u64;
-    let mut buffer = [0u8; STREAM_CHUNK_BYTES];
-    loop {
-        let count = file.read(&mut buffer).map_err(VerifyFileError::Io)?;
-        if count == 0 {
-            break;
+    with_hash_buffer(|buffer| -> Result<(), VerifyFileError> {
+        loop {
+            let count = file.read(buffer).map_err(VerifyFileError::Io)?;
+            if count == 0 {
+                break;
+            }
+            bytes += count as u64;
+            sha512.update(&buffer[..count]);
+            sha256.update(&buffer[..count]);
         }
-        bytes += count as u64;
-        sha512.update(&buffer[..count]);
-        sha256.update(&buffer[..count]);
-    }
+        Ok(())
+    })?;
     if let Some(size) = expected_size {
         if size != bytes {
             return Err(VerifyFileError::Mismatch(
@@ -95,7 +135,7 @@ pub fn verify_file_sha512(
         return Err(VerifyFileError::Mismatch(
             VerificationFailure::Sha512Mismatch {
                 expected: expected.as_hex(),
-                actual: actual.iter().map(|byte| format!("{byte:02x}")).collect(),
+                actual: encode_hex(&actual),
             },
         ));
     }
@@ -103,7 +143,7 @@ pub fn verify_file_sha512(
 }
 
 /// Read/write chunk size used when streaming files for hashing.
-const STREAM_CHUNK_BYTES: usize = 64 * 1024;
+const STREAM_CHUNK_BYTES: usize = 128 * 1024;
 
 /// A canonical SHA-256 digest of an artifact's exact bytes.
 ///
@@ -626,18 +666,30 @@ pub fn verify_file(
 ) -> Result<u64, VerifyFileError> {
     let _performance_hash = crate::performance::hash();
     let mut file = std::fs::File::open(path).map_err(VerifyFileError::Io)?;
-    let mut verifier = StreamingVerifier::new(expected_size);
-    let mut chunk = vec![0u8; STREAM_CHUNK_BYTES];
-
-    loop {
-        let read = std::io::Read::read(&mut file, &mut chunk).map_err(VerifyFileError::Io)?;
-        if read == 0 {
-            break;
+    if let Some(size) = expected_size {
+        let actual_len = file.metadata().map_err(VerifyFileError::Io)?.len();
+        if actual_len != size {
+            return Err(VerifyFileError::Mismatch(
+                VerificationFailure::SizeMismatch {
+                    expected: size,
+                    actual: actual_len,
+                },
+            ));
         }
-        verifier
-            .update(&chunk[..read])
-            .map_err(VerifyFileError::Mismatch)?;
     }
+    let mut verifier = StreamingVerifier::new(expected_size);
+    with_hash_buffer(|chunk| -> Result<(), VerifyFileError> {
+        loop {
+            let read = std::io::Read::read(&mut file, chunk).map_err(VerifyFileError::Io)?;
+            if read == 0 {
+                break;
+            }
+            verifier
+                .update(&chunk[..read])
+                .map_err(VerifyFileError::Mismatch)?;
+        }
+        Ok(())
+    })?;
 
     verifier.finish(expected).map_err(VerifyFileError::Mismatch)
 }
@@ -654,20 +706,53 @@ pub fn verify_file_sha1(
 ) -> Result<u64, VerifyFileError> {
     let _performance_hash = crate::performance::hash();
     let mut file = std::fs::File::open(path).map_err(VerifyFileError::Io)?;
-    let mut verifier = StreamingSha1Verifier::new(expected_size);
-    let mut chunk = vec![0u8; STREAM_CHUNK_BYTES];
-
-    loop {
-        let read = std::io::Read::read(&mut file, &mut chunk).map_err(VerifyFileError::Io)?;
-        if read == 0 {
-            break;
+    if let Some(size) = expected_size {
+        let actual_len = file.metadata().map_err(VerifyFileError::Io)?.len();
+        if actual_len != size {
+            return Err(VerifyFileError::Mismatch(
+                VerificationFailure::SizeMismatch {
+                    expected: size,
+                    actual: actual_len,
+                },
+            ));
         }
-        verifier
-            .update(&chunk[..read])
-            .map_err(VerifyFileError::Mismatch)?;
     }
+    let mut verifier = StreamingSha1Verifier::new(expected_size);
+    with_hash_buffer(|chunk| -> Result<(), VerifyFileError> {
+        loop {
+            let read = std::io::Read::read(&mut file, chunk).map_err(VerifyFileError::Io)?;
+            if read == 0 {
+                break;
+            }
+            verifier
+                .update(&chunk[..read])
+                .map_err(VerifyFileError::Mismatch)?;
+        }
+        Ok(())
+    })?;
 
     verifier.finish(expected).map_err(VerifyFileError::Mismatch)
+}
+
+/// Computes the raw SHA-256 digest and byte length of a file using the
+/// thread-local streaming read buffer.
+pub(crate) fn sha256_file_bytes(path: &Path) -> std::io::Result<(u64, [u8; 32])> {
+    let _performance_hash = crate::performance::hash();
+    let mut file = std::fs::File::open(path)?;
+    let mut sha256 = Sha256::new();
+    let mut bytes = 0u64;
+    with_hash_buffer(|chunk| -> std::io::Result<()> {
+        loop {
+            let read = std::io::Read::read(&mut file, chunk)?;
+            if read == 0 {
+                break;
+            }
+            bytes += read as u64;
+            sha256.update(&chunk[..read]);
+        }
+        Ok(())
+    })?;
+    Ok((bytes, sha256.finalize().into()))
 }
 
 #[cfg(test)]

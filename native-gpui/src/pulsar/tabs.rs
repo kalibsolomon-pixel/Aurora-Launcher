@@ -174,7 +174,7 @@ pub(super) fn table(t: &AuroraTheme, data: &TableView, narrow: bool) -> Div {
                 .role(Role::Group)
                 .when(
                     row.cells.get("Establishing").is_some_and(|v| v == "true"),
-                    |d| d.bg(t.accent_soft).border_l_2().border_color(t.ring),
+                    |d| d.bg(t.accent_soft).rounded(t.radius),
                 )
                 .aria_label(full.clone())
                 .tooltip(move |_, cx| {

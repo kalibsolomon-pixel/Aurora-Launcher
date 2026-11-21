@@ -1756,6 +1756,10 @@ pub struct Discover {
     queue_busy: bool,
     results_page: usize,
     review_only: bool,
+    project_popup: Option<Entity<project::ProjectWindow>>,
+    project_dialog: DialogHandle,
+    _project_sub: Option<Subscription>,
+    showcase_project_opened: bool,
 }
 
 impl EventEmitter<DiscoverEvent> for Discover {}
@@ -1788,7 +1792,7 @@ impl Discover {
         let review_only = shared_downloads.is_some();
         let diagnostic = host.is_none();
         let (tx, rx) = async_channel::unbounded();
-        let query = cx.new(|cx| InputState::new(window, cx).placeholder("Search Modrinth…"));
+        let query = cx.new(|cx| InputState::new(window, cx).placeholder("Search mods…"));
         let _query_events = cx.subscribe(&query, |this, _, event: &InputEvent, cx| {
             if let InputEvent::PressEnter { .. } = event {
                 this.search(false, cx);
@@ -1843,6 +1847,10 @@ impl Discover {
             queue_busy: false,
             results_page: 0,
             review_only,
+            project_popup: None,
+            project_dialog: DialogHandle::new(false),
+            _project_sub: None,
+            showcase_project_opened: false,
         }
     }
 
@@ -2112,7 +2120,7 @@ impl Discover {
         }
     }
 
-    fn open_details(&mut self, project_id: String, cx: &mut Context<Self>) {
+    fn open_details(&mut self, project_id: String, window: &mut Window, cx: &mut Context<Self>) {
         let Some(project) = self
             .state
             .results
@@ -2121,19 +2129,59 @@ impl Discover {
         else {
             return;
         };
+        let Some(host) = self.host.clone() else {
+            return;
+        };
         let target = self
             .state
             .instances
             .iter()
             .find(|instance| self.state.target.as_ref() == Some(&instance.id))
             .cloned();
-        self.open_project(
-            self.state.kind,
-            project_id,
-            project.title.clone(),
-            target,
-            cx,
+        let image = self.state.artwork.cache.image(&project_id);
+        let review = cx.new(|cx| {
+            Discover::with_downloads(
+                Some(host.clone()),
+                self.rt.clone(),
+                window,
+                cx,
+                Some(self.downloads.clone()),
+            )
+        });
+        let popup = cx.new(|cx| {
+            project::ProjectWindow::embedded(
+                host,
+                self.rt.clone(),
+                self.downloads.clone(),
+                review,
+                project::ProjectTarget {
+                    kind: self.state.kind,
+                    project_id,
+                    title: project.title.clone(),
+                    target,
+                },
+                image,
+                cx,
+            )
+        });
+        let sub = cx.subscribe_in(
+            &popup,
+            window,
+            |this, _, _: &project::ProjectPopupEvent, window, cx| {
+                this.close_project_popup(window, cx);
+            },
         );
+        self.project_popup = Some(popup);
+        self._project_sub = Some(sub);
+        self.project_dialog.open(window, cx);
+        cx.notify();
+    }
+
+    fn close_project_popup(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        self.project_popup = None;
+        self._project_sub = None;
+        self.project_dialog.close(window, cx);
+        cx.notify();
     }
 
     fn review_project_version(
@@ -2481,7 +2529,6 @@ fn text_block(text: &str, color: Hsla, size: Pixels) -> impl IntoElement + use<>
 struct SearchField {
     state: Entity<InputState>,
     label: SharedString,
-    submit: AuroraButton,
 }
 
 impl RenderOnce for SearchField {
@@ -2523,9 +2570,8 @@ impl RenderOnce for SearchField {
             .items_center()
             .gap(px(8.))
             .w_full()
-            .h(px(40.))
-            .pl(px(12.))
-            .pr(px(4.))
+            .h(px(34.))
+            .px(px(12.))
             .rounded(t.radius)
             .bg(t.sunken)
             .border_1()
@@ -2543,7 +2589,6 @@ impl RenderOnce for SearchField {
                     .min_w(px(0.))
                     .child(Input::new(&state)),
             )
-            .child(self.submit)
     }
 }
 
@@ -2551,21 +2596,12 @@ impl RenderOnce for SearchField {
 /// Uniform artwork tile: a rounded `control` well with a hairline border and
 /// the image filling it, so every row reads alike whatever the icon's own
 /// padding or transparency.
-fn field(t: &theme::AuroraTheme, label: &'static str, control: impl IntoElement) -> Div {
+fn field(_t: &theme::AuroraTheme, _label: &'static str, control: impl IntoElement) -> Div {
     div()
         .flex()
-        .flex_col()
         .flex_shrink_0()
         .flex_1()
         .min_w(px(160.))
-        .gap(px(6.))
-        .child(
-            div()
-                .text_size(px(ui::TEXT_CAPTION))
-                .font_weight(FontWeight::MEDIUM)
-                .text_color(t.muted_foreground)
-                .child(label),
-        )
         .child(control)
 }
 
@@ -2585,19 +2621,44 @@ fn segmented(t: &theme::AuroraTheme) -> Div {
 }
 
 /// An inline message: neutral for notes, danger for failures.
+/// Splits any trailing `(internal_code)` suffix into a subtle technical line so
+/// players read clear prose first.
 fn callout(t: &theme::AuroraTheme, icon: &str, text: impl Into<SharedString>, danger: bool) -> Div {
-    let tone = if danger { t.danger } else { t.muted_foreground };
+    let raw: SharedString = text.into();
+    let (headline, _code): (String, Option<String>) =
+        if let Some((body, rest)) = raw.as_ref().rsplit_once(" (") {
+            if let Some(code) = rest.strip_suffix(')') {
+                if !code.is_empty()
+                    && code
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+                {
+                    (body.to_owned(), Some(code.to_owned()))
+                } else {
+                    (raw.to_string(), None)
+                }
+            } else {
+                (raw.to_string(), None)
+            }
+        } else {
+            (raw.to_string(), None)
+        };
+    let tone = if danger {
+        t.warning
+    } else {
+        t.muted_foreground
+    };
     div()
         .flex()
-        .items_start()
-        .gap(px(10.))
-        .px(px(12.))
-        .py(px(10.))
-        .rounded(t.radius)
+        .items_center()
+        .gap(px(12.))
+        .px(px(16.))
+        .py(px(14.))
+        .rounded(t.radius_lg)
         .bg(if danger {
             Hsla {
-                a: 0.10,
-                ..t.danger
+                a: 0.08,
+                ..t.warning
             }
         } else {
             t.control
@@ -2606,24 +2667,20 @@ fn callout(t: &theme::AuroraTheme, icon: &str, text: impl Into<SharedString>, da
         .border_color(if danger {
             Hsla {
                 a: 0.28,
-                ..t.danger
+                ..t.warning
             }
         } else {
             t.border_subtle
         })
-        .child(
-            div()
-                .pt(px(1.))
-                .child(crate::symbols::icon(Some(icon), px(16.), tone)),
-        )
+        .child(ui::icon_tile(t, Some(icon), 38., false))
         .child(
             div()
                 .flex_1()
                 .w(px(0.))
                 .min_w(px(0.))
                 .text_size(px(ui::TEXT_BODY))
-                .text_color(tone)
-                .child(text.into()),
+                .text_color(if danger { t.foreground } else { tone })
+                .child(headline),
         )
 }
 
@@ -2638,6 +2695,7 @@ fn section_label(t: &theme::AuroraTheme, text: impl Into<SharedString>) -> Div {
 
 impl Render for Discover {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.state.artwork.cache.flush_dropped(window);
         let palette = theme::theme(cx).clone();
         let page_size = PAGE_SIZE as usize;
 
@@ -2671,14 +2729,12 @@ impl Render for Discover {
                 .child(details_panel);
         }
 
-        // Project type: a segmented control.
-        const KIND_ICONS: [&str; 4] = ["extension", "palette", "wb_sunny", "inventory_2"];
+        // Project type: clean text-only segmented control.
         let kind_row =
             segmented(&palette).children(KIND_LABELS.iter().enumerate().map(|(index, label)| {
                 AuroraButton::new(("kind", index), *label)
                     .variant(ButtonVariant::Ghost)
                     .size(ButtonSize::Small)
-                    .icon(KIND_ICONS[index])
                     .selected(s.kind == index)
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.choose_kind(index, cx);
@@ -2728,33 +2784,50 @@ impl Render for Discover {
                 })),
             ));
         } else {
-            filters = filters.child(field(
-                &palette,
-                "Target instance",
-                AuroraSelect::new(
-                    "target",
-                    "Target instance",
-                    target_options,
-                    &self.selects.target.trigger,
-                    &self.selects.target.content,
-                    self.selects.target.bounds.clone(),
-                )
-                .full_width()
-                .selected(target_selected)
-                .highlight(self.selects.target.highlight)
-                .open(self.selects.target.open)
-                .on_open_change(cx.processor(|view, open, _window, cx| {
-                    view.set_select_open(SelectSlot::Target, open, cx);
-                }))
-                .on_highlight(cx.processor(|view, index, _window, cx| {
-                    view.set_select_highlight(SelectSlot::Target, index, cx);
-                }))
-                .on_confirm(cx.processor(|view, index, _window, cx| {
-                    if !view.state.instances.is_empty() {
-                        view.choose_target(index, cx);
-                    }
-                })),
-            ));
+            let target_aurora = target_selected
+                .and_then(|idx| s.instances.get(idx))
+                .and_then(|inst| inst.aurora.as_ref())
+                .map(|pin| format!("Aurora Client {}", pin.version));
+            filters = filters.child(
+                div()
+                    .flex()
+                    .flex_shrink_0()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(ui::caption(&palette, "For"))
+                    .child(
+                        div().w(px(154.)).child(
+                            AuroraSelect::new(
+                                "target",
+                                "Target instance",
+                                target_options,
+                                &self.selects.target.trigger,
+                                &self.selects.target.content,
+                                self.selects.target.bounds.clone(),
+                            )
+                            .full_width()
+                            .selected(target_selected)
+                            .highlight(self.selects.target.highlight)
+                            .open(self.selects.target.open)
+                            .on_open_change(cx.processor(|view, open, _window, cx| {
+                                view.set_select_open(SelectSlot::Target, open, cx);
+                            }))
+                            .on_highlight(cx.processor(|view, index, _window, cx| {
+                                view.set_select_highlight(SelectSlot::Target, index, cx);
+                            }))
+                            .on_confirm(cx.processor(
+                                |view, index, _window, cx| {
+                                    if !view.state.instances.is_empty() {
+                                        view.choose_target(index, cx);
+                                    }
+                                },
+                            )),
+                        ),
+                    )
+                    .when_some(target_aurora, |row, label| {
+                        row.child(ui::aurora_badge(&palette, label))
+                    }),
+            );
         }
         let mut category_names = vec!["All categories".to_owned()];
         category_names.extend(s.category_values.iter().map(|v| v.replace('-', " ")));
@@ -2809,40 +2882,37 @@ impl Render for Discover {
             })),
         ));
 
-        let search_row = div().flex_1().min_w(px(0.)).child(SearchField {
+        let search_row = div().flex_1().min_w(px(220.)).child(SearchField {
             state: self.query.clone(),
             label: "Search Modrinth projects; press Enter to search".into(),
-            submit: AuroraButton::new("search", "Search")
-                .accessibility_label("Search Modrinth")
-                .variant(ButtonVariant::Default)
-                .size(ButtonSize::Small)
-                .disabled(s.searching)
-                .on_click(cx.listener(|this, _, _, cx| this.search(false, cx))),
         });
 
         let toolbar = ui::card(&palette)
             .flex_shrink_0()
-            .p(px(12.))
-            .gap(px(12.))
+            .flex_row()
+            .flex_wrap()
+            .items_center()
+            .p(px(10.))
+            .gap(px(10.))
+            .child(search_row)
             .child(
                 div()
                     .flex()
                     .flex_wrap()
                     .items_center()
-                    .gap(px(16.))
-                    .child(kind_row)
-                    .child(div().flex_1().min_w(px(280.)).child(search_row)),
-            )
-            .child(filters);
+                    .gap(px(8.))
+                    .child(filters),
+            );
 
         // Messages: failures are tinted callouts; progress and counts are a
         // quiet caption above the list.
-        let has_notes = s.error.is_some()
+        let error_takes_empty_stage = s.results.is_empty() && !s.searching && s.error.is_some();
+        let has_notes = (s.error.is_some() && !error_takes_empty_stage)
             || s.instances_error.is_some()
             || s.categories_error.is_some()
             || (!s.is_pack() && s.target_busy());
         let mut notes = div().flex().flex_col().gap(px(8.));
-        if let Some(error) = &s.error {
+        if let Some(error) = s.error.as_ref().filter(|_| !error_takes_empty_stage) {
             notes = notes.child(callout(&palette, "error", error.clone(), true));
         }
         if let Some(error) = &s.instances_error {
@@ -2868,87 +2938,181 @@ impl Render for Discover {
             s.summary()
         };
 
-        let mut list = div().flex().flex_col().gap(px(12.)).id("discover-results");
-        let mut cards = artwork::card_grid(artwork::card_columns(window.viewport_size().width));
+        let mut list = div().flex().flex_col().gap(px(14.)).id("discover-results");
+        let available_w = (f32::from(window.viewport_size().width)
+            - crate::navigation::PAGE_CHROME)
+            .min(ui::MAX_CONTENT_WIDTH);
+        let grid_cols = ((available_w + 14.) / 380.).floor().clamp(1., 2.) as u16;
+        let mut cards = div().grid().grid_cols(grid_cols).gap(px(14.)).w_full();
         let total = s.results.len();
         let current_page = self.results_page.min(total.saturating_sub(1) / page_size);
         let start = current_page * page_size;
         let end = (start + page_size).min(total);
         for (index, project) in s.results.iter().enumerate().skip(start).take(page_size) {
             let id = project.project_id.clone();
+            let details_id = id.clone();
             let installed = s.installed.contains(&id);
-            let busy = s.busy_project(&id);
-            let text = div()
+            let showcase_downloading = crate::showcase()
+                && std::env::var_os("AURORA_SHOWCASE_DOWNLOAD_TOAST").is_some()
+                && id == "AANobbMI";
+            let busy = s.busy_project(&id) || showcase_downloading;
+            let hover_card = palette.control_hover;
+            let dl_short = download_label(project.downloads)
+                .trim_end_matches(" downloads")
+                .to_owned();
+            let hover_btn = palette.control_hover;
+            let ring_btn = palette.ring;
+            let summary_clean = word_trim(&project.summary, 62);
+            let meta_line = dl_short;
+            let card_body = gpui_kit::base::Button::new(("discover-card-open", index))
+                .accessibility_label(format!("Details for {}", project.title))
                 .flex()
-                .flex_col()
-                .gap(px(5.))
-                .child(
-                    div()
-                        .text_size(px(ui::TEXT_TITLE - 4.))
-                        .font_weight(FontWeight::SEMIBOLD)
-                        .text_color(palette.foreground)
-                        .child(project.title.clone()),
-                )
-                .child(ui::caption(
-                    &palette,
-                    format!("{} · {}", project.author, download_label(project.downloads)),
-                ))
-                .child(
-                    div()
-                        .overflow_hidden()
-                        .line_clamp(3)
-                        .text_size(px(ui::TEXT_BODY))
-                        .line_height(px(19.))
-                        .text_color(palette.muted_foreground)
-                        .child(project.summary.clone()),
-                );
-            let actions = div()
-                .flex()
-                .flex_wrap()
-                .justify_end()
+                .flex_1()
                 .items_center()
-                .gap(px(8.))
+                .gap(px(14.))
+                .min_w(px(0.))
+                .p(px(4.))
+                .m(px(-4.))
+                .rounded(palette.radius)
+                .hover(move |s| s.bg(hover_card))
                 .child(
-                    AuroraButton::new(("details", index), "Details")
-                        .accessibility_label(format!("Details for {}", project.title))
-                        .icon("open_in_new")
-                        .size(ButtonSize::Small)
-                        .on_click({
-                            let id = id.clone();
-                            cx.listener(move |this, _, _, cx| this.open_details(id.clone(), cx))
+                    div()
+                        .flex_none()
+                        .p(px(3.))
+                        .rounded(px(12.))
+                        .bg(palette.sunken)
+                        .border_1()
+                        .border_color(palette.border_subtle)
+                        .child(artwork::tile(
+                            ("art", index),
+                            s.artwork.cache.image(&project.project_id),
+                            &artwork::letter(&project.title),
+                            px(58.),
+                            &palette,
+                        )),
+                )
+                .child(
+                    div()
+                        .flex()
+                        .flex_col()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .gap(px(4.))
+                        .child(
+                            div()
+                                .flex()
+                                .items_baseline()
+                                .gap(px(8.))
+                                .w_full()
+                                .min_w(px(0.))
+                                .child(
+                                    div()
+                                        .min_w(px(0.))
+                                        .overflow_hidden()
+                                        .truncate()
+                                        .text_size(px(ui::TEXT_SECTION))
+                                        .line_height(px(20.))
+                                        .font_weight(FontWeight::SEMIBOLD)
+                                        .text_color(palette.foreground)
+                                        .child(project.title.clone()),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_shrink_0()
+                                        .items_center()
+                                        .gap(px(3.))
+                                        .child(crate::symbols::icon(
+                                            Some("download"),
+                                            px(14.),
+                                            palette.muted_foreground,
+                                        ))
+                                        .child(ui::caption(&palette, meta_line)),
+                                ),
+                        )
+                        .when(!summary_clean.is_empty(), |col| {
+                            col.child(
+                                div()
+                                    .w_full()
+                                    .min_w(px(0.))
+                                    .pb(px(1.))
+                                    .line_height(px(18.))
+                                    .text_size(px(ui::TEXT_CAPTION))
+                                    .text_color(palette.muted_foreground)
+                                    .child(summary_clean),
+                            )
                         }),
                 )
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    this.open_details(details_id.clone(), window, cx);
+                }));
+            let action = div()
+                .flex()
+                .flex_shrink_0()
+                .items_center()
                 .when(busy, |row| {
-                    row.child(ui::status_badge(&palette, "Installing…", ui::Tone::Neutral))
+                    row.child(ui::status_badge(&palette, "Installing…", ui::Tone::Accent))
                 })
                 .when(!s.is_pack() && !busy && installed, |row| {
-                    row.child(ui::status_badge(&palette, "Installed", ui::Tone::Success))
+                    row.child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_center()
+                            .size(px(36.))
+                            .rounded_full()
+                            .bg(gpui::Hsla {
+                                a: 0.14,
+                                ..palette.success
+                            })
+                            .child(crate::symbols::icon(
+                                Some("check_circle"),
+                                px(18.),
+                                palette.success,
+                            )),
+                    )
                 })
                 .when(!s.is_pack() && !busy && !installed, |row| {
                     row.child(
-                        AuroraButton::new(("install", index), "Install")
+                        gpui_kit::base::Button::new(("install", index))
                             .accessibility_label(format!("Install {}", project.title))
-                            .size(ButtonSize::Small)
-                            .variant(ButtonVariant::Soft)
-                            .icon("download")
                             .disabled(s.target.is_none())
+                            .flex()
+                            .flex_none()
+                            .items_center()
+                            .justify_center()
+                            .size(px(36.))
+                            .rounded_full()
+                            .bg(palette.accent_soft)
+                            .border_1()
+                            .border_color(gpui::Hsla {
+                                a: 0.36,
+                                ..palette.ring
+                            })
+                            .hover(move |s| s.bg(hover_btn))
+                            .focus_visible(move |s| s.border_color(ring_btn))
+                            .child(crate::symbols::icon(
+                                Some("download"),
+                                px(18.),
+                                palette.foreground,
+                            ))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.quick_install(id.clone(), cx);
                             })),
                     )
                 });
-            cards = cards.child(artwork::project_card(
-                &palette,
-                artwork::tile(
-                    ("art", index),
-                    s.artwork.cache.image(&project.project_id),
-                    &artwork::letter(&project.title),
-                    px(artwork::CARD_ART_SIDE),
-                    &palette,
-                ),
-                text,
-                actions,
-            ));
+            cards = cards.child(
+                ui::card(&palette)
+                    .flex_row()
+                    .items_center()
+                    .justify_between()
+                    .w_full()
+                    .min_w(px(0.))
+                    .p(px(14.))
+                    .gap(px(12.))
+                    .child(card_body)
+                    .child(action),
+            );
         }
         list = list.child(cards);
         if total > 0 {
@@ -3012,7 +3176,57 @@ impl Render for Discover {
                     "Matching projects will appear here in a moment.",
                 )
                 .into_any_element()
-            } else if s.error.is_none() {
+            } else if let Some(err) = &s.error {
+                let is_verify = err.contains("aurora_installation_invalid");
+                let title = if is_verify {
+                    "Instance needs verification"
+                } else {
+                    "Could not load Modrinth"
+                };
+                let friendly = if is_verify {
+                    "Verify or reinstall Aurora Client on this instance to browse compatible mods."
+                        .to_owned()
+                } else {
+                    err.rsplit_once(" (")
+                        .and_then(|(head, rest)| {
+                            rest.strip_suffix(')').and_then(|code| {
+                                (!code.is_empty()
+                                    && code.bytes().all(|b| {
+                                        b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_'
+                                    }))
+                                .then_some(head)
+                            })
+                        })
+                        .unwrap_or(err.as_str())
+                        .to_owned()
+                };
+                ui::empty_state(&palette, "explore", title, friendly)
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .justify_center()
+                            .gap(px(8.))
+                            .pt(px(6.))
+                            .child(
+                                AuroraButton::new("discover-retry-empty", "Try again")
+                                    .variant(ButtonVariant::Soft)
+                                    .icon("refresh")
+                                    .on_click(cx.listener(|this, _, _, cx| this.search(false, cx))),
+                            )
+                            .when(!s.is_pack(), |row| {
+                                row.child(
+                                    AuroraButton::new("discover-browse-packs", "Browse Modpacks")
+                                        .variant(ButtonVariant::Default)
+                                        .icon("inventory_2")
+                                        .on_click(
+                                            cx.listener(|this, _, _, cx| this.choose_kind(3, cx)),
+                                        ),
+                                )
+                            }),
+                    )
+                    .into_any_element()
+            } else {
                 ui::empty_state(
                     &palette,
                     "search",
@@ -3020,13 +3234,50 @@ impl Render for Discover {
                     "Try another search, or relax the category filter.",
                 )
                 .into_any_element()
-            } else {
-                div().into_any_element()
             }
         } else {
             list.into_any_element()
         };
 
+        if !self.showcase_project_opened
+            && self.project_popup.is_none()
+            && crate::showcase()
+            && !self.state.results.is_empty()
+        {
+            if let Ok(wanted) = std::env::var("AURORA_SHOWCASE_DISCOVER_PROJECT") {
+                let target_id = self
+                    .state
+                    .results
+                    .iter()
+                    .find(|p| {
+                        p.project_id.eq_ignore_ascii_case(&wanted)
+                            || p.title.eq_ignore_ascii_case(&wanted)
+                    })
+                    .or_else(|| self.state.results.first())
+                    .map(|p| p.project_id.clone());
+                if let Some(pid) = target_id {
+                    self.showcase_project_opened = true;
+                    self.open_details(pid, window, cx);
+                }
+            }
+        }
+        let s = &self.state;
+        let project_modal = self.project_popup.as_ref().map(|popup| {
+            let popup = popup.clone();
+            let view = cx.entity();
+            Dialog::new(cx)
+                .handle(self.project_dialog.clone())
+                .open(true)
+                .accessibility_label("Project details")
+                .close_on_backdrop_press(true)
+                .on_open_change(move |open, _, window, cx| {
+                    if !open {
+                        view.update(cx, |this, cx| this.close_project_popup(window, cx));
+                    }
+                })
+                .backdrop(div().absolute().size_full().bg(gpui::rgba(0x000000d4)))
+                .popup(popup)
+        });
         let page = div()
             .w_full()
             .min_w(px(0.))
@@ -3037,27 +3288,29 @@ impl Render for Discover {
             .child(
                 div()
                     .flex()
+                    .flex_wrap()
                     .flex_shrink_0()
-                    .items_start()
+                    .items_center()
                     .justify_between()
-                    .gap(px(16.))
-                    .child(ui::page_header(
-                        &palette,
-                        "Discover",
-                        Some(
-                            "Browse mods, resource packs, shaders and modpacks from Modrinth"
-                                .into(),
-                        ),
-                    ))
-                    .when(s.return_request().is_some(), |page| {
-                        page.child(
-                            AuroraButton::new("return-to-instance", "Back to instance")
-                                .icon("arrow_back")
-                                .on_click(cx.listener(|this, _, _, cx| {
-                                    this.return_to_instance(cx);
-                                })),
-                        )
-                    }),
+                    .gap(px(14.))
+                    .child(ui::page_header(&palette, "Discover", None))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .gap(px(10.))
+                            .child(kind_row)
+                            .when(s.return_request().is_some(), |row| {
+                                row.child(
+                                    AuroraButton::new("return-to-instance", "Back to instance")
+                                        .icon("arrow_back")
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.return_to_instance(cx);
+                                        })),
+                                )
+                            }),
+                    ),
             )
             .child(toolbar)
             .child(
@@ -3085,7 +3338,65 @@ impl Render for Discover {
             .flex_shrink_0()
             .child(page)
             .child(details_panel)
+            .children(project_modal)
     }
+}
+
+/// Trims a Modrinth summary cleanly on a word boundary so Discover cards never clip mid-word.
+fn word_trim(text: &str, max_chars: usize) -> String {
+    let clean = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if clean.chars().count() <= max_chars {
+        return clean;
+    }
+    let mut out = String::new();
+    for word in clean.split(' ') {
+        let next_len = if out.is_empty() {
+            word.chars().count()
+        } else {
+            out.chars().count() + 1 + word.chars().count()
+        };
+        if next_len > max_chars.saturating_sub(1) {
+            break;
+        }
+        if !out.is_empty() {
+            out.push(' ');
+        }
+        out.push_str(word);
+    }
+    if out.is_empty() {
+        out = clean.chars().take(max_chars.saturating_sub(1)).collect();
+    }
+    let mut trimmed =
+        out.trim_end_matches(|c: char| matches!(c, ',' | '.' | ';' | ':' | '-' | '—'));
+    while let Some((head, tail)) = trimmed.rsplit_once(' ') {
+        if matches!(
+            tail.to_ascii_lowercase().as_str(),
+            "a" | "an"
+                | "and"
+                | "are"
+                | "as"
+                | "at"
+                | "be"
+                | "by"
+                | "for"
+                | "from"
+                | "in"
+                | "is"
+                | "of"
+                | "on"
+                | "or"
+                | "that"
+                | "the"
+                | "to"
+                | "with"
+        ) {
+            trimmed =
+                head.trim_end_matches(|c: char| matches!(c, ',' | '.' | ';' | ':' | '-' | '—'));
+        } else {
+            break;
+        }
+    }
+    format!("{trimmed}…")
 }
 
 impl Discover {
