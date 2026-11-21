@@ -1,4 +1,5 @@
 //! Deterministic port of the frozen recording analytics. Reports are never read here.
+pub(crate) mod breakdown;
 mod combos;
 mod dominance;
 pub(crate) mod format;
@@ -296,6 +297,7 @@ pub(crate) struct Analytics {
     pub derived: Value,
     pub combos: Combos,
     pub dominance: Dominance,
+    pub breakdown: breakdown::Breakdown,
 }
 pub(crate) fn analyze(original: &FightRecord) -> Analytics {
     let events = canonical_events(original);
@@ -618,11 +620,13 @@ pub(crate) fn analyze(original: &FightRecord) -> Analytics {
         summary["opponentComboAvailability"] = "Unavailable".into();
     }
     let derived = json!({"summary":summary,"hits":hits,"misses":misses,"readiness":readiness,"timings":timings,"reachBinSize":0.5,"hitReachBins":hit_bins,"missReachBins":miss_bins,"cooldownBins":cooldown_bins,"intervals":intervals,"comboLengths":combos.streaks.iter().filter(|s|s.local).map(|s|s.seqs.len()).collect::<Vec<_>>(),"placement":{"center":center,"edge":edge,"high":high,"low":low},"momentum":momentum(f,&hits,&incoming_times),"incoming":incoming_times,"jumps":jumps,"jumpsWithoutDamage":jumps_without,"motionSamples":events.iter().filter(|e|e.kind=="MOTION").count(),"sprintTransitions":events.iter().filter(|e|e.kind=="SPRINT").count(),"schema":f.schema_version,"resolution":resolution(f),"interpretations":interpretations,"combos":combos.payload(original),"combatExchanges":active,"exchangeTimeoutSeconds":f.statistics.exchange_timeout_seconds,"dominance":dominance.payload(),"shields":shield_payload,"incomingDetail":incoming.rows,"damageCauses":damage_causes,"timingSamples":timing_samples,"attemptOutcomes":outcomes.iter().map(|(k,v)|(k.to_string(),v)).collect::<BTreeMap<_,_>>(),"reach":reach,"aim":aim,"jumpEffect":incoming::jump_effect(&incoming.rows),"jumpWindowTicks":f.policy().jump_window_ticks,"boundaries":boundaries});
+    let breakdown = breakdown::analyze(f, &events, &derived, &combos, &dominance);
     Analytics {
         events,
         derived,
         combos,
         dominance,
+        breakdown,
     }
 }
 

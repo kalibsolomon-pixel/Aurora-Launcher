@@ -167,7 +167,17 @@ pub(crate) fn tabs(
     weapon: &Option<String>,
     timing_result: &Option<String>,
 ) -> (TabView, TabView, TabView, TabView) {
-    tabs_value(f, &a.derived, weapon, timing_result)
+    let (mut overview, mut offense, mut defense, mut flow) =
+        tabs_value(f, &a.derived, weapon, timing_result);
+    analytics::breakdown::apply_to_tabs(
+        &a.breakdown,
+        &mut overview,
+        &mut offense,
+        &mut defense,
+        &mut flow,
+        table,
+    );
+    (overview, offense, defense, flow)
 }
 fn tabs_value(
     f: &FightRecord,
@@ -1594,9 +1604,23 @@ pub(crate) fn pool(
         defense.tables = latest_tabs.2.tables;
         defense.charts = latest_tabs.2.charts;
         flow.metrics.extend(pooled_flow_metrics(entries, timelines));
+        analytics::breakdown::apply_pooled(
+            timelines,
+            &mut overview,
+            &mut offense,
+            &mut defense,
+            &mut flow,
+        );
         offense.notices.push("Distributions include loaded timelines only; counts and sufficient-stat rates include all selected recordings.".into());
         return (overview, offense, defense, flow);
     }
+    analytics::breakdown::apply_pooled(
+        timelines,
+        &mut overview,
+        &mut offense,
+        &mut defense,
+        &mut flow,
+    );
     (overview, offense, defense, flow)
 }
 pub(crate) fn pooled_flow_metrics(
