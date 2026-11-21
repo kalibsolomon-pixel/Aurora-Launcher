@@ -353,6 +353,8 @@ pub struct InstanceConfigurationDto {
     pub fullscreen: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preferred_account_id: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ephemera_enabled: Option<bool>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -380,6 +382,7 @@ impl InstanceConfigurationDto {
             java: configuration.java().cloned(),
             fullscreen: configuration.fullscreen(),
             preferred_account_id: configuration.preferred_account_id().map(str::to_owned),
+            ephemera_enabled: configuration.ephemera_enabled(),
         }
     }
 
@@ -400,6 +403,7 @@ impl InstanceConfigurationDto {
         configuration.set_java(self.java);
         configuration.set_fullscreen(self.fullscreen);
         configuration.set_preferred_account_id(self.preferred_account_id);
+        configuration.set_ephemera_enabled(self.ephemera_enabled);
         Ok(configuration)
     }
 }
@@ -2463,6 +2467,8 @@ pub struct CreateInstanceRequest {
     minecraft_version: String,
     loader: crate::instances::settings::LoaderConfiguration,
     aurora_enabled: Option<bool>,
+    #[serde(default)]
+    ephemera_enabled: Option<bool>,
 }
 
 fn creation_aurora_choice(
@@ -2534,6 +2540,9 @@ pub async fn create_instance(
         configuration.loader(),
         request.aurora_enabled,
     ));
+    if configuration.aurora_enabled() {
+        configuration.set_ephemera_enabled(request.ephemera_enabled);
+    }
     let endpoints = if configuration.aurora_enabled() {
         let manifest = crate::updates::client::fetch_current_manifest(
             &managed_paths,
@@ -2569,6 +2578,77 @@ pub async fn create_instance(
         InstanceFaults::default(),
     )
     .await?;
+
+    // Optional managed Ephemera bundling: best-effort after Aurora installs,
+    // never blocking instance creation if offline or no Ephemera release exists
+    // for this Minecraft line.
+    if record.installed().aurora.is_some()
+        && record.configuration().ephemera_enabled().unwrap_or(true)
+    {
+        if let Some(loader_version) = record.installed().platform.version() {
+            let aurora_pin = record.installed().aurora.as_ref().expect("aurora pin");
+            let java_major = endpoints
+                .release_manifest()
+                .resolve_environment(
+                    &aurora_pin.version,
+                    Some(aurora_pin.channel),
+                    &record.installed().minecraft_version,
+                )
+                .map(|r| r.java().major_version())
+                .unwrap_or(25);
+            match crate::distribution::ephemera::discover_for_minecraft(
+                &managed_paths,
+                endpoints.download_options(),
+                &record.installed().minecraft_version,
+                loader_version,
+                java_major,
+            )
+            .await
+            {
+                Ok(Some(ephemera_release)) => {
+                    match crate::aurora::install_managed_ephemera(
+                        &managed_paths,
+                        record.id(),
+                        &ephemera_release,
+                        endpoints.download_options(),
+                    )
+                    .await
+                    {
+                        Ok(crate::aurora::EphemeraInstallOutcome::Installed(installed)) => {
+                            eprintln!(
+                                "[aurora-launcher] bundled Ephemera {} into instance '{}'",
+                                installed.version(),
+                                record.id()
+                            );
+                        }
+                        Ok(crate::aurora::EphemeraInstallOutcome::SkippedConflict {
+                            conflicting_mod,
+                        }) => {
+                            eprintln!(
+                                "[aurora-launcher] skipped Ephemera bundling on '{}': conflicting mod '{}'",
+                                record.id(),
+                                conflicting_mod
+                            );
+                        }
+                        Ok(crate::aurora::EphemeraInstallOutcome::SkippedExisting) => {}
+                        Err(error) => {
+                            eprintln!(
+                                "[aurora-launcher] skipped Ephemera bundling on '{}': {error}",
+                                record.id()
+                            );
+                        }
+                    }
+                }
+                Ok(None) => {}
+                Err(error) => {
+                    eprintln!(
+                        "[aurora-launcher] Ephemera discovery unavailable while creating '{}': {error}",
+                        record.id()
+                    );
+                }
+            }
+        }
+    }
 
     eprintln!(
         "[aurora-launcher] created instance '{}' (Minecraft {}, platform {}, Aurora configured: {})",
@@ -2704,6 +2784,187 @@ pub async fn apply_aurora_transition(
     )
     .await?;
     Ok(InstanceSummary::from_record(&record))
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct EphemeraStatusRequest {
+    instance_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct SetInstanceEphemeraRequest {
+    instance_id: String,
+    enabled: bool,
+}
+
+/// Returns the read-only launcher-managed Ephemera status for one instance.
+pub fn get_instance_ephemera_status(
+    app: Host,
+    request: EphemeraStatusRequest,
+) -> Result<crate::aurora::EphemeraStatus, CommandError> {
+    let managed = managed_paths(&app)?;
+    let id = crate::instances::InstanceId::new(request.instance_id)?;
+    let registry = InstanceRegistry::load(&managed.instance_registry_file())?;
+    if registry.find(&id).is_none() {
+        return Err(CommandError::new(
+            "instance_not_found",
+            "Instance not found.",
+        ));
+    }
+    crate::aurora::ephemera_status(&managed, &id)
+        .map_err(|error| CommandError::new("ephemera_status_failed", error.to_string()))
+}
+
+/// Installs or removes launcher-managed Ephemera for one ready Aurora instance.
+pub async fn set_instance_ephemera(
+    app: Host,
+    request: SetInstanceEphemeraRequest,
+) -> Result<crate::aurora::EphemeraStatus, CommandError> {
+    let managed = managed_paths(&app)?;
+    let id = crate::instances::InstanceId::new(request.instance_id)?;
+    if crate::launch::process::snapshot(id.as_str())
+        .status
+        .blocks_launch()
+    {
+        return Err(CommandError::new(
+            "instance_running",
+            "Quit Minecraft before changing Ephemera.",
+        ));
+    }
+
+    let registry_path = managed.instance_registry_file();
+    let record = InstanceRegistry::load(&registry_path)?
+        .find(&id)
+        .cloned()
+        .ok_or_else(|| CommandError::new("instance_not_found", "Instance not found."))?;
+    if record.state() != crate::instances::InstanceState::Ready {
+        return Err(CommandError::new(
+            "instance_not_ready",
+            "Finish installing the instance before changing Ephemera.",
+        ));
+    }
+    let Some(aurora_pin) = record.installed().aurora.as_ref() else {
+        return Err(CommandError::new(
+            "ephemera_requires_aurora",
+            "Install Aurora Client on this instance before bundling Ephemera.",
+        ));
+    };
+    let loader_version = record
+        .installed()
+        .platform
+        .require_fabric()
+        .map_err(|reason| CommandError::new("ephemera_requires_fabric", reason))?;
+
+    if request.enabled {
+        if let Some(conflict) =
+            crate::aurora::conflicting_renderer_mod(&managed, &id).map_err(|error| {
+                CommandError::new("ephemera_conflict_check_failed", error.to_string())
+            })?
+        {
+            return Err(CommandError::new(
+                "ephemera_conflict",
+                format!(
+                    "Ephemera cannot run alongside {conflict}. Disable or remove {conflict} in Mods first."
+                ),
+            ));
+        }
+        let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
+            .map_err(|e| CommandError::new("aurora_manifest_invalid", e.to_string()))?;
+        let merged =
+            crate::aurora::merged_release_manifest(&managed, &id, endpoints.release_manifest())
+                .map_err(|e| CommandError::new("aurora_manifest_invalid", e.to_string()))?;
+        let java_major = merged
+            .resolve_environment(
+                &aurora_pin.version,
+                Some(aurora_pin.channel),
+                &record.installed().minecraft_version,
+            )
+            .map(|r| r.java().major_version())
+            .unwrap_or(25);
+        let release = crate::distribution::ephemera::discover_for_minecraft(
+            &managed,
+            endpoints.download_options(),
+            &record.installed().minecraft_version,
+            loader_version,
+            java_major,
+        )
+        .await
+        .map_err(|error| CommandError::new(error.code(), error.message()))?
+        .ok_or_else(|| {
+            CommandError::new(
+                "ephemera_unavailable",
+                format!(
+                    "No published Ephemera release supports Minecraft {} yet.",
+                    record.installed().minecraft_version
+                ),
+            )
+        })?;
+        if crate::launch::process::snapshot(id.as_str())
+            .status
+            .blocks_launch()
+        {
+            return Err(CommandError::new(
+                "instance_running",
+                "Quit Minecraft before changing Ephemera.",
+            ));
+        }
+        match crate::aurora::install_managed_ephemera(
+            &managed,
+            &id,
+            &release,
+            endpoints.download_options(),
+        )
+        .await
+        .map_err(|error| CommandError::new("ephemera_install_failed", error.to_string()))?
+        {
+            crate::aurora::EphemeraInstallOutcome::Installed(_) => {}
+            crate::aurora::EphemeraInstallOutcome::SkippedConflict { conflicting_mod } => {
+                return Err(CommandError::new(
+                    "ephemera_conflict",
+                    format!(
+                        "Ephemera cannot run alongside {conflicting_mod}. Disable or remove {conflicting_mod} in Mods first."
+                    ),
+                ));
+            }
+            crate::aurora::EphemeraInstallOutcome::SkippedExisting => {
+                return Err(CommandError::new(
+                    "ephemera_already_installed",
+                    "An existing Ephemera JAR is already installed in Mods.",
+                ));
+            }
+        }
+    } else {
+        let _process_guard = crate::launch::process::lock_stopped(id.as_str()).map_err(|_| {
+            CommandError::new(
+                "instance_running",
+                "Quit Minecraft before changing Ephemera.",
+            )
+        })?;
+        crate::aurora::remove_managed_ephemera(&managed, &id)
+            .map_err(|error| CommandError::new("ephemera_remove_failed", error.to_string()))?;
+    }
+
+    {
+        let _process_guard = crate::launch::process::lock_stopped(id.as_str()).map_err(|_| {
+            CommandError::new(
+                "instance_running",
+                "Quit Minecraft before changing Ephemera.",
+            )
+        })?;
+        let _guard = crate::instances::lifecycle::registry_lock();
+        let mut registry = InstanceRegistry::load(&registry_path)?;
+        if let Some(stored) = registry.find_mut(&id) {
+            let mut config = stored.configuration().clone();
+            config.set_ephemera_enabled(Some(request.enabled));
+            stored.set_configuration(config);
+            registry.save(&registry_path)?;
+        }
+    }
+
+    crate::aurora::ephemera_status(&managed, &id)
+        .map_err(|error| CommandError::new("ephemera_status_failed", error.to_string()))
 }
 
 /// One lifecycle progress event payload; the game installer's item progress

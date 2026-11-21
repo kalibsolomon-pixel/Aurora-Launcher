@@ -464,6 +464,8 @@ enum Reply {
     Validation(api::ApiResult<api::InstanceValidation>),
     Advice(u64, String, api::ApiResult<api::MemoryAdvice>),
     Runtime(u64, String, api::ApiResult<api::RuntimeStatus>),
+    Ephemera(u64, String, api::ApiResult<api::EphemeraStatus>),
+    EphemeraUpdated(api::ApiResult<api::EphemeraStatus>),
     Icons(u64, String, Vec<symbols::Symbol>),
     IconSaved(api::ApiResult<BTreeMap<String, String>>),
     Java(String, api::ApiResult<api::JavaReport>),
@@ -550,6 +552,8 @@ pub struct InstanceEditor {
     memory_hint: Option<String>,
     runtime_serial: u64,
     runtime_text: Option<String>,
+    ephemera_serial: u64,
+    ephemera_status: Option<api::EphemeraStatus>,
     /// The icon picker: bounded, off-thread search over the bundled symbols.
     icon_query: Entity<InputState>,
     icon_open: bool,
@@ -660,6 +664,8 @@ impl InstanceEditor {
             memory_hint: None,
             runtime_serial: 0,
             runtime_text: None,
+            ephemera_serial: 0,
+            ephemera_status: None,
             icon_query,
             icon_open: false,
             icon_serial: 0,
@@ -869,6 +875,34 @@ impl InstanceEditor {
                     self.selected.as_deref(),
                 ) {
                     self.runtime_text = Some(runtime_status_text(&result));
+                }
+            }
+            Reply::Ephemera(serial, instance, result) => {
+                if read_reply_current(
+                    serial,
+                    self.ephemera_serial,
+                    &instance,
+                    self.selected.as_deref(),
+                ) {
+                    self.ephemera_status = result.ok();
+                }
+            }
+            Reply::EphemeraUpdated(result) => {
+                self.busy = false;
+                match result {
+                    Ok(status) => {
+                        self.message = if status.installed {
+                            format!(
+                                "Ephemera {} installed.",
+                                status.version.as_deref().unwrap_or("")
+                            )
+                        } else {
+                            "Ephemera removed from this instance.".into()
+                        };
+                        self.ephemera_status = Some(status);
+                        cx.emit(InstanceEditorEvent::Changed);
+                    }
+                    Err(e) => self.message = error(e),
                 }
             }
             Reply::Icons(serial, query, results) => {
@@ -1221,6 +1255,7 @@ impl InstanceEditor {
         self.forget_reads();
         self.icon_open = false;
         self.load_advice();
+        self.load_ephemera();
         let c = instance.configuration;
         self.fullscreen = c.fullscreen;
         self.preferred_account = c.preferred_account_id.clone();
@@ -1252,8 +1287,10 @@ impl InstanceEditor {
     fn forget_reads(&mut self) {
         self.advice_serial += 1;
         self.runtime_serial += 1;
+        self.ephemera_serial += 1;
         self.memory_hint = None;
         self.runtime_text = None;
+        self.ephemera_status = None;
     }
     /// Memory advice is read when an instance is opened, never per keystroke.
     fn load_advice(&mut self) {
@@ -1281,6 +1318,38 @@ impl InstanceEditor {
             let r = guarded(api::runtime_status(host, id.clone())).await;
             let _ = tx.send(Reply::Runtime(serial, id, r)).await;
         });
+    }
+    fn load_ephemera(&mut self) {
+        let (Some(host), Some(id)) = (self.host.clone(), self.selected.clone()) else {
+            return;
+        };
+        self.ephemera_serial += 1;
+        let serial = self.ephemera_serial;
+        let tx = self.tx.clone();
+        self.runtime.spawn(async move {
+            let r = guarded(api::ephemera_status(host, id.clone())).await;
+            let _ = tx.send(Reply::Ephemera(serial, id, r)).await;
+        });
+    }
+    fn set_ephemera(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        if self.busy {
+            return;
+        }
+        let (Some(host), Some(id)) = (self.host.clone(), self.selected.clone()) else {
+            return;
+        };
+        self.busy = true;
+        self.message = if enabled {
+            "Installing Ephemera…".into()
+        } else {
+            "Removing Ephemera…".into()
+        };
+        let tx = self.tx.clone();
+        self.runtime.spawn(async move {
+            let r = guarded(api::set_ephemera(host, id, enabled)).await;
+            let _ = tx.send(Reply::EphemeraUpdated(r)).await;
+        });
+        cx.notify();
     }
     fn stored_icon(&self) -> Option<&str> {
         icon_for(&self.state.as_ref()?.icons, self.selected.as_deref()?)
@@ -2503,7 +2572,37 @@ impl Render for InstanceEditor {
                     !trimmed.is_empty() && trimmed != inst.display_name
                 });
                 let aurora_view = this.clone();
+                let ephemera_view = this.clone();
                 let icon_view = this.clone();
+                let ephemera_installed = self
+                    .ephemera_status
+                    .as_ref()
+                    .is_some_and(|status| status.installed);
+                let ephemera_conflict = self
+                    .ephemera_status
+                    .as_ref()
+                    .and_then(|status| status.conflicting_mod.clone());
+                let ephemera_note = if !installed {
+                    "Requires Aurora Client on Fabric".to_owned()
+                } else if let Some(conflict) = &ephemera_conflict {
+                    format!("Auto-skipped: {conflict} is installed")
+                } else if let Some(status) = &self.ephemera_status {
+                    match status.status.as_str() {
+                        "active" => format!(
+                            "Ephemera {} active",
+                            status.version.as_deref().unwrap_or("")
+                        ),
+                        "disabled" => format!(
+                            "Ephemera {} disabled in Mods",
+                            status.version.as_deref().unwrap_or("")
+                        ),
+                        "modified" => "Modified externally; inspect in Mods".to_owned(),
+                        "missing" => "File missing; reinstall or remove".to_owned(),
+                        _ => "Not installed — optional rendering engine for Aurora".to_owned(),
+                    }
+                } else {
+                    "Checking status…".to_owned()
+                };
                 panel = panel.child(form_card(
                     &t,
                     card_head(&t, None, "General", None, None),
@@ -2578,6 +2677,34 @@ impl Render for InstanceEditor {
                                 )
                                 .on_click(move |_, _, cx| {
                                     aurora_view.update(cx, |v, cx| v.review_aurora(!installed, cx));
+                                })
+                                .into_any_element(),
+                            ),
+                            (
+                                "Ephemera Engine",
+                                Some(ephemera_note),
+                                AuroraButton::new(
+                                    "editor-ephemera",
+                                    if ephemera_installed {
+                                        "Remove"
+                                    } else {
+                                        "Install"
+                                    },
+                                )
+                                .variant(if ephemera_installed {
+                                    ButtonVariant::DangerSubtle
+                                } else {
+                                    ButtonVariant::Soft
+                                })
+                                .disabled(
+                                    busy || !installed
+                                        || self.selected_instance().is_some_and(needs_install)
+                                        || (!ephemera_installed && ephemera_conflict.is_some()),
+                                )
+                                .on_click(move |_, _, cx| {
+                                    ephemera_view.update(cx, |v, cx| {
+                                        v.set_ephemera(!ephemera_installed, cx)
+                                    });
                                 })
                                 .into_any_element(),
                             ),

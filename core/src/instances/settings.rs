@@ -97,6 +97,10 @@ pub struct InstanceConfiguration {
     /// Optional preferred Microsoft account UUID for launching this instance.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     preferred_account_id: Option<String>,
+    /// Optional preference for bundling the managed Ephemera rendering engine
+    /// alongside Aurora Client (`None` defaults to enabled on compatible instances).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    ephemera_enabled: Option<bool>,
 }
 
 fn is_false(value: &bool) -> bool {
@@ -269,6 +273,7 @@ impl Default for InstanceConfiguration {
             java: None,
             fullscreen: false,
             preferred_account_id: None,
+            ephemera_enabled: None,
         }
     }
 }
@@ -303,6 +308,7 @@ impl InstanceConfiguration {
             java: None,
             fullscreen: false,
             preferred_account_id: None,
+            ephemera_enabled: None,
         }
     }
 
@@ -342,6 +348,12 @@ impl InstanceConfiguration {
     }
     pub fn set_aurora_enabled(&mut self, enabled: bool) {
         self.aurora_enabled = enabled;
+    }
+    pub fn ephemera_enabled(&self) -> Option<bool> {
+        self.ephemera_enabled
+    }
+    pub fn set_ephemera_enabled(&mut self, enabled: Option<bool>) {
+        self.ephemera_enabled = enabled;
     }
     pub fn matches_installed(&self, installed: &super::platform::InstalledConfiguration) -> bool {
         self.minecraft_version == installed.minecraft_version

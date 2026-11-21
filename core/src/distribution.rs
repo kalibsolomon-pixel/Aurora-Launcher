@@ -21,6 +21,7 @@ use url::Url;
 
 use crate::downloads::is_loopback_host;
 
+pub mod ephemera;
 pub mod github;
 
 /// The only release-manifest schema version this launcher understands.
@@ -390,6 +391,20 @@ pub struct ReleaseArtifact {
 }
 
 impl ReleaseArtifact {
+    pub(crate) fn new(
+        url: String,
+        sha256: String,
+        size_bytes: Option<u64>,
+    ) -> Result<Self, String> {
+        let artifact = Self {
+            url,
+            sha256,
+            size_bytes,
+        };
+        artifact.validate()?;
+        Ok(artifact)
+    }
+
     pub fn url(&self) -> &str {
         &self.url
     }

@@ -416,6 +416,12 @@ pub fn preview(
                     result.remove.push(file);
                 }
             }
+            if let Some(ephemera) = state.ephemera() {
+                result.retain.push(from_artifact(
+                    ephemera.artifact(),
+                    "Retained former launcher ownership: Ephemera remains user controllable in Mods",
+                ));
+            }
             if inventory.entries.iter().any(|entry| {
                 entry.metadata.as_ref().is_some_and(|meta| {
                     meta.id != "aurora" && meta.depends.iter().any(|dep| dep.mod_id == "aurora")

@@ -126,6 +126,7 @@ pub struct InstanceCreator {
     busy: bool,
     snapshots: bool,
     aurora: bool,
+    ephemera: bool,
     versions: Vec<api::MinecraftVersion>,
     releases: Vec<api::AuroraRelease>,
     minecraft_selected: bool,
@@ -184,6 +185,7 @@ impl InstanceCreator {
             busy: false,
             snapshots: false,
             aurora: false,
+            ephemera: true,
             versions: vec![],
             releases: vec![],
             minecraft_selected: false,
@@ -495,6 +497,7 @@ impl InstanceCreator {
             self.minecraft_selected = true;
             self.message = "Creating instance…".into();
             let aurora = self.aurora;
+            let ephemera = aurora.then_some(self.ephemera);
             let tx = self.tx.clone();
             self.runtime.spawn(async move {
                 let value = loader(&choice);
@@ -504,6 +507,7 @@ impl InstanceCreator {
                     choice.minecraft,
                     value,
                     aurora,
+                    ephemera,
                 ))
                 .await;
                 let _ = tx.send(Reply::Created(r)).await;
@@ -874,7 +878,7 @@ impl Render for InstanceCreator {
                     ),
                 )
                 .child(
-                    setting(&t, "Install Aurora", Some(aurora_note.into()), true).child(
+                    setting(&t, "Install Aurora", Some(aurora_note.into()), !self.aurora).child(
                         AuroraToggle::new("creator-aurora")
                             .label("Install Aurora")
                             .checked(self.aurora)
@@ -890,7 +894,33 @@ impl Render for InstanceCreator {
                                 });
                             }),
                     ),
-                ),
+                )
+                .when(self.aurora, |group| {
+                    let ephemera_view = view.clone();
+                    group.child(
+                        setting(
+                            &t,
+                            "Bundle Ephemera Engine",
+                            Some(
+                                "Optional Vulkan/OpenGL rendering engine for Aurora (auto-skipped if Sodium or Iris is added)."
+                                    .into(),
+                            ),
+                            true,
+                        )
+                        .child(
+                            AuroraToggle::new("creator-ephemera")
+                                .label("Bundle Ephemera Engine")
+                                .checked(self.ephemera)
+                                .disabled(busy)
+                                .on_change(move |checked, _, _, cx| {
+                                    ephemera_view.update(cx, |v, cx| {
+                                        v.ephemera = checked;
+                                        cx.notify();
+                                    });
+                                }),
+                        ),
+                    )
+                }),
         );
         if !self.message.is_empty() {
             panel = panel.child(
