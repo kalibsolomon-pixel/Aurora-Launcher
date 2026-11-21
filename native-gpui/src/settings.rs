@@ -839,6 +839,12 @@ impl Settings {
     pub fn refresh(&mut self, cx: &mut Context<Self>) {
         self.load_reads(cx);
     }
+
+    pub fn select_section(&mut self, section: usize, cx: &mut Context<Self>) {
+        self.section = section.min(3);
+        cx.notify();
+    }
+
     pub fn appearance(&self) -> Option<&api::Appearance> {
         self.appearance.appearance()
     }
@@ -1956,8 +1962,8 @@ fn control_slot(child: impl IntoElement) -> Div {
 
 /// A settings card: rows run inside it separated by hairlines.
 fn section_card(t: &theme::AuroraTheme) -> Div {
-    // Rows carry their own vertical padding, so the card's bottom is trimmed.
-    ui::card(t).gap(px(0.)).pb(px(6.))
+    // Rows carry their own vertical padding, so the card's top and bottom are trimmed evenly.
+    ui::card(t).gap(px(0.)).py(px(6.))
 }
 
 /// The card's title (and caption) on the left, optional actions on the right.
@@ -2053,20 +2059,14 @@ impl Render for Settings {
             }
         }
 
-        let mut page = div()
+        let page = div()
             .id("settings-content")
             .flex()
             .flex_col()
             .gap(px(ui::PAGE_GAP))
             .w_full()
             .text_color(palette.foreground)
-            .child(ui::page_header(
-                t,
-                "Settings",
-                Some(
-                    "Personalize Aurora, connect Discord and keep the launcher up to date.".into(),
-                ),
-            ));
+            .child(ui::page_header(t, "Settings", None));
 
         if no_host {
             return page.child(ui::empty_state(
@@ -2077,38 +2077,70 @@ impl Render for Settings {
             ));
         }
 
-        let mut tabs = div()
+        use gpui_kit::prelude::FluentBuilder as _;
+        let narrow_split = window.viewport_size().width < px(860.);
+        let mut category_nav = div()
             .flex()
-            .flex_wrap()
-            .items_center()
-            .gap(px(2.))
-            .p(px(2.))
-            .rounded(t.radius)
-            .bg(t.sunken)
-            .border_1()
-            .border_color(t.border_subtle);
+            .when(narrow_split, |d| d.flex_wrap().gap(px(6.)).w_full())
+            .when(!narrow_split, |d| {
+                d.flex_col().flex_none().w(px(156.)).gap(px(4.))
+            });
         for (index, label) in [
-            "Appearance",
-            "Discord",
-            "Desktop",
-            "Updates & About",
-            "Game",
-        ]
-        .into_iter()
-        .enumerate()
-        {
-            tabs = tabs.child(
-                AuroraButton::new(("settings-section", index), label)
-                    .variant(ButtonVariant::Ghost)
-                    .selected(self.section == index)
-                    .notification(index == 3 && self.updates_pending)
-                    .disabled(
-                        index != 3
-                            && self
-                                .client_updates
-                                .as_ref()
-                                .is_some_and(|updates| updates.read(cx).is_busy()),
+            (0usize, "Appearance"),
+            (3, "Updates"),
+            (1, "Discord"),
+            (2, "Desktop"),
+            (4, "Game"),
+        ] {
+            let selected = self.section == index;
+            let dot = index == 3 && self.updates_pending;
+            let disabled = index != 3
+                && self
+                    .client_updates
+                    .as_ref()
+                    .is_some_and(|updates| updates.read(cx).is_busy());
+            let ring = palette.ring;
+            let hover_bg = palette.control_hover;
+            category_nav = category_nav.child(
+                gpui_kit::base::Button::new(("settings-section", index))
+                    .aria_label(label)
+                    .selected(selected)
+                    .disabled(disabled)
+                    .relative()
+                    .flex()
+                    .items_center()
+                    .h(px(38.))
+                    .px(px(12.))
+                    .rounded(palette.radius)
+                    .border_1()
+                    .border_color(if selected {
+                        gpui::Hsla {
+                            a: 0.38,
+                            ..palette.ring
+                        }
+                    } else {
+                        gpui::transparent_black()
+                    })
+                    .when(selected, |b| b.bg(palette.accent_soft))
+                    .hover(move |s| s.bg(hover_bg))
+                    .focus_visible(move |s| s.border_1().border_color(ring))
+                    .child(
+                        div()
+                            .flex_1()
+                            .text_size(px(ui::TEXT_BODY))
+                            .font_weight(if selected {
+                                gpui_kit::FontWeight::SEMIBOLD
+                            } else {
+                                gpui_kit::FontWeight::MEDIUM
+                            })
+                            .text_color(if selected {
+                                palette.foreground
+                            } else {
+                                palette.muted_foreground
+                            })
+                            .child(label),
                     )
+                    .when(dot, |b| b.child(ui::update_dot(t)))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.cancel_previews(cx);
                         this.section = index;
@@ -2116,18 +2148,18 @@ impl Render for Settings {
                     })),
             );
         }
-        page = page.child(div().flex().child(tabs));
+        let mut panel = div()
+            .flex()
+            .flex_col()
+            .gap(px(ui::PAGE_GAP))
+            .flex_1()
+            .min_w(px(0.));
         if self.section == 0 {
             // --- Appearance ----------------------------------------------------
             {
                 let appearance = self.appearance.appearance();
                 let has_motion = self.appearance.motion_speed().is_some();
-                let mut card = section_card(t).child(card_header(
-                    t,
-                    "Appearance",
-                    Some("How the launcher looks and moves.".into()),
-                    div(),
-                ));
+                let mut card = section_card(t);
 
                 let theme_options = appearance
                     .map(|a| {
@@ -2139,24 +2171,19 @@ impl Render for Settings {
                     .unwrap_or_default();
                 let theme_selected =
                     appearance.and_then(|a| a.themes.iter().position(|t| t.id == a.theme));
-                card = card.child(
-                    ui::setting_row(
-                        t,
-                        "Theme",
-                        Some("The color scheme of every surface.".into()),
-                        false,
-                    )
-                    .child(control_slot(self.select(
+                card = card.child(ui::setting_row(t, "Theme", None, false).child(control_slot(
+                    self.select(
                         Choice::Theme,
                         "Theme",
                         theme_options,
                         theme_selected,
                         busy,
                         weak.clone(),
-                    ))),
-                );
+                    ),
+                )));
 
-                // Accent: the presets, then the custom swatch that opens the picker.
+                // Accent: curated non-status hues (preserving any already-saved preset)
+                // plus a clean text-first "Custom" trigger without rainbow chrome.
                 let accents = appearance.map(|a| a.accents.clone()).unwrap_or_default();
                 let selected = self.accent_selected();
                 let (custom_color, custom_chosen) = self.custom_accent();
@@ -2169,8 +2196,13 @@ impl Render for Settings {
                     .justify_start()
                     .gap(px(8.));
                 for (ix, accent) in accents.iter().enumerate() {
-                    let color = parse_hex_color(&accent.hex).unwrap_or(palette.accent);
                     let chosen = selected == Some(ix);
+                    let curated =
+                        matches!(accent.id.as_str(), "violet" | "blue" | "cyan" | "neutral");
+                    if !curated && !chosen {
+                        continue;
+                    }
+                    let color = parse_hex_color(&accent.hex).unwrap_or(palette.accent);
                     let accent_id = accent.id.clone();
                     swatches = swatches.child(
                         gpui_kit::base::Button::new(("accent", ix))
@@ -2179,20 +2211,16 @@ impl Render for Settings {
                             .disabled(busy)
                             .flex()
                             .items_center()
-                            .gap(px(8.))
-                            .h(px(32.))
-                            .px(px(10.))
-                            .rounded(palette.radius)
+                            .justify_center()
+                            .size(px(30.))
+                            .rounded_full()
                             .bg(palette.control)
-                            .border_1()
+                            .border_2()
                             .border_color(if chosen { ring } else { palette.border_subtle })
-                            .text_size(px(ui::TEXT_BODY))
-                            .text_color(palette.foreground)
-                            .focus(move |style| style.border_color(ring).border_2())
+                            .focus(move |style| style.border_color(ring))
                             .hover(move |style| style.border_color(ring))
                             .styles(|styles| styles.disabled(|style| style.opacity(0.45)))
-                            .child(div().size(px(14.)).rounded_full().bg(color))
-                            .child(accent.label.clone())
+                            .child(div().size(px(16.)).rounded_full().bg(color))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.save_appearance(
                                     accent_edit(
@@ -2204,6 +2232,12 @@ impl Render for Settings {
                     );
                 }
                 let custom_selected = custom_chosen || picker_open;
+                let mut custom_btn = div().flex().items_center().gap(px(6.));
+                if let Some(color) = custom_color {
+                    custom_btn = custom_btn.child(div().size(px(10.)).rounded_full().bg(color));
+                }
+                custom_btn = custom_btn.child("Custom");
+                let hover_custom = palette.control_hover;
                 swatches = swatches.child(
                     gpui_kit::base::Button::new("accent-custom")
                         .aria_label("Custom accent color")
@@ -2211,32 +2245,31 @@ impl Render for Settings {
                         .disabled(appearance.is_none())
                         .flex()
                         .items_center()
-                        .gap(px(8.))
-                        .h(px(32.))
-                        .px(px(10.))
-                        .rounded(palette.radius)
-                        .bg(palette.control)
+                        .justify_center()
+                        .h(px(30.))
+                        .px(px(12.))
+                        .rounded_full()
+                        .bg(if custom_selected {
+                            palette.accent_soft
+                        } else {
+                            palette.control
+                        })
                         .border_1()
                         .border_color(if custom_selected {
-                            ring
+                            palette.ring
                         } else {
                             palette.border_subtle
                         })
-                        .text_size(px(ui::TEXT_BODY))
-                        .text_color(palette.foreground)
-                        .focus(move |style| style.border_color(ring).border_2())
-                        .hover(move |style| style.border_color(ring))
-                        .child(match custom_color {
-                            Some(color) => div()
-                                .size(px(14.))
-                                .rounded_full()
-                                .bg(color)
-                                .into_any_element(),
-                            // No custom color yet: an add affordance, not a gray swatch.
-                            None => crate::symbols::icon(Some("add"), px(16.), palette.ring)
-                                .into_any_element(),
+                        .text_size(px(ui::TEXT_CAPTION))
+                        .font_weight(gpui_kit::FontWeight::MEDIUM)
+                        .text_color(if custom_selected {
+                            palette.foreground
+                        } else {
+                            palette.muted_foreground
                         })
-                        .child("Custom…")
+                        .focus(move |style| style.border_color(ring))
+                        .hover(move |style| style.bg(hover_custom))
+                        .child(custom_btn)
                         .on_click(cx.listener(|this, _, window, cx| {
                             if this.picker.is_some() {
                                 this.picker_cancel(cx);
@@ -2245,18 +2278,7 @@ impl Render for Settings {
                             }
                         })),
                 );
-                card = card.child(
-                    ui::setting_row(
-                        t,
-                        "Accent",
-                        Some("Used for selection, focus and primary actions.".into()),
-                        false,
-                    )
-                    .flex_col()
-                    .items_start()
-                    .gap(px(12.))
-                    .child(swatches),
-                );
+                card = card.child(ui::setting_row(t, "Accent", None, false).child(swatches));
                 if let Some(picker) = &self.picker {
                     card = card.child(
                         div()
@@ -2276,38 +2298,26 @@ impl Render for Settings {
                         .position(|background| *background == a.background)
                         .unwrap_or(0)
                 });
-                card = card.child(
-                    ui::setting_row(
-                        t,
-                        "Background",
-                        background_selected.map(|index| BACKGROUND_DESCRIPTIONS[index].into()),
-                        !has_motion,
-                    )
-                    .child(control_slot(self.select(
+                card = card.child(ui::setting_row(t, "Background", None, !has_motion).child(
+                    control_slot(self.select(
                         Choice::Background,
                         "Background",
                         BACKGROUND_LABELS.map(SharedString::from).to_vec(),
                         background_selected,
                         busy || appearance.is_none(),
                         weak.clone(),
-                    ))),
-                );
+                    )),
+                ));
 
                 // Motion speed: a live preview while dragging, one write on
                 // release. Only offered with a valid snapshot, never fabricated
                 // from malformed or unavailable state.
                 if has_motion {
-                    let accelerated = *self
+                    let _ = *self
                         .accelerated
                         .get_or_insert_with(|| borealis::host_accelerated(window));
                     card = card.child(
-                        ui::setting_row(
-                            t,
-                            "Motion speed",
-                            Some(motion_detail(accelerated).into()),
-                            false,
-                        )
-                        .child(
+                        ui::setting_row(t, "Motion speed", None, false).child(
                             control_slot(
                                 div().w_full().child(
                                     AuroraSlider::new(&self.motion_slider, "Motion speed")
@@ -2341,13 +2351,7 @@ impl Render for Settings {
                 // parity and follows the same effective value as the slider.
                 if let Some(reduced) = self.appearance.reduce_motion() {
                     card = card.child(
-                        ui::setting_row(
-                            t,
-                            "Reduce motion",
-                            Some("Stops transitions and Borealis motion.".into()),
-                            true,
-                        )
-                        .child(control_slot(
+                        ui::setting_row(t, "Reduce motion", None, true).child(control_slot(
                             AuroraToggle::new("reduce-motion")
                                 .label("Reduce motion")
                                 .checked(reduced)
@@ -2365,7 +2369,35 @@ impl Render for Settings {
                 if let Some(error) = self.appearance.error() {
                     card = card.child(card_error(t, error.to_string()));
                 }
-                page = page.child(card);
+                panel = panel.child(card).child(
+                    ui::card(t)
+                        .flex_row()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(16.))
+                        .px(px(20.))
+                        .py(px(14.))
+                        .child(ui::caption(
+                            t,
+                            format!(
+                                "Aurora Launcher {} · Built for Aurora Client",
+                                env!("CARGO_PKG_VERSION")
+                            ),
+                        ))
+                        .child(ui::status_badge(
+                            t,
+                            if self.updates_pending {
+                                "Update available"
+                            } else {
+                                "Up to date"
+                            },
+                            if self.updates_pending {
+                                ui::Tone::Accent
+                            } else {
+                                ui::Tone::Success
+                            },
+                        )),
+                );
             }
         }
         if self.section == 1 {
@@ -2544,7 +2576,7 @@ impl Render for Settings {
                 if let Some(error) = &self.discord_error {
                     card = card.child(card_error(t, error.clone()));
                 }
-                page = page.child(card);
+                panel = panel.child(card);
             }
         }
         if self.section == 2 {
@@ -2648,61 +2680,54 @@ impl Render for Settings {
                 if let Some(error) = &self.desktop_error {
                     card = card.child(card_error(t, error.clone()));
                 }
-                page = page.child(card);
+                panel = panel.child(card);
             }
         }
         if self.section == 4 {
             let weak = cx.entity().downgrade();
-            page = page.child(
+            panel = panel.child(
                 section_card(t)
-                    .child(card_header(
-                        t,
-                        "Game launch",
-                        Some("Read game output in a separate window.".into()),
-                        div(),
-                    ))
+                    .child(card_header(t, "Game launch", None, div()))
                     .child(
-                        ui::setting_row(
-                            t,
-                            "Show game log window when launching",
-                            Some("Off by default. Game log remains available next to Play.".into()),
-                            true,
-                        )
-                        .child(control_slot(
-                            AuroraToggle::new("show-game-log")
-                                .label("Show game log window when launching")
-                                .checked(self.show_game_log.unwrap_or(false))
-                                .disabled(
-                                    no_host
-                                        || self.log_preference_busy
-                                        || self.show_game_log.is_none(),
-                                )
-                                .on_change(move |show, _, _, app| {
-                                    let _ = weak.update(app, |this, cx| {
-                                        let Some(host) = this.host.clone() else {
-                                            return;
-                                        };
-                                        this.log_preference_busy = true;
-                                        this.request_read(
-                                            cx,
-                                            api::game_log_preference(host, Some(show)),
-                                            |this, result, cx| {
-                                                this.log_preference_busy = false;
-                                                match result {
-                                                    Ok(show) => this.show_game_log = Some(show),
-                                                    Err(e) => this.desktop_error = Some(e.message),
-                                                }
-                                                cx.notify();
-                                            },
-                                        );
-                                        cx.notify();
-                                    });
-                                }),
-                        )),
+                        ui::setting_row(t, "Show game log when launching", None, true).child(
+                            control_slot(
+                                AuroraToggle::new("show-game-log")
+                                    .label("Show game log window when launching")
+                                    .checked(self.show_game_log.unwrap_or(false))
+                                    .disabled(
+                                        no_host
+                                            || self.log_preference_busy
+                                            || self.show_game_log.is_none(),
+                                    )
+                                    .on_change(move |show, _, _, app| {
+                                        let _ = weak.update(app, |this, cx| {
+                                            let Some(host) = this.host.clone() else {
+                                                return;
+                                            };
+                                            this.log_preference_busy = true;
+                                            this.request_read(
+                                                cx,
+                                                api::game_log_preference(host, Some(show)),
+                                                |this, result, cx| {
+                                                    this.log_preference_busy = false;
+                                                    match result {
+                                                        Ok(show) => this.show_game_log = Some(show),
+                                                        Err(e) => {
+                                                            this.desktop_error = Some(e.message)
+                                                        }
+                                                    }
+                                                    cx.notify();
+                                                },
+                                            );
+                                            cx.notify();
+                                        });
+                                    }),
+                            ),
+                        ),
                     ),
             );
             if let Some(error) = &self.desktop_error {
-                page = page.child(card_error(t, error.clone()));
+                panel = panel.child(card_error(t, error.clone()));
             }
         }
         if self.section == 3 {
@@ -2759,37 +2784,40 @@ impl Render for Settings {
                 if let Some(error) = &self.updates_error {
                     card = card.child(card_error(t, error.clone()));
                 }
-                page = page.child(card);
+                panel = panel.child(card);
             }
         }
         if self.section == 3 {
             if let Some(updates) = &self.client_updates {
-                page = page.child(updates.clone());
+                panel = panel.child(updates.clone());
             }
             // --- About ---------------------------------------------------------
-            page = page.child(
+            panel = panel.child(
                 ui::card(t).child(
                     div()
                         .flex()
                         .items_center()
                         .gap(px(14.))
-                        .child(ui::icon_tile(t, Some("rocket_launch"), 40., true))
+                        .child(ui::icon_tile(t, Some("rocket_launch"), 44., true))
                         .child(ui::title_block(
                             t,
                             format!("Aurora Launcher {}", env!("CARGO_PKG_VERSION")),
-                            Some(
-                                format!(
-                                    "Released under the {} license.",
-                                    env!("CARGO_PKG_LICENSE")
-                                )
-                                .into(),
-                            ),
+                            Some(format!("{} license", env!("CARGO_PKG_LICENSE")).into()),
                         )),
                 ),
             );
         }
 
-        page
+        page.child(
+            div()
+                .flex()
+                .when(narrow_split, |d| d.flex_col())
+                .items_start()
+                .gap(px(20.))
+                .w_full()
+                .child(category_nav)
+                .child(panel),
+        )
     }
 }
 

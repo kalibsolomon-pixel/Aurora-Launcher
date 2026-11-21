@@ -213,10 +213,22 @@ struct MediaView {
     sessions: usize,
     art: Option<Arc<RenderImage>>,
     art_raw: Option<ArtRaw>,
+    retired: Vec<Arc<RenderImage>>,
 }
 impl MediaView {
     fn clear(&mut self) {
+        let mut retired = std::mem::take(&mut self.retired);
+        if let Some(old) = self.art.take() {
+            retired.push(old);
+        }
         *self = Self::default();
+        self.retired = retired;
+    }
+
+    fn flush_dropped(&mut self, window: &mut Window) {
+        for image in self.retired.drain(..) {
+            let _ = window.drop_image(image);
+        }
     }
 
     fn apply(&mut self, snapshot: &Snapshot) {
@@ -239,12 +251,17 @@ impl MediaView {
     fn set_art(&mut self, art: &Option<ArtRaw>) {
         match art {
             None => {
-                self.art = None;
+                if let Some(old) = self.art.take() {
+                    self.retired.push(old);
+                }
                 self.art_raw = None;
             }
             Some(raw) => {
                 if self.art_raw.as_ref().is_some_and(|last| last == raw) {
                     return;
+                }
+                if let Some(old) = self.art.take() {
+                    self.retired.push(old);
                 }
                 self.art = images::rgba_image(raw.width, raw.height, raw.bytes.clone());
                 self.art_raw = Some(raw.clone());
@@ -587,7 +604,8 @@ impl MediaLayout {
 }
 
 impl Render for Media {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.core.view.flush_dropped(window);
         let palette = theme(cx).clone();
         let core = &self.core;
         let entity = cx.entity();

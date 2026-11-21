@@ -138,18 +138,13 @@ pub async fn upload_game_log(
         .or_else(|_| std::env::var("USER"))
         .ok();
     let upload = logs::UploadRequest::build(&snapshot, home.as_deref(), username.as_deref());
-    crate::downloads::ensure_rustls_crypto_provider();
-    let client = reqwest::Client::builder()
-        .redirect(reqwest::redirect::Policy::none())
-        .connect_timeout(std::time::Duration::from_secs(10))
-        .timeout(std::time::Duration::from_secs(30))
-        .build()
-        .map_err(|_| {
-            CommandError::new(
-                "game_log_upload_failed",
-                "The upload client could not be created.",
-            )
-        })?;
+    let client = crate::downloads::build_direct_client(
+        Some(std::time::Duration::from_secs(10)),
+        None,
+        Some(std::time::Duration::from_secs(30)),
+        false,
+        true,
+    );
     logs::upload_using(upload, &client, |request| async {
         let mut response = client
             .execute(request)

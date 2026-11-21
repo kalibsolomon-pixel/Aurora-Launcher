@@ -6,7 +6,7 @@ const W: usize = 320;
 const H: usize = 440;
 pub const WIDTH: u32 = W as u32;
 pub const HEIGHT: u32 = H as u32;
-pub const DEFAULT_YAW: f32 = -0.42;
+pub const DEFAULT_YAW: f32 = -0.38;
 #[derive(Clone, Copy, Default, Debug)]
 struct P {
     x: f32,
@@ -322,13 +322,13 @@ fn mesh(modern: bool, slim: bool, layers: bool, cape: bool) -> Mesh {
             10.,
             16.,
             1.,
-            P::new(0., -8., 3.),
+            P::new(0., -8., 2.6),
             0,
             0,
             // Minecraft's cape box faces opposite the body: the 1,1 face is
-            // the outward artwork; 12,1 is the lining. Reverse the local
-            // pitch too so the bottom still hangs behind the shoulders.
-            -12.,
+            // the outward artwork; 12,1 is the lining. A slight -2 deg pitch
+            // hangs cleanly from Back view without poking out from Front 3/4.
+            -2.,
             180.,
             false,
             0.,

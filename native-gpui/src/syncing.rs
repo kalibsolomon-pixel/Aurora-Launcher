@@ -52,6 +52,7 @@ mod group;
 
 pub enum SyncingEvent {
     Changed,
+    OpenInstances,
 }
 impl EventEmitter<SyncingEvent> for Syncing {}
 
@@ -1114,22 +1115,19 @@ impl Render for Syncing {
         }
         self.sync_inputs(window, cx);
 
+        let _ = (
+            !self.group.active(),
+            self.policy.draft.as_ref().is_some_and(|d| !d.enabled),
+        );
+
         let mut root = div()
             .flex()
             .flex_col()
             .gap(px(16.))
-            // Bound intrinsic text widths to the actual content viewport.
-            .w((window.viewport_size().width - px(crate::navigation::PAGE_CHROME)).max(px(560.)))
+            .w_full()
             .min_w(px(0.))
             .text_color(palette.foreground)
-            .child(ui::page_header(
-                t,
-                "Sync",
-                Some(
-                    "Keep game settings, packs and controls identical across the instances you choose."
-                        .into(),
-                ),
-            ));
+            .child(ui::page_header(t, "Sync", None));
 
         if self.host.is_none() {
             return root.child(ui::empty_state(
@@ -1176,59 +1174,100 @@ impl Render for Syncing {
             } else {
                 ui::Tone::Neutral
             };
+            let dormant_clean = !enabled
+                && !self.policy.dirty
+                && !self.edit_off_choices
+                && self.conflicts.is_empty();
+            let count = self.instances.as_ref().map_or(0, |s| s.instances.len());
             root = root.child(
                 section_card(t)
-                    .pb(px(20.))
+                    .pb(px(18.))
                     .child(
-                        ui::setting_row(
-                            t,
-                            "Sync shared files between instances",
-                            Some(
-                                if enabled {
-                                    "Selected instances automatically share the categories below."
-                                } else {
-                                    "Turned off. Nothing is synced until you turn it on."
-                                }
-                                .into(),
-                            ),
-                            true,
-                        )
-                        .py(px(0.))
-                        .child(
-                            div()
-                                .flex()
-                                .flex_shrink_0()
-                                .items_center()
-                                .gap(px(16.))
-                                .when(enabled, |state| {
-                                    state.child(ui::status_badge(t, status_label, status_tone))
-                                })
-                                .child(
-                                    AuroraToggle::new("sync-enabled")
-                                        .label("Sync selected instances automatically")
-                                        .checked(enabled)
-                                        .disabled(editing_disabled)
-                                        .on_change({
-                                            let view = view.clone();
-                                            move |next: bool, _, _, cx| {
-                                                view.update(cx, |this, cx| {
-                                                    this.set_enabled(next, cx)
-                                                });
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(16.))
+                            .child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(14.))
+                                    .flex_1()
+                                    .min_w(px(0.))
+                                    .child(ui::title_block(
+                                        t,
+                                        "File sync",
+                                        Some(
+                                            if enabled {
+                                                "Sharing chosen categories across selected instances"
+                                            } else {
+                                                "Sync chosen files across selected instances"
                                             }
-                                        }),
-                                ),
-                        ),
+                                            .into(),
+                                        ),
+                                    )),
+                            )
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_shrink_0()
+                                    .items_center()
+                                    .gap(px(12.))
+                                    .when(enabled, |state| {
+                                        state.child(ui::status_badge(t, status_label, status_tone))
+                                    })
+                                    .child(
+                                        AuroraToggle::new("sync-enabled")
+                                            .label("Sync selected instances automatically")
+                                            .checked(enabled)
+                                            .disabled(editing_disabled)
+                                            .on_change({
+                                                let view = view.clone();
+                                                move |next: bool, _, _, cx| {
+                                                    view.update(cx, |this, cx| {
+                                                        this.set_enabled(next, cx)
+                                                    });
+                                                }
+                                            }),
+                                    ),
+                            ),
                     )
-                    .when(!status_text.trim().is_empty(), |card| {
+                    .when(dormant_clean, |card| {
                         card.child(
                             div()
-                                .pt(px(12.))
+                                .mt(px(12.))
+                                .pt(px(10.))
+                                .border_t_1()
+                                .border_color(t.border_subtle)
+                                .child(ui::caption(
+                                    t,
+                                    if count > 0 {
+                                        format!(
+                                            "{count} {} available",
+                                            if count == 1 { "instance" } else { "instances" }
+                                        )
+                                    } else {
+                                        "No instances available yet".to_owned()
+                                    },
+                                )),
+                        )
+                    })
+                    .when(enabled && !status_text.trim().is_empty(), |card| {
+                        card.child(
+                            div()
+                                .pt(px(10.))
                                 .text_size(px(ui::TEXT_CAPTION))
                                 .text_color(palette.muted_foreground)
                                 .child(status_text),
                         )
                     }),
             );
+
+            // Narrower progression: while File sync is Off and clean, stop here.
+            if dormant_clean {
+                return root;
+            }
 
             // Category choices can be drafted while sync is off. Instance and
             // path controls retain their existing master-switch dependency.

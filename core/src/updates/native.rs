@@ -13,7 +13,7 @@ use super::launcher::UPDATER_PUBKEY;
 use super::launcher::{LauncherUpdateError as Error, LauncherUpdateStatus};
 use super::{LauncherPhase, UpdateAvailability};
 use crate::host::Host;
-use crate::integrity::{ArtifactDigest, verify_file};
+use crate::integrity::ArtifactDigest;
 
 // Proposed discovery location only. No ref is initialized or published by a
 // build. Both owner-supplied compile-time opt-in and the existing trust key are
@@ -180,31 +180,43 @@ pub fn verify_offer(bytes: &[u8], public_key: &str, installed: &str) -> Result<O
     Ok(offer)
 }
 
-/// Rehash and stream-verify the exact file, including the authenticated filename.
+/// Rehash and stream-verify the exact file, including the authenticated filename,
+/// in a single streaming read pass.
 pub fn verify_installer(path: &Path, offer: &Offer, public_key: &str) -> Result<(), Error> {
+    use sha2::{Digest as _, Sha256};
+
     let metadata = std::fs::symlink_metadata(path).map_err(|_| failure())?;
-    if !metadata.is_file() || redirected(&metadata) {
+    if !metadata.is_file() || redirected(&metadata) || metadata.len() != offer.size_bytes {
         return Err(failure());
     }
-    verify_file(
-        path,
-        &ArtifactDigest::parse(&offer.sha256).map_err(|_| failure())?,
-        Some(offer.size_bytes),
-    )
-    .map_err(|_| failure())?;
+    let expected_sha256 = ArtifactDigest::parse(&offer.sha256).map_err(|_| failure())?;
     let public_key = key(public_key)?;
     let signature = signature(&offer.installer_signature)?;
     let mut verifier = public_key
         .verify_stream(&signature)
         .map_err(|_| failure())?;
+    let mut sha256 = Sha256::new();
     let mut file = std::fs::File::open(path).map_err(|_| failure())?;
-    let mut buffer = [0u8; 65536];
-    loop {
-        let count = file.read(&mut buffer).map_err(|_| failure())?;
-        if count == 0 {
-            break;
+    let mut total_bytes = 0u64;
+    crate::integrity::with_hash_buffer(|buffer| -> Result<(), Error> {
+        loop {
+            let count = file.read(buffer).map_err(|_| failure())?;
+            if count == 0 {
+                break;
+            }
+            let slice = &buffer[..count];
+            total_bytes = total_bytes.checked_add(count as u64).ok_or_else(failure)?;
+            sha256.update(slice);
+            verifier.update(slice);
         }
-        verifier.update(&buffer[..count]);
+        Ok(())
+    })?;
+    if total_bytes != offer.size_bytes {
+        return Err(failure());
+    }
+    let actual_sha256: [u8; 32] = sha256.finalize().into();
+    if actual_sha256 != *expected_sha256.as_bytes() {
+        return Err(failure());
     }
     verifier.finalize().map_err(|_| failure())?;
     let files: Vec<_> = signature
@@ -255,9 +267,26 @@ fn configured_key() -> Result<&'static str, Error> {
 }
 
 fn client(artifacts: bool) -> Result<reqwest::Client, Error> {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+
+    static CLIENTS: OnceLock<Mutex<HashMap<(tokio::runtime::Id, bool), reqwest::Client>>> =
+        OnceLock::new();
+    let key = (tokio::runtime::Handle::current().id(), artifacts);
+    let mut clients = CLIENTS
+        .get_or_init(|| Mutex::new(HashMap::new()))
+        .lock()
+        .expect("native updater HTTP client pool lock is not poisoned");
+    if let Some(client) = clients.get(&key) {
+        return Ok(client.clone());
+    }
+
     crate::downloads::ensure_rustls_crypto_provider();
-    reqwest::Client::builder()
+    let mut builder = reqwest::Client::builder()
         .user_agent(concat!("aurora-launcher/", env!("CARGO_PKG_VERSION")))
+        .pool_max_idle_per_host(8)
+        .tcp_keepalive(Some(std::time::Duration::from_secs(30)))
+        .http2_adaptive_window(true)
         .timeout(std::time::Duration::from_secs(300))
         .connect_timeout(std::time::Duration::from_secs(15))
         .read_timeout(std::time::Duration::from_secs(30))
@@ -280,9 +309,13 @@ fn client(artifacts: bool) -> Result<reqwest::Client, Error> {
             } else {
                 attempt.error("Native updater redirect refused")
             }
-        }))
-        .build()
-        .map_err(|_| failure())
+        }));
+    if artifacts {
+        builder = builder.no_gzip();
+    }
+    let built = builder.build().map_err(|_| failure())?;
+    clients.insert(key, built.clone());
+    Ok(built)
 }
 
 async fn discover(app: &Host) -> Result<Offer, Error> {
@@ -441,11 +474,12 @@ async fn stage_installer(
         root: directory,
         retained: false,
     };
-    let mut file = std::fs::OpenOptions::new()
+    let raw_file = std::fs::OpenOptions::new()
         .write(true)
         .create_new(true)
         .open(&staging.path)
         .map_err(|_| failure())?;
+    let mut file = std::io::BufWriter::with_capacity(256 * 1024, raw_file);
     let mut response = client(true)?
         .get(url)
         .send()
@@ -468,8 +502,11 @@ async fn stage_installer(
         file.write_all(&chunk).map_err(|_| failure())?;
         progress(done, Some(offer.size_bytes));
     }
-    file.sync_all().map_err(|_| failure())?;
-    drop(file);
+    file.flush().map_err(|_| failure())?;
+    file.into_inner()
+        .map_err(|_| failure())?
+        .sync_all()
+        .map_err(|_| failure())?;
     if done != offer.size_bytes {
         return Err(failure());
     }

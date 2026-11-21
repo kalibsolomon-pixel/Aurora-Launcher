@@ -1,5 +1,5 @@
 use super::presentation::ui;
-use super::{Pulsar, TOP_TABS, tabs};
+use super::{Pulsar, tabs};
 use crate::{
     controls::{
         AuroraButton, AuroraCheckbox, AuroraInput, AuroraSelect, ButtonSize, ButtonVariant,
@@ -16,7 +16,7 @@ fn small(id: impl Into<gpui::ElementId>, label: impl Into<gpui::SharedString>) -
 }
 
 impl Pulsar {
-    fn scope_bar(&self, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
+    fn scope_bar(&self, _t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
         let ids: Vec<_> = std::iter::once(None)
             .chain(
                 self.library
@@ -78,30 +78,18 @@ impl Pulsar {
             .flex()
             .items_center()
             .gap(px(12.))
+            .w_full()
             .child(select)
-            .child(div().flex_1().min_w(px(100.)).max_w(px(380.)).child(
-                AuroraInput::new(&self.search).label(if self.width < 900. {
-                    "Search"
-                } else {
-                    "Search opponents or servers"
-                }),
-            ))
-            .when(self.width >= 1100., |d| {
-                d.child(ui::caption(
-                    t,
-                    if self.query.instance_id.is_some() {
-                        format!(
-                            "{} for this instance",
-                            super::presentation::count(self.library.filtered_total, "recording")
-                        )
+            .child(
+                div()
+                    .flex_1()
+                    .min_w(px(140.))
+                    .child(AuroraInput::new(&self.search).label(if self.width < 900. {
+                        "Search"
                     } else {
-                        format!(
-                            "{} in library",
-                            super::presentation::count(self.library.total, "recording")
-                        )
-                    },
-                ))
-            })
+                        "Search opponents or servers"
+                    })),
+            )
     }
 
     pub(super) fn fight_row(
@@ -1334,140 +1322,76 @@ impl Pulsar {
         let mut page = div()
             .flex()
             .flex_col()
-            .gap(px(if self.width < 950. { 8. } else { 16. }))
-            .min_w(px(0.))
+            .gap(px(if self.width < 950. { 10. } else { 16. }))
+            .min_w(px(0.));
+        let breakdown_tabs: [(usize, &str); 6] = [
+            (5, "Opponents"),
+            (6, "Records"),
+            (1, "Offense"),
+            (2, "Defense"),
+            (3, "Flow"),
+            (7, "Preferences"),
+        ];
+        let in_breakdowns = breakdown_tabs.iter().any(|(idx, _)| *idx == self.top_tab);
+        let nav_tabs = crate::ui::segmented_tabs(&t)
             .child(
-                div()
-                    .flex()
-                    .flex_wrap()
-                    .items_start()
-                    .justify_between()
-                    .gap(px(16.))
-                    .child(
-                        ui::page_header(
-                            &t,
-                            "Pulsar",
-                            (self.width >= 950.).then(|| {
-                                "Understand your fights and choose what to improve next.".into()
-                            }),
-                        )
-                        .flex_1()
-                        .min_w(px(100.)),
-                    )
-                    .child(
-                        AuroraButton::new(
-                            "pulsar-refresh",
-                            if self.loading {
-                                "Refreshing…"
-                            } else {
-                                "Refresh"
-                            },
-                        )
-                        .icon("refresh")
-                        .disabled(self.loading || self.busy)
-                        .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
-                    ),
-            )
-            .child(self.scope_bar(&t, cx));
-        let mut strip = div()
-            .flex()
-            .flex_wrap()
-            .gap(px(2.))
-            .p(px(2.))
-            .rounded(t.radius)
-            .bg(t.sunken)
-            .border_1()
-            .border_color(t.border_subtle)
-            .on_key_down(cx.listener(|this, e: &KeyDownEvent, _, cx| {
-                let delta = match e.keystroke.key.as_str() {
-                    "left" => 7,
-                    "right" => 1,
-                    _ => return,
-                };
-                cx.stop_propagation();
-                this.top_tab = (this.top_tab + delta) % 8;
-                this.load_sections();
-                cx.notify();
-            }));
-        for (index, label) in TOP_TABS.iter().enumerate().take(if self.width < 900. {
-            0
-        } else if narrow {
-            4
-        } else {
-            8
-        }) {
-            strip = strip.child(
-                small(("pulsar-tab", index), *label)
-                    .selected(self.top_tab == index)
-                    .on_click(cx.listener(move |this, _, _, cx| {
-                        this.top_tab = index;
+                small("pulsar-primary-overview", "Overview")
+                    .selected(self.top_tab == 0)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.top_tab = 0;
                         this.load_sections();
                         cx.notify();
                     })),
-            );
-        }
-
-        if self.width < 900. {
-            strip = strip.bg(gpui::transparent_black()).border_0().p(px(0.));
-        }
-        if narrow {
-            let view = cx.entity();
-            let hi = view.clone();
-            let confirm = view.clone();
-            let first = if self.width < 900. { 0 } else { 4 };
-            strip = strip.child(
-                AuroraSelect::new(
-                    "pulsar-more-tabs",
-                    if self.width < 900. {
-                        "View"
-                    } else {
-                        "More views"
-                    },
-                    TOP_TABS[if self.width < 900. { 0 } else { 4 }..]
-                        .iter()
-                        .map(|v| {
-                            if self.width < 900. {
-                                format!("Section: {v}").into()
-                            } else {
-                                (*v).into()
-                            }
-                        })
-                        .collect(),
-                    &self.tab_trigger,
-                    &self.tab_content,
-                    self.tab_bounds.clone(),
-                )
-                .selected(self.top_tab.checked_sub(first))
-                .open(self.tab_open)
-                .highlight(self.tab_highlight)
-                .width(px(if self.width < 900. {
-                    (self.width - 100.).max(200.)
-                } else {
-                    132.
-                }))
-                .on_open_change(move |v, _, cx| {
-                    view.update(cx, |this, cx| {
-                        this.tab_open = v;
-                        cx.notify();
-                    })
-                })
-                .on_highlight(move |v, _, cx| {
-                    hi.update(cx, |this, cx| {
-                        this.tab_highlight = v;
-                        cx.notify();
-                    })
-                })
-                .on_confirm(move |v, _, cx| {
-                    confirm.update(cx, |this, cx| {
-                        this.tab_open = false;
-                        this.top_tab = v + first;
+            )
+            .child(
+                small("pulsar-primary-history", "History")
+                    .selected(self.top_tab == 4)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.top_tab = 4;
                         this.load_sections();
                         cx.notify();
-                    })
-                }),
+                    })),
+            )
+            .child(
+                small("pulsar-primary-breakdowns", "Breakdowns")
+                    .selected(in_breakdowns)
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        if !matches!(this.top_tab, 1 | 2 | 3 | 5 | 6 | 7) {
+                            this.top_tab = 5;
+                            this.load_sections();
+                            cx.notify();
+                        }
+                    })),
             );
+        page = page.child(
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .justify_between()
+                .gap(px(12.))
+                .child(ui::page_header(
+                    &t,
+                    "Pulsar",
+                    Some("Combat analytics recorded by Aurora Client".into()),
+                ))
+                .when(self.library.total > 0 || self.error.is_some(), |row| {
+                    row.child(nav_tabs)
+                }),
+        );
+        if in_breakdowns && (self.library.total > 0 || self.error.is_some()) {
+            page = page.child(div().flex().child(crate::ui::segmented_tabs(&t).children(
+                breakdown_tabs.into_iter().map(|(tab_idx, label)| {
+                    small(("pulsar-breakdown-tab", tab_idx), label)
+                        .selected(self.top_tab == tab_idx)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            this.top_tab = tab_idx;
+                            this.load_sections();
+                            cx.notify();
+                        }))
+                }),
+            )));
         }
-        page = page.child(strip);
         if let Some(error) = &self.error {
             page = page.child(
                 ui::card(&t)
@@ -1494,48 +1418,102 @@ impl Pulsar {
         }
 
         if self.library.total == 0 && self.error.is_none() {
-            let setup = ui::empty_state(&t, "swords", "Your first fight starts in game", "Enable Pulsar in Aurora Client, then play a fight or start a manual recording.")
-                .child(div().flex().flex_wrap().justify_center().gap(px(8.))
-                    .child(AuroraButton::new("pulsar-setup", "Open Instances").variant(ButtonVariant::Primary).on_click(cx.listener(|_, _, _, cx| cx.emit(super::PulsarEvent::OpenInstances))))
-                    .child(small("pulsar-enable-help", "How to enable Pulsar").on_click(cx.listener(|this, _, _, cx| { if !this.disclosures.remove("enable-help") { this.disclosures.insert("enable-help".into()); } cx.notify(); }))))
-                .when(self.disclosures.contains("enable-help"), |d| d.child(ui::muted(&t, "Launch an instance with Aurora Client installed. Open Aurora settings in game, find Pulsar and enable fight tracking and recording. Play a fight, then return here and select Refresh.")));
-            return page.child(setup);
+            let launch_target = self
+                .library
+                .instances
+                .first()
+                .map(|i| (i.instance_id.clone(), i.instance_name.clone()));
+            let cta_label = launch_target
+                .as_ref()
+                .map(|(_, name)| format!("Launch {name}"))
+                .unwrap_or_else(|| "Launch Aurora Client".to_owned());
+            let target_id = launch_target.map(|(id, _)| id);
+            let hero = ui::aurora_card(&t)
+                .items_center()
+                .w_full()
+                .max_w(px(620.))
+                .mx_auto()
+                .py(px(48.))
+                .px(px(32.))
+                .gap(px(14.))
+                .child(crate::instance_icon(Some("timeline"), 76., true, &t))
+                .child(
+                    div()
+                        .relative()
+                        .pt(px(2.))
+                        .text_size(px(ui::TEXT_TITLE))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(t.foreground)
+                        .child("Combat analytics for Aurora Client"),
+                )
+                .child(
+                    div()
+                        .relative()
+                        .text_size(px(ui::TEXT_BODY))
+                        .text_color(t.muted_foreground)
+                        .text_center()
+                        .child("Enable Pulsar in-game to record fights automatically."),
+                )
+                .child(
+                    div()
+                        .relative()
+                        .flex()
+                        .flex_wrap()
+                        .justify_center()
+                        .gap(px(10.))
+                        .pt(px(4.))
+                        .child(
+                            AuroraButton::new("pulsar-setup", cta_label)
+                                .variant(ButtonVariant::Primary)
+                                .icon("play_arrow")
+                                .on_click(cx.listener(move |_, _, _, cx| {
+                                    cx.emit(super::PulsarEvent::Launch(target_id.clone()))
+                                })),
+                        )
+                        .child(
+                            AuroraButton::new("pulsar-enable-help", "How to enable")
+                                .variant(ButtonVariant::Ghost)
+                                .icon("info")
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if !this.disclosures.remove("enable-help") {
+                                        this.disclosures.insert("enable-help".into());
+                                    }
+                                    cx.notify();
+                                })),
+                        ),
+                )
+                .when(self.disclosures.contains("enable-help"), |d| {
+                    d.child(
+                        div()
+                            .relative()
+                            .max_w(px(520.))
+                            .pt(px(6.))
+                            .text_center()
+                            .child(ui::muted(
+                                &t,
+                                "1. Launch an instance with Aurora Client installed.  2. Enable Pulsar recording in Aurora settings.  3. Play a fight, then press Refresh.",
+                            )),
+                    )
+                });
+            return page.child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .justify_center()
+                    .w_full()
+                    .min_h(px(620.))
+                    .child(hero),
+            );
         }
 
-        if self.top_tab < 4 {
-            let mut window_bar = div().flex().flex_wrap().gap(px(4.)).items_center();
-            for (i, (label, window)) in [
-                ("Last 10", AnalysisWindow::Last10),
-                ("Last 25", AnalysisWindow::Last25),
-                ("All", AnalysisWindow::All),
-            ]
-            .into_iter()
-            .enumerate()
-            {
-                let selected =
-                    std::mem::discriminant(&self.window) == std::mem::discriminant(&window);
-                window_bar = window_bar.child(
-                    small(("pulsar-window", i), label)
-                        .selected(selected)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.window = window.clone();
-                            this.load_sections();
-                            cx.notify();
-                        })),
-                );
+        // Keep Overview calm and uncluttered: show search + instance toolbar on
+        // browsing/breakdown tabs; Overview stays focused on stats + trend chart.
+        if self.top_tab != 0 {
+            let mut toolbar = self.scope_bar(&t, cx).flex_wrap();
+            if self.top_tab < 4 {
+                toolbar = toolbar.child(self.window_selector(&t, cx));
             }
-
-            if let Some(a) = &self.analysis {
-                window_bar = window_bar.child(ui::caption(
-                    &t,
-                    format!(
-                        "Showing {} of {} recordings",
-                        a.coverage.recordings, self.library.total
-                    ),
-                ));
-            }
-
-            page = page.child(window_bar);
+            page = page.child(toolbar);
         }
 
         if self.top_tab == 1 && matches!(self.sections[1], 0 | 2 | 3 | 4) {
@@ -1620,54 +1598,64 @@ impl Pulsar {
                 if let Some(a) = &self.analysis {
                     if index == 0 {
                         page = page.child(self.overview_lead(&t, &a.overview, cx));
+                        let mut quick_row = div()
+                            .flex()
+                            .flex_wrap()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(12.));
+                        let mut left_links = div().flex().flex_wrap().items_center().gap(px(8.));
                         if let Some(latest) = &a.latest {
                             let key = latest.key.clone();
-                            page = page.child(
-                                ui::card(&t)
-                                    .child(
-                                        div()
-                                            .flex()
-                                            .flex_wrap()
-                                            .items_center()
-                                            .justify_between()
-                                            .gap(px(12.))
-                                            .child(ui::title_block(
-                                                &t,
-                                                if latest.manual {
-                                                    "Latest manual session".to_owned()
-                                                } else {
-                                                    format!("Latest fight · {}", latest.opponent)
-                                                },
-                                                Some(
-                                                    format!(
-                                                        "{} · {} · {}",
-                                                        latest.provenance.instance_name,
-                                                        latest.date_group,
-                                                        latest.result_label
-                                                    )
-                                                    .into(),
-                                                ),
-                                            ))
-                                            .child(
-                                                AuroraButton::new("pulsar-latest", "Open fight")
-                                                    .variant(ButtonVariant::Primary)
-                                                    .icon("arrow_forward")
-                                                    .on_click(cx.listener(
-                                                        move |this, _, _, cx| {
-                                                            this.open_detail(key.clone(), cx)
-                                                        },
-                                                    )),
-                                            ),
-                                    )
-                                    .when_some(a.overview.interpretations.first(), |d, insight| {
-                                        d.child(ui::muted(&t, insight.clone()))
-                                    })
-                                    .child(self.latest_denominators(&t, latest, cx)),
+                            let latest_label = if latest.manual {
+                                "Open latest session".to_owned()
+                            } else {
+                                format!("Latest fight · {}", latest.opponent)
+                            };
+                            left_links = left_links.child(
+                                AuroraButton::new("pulsar-latest", latest_label)
+                                    .variant(ButtonVariant::Default)
+                                    .size(ButtonSize::Small)
+                                    .icon("arrow_forward")
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.open_detail(key.clone(), cx)
+                                    })),
                             );
                         }
-                    }
-
-                    if index != 0 {
+                        let mut details_body = div()
+                            .flex()
+                            .flex_col()
+                            .gap(px(12.))
+                            .child(self.overview_groups(&t, &a.overview.metrics, cx));
+                        for s in &a.overview.notices {
+                            details_body = details_body.child(ui::caption(&t, s.clone()));
+                        }
+                        for s in a.overview.interpretations.iter().skip(1) {
+                            details_body = details_body.child(ui::muted(&t, s.clone()));
+                        }
+                        details_body = details_body.child(ui::caption(
+                            &t,
+                            "Live capture and recording controls: Change in game.",
+                        ));
+                        let details_open = self.disclosures.contains("overview-details");
+                        quick_row = quick_row.child(left_links).child(
+                            small("disclosure-overview-details", "Measurement details")
+                                .icon(if details_open {
+                                    "expand_less"
+                                } else {
+                                    "expand_more"
+                                })
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    if !this.disclosures.remove("overview-details") {
+                                        this.disclosures.insert("overview-details".into());
+                                    }
+                                    cx.notify();
+                                })),
+                        );
+                        page = page
+                            .child(quick_row)
+                            .when(details_open, |p| p.child(details_body));
+                    } else {
                         page = page.child(self.tab_body(
                             &t,
                             match index {
@@ -1679,69 +1667,6 @@ impl Pulsar {
                             narrow,
                             cx,
                         ));
-                    } else {
-                        page = page.child(self.disclosure(
-                            &t,
-                            "overview-details",
-                            "All nine measurement groups",
-                            self.overview_groups(&t, &a.overview.metrics, cx),
-                            cx,
-                        ));
-                        let context = div()
-                            .flex()
-                            .flex_col()
-                            .gap(px(12.))
-                            .children(
-                                a.overview
-                                    .notices
-                                    .iter()
-                                    .map(|s| ui::caption(&t, s.clone())),
-                            )
-                            .children(
-                                a.overview
-                                    .interpretations
-                                    .iter()
-                                    .skip(1)
-                                    .map(|s| ui::muted(&t, s.clone())),
-                            );
-                        if !a.overview.notices.is_empty() || a.overview.interpretations.len() > 1 {
-                            page = page.child(self.disclosure(
-                                &t,
-                                "interpretation",
-                                "Interpretation and limitations",
-                                context,
-                                cx,
-                            ));
-                        }
-                        page = page.child(ui::caption(
-                            &t,
-                            "Live capture and recording controls: Change in game.",
-                        ));
-                    }
-
-                    if index == 0 {
-                        let mut recent =
-                            ui::list_card(&t).child(ui::row(&t, false).child(ui::section_header(
-                                &t,
-                                "Recent recordings",
-                                None,
-                            )));
-                        if !narrow {
-                            recent =
-                                recent.child(history_header(&t, history_columns(self.width).reach));
-                        }
-                        for (i, row) in self.library.rows.iter().take(5).enumerate() {
-                            recent = recent.child(self.fight_row(
-                                &t,
-                                row,
-                                i,
-                                i + 1 == self.library.rows.len().min(5),
-                                narrow,
-                                cx,
-                            ));
-                        }
-
-                        page = page.child(recent);
                     }
                 } else if self.error.is_none() {
                     page = page.child(ui::muted(&t, "Loading analysis…"));
@@ -1749,26 +1674,22 @@ impl Pulsar {
             }
         }
 
-        page = page.child(
-            div()
-                .flex()
-                .flex_wrap()
-                .gap(px(8.))
-                .child(
-                    small("pulsar-recordings-folder", "Recordings folder")
-                        .icon("folder_open")
-                        .on_click(
+        if self.top_tab == 4 {
+            page = page.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .gap(px(8.))
+                    .child(
+                        small("pulsar-recordings-folder", "Recordings folder").on_click(
                             cx.listener(|this, _, _, cx| this.folder(FolderKind::Recordings, cx)),
                         ),
-                )
-                .child(
-                    small("pulsar-exports-folder", "Exports folder")
-                        .icon("folder_open")
-                        .on_click(
-                            cx.listener(|this, _, _, cx| this.folder(FolderKind::Exports, cx)),
-                        ),
-                ),
-        );
+                    )
+                    .child(small("pulsar-exports-folder", "Exports folder").on_click(
+                        cx.listener(|this, _, _, cx| this.folder(FolderKind::Exports, cx)),
+                    )),
+            );
+        }
         for issue in &self.library.errors {
             page = page.child(ui::caption(&t, issue.message.clone()));
         }

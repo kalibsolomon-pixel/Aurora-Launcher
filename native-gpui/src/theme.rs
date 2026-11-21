@@ -72,7 +72,7 @@ impl Default for AuroraTheme {
             border_subtle: rgba(0xffffff14).into(),
             foreground: rgb(0xedf1fb).into(),
             muted_foreground: rgb(0xccd3e1).into(),
-            subtle_foreground: rgb(0xb8c0d2).into(),
+            subtle_foreground: rgb(0xc2cadb).into(),
             accent_soft: rgba(0x8b80ff26).into(),
             accent: rgb(0x6f5df2).into(),
             accent_hover: rgb(0x6f63e8).into(),

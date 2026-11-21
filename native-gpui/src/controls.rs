@@ -161,41 +161,47 @@ impl RenderOnce for AuroraButton {
         let clear = gpui_kit::transparent_black();
         let primary = self.variant == ButtonVariant::Primary;
         let (bg, fg, hover_bg, border) = match self.variant {
-            // Filled, borderless: one secondary style everywhere.
-            ButtonVariant::Default => (t.control, t.foreground, t.control_hover, t.control),
+            // Subtle elevated secondary control with hairline edge for clear visual hierarchy.
+            ButtonVariant::Default => (t.control, t.foreground, t.control_hover, t.border_subtle),
             ButtonVariant::Primary => (t.accent, t.accent_foreground, t.accent_hover, t.accent),
             ButtonVariant::Danger => (
                 Hsla {
-                    a: 0.10,
+                    a: 0.12,
                     ..t.danger
                 },
                 t.danger,
                 Hsla {
-                    a: 0.18,
+                    a: 0.20,
                     ..t.danger
                 },
                 Hsla {
-                    a: 0.28,
+                    a: 0.32,
                     ..t.danger
                 },
             ),
             // Transparent at rest so translucent Borealis surfaces show through.
             ButtonVariant::Ghost => (clear, t.foreground, t.control, clear),
             ButtonVariant::Soft => (
-                Hsla { a: 0.28, ..t.ring },
+                Hsla { a: 0.22, ..t.ring },
                 t.foreground,
+                Hsla { a: 0.34, ..t.ring },
                 Hsla { a: 0.38, ..t.ring },
-                Hsla { a: 0.36, ..t.ring },
             ),
             ButtonVariant::Subtle => (clear, t.muted_foreground, t.control, clear),
             ButtonVariant::DangerSubtle => (
-                clear,
-                t.muted_foreground,
                 Hsla {
-                    a: 0.10,
+                    a: 0.07,
                     ..t.danger
                 },
-                clear,
+                t.danger,
+                Hsla {
+                    a: 0.16,
+                    ..t.danger
+                },
+                Hsla {
+                    a: 0.30,
+                    ..t.danger
+                },
             ),
         };
         let (height, pad, text, icon_size) = match self.size {
@@ -203,9 +209,9 @@ impl RenderOnce for AuroraButton {
             ButtonSize::Medium => (34., 14., 14., 16.),
             ButtonSize::Large => (44., 22., 15., 20.),
         };
-        let (soft, ring, selected_fg) = (t.accent_soft, t.ring, t.foreground);
+        let (ring, selected_fg) = (t.ring, t.foreground);
         let (disabled_bg, disabled_fg, disabled_border) =
-            (t.sunken, t.subtle_foreground, t.border_subtle);
+            (t.control, t.muted_foreground, t.border_subtle);
         let icon_color = if self.disabled {
             disabled_fg
         } else if primary {
@@ -237,7 +243,22 @@ impl RenderOnce for AuroraButton {
             .rounded(t.radius)
             .text_size(px(text))
             .font_weight(weight)
-            .bg(bg)
+            .when(primary && !self.disabled, |b| {
+                b.bg(gpui_kit::linear_gradient(
+                    125.,
+                    gpui_kit::linear_color_stop(t.accent, 0.),
+                    gpui_kit::linear_color_stop(
+                        Hsla {
+                            h: t.accent.h,
+                            s: t.accent.s,
+                            l: (t.accent.l + 0.05).min(0.72),
+                            a: 1.0,
+                        },
+                        1.,
+                    ),
+                ))
+            })
+            .when(!primary || self.disabled, |b| b.bg(bg))
             .text_color(fg)
             .border_1()
             .border_color(border)
@@ -248,8 +269,8 @@ impl RenderOnce for AuroraButton {
                 styles
                     .selected(|style| {
                         style
-                            .bg(soft)
-                            .border_color(Hsla { a: 0.55, ..ring })
+                            .bg(Hsla { a: 0.24, ..ring })
+                            .border_color(Hsla { a: 0.58, ..ring })
                             .text_color(selected_fg)
                     })
                     .disabled(|style| {
@@ -507,6 +528,7 @@ impl RenderOnce for AuroraToggle {
 pub struct AuroraCheckbox {
     id: ElementId,
     label: SharedString,
+    visible_label: bool,
     checked: bool,
     disabled: bool,
     dormant: bool,
@@ -518,11 +540,17 @@ impl AuroraCheckbox {
         Self {
             id: id.into(),
             label: label.into(),
+            visible_label: false,
             checked: false,
             disabled: false,
             dormant: false,
             on_change: None,
         }
+    }
+    /// Render the label visibly beside the checkbox box so clicking either toggles it.
+    pub fn with_visible_label(mut self) -> Self {
+        self.visible_label = true;
+        self
     }
     pub fn checked(mut self, checked: bool) -> Self {
         self.checked = checked;
@@ -552,31 +580,37 @@ impl RenderOnce for AuroraCheckbox {
         let t = theme(cx);
         let ring = t.ring;
         let mark = match (self.checked, self.dormant) {
-            (true, false) => t.foreground,
+            (true, false) => t.accent_foreground,
             (true, true) => t.foreground,
             _ => gpui_kit::transparent_black(),
         };
+        let label_text = self.label.clone();
         let mut checkbox = Checkbox::new(self.id)
             .accessibility_label(self.label)
             .checked(self.checked)
             .disabled(self.disabled)
             .flex()
             .items_center()
-            .justify_center()
-            .size(px(36.))
+            .when(self.visible_label, |this| {
+                this.gap(px(10.)).h(px(34.)).px(px(8.))
+            })
+            .when(!self.visible_label, |this| {
+                this.justify_center().size(px(36.))
+            })
             .rounded(t.radius)
             .border_1()
             .border_color(gpui_kit::transparent_black())
             .focus_visible(move |style| style.border_color(ring))
             .hover(|style| style.bg(t.control_hover))
-            .styles(|styles| styles.disabled(|style| style.opacity(0.45)))
+            .styles(|styles| styles.disabled(|style| style.opacity(0.55)))
             .child(
                 div()
                     .size(px(20.))
+                    .flex_shrink_0()
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded(px(4.))
+                    .rounded(px(5.))
                     .border_1()
                     .border_color(match (self.checked, self.dormant) {
                         (true, false) => t.accent,
@@ -588,8 +622,16 @@ impl RenderOnce for AuroraCheckbox {
                         (true, true) => t.control_hover,
                         _ => t.sunken,
                     })
-                    .child(crate::symbols::icon(Some("check"), px(16.), mark)),
-            );
+                    .child(crate::symbols::icon(Some("check"), px(15.), mark)),
+            )
+            .when(self.visible_label, |this| {
+                this.child(
+                    div()
+                        .text_size(px(crate::ui::TEXT_BODY))
+                        .text_color(t.foreground)
+                        .child(label_text),
+                )
+            });
         if let Some(on_change) = self.on_change {
             checkbox = checkbox.on_change(move |state, event, window, cx| {
                 on_change(state == CheckboxState::Checked, event, window, cx)
@@ -661,6 +703,107 @@ impl RenderOnce for AuroraSlider {
             .read(cx)
             .clone();
 
+        let value_text = self
+            .value_label
+            .unwrap_or_else(|| format!("{} / 100", value.end() as i64).into());
+        let track = div()
+            .flex_1()
+            .min_w(px(0.))
+            .on_key_down({
+                let state = state.clone();
+                move |event: &KeyDownEvent, window, cx| {
+                    if disabled {
+                        return;
+                    }
+                    let key = event.keystroke.key.as_str();
+                    if !matches!(key, "left" | "right" | "up" | "down" | "home" | "end") {
+                        return;
+                    }
+                    cx.stop_propagation();
+                    state.update(cx, |state, cx| match key {
+                        "home" => state.set_value(state.min_value(), window, cx),
+                        "end" => state.set_value(state.max_value(), window, cx),
+                        "left" | "down" => {
+                            state.step_thumb(false, -state.accessibility_step(), window, cx)
+                        }
+                        _ => state.step_thumb(false, state.accessibility_step(), window, cx),
+                    });
+                }
+            })
+            .child(
+                Slider::new(&state)
+                    .horizontal()
+                    .disabled(disabled)
+                    .accessibility_label(self.label.clone())
+                    .track_focus(&focus)
+                    .flex()
+                    .flex_1()
+                    .items_center()
+                    .w_full()
+                    .child(
+                        SliderTrack::new(&state)
+                            .axis(Axis::Horizontal)
+                            .disabled(disabled)
+                            .flex()
+                            .items_center()
+                            .w_full()
+                            .h(px(18.))
+                            .child(
+                                SliderIndicator::new(&state)
+                                    .relative()
+                                    .w_full()
+                                    .h(px(6.))
+                                    .rounded_full()
+                                    .bg(t.surface_hover)
+                                    .child(
+                                        div()
+                                            .absolute()
+                                            .h_full()
+                                            .left(relative(percentage.start))
+                                            .right(relative(1. - percentage.end))
+                                            .rounded_full()
+                                            .bg(t.accent),
+                                    )
+                                    .child(
+                                        SliderThumb::new(&state)
+                                            .axis(Axis::Horizontal)
+                                            .disabled(disabled)
+                                            .absolute()
+                                            .top(px(-5.))
+                                            .left(relative(percentage.end))
+                                            .ml(-px(8.))
+                                            .flex()
+                                            .items_center()
+                                            .justify_center()
+                                            .size(px(16.))
+                                            .rounded_full()
+                                            .bg(t.foreground)
+                                            .child(div().size(px(10.)).rounded_full().bg(t.accent)),
+                                    ),
+                            ),
+                    ),
+            );
+
+        if !self.show_label {
+            return div()
+                .id(("aurora-slider", entity_id))
+                .flex()
+                .items_center()
+                .gap(px(12.))
+                .w_full()
+                .when(disabled, |this| this.opacity(0.45))
+                .child(track)
+                .child(
+                    div()
+                        .flex_shrink_0()
+                        .w(px(54.))
+                        .text_right()
+                        .text_size(px(13.))
+                        .text_color(t.muted_foreground)
+                        .child(value_text),
+                );
+        }
+
         div()
             .id(("aurora-slider", entity_id))
             .flex()
@@ -672,107 +815,21 @@ impl RenderOnce for AuroraSlider {
                     .flex()
                     .items_baseline()
                     .justify_between()
-                    .when(!self.show_label, |row| row.justify_end())
                     .gap(px(8.))
-                    .when(self.show_label, |row| {
-                        row.child(
-                            div()
-                                .text_size(px(13.))
-                                .text_color(t.muted_foreground)
-                                .child(self.label.clone()),
-                        )
-                    })
                     .child(
-                        div().text_size(px(13.)).text_color(t.foreground).child(
-                            self.value_label
-                                .unwrap_or_else(|| format!("{} / 100", value.end() as i64).into()),
-                        ),
+                        div()
+                            .text_size(px(13.))
+                            .text_color(t.muted_foreground)
+                            .child(self.label.clone()),
+                    )
+                    .child(
+                        div()
+                            .text_size(px(13.))
+                            .text_color(t.foreground)
+                            .child(value_text),
                     ),
             )
-            .child(
-                div()
-                    .on_key_down({
-                        let state = state.clone();
-                        move |event: &KeyDownEvent, window, cx| {
-                            if disabled {
-                                return;
-                            }
-                            let key = event.keystroke.key.as_str();
-                            if !matches!(key, "left" | "right" | "up" | "down" | "home" | "end") {
-                                return;
-                            }
-                            cx.stop_propagation();
-                            state.update(cx, |state, cx| match key {
-                                "home" => state.set_value(state.min_value(), window, cx),
-                                "end" => state.set_value(state.max_value(), window, cx),
-                                "left" | "down" => {
-                                    state.step_thumb(false, -state.accessibility_step(), window, cx)
-                                }
-                                _ => {
-                                    state.step_thumb(false, state.accessibility_step(), window, cx)
-                                }
-                            });
-                        }
-                    })
-                    .child(
-                        Slider::new(&state)
-                            .horizontal()
-                            .disabled(disabled)
-                            .accessibility_label(self.label.clone())
-                            .track_focus(&focus)
-                            .flex()
-                            .flex_1()
-                            .items_center()
-                            .w_full()
-                            .child(
-                                SliderTrack::new(&state)
-                                    .axis(Axis::Horizontal)
-                                    .disabled(disabled)
-                                    .flex()
-                                    .items_center()
-                                    .w_full()
-                                    .h(px(18.))
-                                    .child(
-                                        SliderIndicator::new(&state)
-                                            .relative()
-                                            .w_full()
-                                            .h(px(6.))
-                                            .rounded_full()
-                                            .bg(t.surface_hover)
-                                            .child(
-                                                div()
-                                                    .absolute()
-                                                    .h_full()
-                                                    .left(relative(percentage.start))
-                                                    .right(relative(1. - percentage.end))
-                                                    .rounded_full()
-                                                    .bg(t.accent),
-                                            )
-                                            .child(
-                                                SliderThumb::new(&state)
-                                                    .axis(Axis::Horizontal)
-                                                    .disabled(disabled)
-                                                    .absolute()
-                                                    .top(px(-5.))
-                                                    .left(relative(percentage.end))
-                                                    .ml(-px(8.))
-                                                    .flex()
-                                                    .items_center()
-                                                    .justify_center()
-                                                    .size(px(16.))
-                                                    .rounded_full()
-                                                    .bg(t.foreground)
-                                                    .child(
-                                                        div()
-                                                            .size(px(10.))
-                                                            .rounded_full()
-                                                            .bg(t.accent),
-                                                    ),
-                                            ),
-                                    ),
-                            ),
-                    ),
-            )
+            .child(track)
     }
 }
 
@@ -857,6 +914,11 @@ impl AuroraSelect {
 
     pub fn trigger_value(mut self, value: Option<SharedString>) -> Self {
         self.trigger_value = value;
+        self
+    }
+
+    pub fn placeholder(mut self, placeholder: impl Into<SharedString>) -> Self {
+        self.placeholder = placeholder.into();
         self
     }
 
@@ -972,49 +1034,56 @@ impl RenderOnce for AuroraSelect {
             })
         };
 
+        let clear = gpui_kit::transparent_black();
         let trigger = div()
             .id((self.id.clone(), "trigger"))
             .flex()
             .items_center()
-            .justify_between()
+            .when(!self.title_trigger, |d| d.justify_between().w_full())
+            .when(self.title_trigger, |d| {
+                d.justify_start().ml(px(-8.)).max_w_full()
+            })
             .gap(px(6.))
-            .w_full()
-            .h(px(if self.title_trigger { 42. } else { 34. }))
-            .px(px(12.))
+            .h(px(if self.title_trigger { 36. } else { 34. }))
+            .px(px(if self.title_trigger { 8. } else { 12. }))
             .rounded(t.radius)
-            .bg(if self.title_trigger {
-                t.raised
+            .bg(if self.title_trigger && !self.open && !focused {
+                clear
             } else {
                 t.control
             })
             .border_1()
             .border_color(if self.open || focused {
                 t.ring
+            } else if self.title_trigger {
+                clear
             } else {
                 t.border_subtle
             })
-            .text_size(px(if self.title_trigger {
-                crate::ui::TEXT_TITLE
-            } else {
-                13.
-            }))
+            .text_size(px(if self.title_trigger { 22. } else { 13. }))
             .when(self.title_trigger, |trigger| {
-                trigger.font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                trigger.font_weight(gpui_kit::FontWeight::BOLD)
             })
             .when(self.disabled, |style| style.opacity(0.45))
-            .hover(|style| style.bg(t.surface_hover))
+            .hover(|style| {
+                style.bg(if self.title_trigger {
+                    t.control_hover
+                } else {
+                    t.surface_hover
+                })
+            })
             .child(
                 div()
-                    .flex_1()
-                    .min_w(px(0.))
-                    .overflow_hidden()
-                    .text_ellipsis()
+                    .when(!self.title_trigger, |d| {
+                        d.flex_1().min_w(px(0.)).overflow_hidden().text_ellipsis()
+                    })
+                    .when(self.title_trigger, |d| d.flex_shrink_0())
                     .whitespace_nowrap()
                     .child(current.clone()),
             )
             .child(crate::symbols::icon(
                 Some("expand_more"),
-                px(18.),
+                px(if self.title_trigger { 20. } else { 18. }),
                 t.muted_foreground,
             ))
             .on_click({
@@ -1163,14 +1232,15 @@ impl RenderOnce for AuroraSelect {
                     }
                 }
             })
-            .w(self.width)
+            .when(!self.title_trigger, |select| select.w(self.width))
+            .when(self.title_trigger, |select| select.max_w(px(360.)))
             .when(self.full_width, |select| select.w_full())
             .child(
                 // Capture the trigger bounds every prepaint so the popup can be
                 // positioned under it (the pattern gpui-component's Select uses).
                 div()
                     .relative()
-                    .w_full()
+                    .when(!self.title_trigger, |d| d.w_full())
                     .on_prepaint({
                         let cell = self.bounds.clone();
                         move |bounds, _, _| cell.set(Some(bounds))

@@ -206,10 +206,23 @@ impl Metrics {
     }
 }
 
-/// The caption strip above the page content: a drag region that fills the
-/// space and the three caption buttons at the right edge. Rendered only where
-/// `custom()`.
+/// The caption strip above the page content: optional left context, a drag
+/// region filling remaining space, optional right utility controls, and the
+/// three caption buttons at the right edge. Rendered only where `custom()`.
 pub fn title_bar(window: &mut Window, cx: &mut App, palette: &AuroraTheme) -> impl IntoElement {
+    title_bar_with_context(window, cx, palette, div(), div())
+}
+
+/// Caption strip with non-drag left context (breadcrumbs / Aurora Client status)
+/// and right utility controls (e.g. refresh), keeping the flexible center as
+/// the OS drag handle.
+pub fn title_bar_with_context(
+    window: &mut Window,
+    cx: &mut App,
+    palette: &AuroraTheme,
+    left: impl IntoElement,
+    right_tools: impl IntoElement,
+) -> impl IntoElement {
     let maximized = window.is_maximized();
     let metrics = Metrics::new(window.scale_factor());
     // One persistent tab stop per button, kept across frames.
@@ -227,9 +240,26 @@ pub fn title_bar(window: &mut Window, cx: &mut App, palette: &AuroraTheme) -> im
     div()
         .flex()
         .flex_shrink_0()
+        .items_center()
         .w_full()
         .h(px(TITLE_HEIGHT))
-        .child(drag_region(div().flex_1().h_full()))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(10.))
+                .pl(px(crate::navigation::PAGE_GUTTER))
+                .child(left),
+        )
+        .child(drag_region(div().flex_1().h_full().min_w(px(32.))))
+        .child(
+            div()
+                .flex()
+                .items_center()
+                .gap(px(6.))
+                .pr(px(8.))
+                .child(right_tools),
+        )
         .children(buttons)
 }
 

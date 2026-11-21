@@ -33,6 +33,8 @@ pub(super) fn metric_value(metric: &MetricValue) -> String {
         "m" => format!("{n:.1} m"),
         "s" => format!("{n:.1} s"),
         "HP" => format!("{n:.1} HP"),
+        "HP/s" => format!("{n:.1} HP/s"),
+        "x" => format!("{n:.1}\u{d7}"),
         "ticks" => format!("{n:.1} ticks"),
         "count" => format!("{n:.0}"),
         "" | "dimensionless" if n.fract() != 0. => format!("{n:.3}")
@@ -143,8 +145,275 @@ fn cell(row: &TableRow, column: &str) -> String {
         .unwrap_or_else(|| "Unavailable".into());
     super::presentation::text(&value)
 }
+pub(super) fn parse_takeaway(line: &str) -> Option<(&str, &str, &str)> {
+    let rest = line.strip_prefix('[')?;
+    let (category, after) = rest.split_once("] ")?;
+    let (headline, detail) = after.split_once(" \u{2014} ")?;
+    Some((category.trim(), headline.trim(), detail.trim()))
+}
+
+fn takeaways_card(t: &AuroraTheme, items: &[(&str, &str, &str)]) -> Div {
+    let mut card = ui::list_card(t).child(ui::row(t, false).py(px(8.)).child(ui::section_header(
+        t,
+        "Key takeaways",
+        None,
+    )));
+    for (i, (category, headline, detail)) in items.iter().enumerate() {
+        let last = i + 1 == items.len();
+        card = card.child(
+            ui::row(t, last)
+                .py(px(10.))
+                .gap(px(12.))
+                .items_start()
+                .child(div().pt(px(2.)).flex_shrink_0().child(ui::badge(
+                    t,
+                    (*category).to_owned(),
+                    ui::Tone::Neutral,
+                )))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.))
+                        .child(
+                            div()
+                                .text_size(px(ui::TEXT_BODY))
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .text_color(t.foreground)
+                                .child((*headline).to_owned()),
+                        )
+                        .child(ui::caption(t, (*detail).to_owned())),
+                ),
+        );
+    }
+    card
+}
+
+fn turning_points_table(t: &AuroraTheme, data: &TableView) -> Div {
+    let mut list =
+        ui::list_card(t)
+            .w_full()
+            .child(ui::row(t, false).py(px(8.)).child(ui::section_header(
+                t,
+                data.title.clone(),
+                None,
+            )));
+    if data.rows.is_empty() {
+        return list.child(ui::row(t, true).child(ui::muted(t, "No turning points recorded.")));
+    }
+    for (i, row) in data.rows.iter().enumerate() {
+        let last = i + 1 == data.rows.len();
+        let time = row
+            .metrics
+            .get("time")
+            .and_then(|m| m.value)
+            .map(|v| format!("{v:.1} s"))
+            .or_else(|| row.cells.get("time").cloned())
+            .unwrap_or_else(|| "\u{2014}".into());
+        let kind = row
+            .cells
+            .get("kind")
+            .map(|s| super::presentation::text(s))
+            .unwrap_or_default();
+        let title = row.cells.get("title").cloned().unwrap_or_default();
+        let detail = row.cells.get("detail").cloned().unwrap_or_default();
+        list = list.child(
+            ui::row(t, last)
+                .id(format!("{}-row-{i}", data.id))
+                .py(px(10.))
+                .gap(px(12.))
+                .items_start()
+                .child(
+                    ui::numeric(ui::caption(t, time))
+                        .w(px(54.))
+                        .pt(px(2.))
+                        .flex_shrink_0(),
+                )
+                .child(
+                    div()
+                        .w(px(120.))
+                        .pt(px(1.))
+                        .flex_shrink_0()
+                        .flex()
+                        .child(ui::badge(t, kind, ui::Tone::Neutral).whitespace_nowrap()),
+                )
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(0.))
+                        .flex()
+                        .flex_col()
+                        .gap(px(2.))
+                        .child(
+                            div()
+                                .text_size(px(ui::TEXT_BODY))
+                                .font_weight(gpui::FontWeight::MEDIUM)
+                                .text_color(t.foreground)
+                                .child(title),
+                        )
+                        .when(!detail.is_empty(), |d| d.child(ui::caption(t, detail))),
+                ),
+        );
+    }
+    list
+}
+
+fn exchanges_table(t: &AuroraTheme, data: &TableView) -> Div {
+    let header_cell = |label: &str, w: f32, num: bool| {
+        let c = ui::caption(t, label.to_owned());
+        (if num { ui::numeric(c) } else { c })
+            .w(px(w))
+            .flex_shrink_0()
+    };
+    let mut list = ui::list_card(t).min_w(px(760.)).w_full().child(
+        ui::row(t, false)
+            .py(px(8.))
+            .child(ui::section_header(t, data.title.clone(), None)),
+    );
+    list = list.child(
+        ui::row(t, false)
+            .py(px(6.))
+            .gap(px(12.))
+            .child(header_cell("#", 36., false))
+            .child(header_cell("Window", 104., true))
+            .child(header_cell("Opener", 84., false).pl(px(8.)))
+            .child(header_cell("Converted", 78., false))
+            .child(header_cell("Hits (You/Opp)", 104., true))
+            .child(header_cell("Diff", 52., true))
+            .child(header_cell("Dmg taken", 82., true))
+            .child(header_cell("Healed", 74., true))
+            .child(ui::caption(t, "Winner").flex_1().min_w(px(84.)).pl(px(8.))),
+    );
+    if data.rows.is_empty() {
+        return list.child(ui::row(t, true).child(ui::muted(t, "No exchanges recorded.")));
+    }
+    for (i, row) in data.rows.iter().enumerate() {
+        let last = i + 1 == data.rows.len();
+        let ex = row
+            .cells
+            .get("exchange")
+            .cloned()
+            .unwrap_or_else(|| format!("#{}", i + 1));
+        let start = row
+            .metrics
+            .get("start")
+            .and_then(|m| m.value)
+            .map(|v| format!("{v:.1}s"))
+            .unwrap_or_else(|| "\u{2014}".into());
+        let end = row
+            .metrics
+            .get("end")
+            .and_then(|m| m.value)
+            .map(|v| format!("{v:.1}s"))
+            .unwrap_or_else(|| "\u{2014}".into());
+        let window = format!("{start}\u{2013}{end}");
+        let opener = row
+            .cells
+            .get("opener")
+            .map(|s| super::presentation::text(s))
+            .unwrap_or_else(|| "\u{2014}".into());
+        let converted = row
+            .cells
+            .get("converted")
+            .filter(|v| v.as_str() != "-" && v.as_str() != "null")
+            .cloned()
+            .unwrap_or_else(|| "\u{2014}".into());
+        let hits = row
+            .cells
+            .get("hits")
+            .cloned()
+            .unwrap_or_else(|| "\u{2014}".into());
+        let diff = row
+            .metrics
+            .get("hitDiff")
+            .and_then(|m| m.value)
+            .map(|v| {
+                let n = v.round() as i64;
+                if n > 0 {
+                    format!("+{n}")
+                } else {
+                    n.to_string()
+                }
+            })
+            .unwrap_or_else(|| "\u{2014}".into());
+        let dmg = row
+            .metrics
+            .get("damageTaken")
+            .and_then(|m| m.value)
+            .map(|v| format!("{v:.1} HP"))
+            .unwrap_or_else(|| "\u{2014}".into());
+        let heal = row
+            .metrics
+            .get("healing")
+            .and_then(|m| m.value)
+            .map(|v| format!("{v:.1} HP"))
+            .unwrap_or_else(|| "\u{2014}".into());
+        let winner = row
+            .cells
+            .get("winner")
+            .map(|s| super::presentation::text(s))
+            .unwrap_or_else(|| "\u{2014}".into());
+        let winner_tone = match winner.as_str() {
+            "You" | "Local" => ui::Tone::Success,
+            _ => ui::Tone::Neutral,
+        };
+        list = list.child(
+            ui::row(t, last)
+                .id(format!("{}-row-{i}", data.id))
+                .py(px(8.))
+                .gap(px(12.))
+                .child(ui::caption(t, ex).w(px(36.)).flex_shrink_0())
+                .child(
+                    ui::numeric(ui::caption(t, window))
+                        .w(px(104.))
+                        .flex_shrink_0(),
+                )
+                .child(ui::caption(t, opener).w(px(84.)).pl(px(8.)).flex_shrink_0())
+                .child(ui::caption(t, converted).w(px(78.)).flex_shrink_0())
+                .child(
+                    ui::numeric(
+                        div()
+                            .text_size(px(ui::TEXT_BODY))
+                            .font_weight(gpui::FontWeight::MEDIUM)
+                            .text_color(t.foreground)
+                            .child(hits),
+                    )
+                    .w(px(104.))
+                    .flex_shrink_0(),
+                )
+                .child(ui::numeric(ui::caption(t, diff)).w(px(52.)).flex_shrink_0())
+                .child(ui::numeric(ui::caption(t, dmg)).w(px(82.)).flex_shrink_0())
+                .child(ui::numeric(ui::caption(t, heal)).w(px(74.)).flex_shrink_0())
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w(px(84.))
+                        .pl(px(8.))
+                        .flex()
+                        .child(ui::badge(t, winner, winner_tone).whitespace_nowrap()),
+                ),
+        );
+    }
+    div().min_w(px(0.)).w_full().child(
+        div()
+            .id(format!("{}-horizontal", data.id))
+            .min_w(px(0.))
+            .w_full()
+            .overflow_x_scroll()
+            .child(list),
+    )
+}
+
 pub(super) fn table(t: &AuroraTheme, data: &TableView, narrow: bool) -> Div {
     let _ = narrow;
+    if data.id == "pvp_turning_points" {
+        return turning_points_table(t, data);
+    }
+    if data.id == "pvp_exchanges" {
+        return exchanges_table(t, data);
+    }
     let count = data.columns.len();
     let order = table_columns(&data.columns);
     let columns: Vec<_> = order.into_iter().take(count).collect();
@@ -174,7 +443,7 @@ pub(super) fn table(t: &AuroraTheme, data: &TableView, narrow: bool) -> Div {
                 .role(Role::Group)
                 .when(
                     row.cells.get("Establishing").is_some_and(|v| v == "true"),
-                    |d| d.bg(t.accent_soft).border_l_2().border_color(t.ring),
+                    |d| d.bg(t.accent_soft).rounded(t.radius),
                 )
                 .aria_label(full.clone())
                 .tooltip(move |_, cx| {
@@ -477,7 +746,7 @@ impl Pulsar {
             tab
         } else {
             let selected = self.sections[index];
-            let mut strip = div().flex().flex_wrap().gap(px(4.)).child(
+            let mut strip = crate::ui::segmented_tabs(t).flex_wrap().child(
                 AuroraButton::new(("pulsar-section", 0usize), "All sections")
                     .variant(ButtonVariant::Ghost)
                     .size(ButtonSize::Small)
@@ -499,7 +768,7 @@ impl Pulsar {
                         })),
                 );
             }
-            body = body.child(strip);
+            body = body.child(div().flex().child(strip));
             filtered = super::sections::filter(tab, sections, selected);
             &filtered
         };
@@ -547,7 +816,12 @@ impl Pulsar {
                     && (!summary
                         || matches!(
                             k.as_str(),
-                            "accuracy" | "hits" | "averageReach" | "longestCombo"
+                            "accuracy"
+                                | "hits"
+                                | "averageReach"
+                                | "longestCombo"
+                                | "firstHitRate"
+                                | "tradeRatio"
                         ))
             })
             .map(|(k, v)| (k.clone(), v.clone()))
@@ -599,9 +873,22 @@ impl Pulsar {
                 ));
             }
         }
+        let takeaways: Vec<(&str, &str, &str)> = if summary {
+            tab.interpretations
+                .iter()
+                .filter_map(|line| parse_takeaway(line))
+                .collect()
+        } else {
+            Vec::new()
+        };
+        let plain_interpretations: Vec<&String> = tab
+            .interpretations
+            .iter()
+            .filter(|line| !summary || parse_takeaway(line).is_none())
+            .collect();
         let pooled_flow = index == 3 && self.detail_request.is_none();
         if !main.is_empty() && !(index == 0 && self.detail_request.is_none()) {
-            if summary {
+            if summary && takeaways.is_empty() {
                 if let Some(insight) = super::presentation::summary_insight(
                     self.detail.as_ref().is_some_and(|d| d.summary.manual)
                         && self
@@ -609,7 +896,7 @@ impl Pulsar {
                             .as_ref()
                             .is_some_and(|r| r.participant.is_none() && r.exchange_id.is_none()),
                     &tab.metrics,
-                    tab.interpretations.first(),
+                    plain_interpretations.first().copied(),
                 ) {
                     body = body.child(ui::muted(t, insight.clone()));
                 }
@@ -658,6 +945,9 @@ impl Pulsar {
                 }
             }
             body = body.child(panel);
+            if !takeaways.is_empty() {
+                body = body.child(takeaways_card(t, &takeaways));
+            }
         }
         // Accuracy starts with the outcome breakdown; counters remain inspectable.
         if index == 1 && matches!(self.sections[1], 0 | 1) {
@@ -726,10 +1016,14 @@ impl Pulsar {
         for notice in &tab.notices {
             context = context.child(ui::caption(t, notice.clone()));
         }
-        for line in tab.interpretations.iter().skip(if summary { 1 } else { 0 }) {
-            context = context.child(ui::muted(t, line.clone()));
+        let skip_first = summary && takeaways.is_empty();
+        for line in plain_interpretations
+            .iter()
+            .skip(if skip_first { 1 } else { 0 })
+        {
+            context = context.child(ui::muted(t, (*line).clone()));
         }
-        if !tab.notices.is_empty() || !tab.interpretations.is_empty() {
+        if !tab.notices.is_empty() || plain_interpretations.len() > usize::from(skip_first) {
             let control = self.disclosure(
                 t,
                 if self.detail_request.is_some() {

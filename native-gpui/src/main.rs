@@ -99,6 +99,8 @@ enum Message {
     Recovery(u64, String, api::ApiResult<api::RecoveryPreview>),
     Done(api::ApiResult<()>),
     SyncInitialized(api::ApiResult<()>),
+    RailAvatar(Option<Vec<u8>>),
+    HeroActivity(String, Vec<(gpui::SharedString, gpui::SharedString)>),
     Event(String, serde_json::Value),
 }
 
@@ -267,20 +269,61 @@ fn stored_icon<'a>(icons: &'a BTreeMap<String, String>, instance: &str) -> Optio
     icons.get(instance).map(String::as_str)
 }
 
-/// The Slint `InstanceIcon`: the symbol on a rounded tile, in the accent for
-/// the active instance and the secondary ink otherwise.
-fn instance_icon(
+/// Single-theme Aurora icon palette: Aurora/active tiles glow in the active theme
+/// accent; standard and non-Aurora tiles stay sleek dark neutral surfaces.
+pub(crate) fn icon_palette(
+    _name: Option<&str>,
+    active: bool,
+    palette: &theme::AuroraTheme,
+) -> (gpui::Hsla, gpui::Hsla, gpui::Hsla) {
+    if active {
+        let h1 = palette.ring.h;
+        let start = gpui::Hsla {
+            h: h1,
+            s: palette.ring.s.clamp(0.45, 0.90),
+            l: 0.56,
+            a: 0.28,
+        };
+        let end = gpui::Hsla {
+            h: h1,
+            s: palette.ring.s.clamp(0.40, 0.86),
+            l: 0.46,
+            a: 0.14,
+        };
+        let ink = gpui::Hsla {
+            h: h1,
+            s: palette.ring.s.clamp(0.35, 0.92),
+            l: 0.84,
+            a: 1.0,
+        };
+        (start, end, ink)
+    } else {
+        (
+            palette.raised,
+            palette.card,
+            gpui::Hsla {
+                a: 0.84,
+                ..palette.foreground
+            },
+        )
+    }
+}
+
+/// Rounded icon well following the active single color theme.
+pub(crate) fn instance_icon(
     name: Option<&str>,
     size: f32,
     active: bool,
     palette: &theme::AuroraTheme,
-) -> impl IntoElement {
-    let ink = if active {
-        palette.ring
+) -> gpui::Div {
+    let (start, end, ink) = icon_palette(name, active, palette);
+    let border = if active {
+        gpui::Hsla { a: 0.44, ..ink }
     } else {
-        palette.muted_foreground
+        palette.border
     };
     div()
+        .relative()
         .flex()
         .flex_shrink_0()
         .items_center()
@@ -288,36 +331,71 @@ fn instance_icon(
         .w(px(size))
         .h(px(size))
         .rounded(px((size * 0.24).min(28.)))
-        .when(active, |tile| {
-            tile.bg(gpui::linear_gradient(
-                145.,
-                gpui::linear_color_stop(
-                    gpui::Hsla {
-                        a: 0.30,
-                        ..palette.ring
-                    },
-                    0.,
-                ),
-                gpui::linear_color_stop(
-                    gpui::Hsla {
-                        a: 0.08,
-                        ..palette.ring
-                    },
-                    1.,
-                ),
-            ))
-        })
-        .when(!active, |tile| tile.bg(palette.control))
+        .bg(gpui::linear_gradient(
+            142.,
+            gpui::linear_color_stop(start, 0.),
+            gpui::linear_color_stop(end, 1.),
+        ))
         .border_1()
-        .border_color(if active {
-            gpui::Hsla {
-                a: 0.35,
-                ..palette.ring
-            }
-        } else {
-            palette.border_subtle
-        })
+        .border_color(border)
         .child(symbols::icon(name, px(size * 0.54), ink))
+}
+
+/// Instance icon with a signature single-theme Aurora sparkle corner emblem for Aurora Client instances.
+pub(crate) fn aurora_instance_icon(
+    name: Option<&str>,
+    size: f32,
+    active: bool,
+    has_aurora: bool,
+    palette: &theme::AuroraTheme,
+) -> gpui::Div {
+    let tile = instance_icon(name, size, active, palette);
+    if !has_aurora {
+        return tile;
+    }
+    let badge_size = (size * 0.34).clamp(24., 32.);
+    let h1 = palette.ring.h;
+    let light = gpui::Hsla {
+        h: h1,
+        s: palette.ring.s.clamp(0.45, 0.94),
+        l: 0.68,
+        a: 1.0,
+    };
+    let primary = gpui::Hsla {
+        h: h1,
+        s: palette.ring.s.clamp(0.45, 0.92),
+        l: 0.56,
+        a: 1.0,
+    };
+    tile.child(
+        div()
+            .absolute()
+            .bottom(px(-5.))
+            .right(px(-5.))
+            .size(px(badge_size))
+            .rounded_full()
+            .flex()
+            .items_center()
+            .justify_center()
+            .bg(gpui::linear_gradient(
+                135.,
+                gpui::linear_color_stop(light, 0.),
+                gpui_kit::linear_color_stop(primary, 1.),
+            ))
+            .border_2()
+            .border_color(palette.card)
+            .shadow_sm()
+            .child(symbols::icon(
+                Some("auto_awesome"),
+                px(badge_size * 0.60),
+                gpui::Hsla {
+                    h: 0.,
+                    s: 0.,
+                    l: 1.,
+                    a: 1.,
+                },
+            )),
+    )
 }
 
 /// How a load request was scheduled.
@@ -334,6 +412,7 @@ enum LoadPlan {
 enum InstanceTab {
     Overview,
     Content,
+    Screenshots,
     Settings,
 }
 
@@ -360,6 +439,8 @@ struct Launcher {
     rt: tokio::runtime::Handle,
     tx: async_channel::Sender<Message>,
     page: u8,
+    sidebar_collapsed: bool,
+    instances_filter: u8,
     instance_detail: Option<(String, InstanceTab)>,
     reset_instance_scroll: bool,
     showcase_instance_opened: bool,
@@ -391,6 +472,8 @@ struct Launcher {
     readiness_rechecks: u8,
     launcher: Option<api::LauncherState>,
     accounts: api::AccountsState,
+    rail_avatar: Option<Arc<gpui::RenderImage>>,
+    hero_activity: HashMap<String, Vec<(gpui::SharedString, gpui::SharedString)>>,
     appearance: Option<api::Appearance>,
     readiness: Option<api::PlayReadiness>,
     processes: HashMap<String, api::LaunchProcess>,
@@ -762,13 +845,20 @@ impl Launcher {
                     status,
                 }
             } else {
-                let launcher = guarded(api::launcher_state(host.clone())).await;
-                let accounts = if showcase() {
-                    Ok(skins_showcase::accounts())
-                } else {
-                    guarded(api::accounts(host.clone())).await
+                let launcher_fut = guarded(api::launcher_state(host.clone()));
+                let accounts_fut = {
+                    let host = host.clone();
+                    async move {
+                        if showcase() {
+                            Ok(skins_showcase::accounts())
+                        } else {
+                            guarded(api::accounts(host)).await
+                        }
+                    }
                 };
-                let appearance = guarded(api::appearance(host)).await;
+                let appearance_fut = guarded(api::appearance(host));
+                let (launcher, accounts, appearance) =
+                    tokio::join!(launcher_fut, accounts_fut, appearance_fut);
                 Snapshot {
                     status,
                     launcher,
@@ -898,10 +988,17 @@ impl Launcher {
             return;
         }
         self.rt.spawn(async move {
-            let result = guarded(api::play_readiness(host, id.clone(), account)).await;
-            let process = guarded(api::launch_state(id)).await.ok();
+            let (result, process) = tokio::join!(
+                guarded(api::play_readiness(host, id.clone(), account)),
+                guarded(api::launch_state(id)),
+            );
             let _ = tx
-                .send(Message::Readiness(serial, process_serial, result, process))
+                .send(Message::Readiness(
+                    serial,
+                    process_serial,
+                    result,
+                    process.ok(),
+                ))
                 .await;
         });
     }
@@ -1295,6 +1392,12 @@ impl Launcher {
                     }
                 });
             }
+        } else if tab == InstanceTab::Screenshots {
+            if let Some(editor) = &self.instance_editor {
+                editor.update(cx, |editor, cx| {
+                    editor.open_screenshots(instance.clone(), cx)
+                });
+            }
         } else if tab == InstanceTab::Settings {
             if let Some(editor) = &self.instance_editor {
                 editor.update(cx, |editor, cx| {
@@ -1396,6 +1499,30 @@ impl Launcher {
                     window,
                     |this, _, event: &pulsar::PulsarEvent, window, cx| match event {
                         pulsar::PulsarEvent::OpenInstances => this.open_page(3, window, cx),
+                        pulsar::PulsarEvent::Launch(target) => {
+                            let id = target
+                                .clone()
+                                .or_else(|| this.selected_id().map(str::to_owned))
+                                .or_else(|| {
+                                    this.launcher.as_ref().and_then(|s| {
+                                        s.instances
+                                            .iter()
+                                            .find(|i| i.aurora.is_some())
+                                            .or_else(|| s.instances.first())
+                                            .map(|i| i.id.clone())
+                                    })
+                                });
+                            if let Some(id) = id {
+                                if this.can_play(&id) {
+                                    this.action("play", id, cx);
+                                } else {
+                                    this.open_instance(id, InstanceTab::Overview, 0, window, cx);
+                                }
+                            } else {
+                                this.open_page(3, window, cx);
+                            }
+                            cx.notify();
+                        }
                     },
                 ));
             }
@@ -1488,16 +1615,23 @@ impl Launcher {
             } else {
                 let syncing =
                     cx.new(|cx| Syncing::new(self.host.clone(), self.rt.clone(), window, cx));
-                self._subscriptions.push(cx.subscribe(
+                self._subscriptions.push(cx.subscribe_in(
                     &syncing,
-                    |this, _, _: &SyncingEvent, cx| {
-                        this.sync_error = None;
-                        this.reload_guarded(cx);
-                        if let Some(editor) = &this.instance_editor {
-                            editor.update(cx, |editor, cx| editor.refresh(cx));
+                    window,
+                    |this, _, event: &SyncingEvent, window, cx| match event {
+                        SyncingEvent::Changed => {
+                            this.sync_error = None;
+                            this.reload_guarded(cx);
+                            if let Some(editor) = &this.instance_editor {
+                                editor.update(cx, |editor, cx| editor.refresh(cx));
+                            }
+                            this.refresh_content_views(cx);
+                            cx.notify();
                         }
-                        this.refresh_content_views(cx);
-                        cx.notify();
+                        SyncingEvent::OpenInstances => {
+                            this.open_page(3, window, cx);
+                            cx.notify();
+                        }
                     },
                 ));
                 self.syncing = Some(syncing);
@@ -1623,6 +1757,91 @@ impl Launcher {
         self.page = page;
         self.sync_mutation_guards(cx);
     }
+    fn refresh_rail_and_activity(&self) {
+        let Some(host) = self.host.clone() else {
+            return;
+        };
+        // Load player head avatar for the sidebar rail (cached by core, non-blocking).
+        let account_id = self.accounts.selected_account_id.clone().filter(|id| {
+            self.accounts
+                .accounts
+                .iter()
+                .any(|a| &a.account_id == id && a.status == "signedIn")
+        });
+        if account_id.is_some() || showcase() {
+            let host_avatar = host.clone();
+            let tx = self.tx.clone();
+            self.rt.spawn(async move {
+                let rgba = if showcase() {
+                    api::skin_thumbnail(host_avatar, "00000000-0000-0000-0000-000000000001".into())
+                        .await
+                        .ok()
+                        .flatten()
+                        .map(|t| t.rgba)
+                } else if let Some(id) = account_id {
+                    api::account_avatar(host_avatar, id)
+                        .await
+                        .ok()
+                        .flatten()
+                        .map(|a| a.rgba)
+                } else {
+                    None
+                };
+                let _ = tx.send(Message::RailAvatar(rgba)).await;
+            });
+        }
+        // Load lightweight local gameplay history summary for the active instance.
+        if let Some(instance_id) = self.selected_id().map(str::to_owned) {
+            let tx = self.tx.clone();
+            self.rt.spawn(async move {
+                let (playtime, servers) = tokio::join!(
+                    api::playtime(host.clone(), Some(instance_id.clone())),
+                    api::recent_servers(host, Some(instance_id.clone()), 1)
+                );
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs())
+                    .unwrap_or(0);
+                let mut stats: Vec<(gpui::SharedString, gpui::SharedString)> = Vec::new();
+                if let Ok(list) = &servers {
+                    if let Some(top) = list.first() {
+                        let at = if top.last_played_at > 100_000_000_000 {
+                            top.last_played_at / 1000
+                        } else {
+                            top.last_played_at
+                        };
+                        if at > 0 {
+                            let label = match now.saturating_sub(at) {
+                                0..=59 => "Just now".into(),
+                                s @ 60..=3599 => format!("{}m ago", s / 60),
+                                s @ 3600..=86399 => format!("{}h ago", s / 3600),
+                                s => format!("{}d ago", s / 86400),
+                            };
+                            stats.push(("Last played".into(), label.into()));
+                        }
+                    }
+                }
+                if let Ok(pt) = &playtime {
+                    if pt.last_7_days_ms > 0 {
+                        let mins = pt.last_7_days_ms / 60_000;
+                        let text = if mins >= 60 {
+                            format!("{}h {}m", mins / 60, mins % 60)
+                        } else {
+                            format!("{mins}m")
+                        };
+                        stats.push(("This week".into(), text.into()));
+                    }
+                }
+                if let Ok(list) = &servers {
+                    if let Some(top) = list.first().filter(|s| !s.display_name.trim().is_empty()) {
+                        stats.push(("Server".into(), top.display_name.clone().into()));
+                    }
+                }
+                let _ = tx.send(Message::HeroActivity(instance_id, stats)).await;
+            });
+        }
+    }
+
     fn receive(&mut self, msg: Message) {
         match msg {
             Message::MaybeOpenLog(_, _) => {}
@@ -1688,6 +1907,7 @@ impl Launcher {
                     }
                 }
                 self.readiness();
+                self.refresh_rail_and_activity();
                 if startup {
                     self.start_update_check();
                 }
@@ -1777,6 +1997,34 @@ impl Launcher {
                 self.sync_error = result
                     .err()
                     .map(|e| format!("Sync initialization: {}", e.message));
+            }
+            Message::RailAvatar(rgba) => {
+                self.rail_avatar = rgba.and_then(|bytes| {
+                    let pixels_count = bytes.len() / 4;
+                    let side = (pixels_count as f64).sqrt() as u32;
+                    if side == 0 || (side as usize) * (side as usize) * 4 != bytes.len() {
+                        return None;
+                    }
+                    if side < 64 {
+                        let img = image::RgbaImage::from_raw(side, side, bytes)?;
+                        let scaled = image::imageops::resize(
+                            &img,
+                            64,
+                            64,
+                            image::imageops::FilterType::Nearest,
+                        );
+                        images::rgba_image(64, 64, scaled.into_raw())
+                    } else {
+                        images::rgba_image(side, side, bytes)
+                    }
+                });
+            }
+            Message::HeroActivity(id, stats) => {
+                if stats.is_empty() {
+                    self.hero_activity.remove(&id);
+                } else {
+                    self.hero_activity.insert(id, stats);
+                }
             }
             Message::Event(name, payload) => {
                 if name == "instance-sync-state" {
@@ -1889,47 +2137,68 @@ impl Launcher {
             .as_deref()
             .and_then(|id| launcher.instances.iter().find(|i| i.id == id));
         let t = palette;
-        let mut head = div()
-            .flex()
-            .flex_col()
-            .gap(px(6.))
-            .flex_1()
-            .min_w(px(0.))
-            .child(self.instance_switcher(launcher, selected.as_deref(), window, cx));
+        let has_aurora = instance.is_some_and(|i| i.aurora.is_some());
+        // Balanced, breathable two-line identity stack inside the Home instance card:
+        // condensed enough to leave prime room for widgets, spacious enough to feel primary.
+        let mut head = div().flex().flex_col().gap(px(10.)).flex_1().min_w(px(0.));
         if let Some(instance) = instance {
-            let mut metadata = div()
-                .flex()
-                .items_center()
-                .flex_wrap()
-                .gap(px(8.))
-                .child(ui::caption(t, instance_metadata(instance)));
+            head = head.child(div().flex().items_center().gap(px(10.)).child(
+                if launcher.instances.len() > 1 {
+                    self.instance_switcher(launcher, selected.as_deref(), window, cx)
+                        .into_any_element()
+                } else {
+                    div()
+                        .text_size(px(ui::TEXT_DISPLAY + 2.))
+                        .line_height(px(34.))
+                        .font_weight(gpui::FontWeight::BOLD)
+                        .text_color(t.foreground)
+                        .text_ellipsis()
+                        .child(instance.display_name.clone())
+                        .into_any_element()
+                },
+            ));
+            let mut metadata = div().flex().items_center().flex_wrap().gap(px(8.));
+            if let Some(pin) = &instance.aurora {
+                metadata = metadata.child(ui::aurora_badge(
+                    t,
+                    format!("Aurora Client {}", pin.version),
+                ));
+            }
+            metadata = metadata.child(ui::badge(
+                t,
+                format!(
+                    "{} · {}",
+                    instance.minecraft_version,
+                    navigation::short_platform_label(instance)
+                ),
+                ui::Tone::Neutral,
+            ));
             if let Some((label, tone)) = self.readiness_badge(&instance.id) {
                 metadata = metadata.child(ui::status_badge(t, label, tone));
             }
             head = head.child(metadata);
+        } else {
+            head = head.child(self.instance_switcher(launcher, selected.as_deref(), window, cx));
         }
         let hero_icon = instance.map(|instance| {
-            instance_icon(
+            aurora_instance_icon(
                 stored_icon(&launcher.icons, &instance.id),
-                64.,
+                58.,
                 true,
+                instance.aurora.is_some(),
                 palette,
             )
         });
-        let mut details = div()
+        let details = div()
+            .relative()
             .flex()
-            .flex_col()
-            .gap(px(20.))
+            .items_center()
+            .gap(px(18.))
             .flex_1()
             .min_w(px(0.))
-            .child(
-                div()
-                    .flex()
-                    .items_start()
-                    .gap(px(16.))
-                    .children(hero_icon)
-                    .child(head),
-            );
+            .children(hero_icon)
+            .child(head);
+        let mut primary_cta: Option<gpui::AnyElement> = None;
         if let Some(id) = selected.clone() {
             let play_id = id.clone();
             let can_kill = self.can_kill(&id);
@@ -1938,106 +2207,64 @@ impl Launcher {
                     .visible_blockers(&id)
                     .iter()
                     .any(|blocker| blocker.code == "launch_authentication_required");
-            details = details.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .flex_wrap()
-                    .gap(px(10.))
-                    .child(
-                        div().child(
-                            self.button(
-                                "play",
-                                if needs_sign_in {
-                                    "Sign in to play"
-                                } else {
-                                    self.play_label(&id)
-                                },
-                            )
-                            .variant(if can_kill {
-                                ButtonVariant::Danger
-                            } else {
-                                ButtonVariant::Primary
-                            })
-                            .size(ButtonSize::Large)
-                            .icon(if can_kill {
-                                "stop"
-                            } else if needs_sign_in {
-                                "login"
-                            } else {
-                                "play_arrow"
-                            })
-                            .disabled(if needs_sign_in {
-                                self.controls_blocked()
-                            } else {
-                                !can_kill && !self.can_play(&id)
-                            })
-                            .on_click(cx.listener(
-                                move |this, _, window, cx| {
-                                    if can_kill {
-                                        this.request_kill(play_id.clone(), cx);
-                                    } else if needs_sign_in {
-                                        this.open_page(1, window, cx);
-                                    } else {
-                                        this.action("play", play_id.clone(), cx);
-                                    }
-                                    cx.notify();
-                                },
-                            )),
-                        ),
-                    )
-                    .child(
-                        self.button("game-log", "Game log")
-                            .disabled(self.host.is_none())
-                            .size(ButtonSize::Large)
-                            .on_click(cx.listener({
-                                let id = id.clone();
-                                move |this, _, _, cx| this.open_game_log(id.clone(), cx)
-                            })),
-                    )
-                    .child(
-                        self.button("instance-settings", "Edit instance")
-                            .variant(ButtonVariant::Default)
-                            .size(ButtonSize::Large)
-                            .icon("tune")
-                            .on_click(cx.listener(move |this, _, window, cx| {
-                                this.open_instance(
-                                    id.clone(),
-                                    InstanceTab::Settings,
-                                    0,
-                                    window,
-                                    cx,
-                                );
-                                cx.notify();
-                            })),
-                    ),
+            primary_cta = Some(
+                self.button(
+                    "play",
+                    if needs_sign_in {
+                        "Sign in to play"
+                    } else {
+                        self.play_label(&id)
+                    },
+                )
+                .variant(if can_kill {
+                    ButtonVariant::Danger
+                } else {
+                    ButtonVariant::Primary
+                })
+                .size(ButtonSize::Large)
+                .icon(if can_kill {
+                    "stop"
+                } else if needs_sign_in {
+                    "login"
+                } else {
+                    "play_arrow"
+                })
+                .disabled(if needs_sign_in {
+                    self.controls_blocked()
+                } else {
+                    !can_kill && !self.can_play(&id)
+                })
+                .on_click(cx.listener(move |this, _, window, cx| {
+                    if can_kill {
+                        this.request_kill(play_id.clone(), cx);
+                    } else if needs_sign_in {
+                        this.open_page(1, window, cx);
+                    } else {
+                        this.action("play", play_id.clone(), cx);
+                    }
+                    cx.notify();
+                }))
+                .into_any_element(),
             );
         }
-        let stats = match (&self.home_widgets, instance) {
-            (Some(home), Some(instance)) => home.read(cx).hero_stats(&instance.id),
-            _ => Vec::new(),
-        };
+        // Spacious yet condensed Home launch card leaving prime canvas for widgets.
         let stacked = window.viewport_size().width < px(900.);
-        out.push(
+        let hero_card = if has_aurora {
+            ui::aurora_card(t)
+        } else {
             ui::card(t)
+        };
+        out.push(
+            hero_card
+                .px(px(22.))
+                .py(px(18.))
                 .when(!stacked, |card| {
                     card.flex_row().items_center().justify_between()
                 })
                 .gap(px(20.))
                 .child(details)
-                .when(!stats.is_empty(), |card| {
-                    card.child(
-                        div()
-                            .flex()
-                            .flex_shrink_0()
-                            .gap(px(20.))
-                            .border_color(t.border_subtle)
-                            .when(stacked, |row| row.border_t_1().pt(px(12.)).w_full())
-                            .when(!stacked, |row| row.border_l_1().pl(px(20.)))
-                            .children(stats.into_iter().map(|(label, value)| {
-                                ui::stat(t, label, value).when(stacked, |stat| stat.flex_1())
-                            })),
-                    )
+                .when_some(primary_cta, |card, cta| {
+                    card.child(div().relative().flex().flex_shrink_0().child(cta))
                 })
                 .into_any_element(),
         );
@@ -2184,7 +2411,7 @@ impl Launcher {
             .as_ref()
             .filter(|decision| decision.instance_id == id);
         match decision {
-            Some(decision) if decision.ready => Some(("Ready to play", ui::Tone::Success)),
+            Some(decision) if decision.ready => Some(("Ready", ui::Tone::Success)),
             Some(decision) if decision.can_prepare => {
                 Some(("Needs preparation", ui::Tone::Warning))
             }
@@ -2286,38 +2513,42 @@ impl Render for Launcher {
             && showcase()
             && !self.showcase_instance_opened
             && self.instance_detail.is_none()
-            && std::env::var("AURORA_SHOWCASE_SECTION").as_deref() == Ok("screenshots")
         {
-            let wanted = std::env::var("AURORA_SHOWCASE_INSTANCE").unwrap_or_default();
-            if wanted != "none" {
-                let index = wanted.parse::<usize>().unwrap_or(0);
-                if let Some(id) = self
-                    .launcher
-                    .as_ref()
-                    .and_then(|state| state.instances.get(index))
-                    .map(|instance| instance.id.clone())
-                {
-                    self.showcase_instance_opened = true;
-                    self.open_instance(id, InstanceTab::Settings, 0, window, cx);
+            let section_env = std::env::var("AURORA_SHOWCASE_SECTION").ok();
+            let target_tab = match section_env.as_deref() {
+                Some("screenshots") => Some(InstanceTab::Screenshots),
+                Some("overview") => Some(InstanceTab::Overview),
+                Some("settings") => Some(InstanceTab::Settings),
+                Some("content") => Some(InstanceTab::Content),
+                _ => None,
+            };
+            if let Some(tab) = target_tab {
+                let wanted = std::env::var("AURORA_SHOWCASE_INSTANCE").unwrap_or_default();
+                if wanted != "none" {
+                    let index = wanted.parse::<usize>().unwrap_or(0);
+                    if let Some(id) = self
+                        .launcher
+                        .as_ref()
+                        .and_then(|state| state.instances.get(index))
+                        .map(|instance| instance.id.clone())
+                    {
+                        self.showcase_instance_opened = true;
+                        self.open_instance(id, tab, 0, window, cx);
+                    }
                 }
             }
         }
         if self.page == 3 && std::mem::take(&mut self.reset_instance_scroll) {
             page_scroll.set_offset(gpui::point(px(0.), px(0.)));
         }
-        let mut content = div()
+        let mut inner = div()
             .flex()
             .flex_col()
             .gap(px(ui::PAGE_GAP))
-            .px(px(navigation::PAGE_GUTTER))
-            .pt(px(4.))
-            .pb(px(40.))
-            .flex_1()
-            .id("content")
-            .min_w(px(0.))
-            .min_h(px(0.))
-            .track_scroll(&page_scroll)
-            .overflow_y_scroll();
+            .w_full()
+            .max_w(px(ui::MAX_CONTENT_WIDTH))
+            .mx_auto()
+            .min_w(px(0.));
         if showcase() {
             // Design screenshots can start part-way down a long page.
             if let Some(y) = std::env::var("AURORA_SHOWCASE_SCROLL")
@@ -2330,7 +2561,7 @@ impl Render for Launcher {
         match self.page {
             // The startup load failed: nothing else is trustworthy until it succeeds.
             _ if self.fatal_error.is_some() => {
-                content = content
+                inner = inner
                     .child(
                         div()
                             .text_2xl()
@@ -2355,48 +2586,40 @@ impl Render for Launcher {
                     );
             }
             0 => {
-                content = content
+                inner = inner
                     .child(
                         div()
                             .flex()
                             .items_center()
                             .justify_between()
                             .gap(px(16.))
-                            .child(ui::page_header(
-                                &palette,
-                                "Home",
-                                Some("Pick up where you left off.".into()),
-                            ))
+                            .child(ui::page_header(&palette, "Home", None))
                             .when_some(self.home_widgets.as_ref(), |header, home| {
                                 header.child(home.read(cx).customize_button(home.clone()))
                             }),
                     )
                     .children(self.home_children(&palette, window, cx));
                 if let Some(home) = &self.home_widgets {
-                    content = content.child(home.clone());
+                    inner = inner.child(home.clone());
                 }
             }
             1 => {
                 if let Some(page) = &self.accounts_page {
-                    content = content.child(page.clone());
+                    inner = inner.child(page.clone());
                 }
             }
             7 => {
-                content = content.child(ui::page_header(
-                    &palette,
-                    "Skins",
-                    Some("Preview, import and wear skins and capes.".into()),
-                ));
+                inner = inner.child(ui::page_header(&palette, "Skins", None));
                 if let Some(skins) = &self.skins {
-                    content = content.child(skins.clone());
+                    inner = inner.child(skins.clone());
                 }
             }
             3 => {
-                content = content.children(self.instances_children(&palette, window, cx));
+                inner = inner.children(self.instances_children(&palette, window, cx));
             }
             5 => {
                 if let Some(page) = &self.discover {
-                    content = content.child(page.clone());
+                    inner = inner.child(page.clone());
                 }
             }
             9 => {
@@ -2405,25 +2628,52 @@ impl Render for Launcher {
                     pulsar.update(cx, |pulsar, _| {
                         pulsar.page_scroll = Some(page_scroll.clone())
                     });
-                    content = content.child(pulsar.clone());
+                    inner = inner.child(pulsar.clone());
                 }
             }
             8 => {
-                if let Some(downloads) = &self.downloads {
-                    content = content.child(downloads.clone());
+                // Downloads are now floating fade-out popup notifications; fall back to Home.
+                inner = inner
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .justify_between()
+                            .gap(px(16.))
+                            .child(ui::page_header(&palette, "Home", None))
+                            .when_some(self.home_widgets.as_ref(), |header, home| {
+                                header.child(home.read(cx).customize_button(home.clone()))
+                            }),
+                    )
+                    .children(self.home_children(&palette, window, cx));
+                if let Some(home) = &self.home_widgets {
+                    inner = inner.child(home.clone());
                 }
             }
             6 => {
                 if let Some(page) = &self.syncing {
-                    content = content.child(page.clone());
+                    inner = inner.child(page.clone());
                 }
             }
             _ => {
                 if let Some(settings) = &self.settings {
-                    content = content.child(settings.clone());
+                    inner = inner.child(settings.clone());
                 }
             }
         }
+        let mut content = div()
+            .flex()
+            .flex_col()
+            .px(px(navigation::PAGE_GUTTER))
+            .pt(px(8.))
+            .pb(px(40.))
+            .flex_1()
+            .id("content")
+            .min_w(px(0.))
+            .min_h(px(0.))
+            .track_scroll(&page_scroll)
+            .overflow_y_scroll()
+            .child(inner);
         if self.page == 3
             && self.instance_detail.is_none()
             && self.fatal_error.is_none()
@@ -2454,6 +2704,128 @@ impl Render for Launcher {
                     }
                 }));
         }
+        // Clean contextual title-bar strip (single back link, live update or running-game status only).
+        let mut title_left = div().flex().items_center().gap(px(6.));
+        if self.page == 3 && self.instance_detail.is_some() {
+            let editor_busy = self
+                .instance_editor
+                .as_ref()
+                .is_some_and(|editor| editor.read(cx).is_busy());
+            title_left = title_left.child(
+                AuroraButton::new("title-breadcrumb-instances", "Instances")
+                    .variant(ButtonVariant::Ghost)
+                    .size(ButtonSize::Small)
+                    .icon("arrow_back")
+                    .disabled(editor_busy)
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.open_page(3, window, cx);
+                        cx.notify();
+                    })),
+            );
+        }
+        if self.page == 6 {
+            title_left = title_left.child(
+                AuroraButton::new("title-breadcrumb-sync-instances", "Instances")
+                    .variant(ButtonVariant::Ghost)
+                    .size(ButtonSize::Small)
+                    .icon("arrow_back")
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.open_page(3, window, cx);
+                        cx.notify();
+                    })),
+            );
+        }
+        // Global Aurora Client update chip: surfaces only when a real Client update is ready to review.
+        if let Some(ver) = self.launcher.as_ref().and_then(|s| {
+            s.instances
+                .iter()
+                .find_map(|i| self.client_offer(i).map(str::to_owned))
+        }) {
+            title_left = title_left.child(
+                AuroraButton::new(
+                    "title-aurora-update",
+                    format!("Aurora Client {ver} update available"),
+                )
+                .variant(ButtonVariant::Soft)
+                .size(ButtonSize::Small)
+                .icon("system_update")
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.open_page(2, window, cx);
+                    cx.notify();
+                })),
+            );
+        }
+        // Live running-game pill visible across every page.
+        if let Some((run_id, run_name, phase)) = self.launcher.as_ref().and_then(|s| {
+            s.instances.iter().find_map(|i| {
+                let phase = self.game_phase(&i.id);
+                matches!(phase, GamePhase::Running | GamePhase::Starting)
+                    .then(|| (i.id.clone(), i.display_name.clone(), phase))
+            })
+        }) {
+            let state_word = if phase == GamePhase::Running {
+                "Running"
+            } else {
+                "Starting…"
+            };
+            title_left = title_left.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .child(ui::status_badge(
+                        &palette,
+                        format!("{run_name} · {state_word}"),
+                        if phase == GamePhase::Running {
+                            ui::Tone::Success
+                        } else {
+                            ui::Tone::Accent
+                        },
+                    ))
+                    .when(self.can_kill(&run_id), |row| {
+                        let stop_id = run_id.clone();
+                        row.child(
+                            AuroraButton::new("title-stop-game", "Stop")
+                                .variant(ButtonVariant::DangerSubtle)
+                                .size(ButtonSize::Small)
+                                .icon("stop")
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.request_kill(stop_id.clone(), cx);
+                                    cx.notify();
+                                })),
+                        )
+                    }),
+            );
+        }
+
+        let refresh_disabled = self.busy
+            || self.account_busy
+            || self.skin_busy
+            || self.client_update_running(cx)
+            || self.load_in_flight
+            || self.host.is_none();
+        let hover_refresh = palette.control_hover;
+        let title_right = gpui_kit::base::Button::new("title-refresh-launcher")
+            .accessibility_label("Refresh")
+            .disabled(refresh_disabled)
+            .flex()
+            .items_center()
+            .justify_center()
+            .size(px(30.))
+            .mr(px(6.))
+            .rounded(palette.radius)
+            .hover(move |s| s.bg(hover_refresh))
+            .child(symbols::icon(
+                Some("refresh"),
+                px(18.),
+                if refresh_disabled {
+                    palette.subtle_foreground
+                } else {
+                    palette.muted_foreground
+                },
+            ))
+            .on_click(cx.listener(|this, _, _, cx| this.refresh_page(cx)));
+
         div()
             .size_full()
             .flex()
@@ -2473,7 +2845,13 @@ impl Render for Launcher {
                     .flex()
                     .flex_col()
                     .when(chrome::custom(), |column| {
-                        column.child(chrome::title_bar(window, cx, &palette))
+                        column.child(chrome::title_bar_with_context(
+                            window,
+                            cx,
+                            &palette,
+                            title_left,
+                            title_right,
+                        ))
                     })
                     .child(
                         div()
@@ -2507,6 +2885,7 @@ impl Render for Launcher {
                         },
                     ),
             )
+            .children(self.downloads.clone())
             .child(self.kill_dialog(cx))
     }
 }
@@ -2563,10 +2942,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             },
         ))
     };
-    if let Some(host) = host.as_ref().filter(|_| !diagnostic) {
-        if api::initialize_discord(host.clone()).is_err() {
-            eprintln!("[aurora-launcher] Discord preferences unavailable; see Settings");
-        }
+    if let Some(host) = host.as_ref().filter(|_| !diagnostic).cloned() {
+        rt.spawn_blocking(move || {
+            if api::initialize_discord(host).is_err() {
+                eprintln!("[aurora-launcher] Discord preferences unavailable; see Settings");
+            }
+        });
     }
     gpui_kit::platform::application().run(move |cx: &mut App| {
         gpui_kit::base::init(cx);
@@ -2708,6 +3089,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         this.status = "The installation could not be queued. Review the folder again.".into();
                                     }
                                 }
+                                PackImportEvent::OpenSync => {
+                                    this.open_page(6, window, cx);
+                                }
                                 PackImportEvent::OpenLocalPack { project_id, version_id, note } => {
                                     this.open_page(5, window, cx);
                                     let opened = this.discover.as_ref().is_some_and(|discover| {
@@ -2745,6 +3129,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         rt,
                         tx,
                         page: 0,
+                        sidebar_collapsed: true,
+                        instances_filter: 0,
                         instance_detail: None,
                         reset_instance_scroll: false,
                         showcase_instance_opened: false,
@@ -2771,6 +3157,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         readiness_rechecks: 0,
                         launcher: None,
                         accounts: Default::default(),
+                        rail_avatar: None,
+                        hero_activity: HashMap::new(),
                         appearance: None,
                         readiness: None,
                         processes: HashMap::new(),
@@ -2995,6 +3383,8 @@ mod tests {
             },
             tx,
             page: 0,
+            sidebar_collapsed: false,
+            instances_filter: 0,
             instance_detail: None,
             reset_instance_scroll: false,
             showcase_instance_opened: false,
@@ -3021,6 +3411,8 @@ mod tests {
             readiness_rechecks: 0,
             launcher: None,
             accounts: Default::default(),
+            rail_avatar: None,
+            hero_activity: HashMap::new(),
             appearance: None,
             readiness: None,
             processes: HashMap::new(),

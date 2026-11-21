@@ -229,8 +229,27 @@ async fn fetch_index(
     url: &Url,
     options: &DownloadOptions,
 ) -> Result<Vec<u8>, RuntimeMetadataError> {
-    crate::performance::measure(crate::performance::Event::RuntimeMetadataHttp, async {
-        let client = downloads::build_client(options);
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{Duration, Instant};
+
+    const CACHE_TTL: Duration = Duration::from_secs(120);
+    const MAX_ENTRIES: usize = 4;
+    static CACHE: OnceLock<Mutex<HashMap<String, (Instant, Vec<u8>)>>> = OnceLock::new();
+
+    let cacheable = url.scheme() == "https" && !downloads::is_loopback_host(url);
+    if cacheable {
+        if let Ok(guard) = CACHE.get_or_init(|| Mutex::new(HashMap::new())).lock() {
+            if let Some((stored_at, cached)) = guard.get(url.as_str()) {
+                if stored_at.elapsed() < CACHE_TTL {
+                    return Ok(cached.clone());
+                }
+            }
+        }
+    }
+
+    let body = crate::performance::measure(crate::performance::Event::RuntimeMetadataHttp, async {
+        let client = downloads::build_metadata_client(options);
         let response = client.get(url.clone()).send().await.map_err(|error| {
             RuntimeMetadataError::IndexNetwork(DownloadError::from_transport(error))
         })?;
@@ -249,7 +268,10 @@ async fn fetch_index(
                 limit_bytes: MAX_INDEX_BYTES,
             });
         }
-        let mut body = Vec::new();
+        let initial_cap = response
+            .content_length()
+            .map_or(0, |size| (size as usize).min(MAX_INDEX_BYTES));
+        let mut body = Vec::with_capacity(initial_cap);
         let mut response = response;
         while let Some(chunk) = response.chunk().await.map_err(|error| {
             RuntimeMetadataError::IndexNetwork(DownloadError::from_transport(error))
@@ -263,7 +285,18 @@ async fn fetch_index(
         }
         Ok(body)
     })
-    .await
+    .await?;
+
+    if cacheable {
+        if let Ok(mut guard) = CACHE.get_or_init(|| Mutex::new(HashMap::new())).lock() {
+            if guard.len() >= MAX_ENTRIES {
+                guard.clear();
+            }
+            guard.insert(url.as_str().to_owned(), (Instant::now(), body.clone()));
+        }
+    }
+
+    Ok(body)
 }
 
 #[derive(Debug)]

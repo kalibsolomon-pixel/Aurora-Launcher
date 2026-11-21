@@ -260,14 +260,13 @@ pub async fn head(skin: &SkinTexture, refresh: bool) -> Option<HeadAvatar> {
             return Some(avatar);
         }
     }
-    crate::downloads::ensure_rustls_crypto_provider();
-    let client = reqwest::Client::builder()
-        .user_agent(crate::downloads::user_agent())
-        .timeout(Duration::from_secs(10))
-        .redirect(reqwest::redirect::Policy::none())
-        .https_only(true)
-        .build()
-        .ok()?;
+    let client = crate::downloads::build_direct_client(
+        None,
+        None,
+        Some(Duration::from_secs(10)),
+        true,
+        false,
+    );
     let avatar = fetch(&client, &skin.url, &skin.model).await?;
     cache().lock().ok()?.put(skin, avatar.clone());
     Some(avatar)

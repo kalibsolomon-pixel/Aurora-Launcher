@@ -7,8 +7,7 @@ use aurora_launcher_lib::modrinth::{ProjectPage, ProjectRelease, VersionChoice, 
 use gpui::{
     AnyElement, App, Bounds, Context, Div, ElementId, Entity, FontStyle, FontWeight,
     HighlightStyle, InteractiveText, ObjectFit, Render, RenderImage, ScrollHandle, SharedString,
-    StyledText, UnderlineStyle, Window, WindowBounds, WindowOptions, div, img, point, prelude::*,
-    px, size,
+    StyledText, Window, WindowBounds, WindowOptions, div, img, point, prelude::*, px, size,
 };
 
 use super::{Discover, KINDS, SelectUi, channel, grouped, loader_name, markdown, size_label};
@@ -25,12 +24,19 @@ use crate::{
 use aurora_launcher_lib::host::Host;
 use std::sync::Arc;
 
+#[derive(Clone)]
 pub(super) struct ProjectTarget {
     pub kind: usize,
     pub project_id: String,
     pub title: String,
     pub target: Option<api::InstanceSummary>,
 }
+
+pub(super) enum ProjectPopupEvent {
+    Close,
+}
+
+impl gpui::EventEmitter<ProjectPopupEvent> for ProjectWindow {}
 
 pub(super) fn open(
     host: Host,
@@ -211,7 +217,7 @@ enum Message {
     Changelog(String, api::ApiResult<Vec<markdown::Block>>),
 }
 
-struct ProjectWindow {
+pub(super) struct ProjectWindow {
     host: Host,
     runtime: tokio::runtime::Handle,
     downloads: Entity<Downloads>,
@@ -231,9 +237,24 @@ struct ProjectWindow {
     icon: Option<Arc<RenderImage>>,
     artwork: ArtworkCache<String>,
     pending: HashSet<String>,
+    embedded: bool,
 }
 
 impl ProjectWindow {
+    pub(super) fn embedded(
+        host: Host,
+        runtime: tokio::runtime::Handle,
+        downloads: Entity<Downloads>,
+        review: Entity<Discover>,
+        target: ProjectTarget,
+        icon: Option<Arc<RenderImage>>,
+        cx: &mut Context<Self>,
+    ) -> Self {
+        let mut view = Self::new(host, runtime, downloads, review, target, icon, cx);
+        view.embedded = true;
+        view
+    }
+
     fn new(
         host: Host,
         runtime: tokio::runtime::Handle,
@@ -276,6 +297,7 @@ impl ProjectWindow {
             icon,
             artwork: ArtworkCache::new(MEDIA_CAPACITY),
             pending: HashSet::new(),
+            embedded: false,
         };
         view.load_page();
         if view.icon.is_none() {
@@ -371,13 +393,24 @@ impl ProjectWindow {
         {
             return;
         }
+        static MEDIA_SLOTS: std::sync::OnceLock<Arc<tokio::sync::Semaphore>> =
+            std::sync::OnceLock::new();
+        let slots =
+            Arc::clone(MEDIA_SLOTS.get_or_init(|| Arc::new(tokio::sync::Semaphore::new(4))));
         let (tx, host) = (self.tx.clone(), self.host.clone());
         self.runtime.spawn(async move {
+            let _permit = slots.acquire_owned().await.ok();
             let request = api::project_image(host, url.clone());
             let image = guarded(async move {
-                Ok(request
-                    .await
-                    .and_then(|bytes| artwork::raw_from_png(&bytes)))
+                let Some(bytes) = request.await else {
+                    return Ok(None);
+                };
+                Ok(
+                    tokio::task::spawn_blocking(move || artwork::raw_from_png(&bytes))
+                        .await
+                        .ok()
+                        .flatten(),
+                )
             })
             .await
             .ok()
@@ -613,65 +646,174 @@ fn release_choices<'a>(
 
 impl Render for ProjectWindow {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        self.artwork.flush_dropped(window);
         let palette = theme::theme(cx).clone();
         let t = &palette;
-        let body = match &self.page {
-            Some(Ok(page)) => div()
-                .flex()
-                .flex_col()
-                .gap(px(20.))
-                .child(self.header(page, t))
-                .child(
-                    div().flex().flex_wrap().gap(px(6.)).children(
-                        TABS.into_iter()
-                            .enumerate()
-                            .filter_map(|(index, (tab, label))| {
+        let body =
+            match &self.page {
+                Some(Ok(page)) => div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(20.))
+                    .child(self.header(page, t, cx))
+                    .child(div().flex().child(
+                        ui::segmented_tabs(t).children(TABS.into_iter().enumerate().filter_map(
+                            |(index, (tab, label))| {
                                 if tab == Tab::Gallery && page.gallery.is_empty() {
                                     return None;
                                 }
                                 Some(
                                     AuroraButton::new(("project-tab", index), label)
                                         .variant(ButtonVariant::Ghost)
+                                        .size(ButtonSize::Small)
                                         .selected(self.tab == tab)
                                         .on_click(cx.listener(move |this, _, _, cx| {
                                             this.select_tab(tab, cx)
                                         })),
                                 )
-                            }),
+                            },
+                        )),
+                    ))
+                    .child(ui::divider(t))
+                    .child(match self.tab {
+                        Tab::Description if !self.description.is_empty() => {
+                            self.markdown(&self.description, t, cx)
+                        }
+                        Tab::Description => ui::muted(t, "This project has no description."),
+                        Tab::Gallery => self.gallery(page, t, cx),
+                        Tab::Versions => self.versions(page, t, cx),
+                        Tab::Changelog => self.changelog(page, t, cx),
+                    }),
+                Some(Err(error)) => div()
+                    .flex()
+                    .flex_col()
+                    .items_start()
+                    .gap(px(12.))
+                    .child(ui::page_header(t, self.target.title.clone(), None))
+                    .child(ui::muted(t, error.message.clone()))
+                    .child(
+                        AuroraButton::new("project-retry", "Retry").on_click(cx.listener(
+                            |this, _, _, cx| {
+                                this.load_page();
+                                cx.notify();
+                            },
+                        )),
                     ),
-                )
-                .child(ui::divider(t))
-                .child(match self.tab {
-                    Tab::Description if !self.description.is_empty() => {
-                        self.markdown(&self.description, t, cx)
-                    }
-                    Tab::Description => ui::muted(t, "This project has no description."),
-                    Tab::Gallery => self.gallery(page, t, cx),
-                    Tab::Versions => self.versions(page, t, cx),
-                    Tab::Changelog => self.changelog(page, t, cx),
-                }),
-            Some(Err(error)) => div()
-                .flex()
-                .flex_col()
-                .items_start()
-                .gap(px(12.))
-                .child(ui::page_header(t, self.target.title.clone(), None))
-                .child(ui::muted(t, error.message.clone()))
-                .child(
-                    AuroraButton::new("project-retry", "Retry").on_click(cx.listener(
-                        |this, _, _, cx| {
-                            this.load_page();
-                            cx.notify();
-                        },
+                None => div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(12.))
+                    .child(ui::page_header(t, self.target.title.clone(), None))
+                    .child(ui::muted(t, "Loading project details…")),
+            };
+        let scroller = div()
+            .relative()
+            .flex_1()
+            .min_h(px(0.))
+            .min_w(px(0.))
+            .child(
+                div()
+                    .id("project-scroll")
+                    .size_full()
+                    .overflow_y_scroll()
+                    .track_scroll(&self.scroll)
+                    .p(px(24.))
+                    .pb(px(36.))
+                    .child(body),
+            )
+            .child(
+                div()
+                    .absolute()
+                    .left_0()
+                    .right_0()
+                    .bottom_0()
+                    .h(px(28.))
+                    .bg(gpui::linear_gradient(
+                        180.,
+                        gpui::linear_color_stop(gpui::Hsla { a: 0.0, ..t.raised }, 0.),
+                        gpui::linear_color_stop(
+                            gpui::Hsla {
+                                a: 0.92,
+                                ..t.raised
+                            },
+                            1.,
+                        ),
                     )),
-                ),
-            None => div()
+            )
+            .child(
+                ui::scrollbar(t, "project-scrollbar", &self.scroll)
+                    .mode(gpui_kit::base::ScrollbarMode::Always),
+            );
+
+        if self.embedded {
+            let hover_close = t.control_hover;
+            let ring_close = t.ring;
+            return div()
+                .w(px(880.).min(window.viewport_size().width - px(64.)))
+                .h(px(700.).min(window.viewport_size().height - px(64.)))
                 .flex()
                 .flex_col()
-                .gap(px(12.))
-                .child(ui::page_header(t, self.target.title.clone(), None))
-                .child(ui::muted(t, "Loading project details…")),
-        };
+                .rounded(t.radius_lg)
+                .bg(t.raised)
+                .border_1()
+                .border_color(t.border)
+                .shadow_lg()
+                .overflow_hidden()
+                .text_color(t.foreground)
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(12.))
+                        .px(px(20.))
+                        .py(px(10.))
+                        .border_b_1()
+                        .border_color(t.border_subtle)
+                        .child(ui::caption(
+                            t,
+                            match self.target.target.as_ref() {
+                                Some(target) => {
+                                    let aurora = target
+                                        .aurora
+                                        .as_ref()
+                                        .map(|pin| format!(" · Aurora Client {}", pin.version))
+                                        .unwrap_or_default();
+                                    format!(
+                                        "{} · {} · {}{aurora}",
+                                        target.display_name,
+                                        target.minecraft_version,
+                                        loader_name(&target.platform.kind),
+                                    )
+                                }
+                                None => "Modrinth project".to_owned(),
+                            },
+                        ))
+                        .child(
+                            gpui_kit::base::Button::new("project-modal-close")
+                                .accessibility_label("Close")
+                                .flex()
+                                .flex_none()
+                                .items_center()
+                                .justify_center()
+                                .size(px(30.))
+                                .rounded(t.radius)
+                                .hover(move |s| s.bg(hover_close))
+                                .focus_visible(move |s| s.border_1().border_color(ring_close))
+                                .child(crate::symbols::icon(
+                                    Some("close"),
+                                    px(18.),
+                                    t.muted_foreground,
+                                ))
+                                .on_click(cx.listener(|_, _, _, cx| {
+                                    cx.emit(ProjectPopupEvent::Close);
+                                })),
+                        ),
+                )
+                .child(scroller)
+                .child(self.review.clone());
+        }
+
         div()
             .size_full()
             .flex()
@@ -682,29 +824,68 @@ impl Render for ProjectWindow {
             .when(chrome::custom(), |root| {
                 root.child(chrome::title_bar(window, cx, t))
             })
-            .child(
-                div()
-                    .relative()
-                    .flex_1()
-                    .min_h(px(0.))
-                    .min_w(px(0.))
-                    .child(
-                        div()
-                            .id("project-scroll")
-                            .size_full()
-                            .overflow_y_scroll()
-                            .track_scroll(&self.scroll)
-                            .p(px(24.))
-                            .child(body),
-                    )
-                    .child(ui::scrollbar(t, "project-scrollbar", &self.scroll)),
-            )
+            .child(scroller)
             .child(self.review.clone())
     }
 }
 
 impl ProjectWindow {
-    fn header(&self, page: &ProjectPage, t: &AuroraTheme) -> Div {
+    fn header(&self, page: &ProjectPage, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
+        let target = self.target.target.as_ref();
+        let matching = self.filters.matching(&page.releases);
+        let selected = matching
+            .iter()
+            .find(|item| Some(&item.version.id) == self.filters.version.as_ref());
+        let busy = self
+            .downloads
+            .read(cx)
+            .busy_projects()
+            .contains(&page.project_id);
+        let block_reason = selected
+            .and_then(|release| release.version.unsupported_reason.as_deref())
+            .or_else(|| install_block(self.target.kind, target, &self.filters));
+        let can_install = selected.is_some() && block_reason.is_none();
+        let install_label = match target {
+            Some(tgt) => format!("Install to {}", tgt.display_name),
+            None => "Install".to_owned(),
+        };
+        let install_cta = if busy {
+            AuroraButton::new("project-header-install", "In Downloads")
+                .icon("download")
+                .variant(ButtonVariant::Primary)
+                .disabled(true)
+        } else if can_install {
+            AuroraButton::new("project-header-install", install_label)
+                .icon("download")
+                .variant(ButtonVariant::Primary)
+                .on_click(cx.listener(|this, _, window, cx| this.install(window, cx)))
+        } else {
+            AuroraButton::new("project-header-install", "Versions")
+                .icon("download")
+                .variant(ButtonVariant::Primary)
+                .on_click(cx.listener(|this, _, _, cx| this.select_tab(Tab::Versions, cx)))
+        };
+        let short_ver = selected.map(|release| {
+            let raw = release.version.version_number.as_str();
+            raw.strip_prefix("mc")
+                .and_then(|s| s.split_once('-').map(|(_, rest)| rest))
+                .unwrap_or(raw)
+                .trim_end_matches("-fabric")
+                .trim_end_matches("-neoforge")
+                .trim_end_matches("-forge")
+                .trim_end_matches("-quilt")
+                .to_owned()
+        });
+        let target_loader = target.map(|tgt| tgt.platform.kind.as_str());
+        let short_count = |n: u64| -> String {
+            if n >= 1_000_000 {
+                format!("{:.1}M", n as f64 / 1_000_000.0)
+            } else if n >= 1_000 {
+                format!("{:.1}K", n as f64 / 1_000.0)
+            } else {
+                grouped(n)
+            }
+        };
         div()
             .flex()
             .flex_col()
@@ -730,24 +911,95 @@ impl ProjectWindow {
                             .gap(px(6.))
                             .child(
                                 div()
-                                    .text_size(px(ui::TEXT_DISPLAY))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .child(page.title.clone()),
-                            )
-                            .children(
-                                page.author
-                                    .as_ref()
-                                    .map(|author| ui::caption(t, format!("by {author}"))),
+                                    .flex()
+                                    .items_start()
+                                    .justify_between()
+                                    .gap(px(12.))
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .gap(px(3.))
+                                            .min_w(px(0.))
+                                            .child(
+                                                div()
+                                                    .text_size(px(ui::TEXT_DISPLAY))
+                                                    .line_height(px(32.))
+                                                    .font_weight(FontWeight::SEMIBOLD)
+                                                    .child(page.title.clone()),
+                                            )
+                                            .children(page.author.as_ref().map(|author| {
+                                                ui::caption(t, format!("by {author}"))
+                                            })),
+                                    )
+                                    .child(
+                                        div()
+                                            .flex()
+                                            .flex_col()
+                                            .items_end()
+                                            .gap(px(6.))
+                                            .flex_shrink_0()
+                                            .child(install_cta)
+                                            .when_some(short_ver, |col, ver| {
+                                                col.child(
+                                                    div()
+                                                        .flex()
+                                                        .items_center()
+                                                        .gap(px(6.))
+                                                        .child(ui::caption(t, format!("v{ver}")))
+                                                        .when(can_install, |row| {
+                                                            row.child(ui::status_badge(
+                                                                t,
+                                                                "Compatible",
+                                                                ui::Tone::Success,
+                                                            ))
+                                                        }),
+                                                )
+                                            }),
+                                    ),
                             )
                             .child(ui::muted(t, page.summary.clone()))
-                            .child(ui::caption(
-                                t,
-                                format!(
-                                    "{} downloads · {} followers",
-                                    grouped(page.downloads),
-                                    grouped(page.followers)
-                                ),
-                            )),
+                            .child(
+                                div()
+                                    .flex()
+                                    .flex_wrap()
+                                    .items_center()
+                                    .gap(px(10.))
+                                    .child(ui::caption(
+                                        t,
+                                        format!(
+                                            "{} downloads · {} followers",
+                                            short_count(page.downloads),
+                                            short_count(page.followers)
+                                        ),
+                                    ))
+                                    .when(!page.links.is_empty(), |row| {
+                                        row.child(ui::caption(t, "·")).children(
+                                            page.links.iter().enumerate().map(|(index, link)| {
+                                                let url = link.url.clone();
+                                                let fg = t.foreground;
+                                                let link_color = gpui::Hsla {
+                                                    h: t.accent.h,
+                                                    s: (t.accent.s * 0.92).min(1.0),
+                                                    l: 0.74,
+                                                    a: 1.0,
+                                                };
+                                                gpui_kit::base::Button::new(("project-link", index))
+                                                    .accessibility_label(link.label)
+                                                    .text_size(px(ui::TEXT_CAPTION))
+                                                    .text_color(link_color)
+                                                    .hover(move |s| s.text_color(fg).underline())
+                                                    .child(link.label)
+                                                    .on_click(move |_, _, cx| {
+                                                        if let Some(url) = safe_web_link(&url, None)
+                                                        {
+                                                            cx.open_url(&url);
+                                                        }
+                                                    })
+                                            }),
+                                        )
+                                    }),
+                            ),
                     ),
             )
             .child(
@@ -758,21 +1010,35 @@ impl ProjectWindow {
                     .children(
                         page.loaders
                             .iter()
-                            .map(|loader| ui::badge(t, loader_name(loader), ui::Tone::Accent)),
+                            .filter(|loader| {
+                                target_loader.map_or(true, |want| {
+                                    want.eq_ignore_ascii_case(loader)
+                                        || !page
+                                            .loaders
+                                            .iter()
+                                            .any(|l| want.eq_ignore_ascii_case(l))
+                                })
+                            })
+                            .map(|loader| ui::badge(t, loader_name(loader), ui::Tone::Neutral)),
                     )
-                    .children(
-                        page.categories
-                            .iter()
-                            .map(|category| ui::badge(t, category.clone(), ui::Tone::Neutral)),
-                    ),
+                    .children(page.categories.iter().map(|category| {
+                        let pretty = category
+                            .split(['-', '_'])
+                            .filter(|part| !part.is_empty())
+                            .map(|part| {
+                                let mut chars = part.chars();
+                                match chars.next() {
+                                    Some(first) => {
+                                        format!("{}{}", first.to_ascii_uppercase(), chars.as_str())
+                                    }
+                                    None => String::new(),
+                                }
+                            })
+                            .collect::<Vec<_>>()
+                            .join(" ");
+                        ui::badge(t, pretty, ui::Tone::Neutral)
+                    })),
             )
-            .when(!page.links.is_empty(), |header| {
-                header.child(div().flex().flex_wrap().gap(px(6.)).children(
-                    page.links.iter().enumerate().map(|(index, link)| {
-                        browser_link(("project-link", index), link.label, link.url.clone())
-                    }),
-                ))
-            })
     }
 
     fn gallery(&self, page: &ProjectPage, t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
@@ -1022,18 +1288,70 @@ impl ProjectWindow {
             )
     }
 
+    fn is_suppressed_block(&self, block: &markdown::Block) -> bool {
+        match block {
+            markdown::Block::Image { alt, url } => {
+                let alt_lower = alt.to_ascii_lowercase();
+                if alt_lower.contains("ko-fi")
+                    || alt_lower.contains("buy me a coffee")
+                    || alt_lower.contains("discord")
+                    || alt_lower.contains("patreon")
+                    || alt_lower.contains("donate")
+                {
+                    return true;
+                }
+                if let Some(url) = url {
+                    let url_lower = url.to_ascii_lowercase();
+                    if url_lower.contains("ko-fi")
+                        || url_lower.contains("shields.io")
+                        || url_lower.contains("badgen.net")
+                        || url_lower.contains("badge")
+                    {
+                        return true;
+                    }
+                    if let Some(image) = self.artwork.image(url) {
+                        let dimensions = image.size(0);
+                        let raw_w = dimensions.width.0.max(1) as f32;
+                        let raw_h = dimensions.height.0.max(1) as f32;
+                        if raw_h <= 110. && (raw_w / raw_h) >= 2.2 {
+                            return true;
+                        }
+                    }
+                }
+                false
+            }
+            markdown::Block::Text(spans) => spans.iter().all(|span| span.text.trim().is_empty()),
+            _ => false,
+        }
+    }
+
     fn markdown(&self, blocks: &[markdown::Block], t: &AuroraTheme, cx: &mut Context<Self>) -> Div {
         let mut index = 0;
+        let mut visible: Vec<&markdown::Block> = Vec::with_capacity(blocks.len());
+        for block in blocks {
+            if self.is_suppressed_block(block) {
+                continue;
+            }
+            if matches!(block, markdown::Block::Rule)
+                && (visible.is_empty() || matches!(visible.last(), Some(markdown::Block::Rule)))
+            {
+                continue;
+            }
+            visible.push(block);
+        }
+        while matches!(visible.last(), Some(markdown::Block::Rule)) {
+            visible.pop();
+        }
         div()
-            .max_w(px(740.))
+            .w_full()
             .flex()
             .flex_col()
             .gap(px(12.))
             .text_size(px(ui::TEXT_BODY))
             .line_height(px(22.))
             .children(
-                blocks
-                    .iter()
+                visible
+                    .into_iter()
                     .map(|block| self.block(block, t, cx, &mut index)),
             )
     }
@@ -1063,9 +1381,10 @@ impl ProjectWindow {
                 .flex()
                 .flex_col()
                 .gap(px(6.))
-                .border_l_2()
-                .border_color(t.border)
-                .pl(px(12.))
+                .rounded(t.radius)
+                .bg(t.sunken)
+                .px(px(12.))
+                .py(px(8.))
                 .text_color(t.muted_foreground)
                 .children(blocks.iter().map(|child| self.block(child, t, cx, index)))
                 .into_any_element(),
@@ -1131,19 +1450,38 @@ impl ProjectWindow {
             let key = url.to_owned();
             if let Some(image) = self.artwork.image(&key) {
                 let dimensions = image.size(0);
-                let width = dimensions.width.0.min(740) as f32;
-                let height = dimensions.height.0 as f32 * width / dimensions.width.0 as f32;
-                return media
-                    .child(
-                        img(image)
-                            .w(px(width))
-                            .max_w_full()
-                            .h(px(height))
-                            .max_h(px(420.))
-                            .object_fit(ObjectFit::Contain)
-                            .rounded(t.radius),
-                    )
-                    .child(ui::caption(t, alt.to_owned()));
+                let raw_w = dimensions.width.0.max(1) as f32;
+                let raw_h = dimensions.height.0.max(1) as f32;
+                let aspect = raw_w / raw_h;
+                let alt_lower = alt.to_ascii_lowercase();
+                // Skip third-party sponsor/social badge banners in markdown descriptions so
+                // actual mod prose and real screenshots stay front and center.
+                let is_promo_badge = (raw_h <= 110. && aspect >= 2.2)
+                    || alt_lower.contains("ko-fi")
+                    || alt_lower.contains("buy me a coffee")
+                    || alt_lower.contains("discord")
+                    || alt_lower.contains("patreon")
+                    || alt_lower.contains("donate");
+                if id.0 == 1 && is_promo_badge {
+                    return div();
+                }
+                let width = raw_w.min(680.);
+                let height = (raw_h * width / raw_w).min(400.);
+                return media.child(
+                    div()
+                        .rounded(t.radius)
+                        .border_1()
+                        .border_color(t.border_subtle)
+                        .overflow_hidden()
+                        .bg(t.sunken)
+                        .child(
+                            img(image)
+                                .w(px(width))
+                                .max_w_full()
+                                .h(px(height))
+                                .object_fit(ObjectFit::Contain),
+                        ),
+                );
             }
             if self.pending.contains(&key) {
                 return media.child(ui::muted(t, format!("Loading {alt}…")));
@@ -1178,7 +1516,6 @@ fn browser_link(
     AuroraButton::new(id, text)
         .variant(ButtonVariant::Ghost)
         .size(ButtonSize::Small)
-        .icon("open_in_new")
         .on_click(move |_, _, cx| {
             if let Some(url) = safe_web_link(&url, None) {
                 cx.open_url(&url);
@@ -1209,10 +1546,11 @@ fn rich_text(id: usize, spans: &[markdown::Span], t: &AuroraTheme) -> AnyElement
         styles.push((
             range,
             HighlightStyle {
-                color: span.link.as_ref().map(|_| t.ring),
-                underline: span.link.as_ref().map(|_| UnderlineStyle {
-                    thickness: px(1.),
-                    ..Default::default()
+                color: span.link.as_ref().map(|_| gpui::Hsla {
+                    h: t.accent.h,
+                    s: (t.accent.s * 0.95).min(1.0),
+                    l: 0.76,
+                    a: 1.0,
                 }),
                 font_style: span.style.italic.then_some(FontStyle::Italic),
                 font_weight: span.style.bold.then_some(FontWeight::BOLD),

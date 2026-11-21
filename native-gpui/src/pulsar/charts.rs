@@ -62,6 +62,7 @@ type Activate = std::rc::Rc<dyn Fn(Target, &mut Window, &mut gpui::App)>;
 pub(super) struct Options {
     pub preferences: Preferences,
     pub header: Option<Div>,
+    pub header_right: Option<Div>,
     pub activate: Option<Activate>,
     /// Frozen region ellipses: center x/y, radii x/y, grade index; largest first.
     pub regions: Vec<(f64, f64, f64, f64, usize)>,
@@ -571,7 +572,7 @@ impl Chart {
             // Two lanes (you and the opponent) need little height.
             104.
         } else if self.id.contains("trend") {
-            80.
+            180.
         } else {
             164.
         };
@@ -592,9 +593,13 @@ impl Chart {
                         }
                     },
                     move |bounds, _, window, _| {
-                        let left = bounds.origin.x;
+                        let is_trend = chart.id.contains("trend");
+                        let inset = if is_trend { px(42.) } else { px(0.) };
+                        let full_left = bounds.origin.x;
+                        let full_width = bounds.size.width;
+                        let left = full_left + inset;
                         let top = bounds.origin.y;
-                        let width = bounds.size.width;
+                        let width = (full_width - inset * 2.).max(px(1.));
                         let height = bounds.size.height;
                         let x = |v| left + width * fraction(v, chart.domain);
                         let y = |v| top + height * (1. - fraction(v, chart.range));
@@ -606,7 +611,7 @@ impl Chart {
                             let yy = y(value);
                             stroke(
                                 window,
-                                &[(left, yy), (left + width, yy)],
+                                &[(full_left, yy), (full_left + full_width, yy)],
                                 palette.border_subtle,
                                 1.,
                             );
@@ -744,6 +749,18 @@ impl Chart {
                                         }
                                     }
                                 }
+                                if is_trend && pts.len() >= 2 {
+                                    let baseline = top + height;
+                                    for pair in pts.windows(2) {
+                                        let (x0, y0) = pair[0];
+                                        let (x1, y1) = pair[1];
+                                        polygon(
+                                            window,
+                                            &[(x0, baseline), (x0, y0), (x1, y1), (x1, baseline)],
+                                            palette.ring.opacity(0.11),
+                                        );
+                                    }
+                                }
                                 stroke(window, &pts, palette.ring, 2.);
                             }
                         }
@@ -836,6 +853,17 @@ impl Chart {
                                             palette.subtle_foreground,
                                             2.,
                                         );
+                                    } else if chart.id.contains("trend") {
+                                        let circle = |radius: gpui::Pixels| -> Vec<_> {
+                                            (0..16)
+                                                .map(|i| {
+                                                    let a = i as f32 * std::f32::consts::TAU / 16.;
+                                                    (xx + radius * a.cos(), yy + radius * a.sin())
+                                                })
+                                                .collect()
+                                        };
+                                        polygon(window, &circle(px(6.0)), palette.card);
+                                        polygon(window, &circle(px(4.2)), palette.ring);
                                     } else {
                                         mark(window, s.shape, xx, yy, ink);
                                     }
@@ -1025,6 +1053,8 @@ impl Chart {
                     ),
             )
         };
+        let has_header = options.header.is_some();
+        let has_header_right = options.header_right.is_some();
         let shell = if options.embedded {
             div().flex().flex_col().gap(px(8.))
         } else {
@@ -1043,7 +1073,7 @@ impl Chart {
                     .items_center()
                     .justify_between()
                     .gap(px(8.))
-                    .when(!options.embedded, |d| {
+                    .when(!options.embedded && !(trend && has_header), |d| {
                         d.child(ui::section_header(t, self.title.clone(), None))
                     })
                     .when(options.embedded, |d| {
@@ -1062,9 +1092,14 @@ impl Chart {
                             format!("Playhead {:.1} s", self.playhead.unwrap_or(0.)),
                         ))
                     })
-                    .when(trend, |d| d.child(ui::caption(t, self.x_label.clone()))),
+                    .when_some(options.header_right, |d, right| d.child(right))
+                    .when(trend && !has_header_right, |d| {
+                        d.child(ui::caption(t, self.x_label.clone()))
+                    }),
             )
-            .when(trend, |d| d.child(ui::caption(t, self.note.clone())))
+            .when(trend && !self.note.is_empty(), |d| {
+                d.child(ui::caption(t, self.note.clone()))
+            })
             .when(
                 !lanes && !trend && !combo_distribution && !self.y_label.is_empty(),
                 |d| d.child(ui::caption(t, self.y_label.clone())),
@@ -1074,6 +1109,7 @@ impl Chart {
                 div()
                     .flex()
                     .gap(px(12.))
+                    .when(trend, |d| d.pt(px(14.)))
                     .child(if lanes {
                         div()
                             .w(px(label_width))
@@ -1157,15 +1193,53 @@ impl Chart {
                         }))
                 } else {
                     if trend {
-                        div().flex().justify_between().children((0..=4).map(|i| {
-                            ui::caption(
-                                t,
-                                self.samples
-                                    .get((self.samples.len().saturating_sub(1) * i) / 4)
-                                    .map(|s| super::presentation::short_stamp(axis_date(&s.label)))
-                                    .unwrap_or_else(|| "Unavailable".into()),
-                            )
-                        }))
+                        let count = self.samples.len();
+                        let indices: Vec<usize> = if count <= 5 {
+                            (0..count).collect()
+                        } else {
+                            (0..=4).map(|i| ((count - 1) * i) / 4).collect()
+                        };
+                        let stamps: Vec<(usize, String)> = indices
+                            .iter()
+                            .filter_map(|&idx| {
+                                let s = self.samples.get(idx)?;
+                                Some((idx, super::presentation::short_stamp(axis_date(&s.label))))
+                            })
+                            .collect();
+                        let same_day = stamps.len() > 1 && {
+                            let first_day = stamps[0].1.rsplit_once(' ').map(|(d, _)| d);
+                            first_day.is_some()
+                                && stamps
+                                    .iter()
+                                    .all(|(_, t)| t.rsplit_once(' ').map(|(d, _)| d) == first_day)
+                        };
+                        div().px(px(42.)).w_full().child(
+                            div().relative().h(px(18.)).w_full().children(
+                                stamps.into_iter().filter_map(|(idx, stamp)| {
+                                    let s = self.samples.get(idx)?;
+                                    let text = if same_day {
+                                        if let Some((_, clock)) = stamp.rsplit_once(' ') {
+                                            format!("#{} · {clock}", idx + 1)
+                                        } else {
+                                            stamp
+                                        }
+                                    } else {
+                                        stamp
+                                    };
+                                    let frac = fraction(s.x, self.domain);
+                                    Some(
+                                        ui::caption(t, text)
+                                            .absolute()
+                                            .top_0()
+                                            .whitespace_nowrap()
+                                            .left(relative(frac))
+                                            .ml(px(-44.))
+                                            .w(px(88.))
+                                            .text_center(),
+                                    )
+                                }),
+                            ),
+                        )
                     } else {
                         let step = nice_step(self.domain.1 - self.domain.0, 5.);
                         div().relative().h(px(16.)).children(

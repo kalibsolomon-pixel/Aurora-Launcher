@@ -127,6 +127,7 @@ pub struct SkinPreview {
     runtime: tokio::runtime::Handle,
     state: PreviewState,
     image: Option<Arc<RenderImage>>,
+    retired: Vec<Arc<RenderImage>>,
     focus: FocusHandle,
     drag: Option<Point<Pixels>>,
     rear: bool,
@@ -134,6 +135,12 @@ pub struct SkinPreview {
 impl SkinPreview {
     pub fn has_texture(&self) -> bool {
         self.state.scene.skin.is_some() || self.state.scene.cape.is_some()
+    }
+
+    fn replace_image(&mut self, next: Option<Arc<RenderImage>>) {
+        if let Some(old) = std::mem::replace(&mut self.image, next) {
+            self.retired.push(old);
+        }
     }
 
     pub fn new(
@@ -145,6 +152,7 @@ impl SkinPreview {
             runtime,
             state: PreviewState::new(),
             image: None,
+            retired: Vec::new(),
             focus: cx.focus_handle(),
             drag: None,
             rear: false,
@@ -162,7 +170,7 @@ impl SkinPreview {
         self.state.scene.cape = cape;
         let changed = !old.same_appearance(&self.state.scene);
         if changed {
-            self.image = None;
+            self.replace_image(None);
         }
         if rear != self.rear {
             self.rear = rear;
@@ -197,7 +205,7 @@ impl SkinPreview {
         };
         if request.skin.is_none() && request.cape.is_none() {
             self.state.finish(&request, true);
-            self.image = None;
+            self.replace_image(None);
             return;
         }
         let mut work = request.clone();
@@ -224,9 +232,10 @@ impl SkinPreview {
             let result = rx.await.ok().and_then(Result::ok);
             let _ = weak.update(cx, |this, cx| {
                 if this.state.finish(&request, result.is_some()) {
-                    this.image = result.and_then(|pixels| {
+                    let next = result.and_then(|pixels| {
                         images::rgba_image(player::WIDTH, player::HEIGHT, pixels)
                     });
+                    this.replace_image(next);
                 }
                 this.dispatch(cx);
                 cx.notify();
@@ -254,7 +263,10 @@ impl SkinPreview {
 const STAGE_HEIGHT: f32 = 260.;
 
 impl Render for SkinPreview {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        for image in self.retired.drain(..) {
+            let _ = window.drop_image(image);
+        }
         let t = theme::theme(cx).clone();
         let focus = self.focus.clone();
         let entity = cx.entity();
@@ -280,10 +292,10 @@ impl Render for SkinPreview {
             }
             div().flex_1().min_w(px(0.)).child(button)
         };
-        // Icon-only tool button (32px) with an accessible name.
+        // Icon-only tool button (30px) with an accessible name.
         let tool = |id: &'static str,
                     label: &'static str,
-                    short: &'static str,
+                    _short: &'static str,
                     icon: &'static str,
                     action: fn(&mut Self, &mut Context<Self>)| {
             let entity = entity.clone();
@@ -294,19 +306,14 @@ impl Render for SkinPreview {
                 .flex_shrink_0()
                 .items_center()
                 .justify_center()
-                .gap(px(4.))
-                .h(px(26.))
-                .px(px(7.))
+                .size(px(30.))
                 .rounded(t.radius)
                 .border_1()
                 .border_color(gpui::transparent_black())
                 .hover(move |style| style.bg(hover))
                 .active(|style| style.opacity(0.88))
                 .focus(move |style| style.border_color(ring))
-                .text_size(px(ui::TEXT_CAPTION))
-                .text_color(color)
-                .child(crate::symbols::icon(Some(icon), px(14.), color))
-                .child(short)
+                .child(crate::symbols::icon(Some(icon), px(18.), color))
                 .on_click(move |_, _, cx| {
                     entity.update(cx, |s, cx| action(s, cx));
                 })
@@ -436,85 +443,78 @@ impl Render for SkinPreview {
                         .text_center()
                         .child(ui::caption(&t, "Choose a PNG to preview it here.")),
                 )
-            })
-            .when(!neutral, |d| {
-                d.child(
-                    // Labeled view tools, centered atop the stage. Presses here must
-                    // not start a rotate-drag on the stage underneath.
-                    div()
-                        .absolute()
-                        .top(px(8.))
-                        .left(px(0.))
-                        .right(px(0.))
-                        .flex()
-                        .justify_center()
-                        .child(
-                            div()
-                                .flex()
-                                .gap(px(2.))
-                                .p(px(3.))
-                                .rounded(t.radius_lg)
-                                .bg(t.raised)
-                                .border_1()
-                                .border_color(t.border_subtle)
-                                .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                                .child(tool(
-                                    "preview-zoom-in",
-                                    "Zoom in",
-                                    "Zoom in",
-                                    "zoom_in",
-                                    |s, cx| s.zoom(0.08, cx),
-                                ))
-                                .child(tool(
-                                    "preview-zoom-out",
-                                    "Zoom out",
-                                    "Zoom out",
-                                    "zoom_out",
-                                    |s, cx| s.zoom(-0.08, cx),
-                                ))
-                                .child(tool(
-                                    "preview-reset",
-                                    "Reset view",
-                                    "Reset",
-                                    "restart_alt",
-                                    |s, cx| s.reset(cx),
-                                )),
-                        ),
-                )
             });
 
+        let zoom_overlay = div()
+            .absolute()
+            .right(px(8.))
+            .bottom(px(8.))
+            .flex()
+            .items_center()
+            .gap(px(2.))
+            .p(px(2.))
+            .rounded_full()
+            .bg(gpui::Hsla {
+                a: 0.84,
+                ..t.sunken
+            })
+            .border_1()
+            .border_color(t.border_subtle)
+            .child(tool(
+                "preview-zoom-in",
+                "Zoom in",
+                "Zoom in",
+                "zoom_in",
+                |s, cx| s.zoom(0.08, cx),
+            ))
+            .child(tool(
+                "preview-zoom-out",
+                "Zoom out",
+                "Zoom out",
+                "zoom_out",
+                |s, cx| s.zoom(-0.08, cx),
+            ))
+            .child(tool(
+                "preview-reset",
+                "Reset view",
+                "Reset",
+                "restart_alt",
+                |s, cx| s.reset(cx),
+            ));
+
         ui::card(&t)
-            .gap(px(14.))
+            .gap(px(10.))
             .p(px(0.))
             .bg(gpui::transparent_black())
             .border_0()
-            .w(px(if neutral { 180. } else { 320. }))
-            .h(px(if neutral { 180. } else { 338. }))
+            .w(px(if neutral { 180. } else { 300. }))
+            .h(px(if neutral { 180. } else { 320. }))
             .when(neutral, |card| {
                 card.bg(gpui::transparent_black()).border_0().p(px(0.))
             })
             .flex_shrink_0()
             .text_color(t.foreground)
-            .child(stage)
-            // View segments left, the outer-layers toggle right.
+            .child(stage.when(!neutral, |s| s.child(zoom_overlay)))
+            // Unified single bottom control bar: Front/Back segments + outer-layers toggle.
             .when(!neutral, |card| {
                 card.child(
                     div()
                         .flex()
                         .items_center()
                         .justify_between()
-                        .gap(px(8.))
+                        .gap(px(12.))
+                        .px(px(6.))
+                        .py(px(4.))
+                        .rounded(t.radius)
+                        .bg(t.sunken)
+                        .border_1()
+                        .border_color(t.border_subtle)
                         .child(
                             div()
                                 .flex()
-                                .w(px(132.))
+                                .w(px(126.))
                                 .flex_shrink_0()
                                 .gap(px(2.))
-                                .p(px(3.))
-                                .rounded(t.radius)
-                                .bg(t.sunken)
-                                .border_1()
-                                .border_color(t.border_subtle)
                                 .child(control(
                                     "preview-front",
                                     "Front",
@@ -538,11 +538,12 @@ impl Render for SkinPreview {
                                 .flex_shrink_0()
                                 .items_center()
                                 .gap(px(8.))
+                                .pr(px(4.))
                                 .child(
                                     div()
                                         .text_size(px(ui::TEXT_CAPTION))
                                         .text_color(t.muted_foreground)
-                                        .child("Outer layers"),
+                                        .child("Layers"),
                                 )
                                 .child(
                                     AuroraToggle::new("preview-layers")
@@ -551,7 +552,7 @@ impl Render for SkinPreview {
                                         .on_change(move |value, _, _, cx| {
                                             layers_entity.update(cx, |s, cx| {
                                                 s.state.scene.layers = value;
-                                                s.image = None;
+                                                s.replace_image(None);
                                                 s.changed(cx);
                                             });
                                         }),

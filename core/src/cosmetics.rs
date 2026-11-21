@@ -757,13 +757,7 @@ fn normalize(profile: WireProfile, account_id: &str) -> Result<CosmeticsState> {
     })
 }
 fn client() -> reqwest::Client {
-    crate::downloads::ensure_rustls_crypto_provider();
-    reqwest::Client::builder()
-        .user_agent(crate::downloads::user_agent())
-        .timeout(Duration::from_secs(15))
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("cosmetic client")
+    crate::downloads::build_direct_client(None, None, Some(Duration::from_secs(15)), false, true)
 }
 async fn request(request: reqwest::RequestBuilder) -> Result<Vec<u8>> {
     let mut response = request.send().await.map_err(|_| {

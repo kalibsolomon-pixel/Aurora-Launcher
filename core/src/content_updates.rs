@@ -123,9 +123,9 @@ pub async fn check_updates(
     let state = ContentState::load_and_migrate(managed, instance)?;
     let pack = crate::pack_state::InstalledPack::load(managed, instance)
         .map_err(|error| ContentError::StateMalformed(error.to_string()))?;
-    let mut entries = Vec::new();
+    let mut slots: Vec<Option<UpdateAvailability>> = Vec::new();
+    let mut pending_checks = Vec::new();
     let mut dependency_managed = 0usize;
-    let mut rate_limited = false;
     let mut reported_pack_projects = HashSet::new();
     for record in &state.entries {
         if record.provider != "modrinth" || kind.is_some_and(|kind| record.content_type != kind) {
@@ -146,7 +146,7 @@ pub async fn check_updates(
             // Distinct pack files can share a project. Update discovery is
             // project-scoped, so show one explanatory row for that project.
             if reported_pack_projects.insert((record.content_type, record.project_id.clone())) {
-                entries.push(UpdateAvailability {
+                slots.push(Some(UpdateAvailability {
                     content_type: record.content_type,
                     project_id: record.project_id.clone(),
                     current_version,
@@ -160,12 +160,12 @@ pub async fn check_updates(
                         pack.as_ref().unwrap().identity.name,
                         pack.as_ref().unwrap().identity.pack_version
                     )),
-                });
+                }));
             }
             continue;
         }
         if let Some(block) = local_block(managed, instance, record) {
-            entries.push(UpdateAvailability {
+            slots.push(Some(UpdateAvailability {
                 content_type: record.content_type,
                 project_id: record.project_id.clone(),
                 current_version,
@@ -190,85 +190,146 @@ pub async fn check_updates(
                     }
                 }
                 .to_owned()),
-            });
+            }));
             continue;
         }
-        if rate_limited {
-            entries.push(UpdateAvailability {
-                content_type: record.content_type,
-                project_id: record.project_id.clone(),
-                current_version,
-                status: UpdateStatus::ProviderUnavailable,
-                block: None,
-                candidate: None,
-                pinned: record.pinned,
-                channel: record.update_channel,
-                detail: Some(
-                    "Update check paused: the provider is rate limiting requests. Try again later."
-                        .into(),
-                ),
-            });
-            continue;
-        }
-        let availability = match client.update_discovery(context, record).await {
-            Ok(discovery) => {
-                let status = match discovery.candidate {
-                    Some(_) => {
-                        if record.pinned {
-                            UpdateStatus::PinnedUpdateAvailable
-                        } else {
-                            UpdateStatus::UpdateAvailable
+        let slot = slots.len();
+        slots.push(None);
+        pending_checks.push((slot, record, current_version));
+    }
+
+    if !pending_checks.is_empty() {
+        use std::sync::atomic::{AtomicBool, Ordering};
+        const UPDATE_CHECK_CONCURRENCY: usize = 6;
+
+        let map_result = |record: &ProviderRecord,
+                          current_version: &str,
+                          result: Result<
+            crate::modrinth::UpdateDiscovery,
+            crate::modrinth::Error,
+        >|
+         -> UpdateAvailability {
+            match result {
+                Ok(discovery) => {
+                    let status = match discovery.candidate {
+                        Some(_) => {
+                            if record.pinned {
+                                UpdateStatus::PinnedUpdateAvailable
+                            } else {
+                                UpdateStatus::UpdateAvailable
+                            }
                         }
+                        None if discovery.newer_compatible_exists => {
+                            UpdateStatus::NoNewerUnderPolicy
+                        }
+                        None => UpdateStatus::UpToDate,
+                    };
+                    let detail = (status == UpdateStatus::NoNewerUnderPolicy).then(|| {
+                        format!(
+                            "Newer versions exist but none is allowed by the {} release-channel policy for this content.",
+                            channel_label(record.update_channel)
+                        )
+                    });
+                    UpdateAvailability {
+                        content_type: record.content_type,
+                        project_id: record.project_id.clone(),
+                        current_version: current_version.to_owned(),
+                        status,
+                        block: None,
+                        candidate: discovery.candidate,
+                        pinned: record.pinned,
+                        channel: record.update_channel,
+                        detail,
                     }
-                    None if discovery.newer_compatible_exists => UpdateStatus::NoNewerUnderPolicy,
-                    None => UpdateStatus::UpToDate,
-                };
-                let detail = (status == UpdateStatus::NoNewerUnderPolicy).then(|| {
-                    format!(
-                        "Newer versions exist but none is allowed by the {} release-channel policy for this content.",
-                        channel_label(record.update_channel)
-                    )
-                });
-                UpdateAvailability {
+                }
+                Err(crate::modrinth::Error::NotFound) => UpdateAvailability {
                     content_type: record.content_type,
                     project_id: record.project_id.clone(),
-                    current_version,
-                    status,
+                    current_version: current_version.to_owned(),
+                    status: UpdateStatus::CurrentVersionUnknown,
                     block: None,
-                    candidate: discovery.candidate,
+                    candidate: None,
                     pinned: record.pinned,
                     channel: record.update_channel,
-                    detail,
-                }
+                    detail: Some(
+                        "The provider no longer lists this exact project or version.".into(),
+                    ),
+                },
+                Err(crate::modrinth::Error::InvalidResponse) => UpdateAvailability {
+                    content_type: record.content_type,
+                    project_id: record.project_id.clone(),
+                    current_version: current_version.to_owned(),
+                    status: UpdateStatus::CurrentVersionUnknown,
+                    block: None,
+                    candidate: None,
+                    pinned: record.pinned,
+                    channel: record.update_channel,
+                    detail: Some(
+                        "The published version no longer matches the recorded provider identity."
+                            .into(),
+                    ),
+                },
+                Err(crate::modrinth::Error::RateLimited(_)) => UpdateAvailability {
+                    content_type: record.content_type,
+                    project_id: record.project_id.clone(),
+                    current_version: current_version.to_owned(),
+                    status: UpdateStatus::ProviderUnavailable,
+                    block: None,
+                    candidate: None,
+                    pinned: record.pinned,
+                    channel: record.update_channel,
+                    detail: Some("The provider is rate limiting requests. Try again later.".into()),
+                },
+                Err(_) => UpdateAvailability {
+                    content_type: record.content_type,
+                    project_id: record.project_id.clone(),
+                    current_version: current_version.to_owned(),
+                    status: UpdateStatus::ProviderUnavailable,
+                    block: None,
+                    candidate: None,
+                    pinned: record.pinned,
+                    channel: record.update_channel,
+                    detail: Some("The provider could not be reached for this project.".into()),
+                },
             }
-            Err(crate::modrinth::Error::NotFound) => UpdateAvailability {
-                content_type: record.content_type,
-                project_id: record.project_id.clone(),
-                current_version,
-                status: UpdateStatus::CurrentVersionUnknown,
-                block: None,
-                candidate: None,
-                pinned: record.pinned,
-                channel: record.update_channel,
-                detail: Some("The provider no longer lists this exact project or version.".into()),
-            },
-            Err(crate::modrinth::Error::InvalidResponse) => UpdateAvailability {
-                content_type: record.content_type,
-                project_id: record.project_id.clone(),
-                current_version,
-                status: UpdateStatus::CurrentVersionUnknown,
-                block: None,
-                candidate: None,
-                pinned: record.pinned,
-                channel: record.update_channel,
-                detail: Some(
-                    "The published version no longer matches the recorded provider identity."
-                        .into(),
-                ),
-            },
-            Err(crate::modrinth::Error::RateLimited(_)) => {
-                rate_limited = true;
-                UpdateAvailability {
+        };
+
+        // Probe the first project before fanning out so an already-rate-limited
+        // provider only receives one request instead of a concurrent burst.
+        let rate_limited = AtomicBool::new(false);
+        let (first_slot, first_record, ref first_version) = pending_checks[0];
+        let first_result = client.update_discovery(context, first_record).await;
+        if matches!(first_result, Err(crate::modrinth::Error::RateLimited(_))) {
+            rate_limited.store(true, Ordering::Release);
+        }
+        slots[first_slot] = Some(map_result(first_record, first_version, first_result));
+
+        if pending_checks.len() > 1 && !rate_limited.load(Ordering::Acquire) {
+            let _ = crate::transfer::settled_each(
+                &pending_checks[1..],
+                UPDATE_CHECK_CONCURRENCY,
+                || !rate_limited.load(Ordering::Acquire),
+                |(_, record, _)| {
+                    let rate_limited = &rate_limited;
+                    async move {
+                        let result = client.update_discovery(context, record).await;
+                        if matches!(result, Err(crate::modrinth::Error::RateLimited(_))) {
+                            rate_limited.store(true, Ordering::Release);
+                        }
+                        Ok::<_, std::convert::Infallible>(result)
+                    }
+                },
+                |(slot, record, current_version), result| {
+                    slots[*slot] = Some(map_result(record, current_version, result));
+                },
+            )
+            .await;
+        }
+
+        // Any item skipped after rate limiting was observed gets the paused notice.
+        for (slot, record, current_version) in pending_checks {
+            if slots[slot].is_none() {
+                slots[slot] = Some(UpdateAvailability {
                     content_type: record.content_type,
                     project_id: record.project_id.clone(),
                     current_version,
@@ -277,23 +338,16 @@ pub async fn check_updates(
                     candidate: None,
                     pinned: record.pinned,
                     channel: record.update_channel,
-                    detail: Some("The provider is rate limiting requests. Try again later.".into()),
-                }
+                    detail: Some(
+                        "Update check paused: the provider is rate limiting requests. Try again later."
+                            .into(),
+                    ),
+                });
             }
-            Err(_) => UpdateAvailability {
-                content_type: record.content_type,
-                project_id: record.project_id.clone(),
-                current_version,
-                status: UpdateStatus::ProviderUnavailable,
-                block: None,
-                candidate: None,
-                pinned: record.pinned,
-                channel: record.update_channel,
-                detail: Some("The provider could not be reached for this project.".into()),
-            },
-        };
-        entries.push(availability);
+        }
     }
+
+    let entries = slots.into_iter().flatten().collect();
     Ok(UpdatesReport {
         instance_id: instance.to_string(),
         entries,

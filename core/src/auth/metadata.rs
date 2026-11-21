@@ -181,15 +181,13 @@ impl std::error::Error for AuthTransportError {}
 /// exchange is forbidden), HTTPS is transport policy, timeouts are bounded,
 /// and the user agent is the shared launcher identity.
 fn auth_client() -> reqwest::Client {
-    downloads::ensure_rustls_crypto_provider();
-
-    reqwest::Client::builder()
-        .user_agent(downloads::user_agent())
-        .connect_timeout(downloads::CONNECT_TIMEOUT)
-        .read_timeout(downloads::IDLE_READ_TIMEOUT)
-        .redirect(reqwest::redirect::Policy::none())
-        .build()
-        .expect("authentication client configuration is valid")
+    downloads::build_direct_client(
+        Some(downloads::CONNECT_TIMEOUT),
+        Some(downloads::IDLE_READ_TIMEOUT),
+        None,
+        false,
+        true,
+    )
 }
 
 /// Sends one request and returns `(status, bounded body)`.

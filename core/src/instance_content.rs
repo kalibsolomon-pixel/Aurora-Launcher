@@ -1360,7 +1360,7 @@ fn inspect_archive(
             );
         }
     };
-    let mut zip = match zip::ZipArchive::new(file) {
+    let mut zip = match zip::ZipArchive::new(std::io::BufReader::new(file)) {
         Ok(zip) => zip,
         Err(_) => {
             return (
@@ -1385,8 +1385,8 @@ fn inspect_archive(
     }
     if kind == ContentType::ShaderPack {
         let has_shaders = (0..zip.len()).any(|i| {
-            zip.by_index(i)
-                .is_ok_and(|entry| entry.name().starts_with("shaders/"))
+            zip.name_for_index(i)
+                .is_some_and(|name| name.starts_with("shaders/"))
         });
         return (
             None,
@@ -1400,10 +1400,7 @@ fn inspect_archive(
         );
     }
     let matches: Vec<_> = (0..zip.len())
-        .filter(|index| {
-            zip.by_index(*index)
-                .is_ok_and(|entry| entry.name() == "pack.mcmeta")
-        })
+        .filter(|index| zip.name_for_index(*index) == Some("pack.mcmeta"))
         .collect();
     if matches.len() != 1 {
         return (
@@ -1933,6 +1930,7 @@ pub async fn reconcile_provider_resolution(
         if index + 1 == count || plan.content_type != ContentType::Mod {
             continue;
         }
+        let mut installed_sha512: HashMap<String, Option<String>> = HashMap::new();
         let exact = inventory.entries.iter().find(|entry| {
             if !crate::mod_compatibility::usable(entry) {
                 return false;
@@ -1942,22 +1940,29 @@ pub async fn reconcile_provider_resolution(
                     entry.sha256.as_deref() == Some(s.sha256().as_hex().as_str())
                 }
                 ProviderArtifactSource::Sha512(s) => {
-                    let path = managed
-                        .instance_paths(instance)
-                        .mods()
-                        .join(&entry.file_name);
-                    std::fs::File::open(path).is_ok_and(|mut file| {
-                        let mut hash = sha2::Sha512::new();
-                        let mut buffer = [0u8; 65536];
-                        loop {
-                            match file.read(&mut buffer) {
-                                Ok(0) => break,
-                                Ok(n) => hash.update(&buffer[..n]),
-                                Err(_) => return false,
-                            }
-                        }
-                        format!("{:x}", hash.finalize()) == s.sha512().as_hex()
-                    })
+                    let expected_hex = s.sha512().as_hex();
+                    let computed = installed_sha512
+                        .entry(entry.file_name.clone())
+                        .or_insert_with(|| {
+                            let path = managed
+                                .instance_paths(instance)
+                                .mods()
+                                .join(&entry.file_name);
+                            let mut file = std::fs::File::open(path).ok()?;
+                            let mut hash = sha2::Sha512::new();
+                            crate::integrity::with_hash_buffer(|buffer| {
+                                loop {
+                                    match file.read(buffer) {
+                                        Ok(0) => return Some(()),
+                                        Ok(n) => hash.update(&buffer[..n]),
+                                        Err(_) => return None,
+                                    }
+                                }
+                            })?;
+                            let raw: [u8; 64] = hash.finalize().into();
+                            Some(crate::integrity::encode_hex(&raw))
+                        });
+                    computed.as_deref() == Some(expected_hex.as_str())
                 }
             }
         });
@@ -2354,12 +2359,14 @@ fn activate_provider_transaction_with_revision(
         }
         let mut keys = HashSet::new();
         let mut targets = Vec::new();
+        let mut existing_names: HashMap<ContentType, (PathBuf, HashSet<String>)> = HashMap::new();
         let required = crate::instance_mods::managed_artifact_file_name(managed, instance)
             .map_err(|error| ContentError::StateMalformed(error.to_string()))?
             .unwrap_or_default();
         for (record, _, _) in &acquired {
-            let key = (record.content_type, record.file_name.to_lowercase());
-            if !keys.insert(key.clone())
+            let lowered = record.file_name.to_lowercase();
+            let key = (record.content_type, lowered.clone());
+            if !keys.insert(key)
                 || state.entries.iter().any(|entry| {
                     entry.content_type == record.content_type
                         && entry.file_name.eq_ignore_ascii_case(&record.file_name)
@@ -2371,19 +2378,21 @@ fn activate_provider_transaction_with_revision(
             {
                 return Err(ContentError::Collision);
             }
-            let directory = ensure_directory(managed, instance, record.content_type)?;
+            let (directory, names) = match existing_names.entry(record.content_type) {
+                std::collections::hash_map::Entry::Occupied(entry) => entry.into_mut(),
+                std::collections::hash_map::Entry::Vacant(entry) => {
+                    let directory = ensure_directory(managed, instance, record.content_type)?;
+                    let mut names = HashSet::new();
+                    for item in std::fs::read_dir(&directory).map_err(ContentError::Io)? {
+                        if let Ok(item) = item {
+                            names.insert(item.file_name().to_string_lossy().to_lowercase());
+                        }
+                    }
+                    entry.insert((directory, names))
+                }
+            };
             let target = directory.join(&record.file_name);
-            if std::fs::symlink_metadata(&target).is_ok()
-                || std::fs::read_dir(&directory)
-                    .map_err(ContentError::Io)?
-                    .any(|item| {
-                        item.is_ok_and(|item| {
-                            item.file_name()
-                                .to_string_lossy()
-                                .eq_ignore_ascii_case(&record.file_name)
-                        })
-                    })
-            {
+            if names.contains(&lowered) || std::fs::symlink_metadata(&target).is_ok() {
                 return Err(ContentError::Collision);
             }
             targets.push(target);

@@ -864,18 +864,33 @@ fn inspect_entry(
     } else {
         ModOwnership::Unknown
     };
-    let mut sha256 = None;
+    let is_jar = matches!(
+        file_type,
+        ModFileType::EnabledJar | ModFileType::DisabledJar
+    );
+    let size_bytes = metadata.is_file().then_some(metadata.len());
+    let modified_unix_millis = metadata
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
+        .and_then(|duration| u64::try_from(duration.as_millis()).ok());
+
+    // Hash each JAR at most once per scan; reuse the computed SHA-256 for
+    // provider verification and entry identity instead of hashing twice.
+    let mut sha256 = if is_jar { file_digest(path).ok() } else { None };
+    if is_jar && sha256.is_none() {
+        ownership = ModOwnership::Unknown;
+    }
+
     let mut provenance = None;
     let provider_mismatch = if !is_managed {
         if let Some(provider) = provider {
-            if matches!(
-                file_type,
-                ModFileType::EnabledJar | ModFileType::DisabledJar
-            ) {
-                if let Ok(digest) = ArtifactDigest::parse(&provider.sha256) {
-                    if verify_file(path, &digest, None).is_ok() {
+            if is_jar {
+                if let (Ok(expected), Some(actual)) =
+                    (ArtifactDigest::parse(&provider.sha256), sha256.as_deref())
+                {
+                    if actual == expected.as_hex() {
                         ownership = ModOwnership::ProviderManaged;
-                        sha256 = Some(provider.sha256.clone());
                         provenance = Some(provider.clone());
                         false
                     } else {
@@ -896,28 +911,16 @@ fn inspect_entry(
     } else {
         false
     };
-    let size_bytes = metadata.is_file().then_some(metadata.len());
-    let modified_unix_millis = metadata
-        .modified()
-        .ok()
-        .and_then(|time| time.duration_since(UNIX_EPOCH).ok())
-        .and_then(|duration| u64::try_from(duration.as_millis()).ok());
     let mut id_material = Vec::new();
     id_material.extend_from_slice(file_name.as_bytes());
     id_material.extend_from_slice(
         format!("|{file_type:?}|{:?}|{modified_unix_millis:?}", size_bytes).as_bytes(),
     );
-    if matches!(
-        file_type,
-        ModFileType::EnabledJar | ModFileType::DisabledJar
-    ) {
-        if let Ok(hash) = file_digest(path) {
-            id_material.extend_from_slice(hash.as_bytes());
-            sha256 = Some(hash);
-        } else {
-            ownership = ModOwnership::Unknown;
-            sha256 = None;
-        }
+    if let Some(hash) = sha256.as_deref() {
+        id_material.extend_from_slice(hash.as_bytes());
+    } else if is_jar {
+        ownership = ModOwnership::Unknown;
+        sha256 = None;
     }
     let entry_id = opaque_id(&id_material);
 
@@ -1191,7 +1194,7 @@ pub(crate) fn inspect_neoforge_metadata(
             );
         }
     };
-    let mut archive = match zip::ZipArchive::new(file) {
+    let mut archive = match zip::ZipArchive::new(std::io::BufReader::new(file)) {
         Ok(archive) => archive,
         Err(error) => {
             return (
@@ -1215,18 +1218,16 @@ pub(crate) fn inspect_neoforge_metadata(
     let mut primary = None;
     let mut legacy = None;
     for index in 0..archive.len() {
-        match archive.by_index(index) {
-            Ok(entry) => match entry.name() {
-                "META-INF/neoforge.mods.toml" => primary = Some(index),
-                "META-INF/mods.toml" => legacy = Some(index),
-                _ => {}
-            },
-            Err(error) => {
+        match archive.name_for_index(index) {
+            Some("META-INF/neoforge.mods.toml") => primary = Some(index),
+            Some("META-INF/mods.toml") => legacy = Some(index),
+            Some(_) => {}
+            None => {
                 return (
                     None,
                     vec![ModWarning::new(
                         "jar_malformed",
-                        format!("The JAR directory could not be inspected: {error}"),
+                        "The JAR directory could not be inspected.",
                     )],
                 );
             }
@@ -1410,7 +1411,7 @@ pub(crate) fn inspect_fabric_metadata(
             );
         }
     };
-    let mut archive = match zip::ZipArchive::new(file) {
+    let mut archive = match zip::ZipArchive::new(std::io::BufReader::new(file)) {
         Ok(archive) => archive,
         Err(error) => {
             return (
@@ -1433,15 +1434,15 @@ pub(crate) fn inspect_fabric_metadata(
     }
     let mut metadata_indexes = Vec::new();
     for index in 0..archive.len() {
-        match archive.by_index(index) {
-            Ok(entry) if entry.name() == "fabric.mod.json" => metadata_indexes.push(index),
-            Ok(_) => {}
-            Err(error) => {
+        match archive.name_for_index(index) {
+            Some("fabric.mod.json") => metadata_indexes.push(index),
+            Some(_) => {}
+            None => {
                 return (
                     None,
                     vec![ModWarning::new(
                         "jar_malformed",
-                        format!("The JAR directory could not be inspected: {error}"),
+                        "The JAR directory could not be inspected.",
                     )],
                 );
             }

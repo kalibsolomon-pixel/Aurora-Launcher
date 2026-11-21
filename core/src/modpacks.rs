@@ -543,7 +543,7 @@ pub struct RecognizedPreview {
 
 /// Pack files downloaded at once per pack; the process-wide transfer
 /// permits still bound the total across concurrent installs.
-pub(crate) const PACK_DOWNLOAD_CONCURRENCY: usize = 8;
+pub(crate) const PACK_DOWNLOAD_CONCURRENCY: usize = 16;
 
 pub(crate) struct Resolved {
     pub(crate) archive: VerifiedArtifact,
@@ -756,12 +756,28 @@ async fn resolve_bounded(
             component_limit_message(recognized_files.len(), false),
         ));
     }
-    let mut planned_files = Vec::new();
-    crate::transfer::settled_window(&recognized_files, PACK_DOWNLOAD_CONCURRENCY,
+    let project_types = provider
+        .project_types(
+            recognized_files
+                .iter()
+                .map(|(_, item)| item.project_id.as_str()),
+        )
+        .await;
+    let project_types = &project_types;
+    let mut planned_files = Vec::with_capacity(recognized_files.len());
+    crate::transfer::settled_window(
+        &recognized_files,
+        PACK_DOWNLOAD_CONCURRENCY,
         || crate::content_jobs::checkpoint().is_ok(),
         |(file, item)| async move {
             provider
-                .pack_component_plan(item, &file.path, file.file_size, loader_tag)
+                .pack_component_plan_with_type(
+                    item,
+                    &file.path,
+                    file.file_size,
+                    loader_tag,
+                    project_types.get(&item.project_id).map(String::as_str),
+                )
                 .await
                 .map_err(|e| {
                     if matches!(e, crate::modrinth::Error::DependencyConflict) {
@@ -776,10 +792,10 @@ async fn resolve_bounded(
                         fail("pack_identity_conflict", format!("{}: {e}", file.path))
                     }
                 })
-
         },
         |(file, item), planned| planned_files.push((*file, *item, planned)),
-    ).await?;
+    )
+    .await?;
     for (file, item, planned) in planned_files {
         project_set.insert(planned.project_id.clone());
         provider_preview.push(RecognizedPreview {
@@ -1487,18 +1503,23 @@ async fn install_content(
                 provider_version_id: None,
             });
         }
-        let mut overrides = Vec::new();
-        for item in &resolved.pack.overrides {
-            #[cfg(test)]
-            materialize_fault::check(created.len())?;
-            let bytes = crate::mrpack::read_override(&resolved.archive.path, item)
+        let mut overrides = Vec::with_capacity(resolved.pack.overrides.len());
+        if !resolved.pack.overrides.is_empty() {
+            let mut override_reader = crate::mrpack::OverrideReader::open(&resolved.archive.path)
                 .map_err(|e| fail(e.code(), e.to_string()))?;
-            let target = materialize_bytes(&root, &item.path, &bytes, &item.sha256)?;
-            created.push((target, item.sha256.clone()));
-            overrides.push(OwnedOverride {
-                path: item.path.clone(),
-                sha256: item.sha256.clone(),
-            });
+            for item in &resolved.pack.overrides {
+                #[cfg(test)]
+                materialize_fault::check(created.len())?;
+                let bytes = override_reader
+                    .read(item)
+                    .map_err(|e| fail(e.code(), e.to_string()))?;
+                let target = materialize_bytes(&root, &item.path, &bytes, &item.sha256)?;
+                created.push((target, item.sha256.clone()));
+                overrides.push(OwnedOverride {
+                    path: item.path.clone(),
+                    sha256: item.sha256.clone(),
+                });
+            }
         }
         Ok(InstalledPack::new(
             record.id().clone(),

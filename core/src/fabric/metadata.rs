@@ -527,47 +527,78 @@ async fn fetch_document(
     url: &Url,
     options: &DownloadOptions,
 ) -> Result<Vec<u8>, FabricMetadataError> {
-    crate::performance::measure(crate::performance::Event::FabricMetadataHttp, async {
-        let client = downloads::build_client(options);
-        let response =
-            client.get(url.clone()).send().await.map_err(|error| {
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{Duration, Instant};
+
+    const CACHE_TTL: Duration = Duration::from_secs(120);
+    const MAX_ENTRIES: usize = 32;
+    static CACHE: OnceLock<Mutex<HashMap<String, (Instant, Vec<u8>)>>> = OnceLock::new();
+
+    let cacheable = url.scheme() == "https" && !downloads::is_loopback_host(url);
+    if cacheable {
+        if let Ok(guard) = CACHE.get_or_init(|| Mutex::new(HashMap::new())).lock() {
+            if let Some((stored_at, cached)) = guard.get(url.as_str()) {
+                if stored_at.elapsed() < CACHE_TTL {
+                    return Ok(cached.clone());
+                }
+            }
+        }
+    }
+
+    let document =
+        crate::performance::measure(crate::performance::Event::FabricMetadataHttp, async {
+            let client = downloads::build_metadata_client(options);
+            let response = client.get(url.clone()).send().await.map_err(|error| {
                 FabricMetadataError::Network(DownloadError::from_transport(error))
             })?;
 
-        let status = response.status();
-        if !status.is_success() {
-            return Err(FabricMetadataError::HttpStatus {
-                status: status.as_u16(),
-            });
-        }
+            let status = response.status();
+            if !status.is_success() {
+                return Err(FabricMetadataError::HttpStatus {
+                    status: status.as_u16(),
+                });
+            }
 
-        if response
-            .content_length()
-            .is_some_and(|declared| declared as usize > MAX_METADATA_DOCUMENT_BYTES)
-        {
-            return Err(FabricMetadataError::ResponseTooLarge {
-                limit_bytes: MAX_METADATA_DOCUMENT_BYTES,
-            });
-        }
-
-        let mut document = Vec::new();
-        let mut response = response;
-        while let Some(chunk) = response
-            .chunk()
-            .await
-            .map_err(|error| FabricMetadataError::Network(DownloadError::from_transport(error)))?
-        {
-            if document.len() + chunk.len() > MAX_METADATA_DOCUMENT_BYTES {
+            if response
+                .content_length()
+                .is_some_and(|declared| declared as usize > MAX_METADATA_DOCUMENT_BYTES)
+            {
                 return Err(FabricMetadataError::ResponseTooLarge {
                     limit_bytes: MAX_METADATA_DOCUMENT_BYTES,
                 });
             }
-            document.extend_from_slice(&chunk);
-        }
 
-        Ok(document)
-    })
-    .await
+            let initial_cap = response.content_length().map_or(0, |declared| {
+                (declared as usize).min(MAX_METADATA_DOCUMENT_BYTES)
+            });
+            let mut document = Vec::with_capacity(initial_cap);
+            let mut response = response;
+            while let Some(chunk) = response.chunk().await.map_err(|error| {
+                FabricMetadataError::Network(DownloadError::from_transport(error))
+            })? {
+                if document.len() + chunk.len() > MAX_METADATA_DOCUMENT_BYTES {
+                    return Err(FabricMetadataError::ResponseTooLarge {
+                        limit_bytes: MAX_METADATA_DOCUMENT_BYTES,
+                    });
+                }
+                document.extend_from_slice(&chunk);
+            }
+
+            Ok(document)
+        })
+        .await?;
+
+    if cacheable {
+        if let Ok(mut guard) = CACHE.get_or_init(|| Mutex::new(HashMap::new())).lock() {
+            if guard.len() >= MAX_ENTRIES {
+                guard.clear();
+            }
+            guard.insert(url.as_str().to_owned(), (Instant::now(), document.clone()));
+        }
+    }
+
+    Ok(document)
 }
 
 /// Decodes fetched bytes as document text.

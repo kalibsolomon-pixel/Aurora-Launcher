@@ -1,6 +1,5 @@
 //! Transactional installation and read-only validation of shared runtimes.
 
-use futures_util::future::join_all;
 use std::collections::HashMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -257,35 +256,33 @@ async fn ensure_runtime_with_policy(
         .collect();
     let total = files.len() as u32;
     let cache = ArtifactCache::new(managed.clone());
-    let mut acquired = HashMap::new();
+    let mut acquired = HashMap::with_capacity(files.len());
     let mut downloads = 0usize;
     let mut downloaded_bytes = 0u64;
-    for batch in files.chunks(RUNTIME_DOWNLOAD_CONCURRENCY) {
-        let cache = &cache;
-        let results = join_all(batch.iter().map(|(relative, artifact)| async move {
-            let source = Sha1ArtifactSource::https_or_loopback(
-                artifact.url(),
-                &artifact.sha1().as_hex(),
-                Some(artifact.size_bytes()),
-            )
-            .map_err(|error| {
-                RuntimeInstallError::Plan(format!(
-                    "runtime artifact '{relative}' is invalid: {error}"
-                ))
-            })?;
-            let verified = cache.acquire_sha1(&source, options).await?;
-            Ok::<_, RuntimeInstallError>((
-                relative.clone(),
-                verified.path,
-                verified.origin,
-                verified.bytes,
-            ))
-        }))
-        .await;
-        // Settle each bounded batch before returning an error, so no
-        // in-flight transfer is dropped with an open staging file.
-        for result in results {
-            let (relative, path, origin, bytes) = result?;
+    // Completion-order bounded scheduling keeps all download slots fed while
+    // large runtime archives (such as `lib/modules`) stream in parallel.
+    crate::transfer::settled_each(
+        &files,
+        RUNTIME_DOWNLOAD_CONCURRENCY,
+        || true,
+        |(relative, artifact)| {
+            let cache = &cache;
+            async move {
+                let source = Sha1ArtifactSource::https_or_loopback(
+                    artifact.url(),
+                    &artifact.sha1().as_hex(),
+                    Some(artifact.size_bytes()),
+                )
+                .map_err(|error| {
+                    RuntimeInstallError::Plan(format!(
+                        "runtime artifact '{relative}' is invalid: {error}"
+                    ))
+                })?;
+                let verified = cache.acquire_sha1(&source, options).await?;
+                Ok::<_, RuntimeInstallError>((verified.path, verified.origin, verified.bytes))
+            }
+        },
+        |(relative, _), (path, origin, bytes)| {
             if origin == crate::cache::ArtifactOrigin::Downloaded {
                 downloads += 1;
                 downloaded_bytes += bytes;
@@ -295,10 +292,11 @@ async fn ensure_runtime_with_policy(
                 RuntimeInstallPhase::Acquiring,
                 acquired.len() as u32,
                 total,
-                Some(relative),
+                Some(relative.clone()),
             ));
-        }
-    }
+        },
+    )
+    .await?;
     progress(report(RuntimeInstallPhase::Acquiring, total, total, None));
     let acquisition_finished = Instant::now();
 
@@ -506,10 +504,21 @@ pub async fn validate_runtime(
             }
             Err(error) => return Ok(damaged(plan, root, vec![error.to_string()])),
         };
-        let mut validation = validate_root_against_state(&root, plan, &state);
+        let diag_exec = state.diagnostic_executable().to_owned();
+        let root_for_check = root.clone();
+        let plan_for_check = plan.clone();
+        let mut validation = tokio::task::spawn_blocking(move || {
+            validate_root_against_state(&root_for_check, &plan_for_check, &state)
+        })
+        .await
+        .map_err(|error| {
+            RuntimeInstallError::Storage(std::io::Error::other(format!(
+                "runtime validation worker failed: {error}"
+            )))
+        })?;
         if validation.problems.is_empty() && execute_diagnostic {
             match run_java_diagnostic(
-                &join_relative(&root, state.diagnostic_executable()),
+                &join_relative(&root, &diag_exec),
                 plan.required_major_version(),
                 timeout,
             )
@@ -558,6 +567,72 @@ fn diagnostic_problem(reason: String, root: &Path) -> String {
     reason
 }
 
+fn validate_runtime_entry(
+    root: &Path,
+    entry: &super::state::RuntimeStateEntry,
+) -> (u32, u64, Vec<String>) {
+    let mut problems = Vec::new();
+    let path = join_relative(root, entry.path());
+    let metadata = match std::fs::symlink_metadata(&path) {
+        Ok(metadata) => metadata,
+        Err(error) => {
+            problems.push(format!(
+                "{} is missing or unreadable: {error}",
+                entry.path()
+            ));
+            return (0, 0, problems);
+        }
+    };
+    match entry.kind() {
+        RuntimeStateEntryKind::Directory => {
+            if !metadata.file_type().is_dir() {
+                problems.push(format!("{} is not a directory", entry.path()));
+            }
+            (0, 0, problems)
+        }
+        RuntimeStateEntryKind::File => {
+            if !metadata.file_type().is_file() {
+                problems.push(format!("{} is not a regular file", entry.path()));
+                return (1, 0, problems);
+            }
+            let expected = match Sha1Digest::parse(entry.sha1().unwrap_or_default()) {
+                Ok(value) => value,
+                Err(error) => {
+                    problems.push(format!("{} records invalid SHA-1: {error}", entry.path()));
+                    return (1, 0, problems);
+                }
+            };
+            let verified = match verify_file_sha1(&path, &expected, entry.size_bytes()) {
+                Ok(bytes) => bytes,
+                Err(error) => {
+                    problems.push(format!(
+                        "{} failed integrity validation: {error}",
+                        entry.path()
+                    ));
+                    0
+                }
+            };
+            if entry.executable() && !has_executable_permission(&path) {
+                problems.push(format!("{} is not executable", entry.path()));
+            }
+            (1, verified, problems)
+        }
+        RuntimeStateEntryKind::Link => {
+            if !metadata.file_type().is_symlink() {
+                problems.push(format!("{} is not a symbolic link", entry.path()));
+            } else if std::fs::read_link(&path).ok().as_deref()
+                != Some(Path::new(entry.target().unwrap_or_default()))
+            {
+                problems.push(format!(
+                    "{} does not point to its recorded target",
+                    entry.path()
+                ));
+            }
+            (0, 0, problems)
+        }
+    }
+}
+
 fn validate_root_against_state(
     root: &Path,
     plan: &JavaRuntimePlan,
@@ -569,63 +644,54 @@ fn validate_root_against_state(
             "the installed runtime identity does not match the exact resolved plan".to_owned(),
         );
     }
+    let entries = state.entries();
+    let workers = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .min(8)
+        .min(entries.len().max(1));
+    let outcomes: Vec<(u32, u64, Vec<String>)> = if workers <= 1 || entries.len() < 4 {
+        entries
+            .iter()
+            .map(|entry| validate_runtime_entry(root, entry))
+            .collect()
+    } else {
+        use std::sync::Mutex;
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let next = AtomicUsize::new(0);
+        let slots: Vec<Mutex<Option<(u32, u64, Vec<String>)>>> =
+            (0..entries.len()).map(|_| Mutex::new(None)).collect();
+        std::thread::scope(|scope| {
+            for _ in 0..workers {
+                let next = &next;
+                let slots = &slots;
+                scope.spawn(move || {
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        if index >= entries.len() {
+                            break;
+                        }
+                        let result = validate_runtime_entry(root, &entries[index]);
+                        *slots[index].lock().expect("runtime slot") = Some(result);
+                    }
+                });
+            }
+        });
+        slots
+            .into_iter()
+            .map(|slot| {
+                slot.into_inner()
+                    .expect("runtime slot")
+                    .expect("every runtime entry checked")
+            })
+            .collect()
+    };
     let mut checked_files = 0u32;
     let mut verified_bytes = 0u64;
-    for entry in state.entries() {
-        let path = join_relative(root, entry.path());
-        let metadata = match std::fs::symlink_metadata(&path) {
-            Ok(metadata) => metadata,
-            Err(error) => {
-                problems.push(format!(
-                    "{} is missing or unreadable: {error}",
-                    entry.path()
-                ));
-                continue;
-            }
-        };
-        match entry.kind() {
-            RuntimeStateEntryKind::Directory => {
-                if !metadata.file_type().is_dir() {
-                    problems.push(format!("{} is not a directory", entry.path()));
-                }
-            }
-            RuntimeStateEntryKind::File => {
-                checked_files += 1;
-                if !metadata.file_type().is_file() {
-                    problems.push(format!("{} is not a regular file", entry.path()));
-                    continue;
-                }
-                let expected = match Sha1Digest::parse(entry.sha1().unwrap_or_default()) {
-                    Ok(value) => value,
-                    Err(error) => {
-                        problems.push(format!("{} records invalid SHA-1: {error}", entry.path()));
-                        continue;
-                    }
-                };
-                match verify_file_sha1(&path, &expected, entry.size_bytes()) {
-                    Ok(bytes) => verified_bytes += bytes,
-                    Err(error) => problems.push(format!(
-                        "{} failed integrity validation: {error}",
-                        entry.path()
-                    )),
-                }
-                if entry.executable() && !has_executable_permission(&path) {
-                    problems.push(format!("{} is not executable", entry.path()));
-                }
-            }
-            RuntimeStateEntryKind::Link => {
-                if !metadata.file_type().is_symlink() {
-                    problems.push(format!("{} is not a symbolic link", entry.path()));
-                } else if std::fs::read_link(&path).ok().as_deref()
-                    != Some(Path::new(entry.target().unwrap_or_default()))
-                {
-                    problems.push(format!(
-                        "{} does not point to its recorded target",
-                        entry.path()
-                    ));
-                }
-            }
-        }
+    for (files, bytes, entry_problems) in outcomes {
+        checked_files += files;
+        verified_bytes += bytes;
+        problems.extend(entry_problems);
     }
     RuntimeValidation {
         status: RuntimeValidationStatus::Damaged,

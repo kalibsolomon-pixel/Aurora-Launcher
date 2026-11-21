@@ -64,3 +64,11 @@ pub mod updates;
 
 #[cfg(test)]
 mod test_support;
+
+/// Decompresses a raw DEFLATE stream produced at build time for bundled static tables.
+pub fn inflate_raw(compressed: &[u8]) -> std::io::Result<Vec<u8>> {
+    use std::io::Read as _;
+    let mut out = Vec::new();
+    flate2::read::DeflateDecoder::new(compressed).read_to_end(&mut out)?;
+    Ok(out)
+}

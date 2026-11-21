@@ -853,7 +853,29 @@ impl ArtifactCache {
         verified_path: &Path,
         expected: Expected<'_>,
     ) -> Result<Option<u64>, AcquisitionError> {
-        match expected.revalidate(verified_path) {
+        const OFFLOAD_BYTES: u64 = 64 * 1024;
+        let outcome = match std::fs::metadata(verified_path) {
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+            Err(error) => return Err(AcquisitionError::StoreIo(error)),
+            Ok(meta) if meta.len() >= OFFLOAD_BYTES => {
+                let path = verified_path.to_path_buf();
+                let owned = match expected {
+                    Expected::Sha256 { digest, size_bytes } => (Some(*digest), None, size_bytes),
+                    Expected::Sha1 { digest, size_bytes } => (None, Some(*digest), size_bytes),
+                };
+                tokio::task::spawn_blocking(move || match owned {
+                    (Some(digest), None, size_bytes) => verify_file(&path, &digest, size_bytes),
+                    (None, Some(digest), size_bytes) => {
+                        verify_file_sha1(&path, &digest, size_bytes)
+                    }
+                    _ => unreachable!(),
+                })
+                .await
+                .map_err(|error| AcquisitionError::StoreIo(std::io::Error::other(error)))?
+            }
+            Ok(_) => expected.revalidate(verified_path),
+        };
+        match outcome {
             Ok(bytes) => Ok(Some(bytes)),
             Err(VerifyFileError::Mismatch(failure)) => {
                 eprintln!(

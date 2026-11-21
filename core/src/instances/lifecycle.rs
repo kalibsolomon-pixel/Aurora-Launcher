@@ -1596,29 +1596,97 @@ async fn resolve_instance_game_plan_under_gate(
             reason: "managed Java can only be prepared after instance content is ready".to_owned(),
         });
     }
-    let content = validate_instance(managed, &registry, instance_id)?;
-    let blocking: Vec<String> = content
-        .problems
-        .iter()
-        .filter(|problem| gate.blocks(problem))
-        .map(|problem| format!("{}: {}", problem.component, problem.reason))
-        .collect();
-    let blocked = match gate {
-        PlanResolutionGate::LaunchBlocking => content.status != InstanceStatus::Ready,
-        PlanResolutionGate::RuntimeMaintenance => !blocking.is_empty(),
+    let (blocked, status_label, blocking) = match gate {
+        PlanResolutionGate::LaunchBlocking => {
+            let content = validate_instance(managed, &registry, instance_id)?;
+            let blocking: Vec<String> = content
+                .problems
+                .iter()
+                .filter(|problem| gate.blocks(problem))
+                .map(|problem| format!("{}: {}", problem.component, problem.reason))
+                .collect();
+            (
+                content.status != InstanceStatus::Ready,
+                content.status.as_str(),
+                blocking,
+            )
+        }
+        PlanResolutionGate::RuntimeMaintenance => {
+            // Runtime maintenance only needs platform and version consistency;
+            // avoid hashing thousands of game files and scanning user mods.
+            let blocking = validate_runtime_maintenance_consistency(managed, &record)?;
+            (!blocking.is_empty(), "damaged", blocking)
+        }
     };
     if blocked {
         return Err(InstanceError::NotReady {
             instance_id: instance_id.to_string(),
             reason: format!(
-                "instance content validation reported {}: {}",
-                content.status.as_str(),
+                "instance content validation reported {status_label}: {}",
                 blocking.join("; ")
             ),
         });
     }
     let release = resolve_optional_aurora(managed, endpoints, &record)?;
     resolve_record_game_plan(managed, endpoints, &record, release.as_ref()).await
+}
+
+fn validate_runtime_maintenance_consistency(
+    managed: &ManagedPaths,
+    record: &InstanceRecord,
+) -> Result<Vec<String>, InstanceError> {
+    let mut blocking = Vec::new();
+    let game_root = managed.instance_paths(record.id()).game().to_path_buf();
+    let game_manifest = if game_root.is_dir() {
+        crate::install::state::load_installed_state(&game_root)
+            .map_err(InstanceError::GameInstallState)?
+    } else {
+        None
+    };
+    if let Some(game) = &game_manifest {
+        if game.minecraft_version() != record.installed().minecraft_version
+            || game.platform() != record.installed().platform
+        {
+            blocking
+                .push("platform: installed game does not match Minecraft/platform identity".into());
+        }
+    }
+    if record.installed().aurora.is_some() {
+        let pin = record.aurora_release()?;
+        if let Some(aurora) = load_installed_state(managed, record.id())? {
+            if aurora.aurora_version() != pin.aurora_version()
+                || aurora.channel() != pin.channel()
+                || aurora.minecraft_version() != pin.minecraft_version()
+                || aurora.fabric_loader_version() != pin.fabric_loader_version()
+            {
+                blocking.push(format!(
+                    "consistency: the pinned release ({} {} for Minecraft {} + Fabric Loader {}) does not match the installed Aurora release ({} {} for Minecraft {} + Fabric Loader {})",
+                    pin.channel().as_str(),
+                    pin.aurora_version(),
+                    pin.minecraft_version(),
+                    pin.fabric_loader_version(),
+                    aurora.channel().as_str(),
+                    aurora.aurora_version(),
+                    aurora.minecraft_version(),
+                    aurora.fabric_loader_version(),
+                ));
+            }
+            if let Some(game) = &game_manifest {
+                if game.minecraft_version() != aurora.minecraft_version()
+                    || game.fabric_loader_version() != Some(aurora.fabric_loader_version())
+                {
+                    blocking.push(format!(
+                        "consistency: the installed game (Minecraft {} + Fabric Loader {}) does not match the Aurora release (Minecraft {} + Fabric Loader {})",
+                        game.minecraft_version(),
+                        game.fabric_loader_version().unwrap_or("Vanilla"),
+                        aurora.minecraft_version(),
+                        aurora.fabric_loader_version(),
+                    ));
+                }
+            }
+        }
+    }
+    Ok(blocking)
 }
 
 pub async fn validate_instance_runtime(

@@ -115,9 +115,9 @@ const MAX_ANCHOR_ROW: i32 = 63 * GRID_UNITS;
 /// Responsive grid geometry (matches the Slint `WidgetGrid` constants).
 const GRID_GAP: f32 = 16.0;
 const MIN_CARD_WIDTH: f32 = 120.0;
-/// Sized so a typical three-row Servers list fills its card (the list scrolls
-/// beyond that) while the Playtime chart keeps a readable plot.
-const CARD_HEIGHT: f32 = 280.0;
+/// Sized so a typical four-row Servers list fills its card cleanly with zero
+/// bottom clipping or dead space while the Playtime chart keeps crisp proportions.
+const CARD_HEIGHT: f32 = 408.0;
 
 /// Saved columns for a viewport width; clamping renders, it never writes.
 pub(crate) fn responsive_columns(width_px: f32) -> i32 {
@@ -2046,11 +2046,12 @@ impl HomeWidgets {
     /// Page visibility. A hidden page stops starting data work; the deferred
     /// refresh runs on the next actual activation or input change.
     pub fn set_active(&mut self, active: bool, cx: &mut Context<Self>) {
-        if self.core.active != active {
-            self.core.active = active;
-            if !active {
-                self.core.cancel_gesture();
-            }
+        if self.core.active == active {
+            return;
+        }
+        self.core.active = active;
+        if !active {
+            self.core.cancel_gesture();
         }
         self.dispatch_pending(cx);
         self.sync_media(cx);
@@ -2272,39 +2273,67 @@ impl HomeWidgets {
             cx,
             async move {
                 let instance = request.instance.clone();
-                let playtime = api::playtime(host.clone(), instance.clone()).await;
-                let daily = api::daily_playtime(host.clone(), instance.clone()).await;
-                let servers = if request.servers {
-                    api::recent_servers(host.clone(), None, SERVER_READ).await
-                } else {
-                    Ok(Vec::new())
-                };
-                let worlds = match &instance {
-                    Some(id) => {
-                        api::recent_worlds(host.clone(), Some(id.clone()), WORLD_READ).await
+                let playtime_fut = api::playtime(host.clone(), instance.clone());
+                let daily_fut = api::daily_playtime(host.clone(), instance.clone());
+                let servers_fut = {
+                    let host = host.clone();
+                    let fetch = request.servers;
+                    async move {
+                        if fetch {
+                            api::recent_servers(host, None, SERVER_READ).await
+                        } else {
+                            Ok(Vec::new())
+                        }
                     }
-                    None => Ok(Vec::new()),
                 };
-                let saved = |worlds: bool| {
+                let worlds_fut = {
                     let host = host.clone();
                     let instance = instance.clone();
                     async move {
                         match instance {
-                            Some(id) => Some(api::saved_destinations(host, id, worlds).await),
-                            None => None,
+                            Some(id) => api::recent_worlds(host, Some(id), WORLD_READ).await,
+                            None => Ok(Vec::new()),
                         }
                     }
                 };
-                let saved_servers = if request.saved_servers {
-                    saved(false).await
-                } else {
-                    None
+                let saved_servers_fut = {
+                    let host = host.clone();
+                    let instance = instance.clone();
+                    let fetch = request.saved_servers;
+                    async move {
+                        if fetch {
+                            match instance {
+                                Some(id) => Some(api::saved_destinations(host, id, false).await),
+                                None => None,
+                            }
+                        } else {
+                            None
+                        }
+                    }
                 };
-                let saved_worlds = if request.saved_worlds {
-                    saved(true).await
-                } else {
-                    None
+                let saved_worlds_fut = {
+                    let host = host.clone();
+                    let instance = instance.clone();
+                    let fetch = request.saved_worlds;
+                    async move {
+                        if fetch {
+                            match instance {
+                                Some(id) => Some(api::saved_destinations(host, id, true).await),
+                                None => None,
+                            }
+                        } else {
+                            None
+                        }
+                    }
                 };
+                let (playtime, daily, servers, worlds, saved_servers, saved_worlds) = tokio::join!(
+                    playtime_fut,
+                    daily_fut,
+                    servers_fut,
+                    worlds_fut,
+                    saved_servers_fut,
+                    saved_worlds_fut
+                );
                 Ok(Box::new(HistoryResults {
                     playtime,
                     daily,
@@ -2322,17 +2351,6 @@ impl HomeWidgets {
 
     fn start_enrich(&mut self, cx: &mut Context<Self>, ids: Vec<String>) {
         let serial = self.core.data_serial;
-        if crate::showcase() {
-            // Design-review mode has no network: settle immediately with an
-            // empty result through the normal reply path so the widget leaves
-            // its loading state.
-            self.run(
-                cx,
-                async move { Ok(Vec::<api::ServerPresentation>::new()) },
-                move |view, result, cx| view.receive(Reply::Enrich(serial, result), cx),
-            );
-            return;
-        }
         let Some(host) = self.host.clone() else {
             return;
         };
@@ -2893,6 +2911,10 @@ impl Render for HomeWidgets {
             grid_rows
         };
 
+        if placements.is_empty() && !editing {
+            return div().w_full().child(page);
+        }
+
         let mut grid = div()
             .id("widgets-grid")
             .relative()
@@ -3286,6 +3308,28 @@ impl HomeWidgets {
             "recent-servers" if self.core.server_enriching && !loading => Some("Loading details…"),
             _ => None,
         };
+        let playtime_summary = if id == "playtime" {
+            let narrow = card_px < 380.;
+            let projection = playtime_view(playtime_data, period, narrow, loading);
+            let compact = if loading {
+                "Loading…".to_string()
+            } else {
+                projection
+                    .total
+                    .replace(" h ", "h ")
+                    .replace(" min", "m")
+                    .trim_end_matches(" h")
+                    .to_owned()
+                    + if projection.total.ends_with(" h") {
+                        "h"
+                    } else {
+                        ""
+                    }
+            };
+            Some((compact, projection.total_detail))
+        } else {
+            None
+        };
         let caption: Option<String> = match id.as_str() {
             "instance-details" => self
                 .core
@@ -3355,42 +3399,24 @@ impl HomeWidgets {
                         .into_any_element(),
                 );
                 extra = Some(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(8.))
-                        .child(
-                            AuroraButton::new("servers-manage", "Manage")
-                                .accessibility_label("Manage Minecraft servers")
-                                .size(ButtonSize::Small)
-                                .disabled(
-                                    busy || self.server_editor_busy
-                                        || self.core.blocked
-                                        || self.core.selected_instance().is_none(),
-                                )
-                                .on_click(cx.listener(|view, _, _, cx| {
-                                    if let Some(instance) = view.core.selected_instance() {
-                                        let (id, name) =
-                                            (instance.id.clone(), instance.display_name.clone());
-                                        view.server_editor
-                                            .update(cx, |editor, cx| editor.open(id, name, cx));
-                                    }
-                                })),
-                        )
-                        .child(
-                            icon_button(
-                                &palette,
-                                "servers-refresh".to_owned(),
-                                "refresh",
-                                "Refresh status".to_owned(),
-                                self.core.refreshing_servers || busy,
-                                false,
-                            )
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                this.start_status_refresh(cx);
-                            })),
-                        )
-                        .into_any_element(),
+                    icon_button(
+                        &palette,
+                        "servers-manage".into(),
+                        "tune",
+                        "Manage Minecraft servers".into(),
+                        busy || self.server_editor_busy
+                            || self.core.blocked
+                            || self.core.selected_instance().is_none(),
+                        false,
+                    )
+                    .on_click(cx.listener(|view, _, _, cx| {
+                        if let Some(instance) = view.core.selected_instance() {
+                            let (id, name) = (instance.id.clone(), instance.display_name.clone());
+                            view.server_editor
+                                .update(cx, |editor, cx| editor.open(id, name, cx));
+                        }
+                    }))
+                    .into_any_element(),
                 );
             }
             "recent-worlds" => {
@@ -3443,6 +3469,19 @@ impl HomeWidgets {
                             .whitespace_nowrap()
                             .child(title),
                     )
+                    .when_some(playtime_summary, |this, (compact, detail)| {
+                        let mut el = div()
+                            .id("playtime-total")
+                            .text_size(px(ui::TEXT_SECTION))
+                            .font_weight(FontWeight::SEMIBOLD)
+                            .text_color(palette.muted_foreground)
+                            .whitespace_nowrap()
+                            .child(format!("· {compact}"));
+                        if !detail.is_empty() {
+                            el = el.aria_description(detail);
+                        }
+                        this.child(el)
+                    })
                     .when_some(caption, |this, caption| {
                         this.child(
                             div()
@@ -3542,22 +3581,6 @@ impl HomeWidgets {
             "playtime" => {
                 let narrow = card_px < 380.;
                 let projection = playtime_view(playtime_data, period, narrow, loading);
-                let total = div()
-                    .id("playtime-total")
-                    .text_size(px(ui::TEXT_TITLE))
-                    .font_weight(FontWeight::SEMIBOLD)
-                    .text_color(palette.foreground)
-                    .child(if loading {
-                        "Loading…".to_string()
-                    } else {
-                        projection.total.clone()
-                    });
-                let total = if projection.total_detail.is_empty() {
-                    total
-                } else {
-                    total.aria_description(projection.total_detail.clone())
-                };
-                card = card.child(total);
                 match &projection.status {
                     Some(status) => {
                         card = card.child(empty_note(&palette, "bar_chart", status.clone()));
@@ -3565,9 +3588,16 @@ impl HomeWidgets {
                     None => {
                         let label = |text: String| {
                             div()
-                                .text_size(px(ui::TEXT_BODY + 1.))
-                                .text_color(palette.muted_foreground)
+                                .text_size(px(ui::TEXT_CAPTION))
+                                .text_color(palette.subtle_foreground)
                                 .child(text)
+                        };
+                        let compact_tick = |raw: &str| -> String {
+                            raw.replace(" h ", "h ")
+                                .replace(" min", "m")
+                                .trim_end_matches(" h")
+                                .to_owned()
+                                + if raw.ends_with(" h") { "h" } else { "" }
                         };
                         let today = playtime_data.map_or(0, |data| data.today);
                         let count = projection.points.len();
@@ -3587,7 +3617,7 @@ impl HomeWidgets {
                                             .text_color(if last {
                                                 palette.foreground
                                             } else {
-                                                palette.foreground.opacity(0.75)
+                                                palette.muted_foreground
                                             })
                                             .child(if last { "Today" } else { weekday_label(day) })
                                     }),
@@ -3619,7 +3649,8 @@ impl HomeWidgets {
                                     .w_full()
                                     .flex_1()
                                     .min_h(px(40.))
-                                    .when(count > 7, |chart| { chart.child(
+                                    .pt(px(10.))
+                                    .child(
                                         div()
                                             .flex()
                                             .flex_col()
@@ -3627,10 +3658,10 @@ impl HomeWidgets {
                                             .pb(px(AXIS_HEIGHT + 8.))
                                             .pr(px(10.))
                                             .child(
-                                                div().relative().flex_1().w(px(76.)).children(
+                                                div().relative().flex_1().w(px(if count > 7 { 58. } else { 36. })).children(
                                                     [
-                                                        (0., projection.peak.clone()),
-                                                        (0.5, projection.midpoint.clone()),
+                                                        (0., compact_tick(&projection.peak)),
+                                                        (0.5, compact_tick(&projection.midpoint)),
                                                         (1., "0".into()),
                                                     ]
                                                     .map(|(at, text)| {
@@ -3646,7 +3677,6 @@ impl HomeWidgets {
                                                 ),
                                             ),
                                     )
-                                    })
                                     .child(
                                         div()
                                             .flex()
@@ -3661,6 +3691,24 @@ impl HomeWidgets {
                                                     .flex_1()
                                                     .border_b_1()
                                                     .border_color(palette.border)
+                                                    .child(
+                                                        div()
+                                                            .absolute()
+                                                            .left_0()
+                                                            .right_0()
+                                                            .top(gpui_kit::relative(0.))
+                                                            .h(px(1.))
+                                                            .bg(palette.border_subtle),
+                                                    )
+                                                    .child(
+                                                        div()
+                                                            .absolute()
+                                                            .left_0()
+                                                            .right_0()
+                                                            .top(gpui_kit::relative(0.5))
+                                                            .h(px(1.))
+                                                            .bg(palette.border_subtle),
+                                                    )
                                                     .when(projection.empty_period, |plot| {
                                                         plot.child(
                                                             div()
@@ -3699,27 +3747,7 @@ impl HomeWidgets {
                                                                 .flex_col()
                                                                 .items_center()
                                                                 .justify_end()
-                                                                .gap(px(6.))
-                                                                .when(
-                                                                    count <= 7
-                                                                        && !projection.empty_period,
-                                                                    |column| {
-                                                                        column.child(
-                                                                            div()
-                                                                                .text_size(px(
-                                                                                    ui::TEXT_CAPTION,
-                                                                                ))
-                                                                                .text_color(
-                                                                                    palette.foreground,
-                                                                                )
-                                                                                .whitespace_nowrap()
-                                                                                .child(
-                                                                                    point.short.clone(),
-                                                                                ),
-                                                                        )
-                                                                    },
-                                                                )
-                                                                .child(
+                                                                .child(if point.fraction > 0. {
                                                                     div()
                                                                         .w_full()
                                                                         .min_w(px(2.))
@@ -3729,14 +3757,26 @@ impl HomeWidgets {
                                                                         ))
                                                                         .rounded_t(px(4.))
                                                                         .rounded_b(px(1.))
-                                                                        .bg(
-                                                                            if point.fraction > 0. {
-                                                                                palette.accent
-                                                                            } else {
-                                                                                gpui_kit::transparent_black()
-                                                                            },
-                                                                        ),
-                                                                )
+                                                                        .bg(gpui_kit::linear_gradient(
+                                                                            180.,
+                                                                            gpui_kit::linear_color_stop(
+                                                                                palette.ring.opacity(0.92),
+                                                                                0.,
+                                                                            ),
+                                                                            gpui_kit::linear_color_stop(
+                                                                                palette.accent.opacity(0.66),
+                                                                                1.,
+                                                                            ),
+                                                                        ))
+                                                                } else {
+                                                                    div()
+                                                                        .w_full()
+                                                                        .min_w(px(2.))
+                                                                        .max_w(px(20.))
+                                                                        .h(px(3.))
+                                                                        .rounded_full()
+                                                                        .bg(palette.border)
+                                                                })
                                                         },
                                                     )),
                                             )
@@ -3817,7 +3857,7 @@ impl HomeWidgets {
                                 .h(px(80.))
                                 .flex_none()
                                 .id(format!("server-row-{}", row.id))
-                                .child(avatar(&palette, row.picture.clone(), "dns", 44.))
+                                .child(server_avatar(&palette, row.picture.clone(), &row.name, 42.))
                                 .child(
                                     div()
                                         .flex()
@@ -3857,20 +3897,38 @@ impl HomeWidgets {
                                         },
                                     )),
                                 )
-                                .child(
-                                    AuroraButton::new(format!("server-play-{}", row.id), "Play")
-                                        .size(ButtonSize::Small)
-                                        .variant(if self.needs_sign_in {
-                                            ButtonVariant::Default
-                                        } else {
-                                            ButtonVariant::Soft
-                                        })
-                                        .icon("play_arrow")
+                                .child({
+                                    let play_hover = palette.accent;
+                                    let play_ring = palette.ring;
+                                    Button::new(format!("server-play-{}", row.id))
+                                        .aria_label(format!("Play {name}"))
                                         .disabled(!playable)
+                                        .flex()
+                                        .flex_none()
+                                        .items_center()
+                                        .justify_center()
+                                        .size(px(32.))
+                                        .rounded_full()
+                                        .bg(gpui::transparent_black())
+                                        .border_1()
+                                        .border_color(palette.border_subtle)
+                                        .opacity(0.68)
+                                        .hover(move |s| {
+                                            s.bg(play_hover).border_color(play_hover).opacity(1.0)
+                                        })
+                                        .focus_visible(move |s| s.border_color(play_ring))
+                                        .styles(|styles| {
+                                            styles.disabled(|style| style.opacity(0.45))
+                                        })
+                                        .child(crate::symbols::icon(
+                                            Some("play_arrow"),
+                                            px(18.),
+                                            palette.foreground,
+                                        ))
                                         .on_click(cx.listener(move |this, _, _, cx| {
                                             this.quick_play(mode, &play_target, cx);
-                                        })),
-                                ),
+                                        }))
+                                }),
                         );
                     }
                     card = card.child(
@@ -4182,15 +4240,83 @@ fn icon_button(
         .child(crate::symbols::icon(
             Some(icon),
             px(18.),
-            if accent {
-                t.warning
-            } else {
-                t.muted_foreground
-            },
+            if accent { t.ring } else { t.muted_foreground },
         ))
 }
 
-/// The favorite toggle: an amber star when set, a quiet one when not.
+/// A server picture, or a crisp monogram tile derived from the server name
+/// when no favicon has been cached (avoiding identical generic server icons).
+fn server_avatar(
+    t: &theme::AuroraTheme,
+    picture: Option<Arc<RenderImage>>,
+    name: &str,
+    size: f32,
+) -> Div {
+    match picture {
+        Some(picture) => avatar(t, Some(picture), "dns", size),
+        None => {
+            let mut words = name.split_whitespace().filter(|w| !w.is_empty());
+            let initials = match (words.next(), words.next()) {
+                (Some(a), Some(b)) => format!(
+                    "{}{}",
+                    a.chars().next().unwrap_or('S').to_ascii_uppercase(),
+                    b.chars().next().unwrap_or(' ').to_ascii_uppercase()
+                ),
+                (Some(a), None) => a.chars().take(2).collect::<String>().to_ascii_uppercase(),
+                _ => "MC".to_owned(),
+            };
+            div()
+                .flex()
+                .flex_shrink_0()
+                .items_center()
+                .justify_center()
+                .size(px(size))
+                .rounded(px(10.))
+                .bg(t.sunken)
+                .border_1()
+                .border_color(t.border_subtle)
+                .text_size(px(13.))
+                .font_weight(FontWeight::SEMIBOLD)
+                .text_color(t.muted_foreground)
+                .child(initials)
+        }
+    }
+}
+
+/// A crisp 5-point filled star for favorited items so state never relies on
+/// color alone (outlined Material star is used for non-favorited items).
+fn filled_star(size: f32, color: gpui_kit::Hsla) -> impl IntoElement {
+    use gpui::{FillOptions, PathBuilder, PathStyle, canvas, point};
+    canvas(
+        |_, _, _| {},
+        move |bounds, _, window, _| {
+            let cx = bounds.origin.x + bounds.size.width * 0.5;
+            let cy = bounds.origin.y + bounds.size.height * 0.5;
+            let outer = bounds.size.width.min(bounds.size.height) * 0.45;
+            let inner = outer * 0.42;
+            let mut builder = PathBuilder::fill();
+            for i in 0..10 {
+                let angle = -std::f32::consts::FRAC_PI_2 + (i as f32) * std::f32::consts::PI / 5.0;
+                let r = if i % 2 == 0 { outer } else { inner };
+                let p = point(cx + r * angle.cos(), cy + r * angle.sin());
+                if i == 0 {
+                    builder.move_to(p);
+                } else {
+                    builder.line_to(p);
+                }
+            }
+            builder.close();
+            builder.style = PathStyle::Fill(FillOptions::default());
+            if let Ok(path) = builder.build() {
+                window.paint_path(path, color);
+            }
+        },
+    )
+    .size(px(size))
+}
+
+/// The favorite toggle: a filled theme-accent star when set, an outlined muted
+/// star when not.
 fn star_button(
     t: &theme::AuroraTheme,
     id: String,
@@ -4198,7 +4324,24 @@ fn star_button(
     label: String,
     disabled: bool,
 ) -> Button {
-    icon_button(t, id, "star", label, disabled, favorite)
+    let hover = t.control;
+    Button::new(id)
+        .aria_label(label)
+        .disabled(disabled)
+        .flex()
+        .flex_shrink_0()
+        .items_center()
+        .justify_center()
+        .size(px(28.))
+        .rounded(t.radius)
+        .when(!favorite, |b| b.opacity(0.32))
+        .hover(move |style| style.bg(hover).opacity(1.0))
+        .styles(|styles| styles.disabled(|style| style.opacity(0.42)))
+        .child(if favorite {
+            filled_star(17., t.ring).into_any_element()
+        } else {
+            crate::symbols::icon(Some("star"), px(18.), t.muted_foreground).into_any_element()
+        })
 }
 
 // ---------------------------------------------------------------------------

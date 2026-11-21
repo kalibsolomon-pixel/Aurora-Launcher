@@ -15,8 +15,325 @@ use gpui::{
 };
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-#[path = "../../native/src/symbols.rs"]
-mod catalog;
+mod catalog {
+    use std::ops::Range;
+    use std::sync::OnceLock;
+
+    include!(concat!(env!("OUT_DIR"), "/symbols_categories.rs"));
+
+    /// Shown first, mirroring the WebView picker's game-flavoured defaults.
+    pub const DEFAULT_ICONS: &[&str] = &[
+        "deployed_code",
+        "sports_esports",
+        "swords",
+        "shield",
+        "diamond",
+        "forest",
+        "landscape",
+        "castle",
+        "cottage",
+        "rocket_launch",
+        "bolt",
+        "local_fire_department",
+        "water_drop",
+        "ac_unit",
+        "hiking",
+        "science",
+        "pets",
+        "explore",
+    ];
+
+    /// Rendered when an instance has no chosen (or no longer known) icon.
+    pub const FALLBACK_ICON: &str = "deployed_code";
+
+    /// The most results the picker shows at once.
+    pub const RESULT_LIMIT: usize = 120;
+
+    /// Everyday words → glyph names that depict them (Material names carry no
+    /// Minecraft vocabulary). Extends the WebView table with launcher topics.
+    const SYNONYMS: &[(&str, &[&str])] = &[
+        ("tree", &["forest", "park", "nature", "eco", "grass"]),
+        ("wood", &["forest", "park", "carpenter"]),
+        ("sword", &["swords", "sports_martial_arts"]),
+        ("combat", &["swords", "shield", "sports_martial_arts"]),
+        ("pvp", &["swords", "sports_martial_arts", "shield"]),
+        ("house", &["home", "cottage", "house", "cabin"]),
+        ("base", &["home", "cottage", "castle", "fort"]),
+        ("fire", &["local_fire_department", "whatshot", "mode_heat"]),
+        ("lava", &["local_fire_department", "volcano", "whatshot"]),
+        ("ice", &["ac_unit", "severe_cold", "snowing"]),
+        ("snow", &["ac_unit", "snowing", "severe_cold"]),
+        ("mine", &["construction", "hardware", "landslide"]),
+        ("ore", &["diamond", "deployed_code", "token"]),
+        ("gem", &["diamond", "token"]),
+        ("magic", &["auto_fix_high", "wand_stars", "star", "flare"]),
+        ("space", &["rocket", "rocket_launch", "planet", "public"]),
+        (
+            "build",
+            &["construction", "architecture", "foundation", "handyman"],
+        ),
+        (
+            "tools",
+            &[
+                "handyman",
+                "construction",
+                "build",
+                "hardware",
+                "home_repair_service",
+            ],
+        ),
+        ("creative", &["palette", "brush", "draw"]),
+        ("survival", &["hiking", "camping", "explore"]),
+        ("ocean", &["water", "waves", "sailing", "scuba_diving"]),
+        ("sea", &["water", "waves", "sailing"]),
+        ("farm", &["agriculture", "grass", "eco", "potted_plant"]),
+        ("animal", &["pets", "cruelty_free", "flutter_dash"]),
+        (
+            "game",
+            &["sports_esports", "videogame_asset", "stadia_controller"],
+        ),
+        ("speed", &["bolt", "speed", "electric_bolt"]),
+        ("performance", &["speed", "bolt", "rocket_launch"]),
+        ("server", &["dns", "storage", "lan", "router", "cloud"]),
+        ("multiplayer", &["group", "groups", "lan", "dns"]),
+        (
+            "modpack",
+            &["inventory_2", "package_2", "deployed_code", "extension"],
+        ),
+        ("mods", &["extension", "deployed_code", "construction"]),
+    ];
+
+    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+    pub struct Symbol {
+        pub name: &'static str,
+        pub path: &'static str,
+    }
+
+    struct PathCatalog {
+        blob: String,
+        entries: Vec<(Range<usize>, Range<usize>)>,
+    }
+
+    struct SearchCatalog {
+        blob: String,
+        entries: Vec<(Range<usize>, u8, u32)>,
+    }
+
+    fn read_u16(bytes: &[u8], cursor: &mut usize) -> usize {
+        let value = u16::from_le_bytes([bytes[*cursor], bytes[*cursor + 1]]) as usize;
+        *cursor += 2;
+        value
+    }
+
+    fn read_u32(bytes: &[u8], cursor: &mut usize) -> u32 {
+        let value = u32::from_le_bytes([
+            bytes[*cursor],
+            bytes[*cursor + 1],
+            bytes[*cursor + 2],
+            bytes[*cursor + 3],
+        ]);
+        *cursor += 4;
+        value
+    }
+
+    fn paths_catalog() -> &'static PathCatalog {
+        static PATHS: OnceLock<PathCatalog> = OnceLock::new();
+        PATHS.get_or_init(|| {
+            let compressed = include_bytes!(concat!(env!("OUT_DIR"), "/symbols_paths.deflate"));
+            let raw = aurora_launcher_lib::inflate_raw(compressed)
+                .expect("bundled Material Symbols paths must inflate");
+            let mut cursor = 0usize;
+            let count = read_u32(&raw, &mut cursor) as usize;
+            let mut blob = String::with_capacity(raw.len());
+            let mut entries = Vec::with_capacity(count);
+            for _ in 0..count {
+                let name_len = read_u16(&raw, &mut cursor);
+                let name_start = blob.len();
+                let name_str =
+                    std::str::from_utf8(&raw[cursor..cursor + name_len]).expect("symbol utf8");
+                blob.push_str(name_str);
+                let name_range = name_start..blob.len();
+                cursor += name_len;
+
+                let path_len = read_u16(&raw, &mut cursor);
+                let path_start = blob.len();
+                let path_str =
+                    std::str::from_utf8(&raw[cursor..cursor + path_len]).expect("path utf8");
+                blob.push_str(path_str);
+                let path_range = path_start..blob.len();
+                cursor += path_len;
+
+                entries.push((name_range, path_range));
+            }
+            PathCatalog { blob, entries }
+        })
+    }
+
+    fn search_catalog() -> &'static SearchCatalog {
+        static SEARCH: OnceLock<SearchCatalog> = OnceLock::new();
+        SEARCH.get_or_init(|| {
+            let compressed = include_bytes!(concat!(env!("OUT_DIR"), "/symbols_search.deflate"));
+            let raw = aurora_launcher_lib::inflate_raw(compressed)
+                .expect("bundled Material Symbols search metadata must inflate");
+            let mut cursor = 0usize;
+            let count = read_u32(&raw, &mut cursor) as usize;
+            let mut blob = String::with_capacity(raw.len());
+            let mut entries = Vec::with_capacity(count);
+            for _ in 0..count {
+                let category = raw[cursor];
+                cursor += 1;
+                let popularity = read_u32(&raw, &mut cursor);
+                let tags_len = read_u16(&raw, &mut cursor);
+                let tags_start = blob.len();
+                let tags_str =
+                    std::str::from_utf8(&raw[cursor..cursor + tags_len]).expect("tags utf8");
+                blob.push_str(tags_str);
+                let tags_range = tags_start..blob.len();
+                cursor += tags_len;
+                entries.push((tags_range, category, popularity));
+            }
+            SearchCatalog { blob, entries }
+        })
+    }
+
+    /// The SVG path for a known icon name.
+    pub fn path(name: &str) -> Option<&'static str> {
+        let cat = paths_catalog();
+        cat.entries
+            .binary_search_by(|(n, _)| cat.blob[n.clone()].cmp(name))
+            .ok()
+            .map(|index| &cat.blob[cat.entries[index].1.clone()])
+    }
+
+    /// The path for an instance's stored icon, falling back for unknown names
+    /// (a forward-produced store or a renamed glyph) instead of failing.
+    pub fn path_or_fallback(name: Option<&str>) -> &'static str {
+        name.and_then(path)
+            .or_else(|| path(FALLBACK_ICON))
+            .unwrap_or("")
+    }
+
+    /// "rocket_launch" → "Rocket launch" for accessible names and tooltips.
+    pub fn label(name: &str) -> String {
+        let words = name.replace('_', " ");
+        let mut chars = words.trim().chars();
+        match chars.next() {
+            Some(first) => first.to_uppercase().chain(chars).collect(),
+            None => String::new(),
+        }
+    }
+
+    /// Bounded search. Every query word must match the name, a tag or a
+    /// synonym; name matches rank above tag matches, then Google's popularity.
+    /// `category` (an index into [`CATEGORIES`]) narrows the set. An empty query
+    /// shows the curated defaults first, then the most popular icons.
+    pub fn search(query: &str, category: Option<usize>, limit: usize) -> Vec<Symbol> {
+        let pcat = paths_catalog();
+        let scat = search_catalog();
+        let words: Vec<String> = query
+            .split(|c: char| c.is_whitespace() || c == ',')
+            .map(|w| w.trim().to_lowercase().replace(' ', "_"))
+            .filter(|w| !w.is_empty())
+            .take(6)
+            .collect();
+        let in_category = |cat_idx: u8| category.is_none_or(|c| cat_idx as usize == c);
+        if words.is_empty() {
+            let mut out: Vec<Symbol> = Vec::with_capacity(limit);
+            if category.is_none() {
+                for name in DEFAULT_ICONS {
+                    if let Some(svg_path) = path(name) {
+                        out.push(Symbol {
+                            name,
+                            path: svg_path,
+                        });
+                    }
+                }
+            }
+            let mut popular: Vec<(u32, &'static str, &'static str)> = pcat
+                .entries
+                .iter()
+                .zip(scat.entries.iter())
+                .filter_map(|((n, p), (_, cat_idx, pop))| {
+                    let name = &pcat.blob[n.clone()];
+                    if in_category(*cat_idx) && !DEFAULT_ICONS.contains(&name) {
+                        Some((*pop, name, &pcat.blob[p.clone()]))
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+            popular.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(b.1)));
+            out.extend(popular.into_iter().map(|(_, name, svg_path)| Symbol {
+                name,
+                path: svg_path,
+            }));
+            out.truncate(limit);
+            return out;
+        }
+        let mut scored: Vec<(u32, u32, &'static str, &'static str)> = Vec::new();
+        for ((n, p), (t, cat_idx, pop)) in pcat.entries.iter().zip(scat.entries.iter()) {
+            if !in_category(*cat_idx) {
+                continue;
+            }
+            let name = &pcat.blob[n.clone()];
+            let tags = &scat.blob[t.clone()];
+            let mut total = 0u32;
+            let mut all = true;
+            for word in &words {
+                let score = word_score(name, tags, word);
+                if score == 0 {
+                    all = false;
+                    break;
+                }
+                total += score;
+            }
+            if all {
+                scored.push((total, *pop, name, &pcat.blob[p.clone()]));
+            }
+        }
+        scored.sort_by(|a, b| b.0.cmp(&a.0).then(b.1.cmp(&a.1)).then(a.2.cmp(b.2)));
+        scored
+            .into_iter()
+            .take(limit)
+            .map(|(_, _, name, svg_path)| Symbol {
+                name,
+                path: svg_path,
+            })
+            .collect()
+    }
+
+    fn word_score(name: &str, tags: &str, word: &str) -> u32 {
+        let mut best = 0;
+        if name == word {
+            best = 100;
+        } else if name.starts_with(word) {
+            best = 60;
+        } else if name.split('_').any(|part| part == word) {
+            best = 50;
+        } else if name.contains(word) {
+            best = 30;
+        }
+        if best < 25 {
+            for tag in tags.split(' ') {
+                if tag == word {
+                    best = best.max(25);
+                } else if word.len() >= 3 && tag.starts_with(word) {
+                    best = best.max(12);
+                }
+            }
+        }
+        if best < 40 {
+            for (key, names) in SYNONYMS {
+                if (*key == word || (word.len() >= 3 && key.starts_with(word)))
+                    && names.contains(&name)
+                {
+                    best = best.max(40);
+                }
+            }
+        }
+        best
+    }
+}
 
 #[allow(unused_imports)]
 pub use catalog::{

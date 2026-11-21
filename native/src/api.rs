@@ -860,10 +860,13 @@ pub fn application_status(host: &Host) -> ApiResult<ApplicationStatus> {
 }
 
 pub async fn launcher_state(host: Host) -> ApiResult<LauncherState> {
-    let mut state: LauncherState = convert(app::get_launcher_state(host.clone()).await)?;
-    state.icons = blocking(move || app::get_instance_icons(host).unwrap_or_default())
-        .await
-        .unwrap_or_default();
+    let icons_host = host.clone();
+    let (state_res, icons_res) = tokio::join!(
+        app::get_launcher_state(host),
+        blocking(move || app::get_instance_icons(icons_host).unwrap_or_default()),
+    );
+    let mut state: LauncherState = convert(state_res)?;
+    state.icons = icons_res.unwrap_or_default();
     Ok(state)
 }
 
@@ -1129,11 +1132,11 @@ pub async fn play_readiness(
 pub use aurora_launcher_lib::launch::logs::{LogSnapshot, UploadResult};
 
 pub async fn game_log_preference(host: Host, show: Option<bool>) -> ApiResult<bool> {
-    blocking(move || convert(app::game_log_preference(host, show))).await?
+    blocking(move || app::game_log_preference(host, show).map_err(ApiError::from)).await?
 }
 pub async fn game_log(instance_id: String) -> ApiResult<LogSnapshot> {
     let request = request(json!({"instanceId": instance_id}))?;
-    blocking(move || convert(app::game_log(request))).await?
+    blocking(move || app::game_log(request).map_err(ApiError::from)).await?
 }
 pub fn subscribe_game_log(instance_id: String) -> ApiResult<tokio::sync::watch::Receiver<u64>> {
     app::subscribe_game_log(request(json!({"instanceId": instance_id}))?).map_err(ApiError::from)
@@ -1228,7 +1231,7 @@ pub use aurora_launcher_lib::saved_servers::editor::{
 };
 
 pub async fn server_list(host: Host, instance_id: String) -> ApiResult<ServerList> {
-    blocking(move || convert(app::get_server_list(host, instance_id))).await?
+    blocking(move || app::get_server_list(host, instance_id).map_err(ApiError::from)).await?
 }
 
 pub async fn edit_server_list(
@@ -1237,7 +1240,10 @@ pub async fn edit_server_list(
     revision: String,
     edit: ServerEdit,
 ) -> ApiResult<ServerList> {
-    blocking(move || convert(app::edit_server_list(host, instance_id, revision, edit))).await?
+    blocking(move || {
+        app::edit_server_list(host, instance_id, revision, edit).map_err(ApiError::from)
+    })
+    .await?
 }
 
 pub async fn runtime_status(host: Host, instance_id: String) -> ApiResult<RuntimeStatus> {
@@ -1940,9 +1946,24 @@ pub async fn identify_local_modpack(host: Host, path: String) -> ApiResult<Value
     convert(app::identify_local_modpack(host, request).await)
 }
 
+fn map_head_avatar(avatar: aurora_launcher_lib::auth::avatar::HeadAvatar) -> HeadAvatar {
+    HeadAvatar {
+        rgba: avatar.rgba,
+        sha256: avatar.sha256,
+        skin_rgba: avatar.skin_rgba,
+        skin_height: avatar.skin_height,
+        model: avatar.model,
+    }
+}
+
 pub async fn skin_preview(host: Host, preset: String) -> ApiResult<HeadAvatar> {
     let request = request(json!({"presetId": preset}))?;
-    blocking(move || convert(app::skin_preset_preview(host, request))).await?
+    blocking(move || {
+        app::skin_preset_preview(host, request)
+            .map(map_head_avatar)
+            .map_err(ApiError::from)
+    })
+    .await?
 }
 
 pub async fn import_skin(
@@ -1960,12 +1981,28 @@ pub async fn accounts(host: Host) -> ApiResult<AccountsState> {
 }
 
 pub async fn cached_avatars(host: Host) -> ApiResult<Vec<CachedAvatar>> {
-    blocking(move || convert(app::get_cached_account_avatars(host))).await?
+    blocking(move || {
+        app::get_cached_account_avatars(host)
+            .map(|items| {
+                items
+                    .into_iter()
+                    .map(|item| CachedAvatar {
+                        account_id: item.account_id,
+                        avatar: map_head_avatar(item.avatar),
+                    })
+                    .collect()
+            })
+            .map_err(ApiError::from)
+    })
+    .await?
 }
 
 pub async fn account_avatar(host: Host, account_id: String) -> ApiResult<Option<HeadAvatar>> {
     let request = request(json!({ "accountId": account_id, "refresh": false }))?;
-    convert(app::get_account_avatar(host, request).await)
+    app::get_account_avatar(host, request)
+        .await
+        .map(|avatar| avatar.map(map_head_avatar))
+        .map_err(ApiError::from)
 }
 
 pub async fn begin_login(host: Host) -> ApiResult<AccountSummary> {
@@ -2069,7 +2106,31 @@ pub async fn install_launcher_update(host: Host, version: String) -> ApiResult<V
 
 pub async fn cosmetics(host: Host, account_id: String) -> ApiResult<Cosmetics> {
     let request = request(json!({ "accountId": account_id }))?;
-    convert(app::get_cosmetics(host, request).await)
+    app::get_cosmetics(host, request)
+        .await
+        .map(|state| Cosmetics {
+            current_skin_model: state.current_skin_model.map(|model| match model {
+                aurora_launcher_lib::cosmetics::SkinModel::Classic => "classic".into(),
+                aurora_launcher_lib::cosmetics::SkinModel::Slim => "slim".into(),
+            }),
+            has_current_skin: state.has_current_skin,
+            current_skin: state.current_skin.map(map_head_avatar),
+            capes: state
+                .capes
+                .into_iter()
+                .map(|cape| Cape {
+                    id: cape.id,
+                    name: cape.name,
+                    selected: cape.selected,
+                    preview: cape.preview.map(|preview| Texture {
+                        width: preview.width,
+                        height: preview.height,
+                        rgba: preview.rgba,
+                    }),
+                })
+                .collect(),
+        })
+        .map_err(ApiError::from)
 }
 
 pub async fn skin_presets(host: Host) -> ApiResult<Vec<SkinPreset>> {
@@ -2078,7 +2139,12 @@ pub async fn skin_presets(host: Host) -> ApiResult<Vec<SkinPreset>> {
 
 pub async fn skin_thumbnail(host: Host, preset_id: String) -> ApiResult<Option<Thumbnail>> {
     let request = request(json!({ "presetId": preset_id }))?;
-    blocking(move || convert(app::skin_preset_thumbnail(host, request))).await?
+    blocking(move || {
+        app::skin_preset_thumbnail(host, request)
+            .map(|thumb| thumb.map(|t| Thumbnail { rgba: t.rgba }))
+            .map_err(ApiError::from)
+    })
+    .await?
 }
 
 pub async fn save_current_skin(host: Host, account_id: String) -> ApiResult<Value> {
@@ -2249,47 +2315,75 @@ pub async fn apply_recovery(
 // Pulsar uses the shared, serde camelCase presentation contract.
 pub use aurora_launcher_lib::pulsar::view::*;
 pub async fn pulsar_library(host: Host, request: LibraryQuery) -> ApiResult<LibraryView> {
-    convert(app::list_pulsar_library(host, request).await)
+    app::list_pulsar_library(host, request)
+        .await
+        .map_err(ApiError::from)
 }
 pub async fn pulsar_refresh(host: Host, request: LibraryQuery) -> ApiResult<LibraryView> {
-    convert(app::refresh_pulsar_library(host, request).await)
+    app::refresh_pulsar_library(host, request)
+        .await
+        .map_err(ApiError::from)
 }
 pub async fn pulsar_analysis(host: Host, request: AnalysisRequest) -> ApiResult<AnalysisView> {
-    convert(app::analyze_pulsar(host, request).await)
+    app::analyze_pulsar(host, request)
+        .await
+        .map_err(ApiError::from)
 }
 pub async fn pulsar_detail(host: Host, request: DetailRequest) -> ApiResult<FightDetailView> {
-    convert(app::get_pulsar_fight(host, request).await)
+    app::get_pulsar_fight(host, request)
+        .await
+        .map_err(ApiError::from)
 }
 pub async fn pulsar_playback(host: Host, request: PlaybackRequest) -> ApiResult<PlaybackView> {
-    convert(app::get_pulsar_playback(host, request).await)
+    app::get_pulsar_playback(host, request)
+        .await
+        .map_err(ApiError::from)
 }
 pub async fn pulsar_detail_analysis(
     host: Host,
     request: DetailAnalysisRequest,
 ) -> ApiResult<FightDetailView> {
-    convert(app::analyze_pulsar_fight(host, request).await)
+    app::analyze_pulsar_fight(host, request)
+        .await
+        .map_err(ApiError::from)
 }
 pub async fn pulsar_settings(host: Host, request: FolderRequest) -> ApiResult<SettingsView> {
-    convert(app::get_pulsar_settings(host, request).await)
+    app::get_pulsar_settings(host, request)
+        .await
+        .map_err(ApiError::from)
 }
 pub async fn pulsar_opponents(host: Host, request: LibraryQuery) -> ApiResult<Vec<OpponentView>> {
-    convert(app::get_pulsar_opponents(host, request).await)
+    app::get_pulsar_opponents(host, request)
+        .await
+        .map_err(ApiError::from)
 }
 pub async fn pulsar_records(host: Host, request: LibraryQuery) -> ApiResult<Vec<RecordView>> {
-    convert(app::get_pulsar_records(host, request).await)
+    app::get_pulsar_records(host, request)
+        .await
+        .map_err(ApiError::from)
 }
 pub async fn pulsar_compare(host: Host, request: CompareRequest) -> ApiResult<CompareView> {
-    convert(app::compare_pulsar_fights(host, request).await)
+    app::compare_pulsar_fights(host, request)
+        .await
+        .map_err(ApiError::from)
 }
 pub async fn pulsar_open_folder(host: Host, request: FolderRequest) -> ApiResult<ActionReceipt> {
-    convert(app::open_pulsar_folder(host, request).await)
+    app::open_pulsar_folder(host, request)
+        .await
+        .map_err(ApiError::from)
 }
 pub async fn pulsar_view_report(host: Host, request: FightKey) -> ApiResult<ActionReceipt> {
-    convert(app::view_pulsar_report(host, request).await)
+    app::view_pulsar_report(host, request)
+        .await
+        .map_err(ApiError::from)
 }
 pub async fn pulsar_export(host: Host, request: ExportRequest) -> ApiResult<ActionReceipt> {
-    convert(app::export_pulsar_report(host, request).await)
+    app::export_pulsar_report(host, request)
+        .await
+        .map_err(ApiError::from)
 }
 pub async fn pulsar_delete(host: Host, request: DeleteRequest) -> ApiResult<ActionReceipt> {
-    convert(app::delete_pulsar_fight(host, request).await)
+    app::delete_pulsar_fight(host, request)
+        .await
+        .map_err(ApiError::from)
 }

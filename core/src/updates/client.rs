@@ -130,7 +130,7 @@ pub async fn fetch_published_manifest(
             ));
         }
 
-        let client = downloads::build_client(options);
+        let client = downloads::build_metadata_client(options);
         let response = client
             .get(parsed)
             .send()
@@ -399,6 +399,7 @@ pub fn preview_update(
     let mut candidate_dto = None;
     let mut outcome_label = "upToDate";
 
+    let mut cached_inventory = None;
     if let CandidateOutcome::UpdateAvailable(release) = &outcome {
         outcome_label = "updateAvailable";
         candidate_release = Some(release.clone());
@@ -486,6 +487,7 @@ pub fn preview_update(
         if let Err(error) = aurora::preflight_bootstrap(managed, id, release) {
             blockers.push(error.to_string());
         }
+        cached_inventory = Some(inventory);
     } else if matches!(outcome, CandidateOutcome::InstalledNewer) {
         outcome_label = "installedNewer";
         warnings.push(
@@ -494,8 +496,15 @@ pub fn preview_update(
         );
     }
 
-    let fingerprint = fingerprint_update(&record, &state, managed, id, candidate_release.as_ref())
-        .map_err(|error| invalid(error.to_string()))?;
+    let fingerprint = fingerprint_update_with_inventory(
+        &record,
+        &state,
+        managed,
+        id,
+        candidate_release.as_ref(),
+        cached_inventory.as_ref(),
+    )
+    .map_err(|error| invalid(error.to_string()))?;
 
     Ok(ClientUpdatePreview {
         instance_id: id.to_string(),
@@ -511,12 +520,13 @@ pub fn preview_update(
 /// Hashes the exact world the approval covered: the registry record, the
 /// installed state bytes, retained ownership, provider state, the mod
 /// inventory, the installed game manifest, the full candidate release. Any drift refuses the stale plan.
-fn fingerprint_update(
+fn fingerprint_update_with_inventory(
     record: &InstanceRecord,
     state: &AuroraInstalledState,
     managed: &ManagedPaths,
     id: &InstanceId,
     candidate: Option<&AuroraRelease>,
+    existing_inventory: Option<&instance_mods::ModInventory>,
 ) -> Result<String, ClientUpdateError> {
     let _performance =
         crate::performance::scope(crate::performance::Event::ClientUpdateFingerprint);
@@ -528,8 +538,15 @@ fn fingerprint_update(
         .map_err(|error| ClientUpdateError::Inapplicable(error.to_string()))?;
     let provider = ContentState::load(managed, id)
         .map_err(|error| ClientUpdateError::Inapplicable(error.to_string()))?;
-    let inventory = instance_mods::scan(managed, id)
-        .map_err(|error| ClientUpdateError::Inapplicable(error.to_string()))?;
+    let owned_inventory;
+    let inventory = match existing_inventory {
+        Some(inv) => inv,
+        None => {
+            owned_inventory = instance_mods::scan(managed, id)
+                .map_err(|error| ClientUpdateError::Inapplicable(error.to_string()))?;
+            &owned_inventory
+        }
+    };
     let game_manifest =
         crate::install::state::load_installed_state(managed.instance_paths(id).game())
             .map_err(|error| ClientUpdateError::Inapplicable(error.to_string()))?;
@@ -1019,13 +1036,9 @@ pub async fn check_client_update(
 ) -> UpdateAvailability {
     crate::performance::measure(crate::performance::Event::ClientUpdateDiscovery, async {
         match fetch_update_manifest(managed, endpoints, id).await {
-            Ok(remote) => match preview_update(managed, endpoints, id, &remote) {
-                Ok(preview) => preview_availability(&preview),
-                Err(ClientUpdateError::Inapplicable(reason)) => {
-                    UpdateAvailability::NotApplicable { reason }
-                }
-                Err(error) => UpdateAvailability::unavailable(error.message()),
-            },
+            Ok(remote) => {
+                check_client_update_against_manifest(managed, endpoints, id, &remote).await
+            }
             Err(ClientUpdateError::Inapplicable(reason)) => {
                 UpdateAvailability::NotApplicable { reason }
             }
@@ -1033,6 +1046,117 @@ pub async fn check_client_update(
         }
     })
     .await
+}
+
+/// Evaluates update availability against an already-fetched release manifest
+/// on a blocking worker, avoiding redundant mod scans and unused preview
+/// fingerprinting while keeping the exact same eligibility and validation rules.
+pub(crate) async fn check_client_update_against_manifest(
+    managed: &ManagedPaths,
+    endpoints: &lifecycle::InstanceEndpoints,
+    id: &InstanceId,
+    remote: &ReleaseManifest,
+) -> UpdateAvailability {
+    let managed = managed.clone();
+    let endpoints = endpoints.clone();
+    let id = id.clone();
+    let remote = remote.clone();
+    let result = tokio::task::spawn_blocking(move || {
+        check_availability_only(&managed, &endpoints, &id, &remote)
+    })
+    .await;
+    match result {
+        Ok(Ok(availability)) => availability,
+        Ok(Err(ClientUpdateError::Inapplicable(reason))) => {
+            UpdateAvailability::NotApplicable { reason }
+        }
+        Ok(Err(error)) => UpdateAvailability::unavailable(error.message()),
+        Err(_) => UpdateAvailability::unavailable(
+            "The Aurora Client update check worker stopped unexpectedly.",
+        ),
+    }
+}
+
+fn check_availability_only(
+    managed: &ManagedPaths,
+    endpoints: &lifecycle::InstanceEndpoints,
+    id: &InstanceId,
+    remote: &ReleaseManifest,
+) -> Result<UpdateAvailability, ClientUpdateError> {
+    let _performance = crate::performance::scope(crate::performance::Event::ClientUpdatePreview);
+    let invalid = |reason: String| ClientUpdateError::Inapplicable(reason);
+    let registry = InstanceRegistry::load(&managed.instance_registry_file())
+        .map_err(|error| invalid(error.to_string()))?;
+    let record = registry
+        .find(id)
+        .ok_or_else(|| invalid("instance not found".into()))?
+        .clone();
+    if record.state() != InstanceState::Ready
+        || !record.configuration().matches_installed(record.installed())
+    {
+        return Err(invalid(
+            "finish installation and resolve stale configuration first".into(),
+        ));
+    }
+    let Some(pin) = record.installed().aurora.clone() else {
+        return Err(invalid(
+            "the Aurora Client is not installed on this instance".into(),
+        ));
+    };
+    let state = aurora::load_installed_state(managed, id)
+        .map_err(|error| invalid(error.to_string()))?
+        .ok_or_else(|| invalid("no Aurora installation is present".into()))?;
+    if state.aurora_version() != pin.version
+        || state.channel() != pin.channel
+        || state.minecraft_version() != record.installed().minecraft_version
+        || Some(state.fabric_loader_version()) != record.installed().platform.version()
+    {
+        return Err(invalid(
+            "the Aurora installation disagrees with the instance pin".into(),
+        ));
+    }
+    let merged = aurora::merged_release_manifest(managed, id, endpoints.release_manifest())
+        .map_err(|error| invalid(error.to_string()))?;
+    let current_release = merged
+        .resolve_environment(
+            &pin.version,
+            Some(pin.channel),
+            &record.installed().minecraft_version,
+        )
+        .ok_or_else(|| {
+            invalid("the installed release metadata is missing; no update can be planned".into())
+        })?;
+    let validation = lifecycle::validate_instance(managed, &registry, id)
+        .map_err(|error| invalid(error.to_string()))?;
+    if validation.status != lifecycle::InstanceStatus::Ready {
+        return Err(invalid(format!(
+            "the instance must validate before an update; {}",
+            validation
+                .problems
+                .iter()
+                .map(|problem| format!("{}: {}", problem.component, problem.reason))
+                .collect::<Vec<_>>()
+                .join("; ")
+        )));
+    }
+    match select_candidate(
+        remote,
+        record.installed(),
+        &state,
+        current_release.java().major_version(),
+    )? {
+        CandidateOutcome::UpdateAvailable(release) => {
+            let candidate = ClientUpdateCandidate::from_release(&release);
+            Ok(UpdateAvailability::UpdateAvailable {
+                current: pin.version,
+                candidate: candidate.version,
+                notes: candidate.notes,
+            })
+        }
+        CandidateOutcome::UpToDate | CandidateOutcome::InstalledNewer => {
+            Ok(UpdateAvailability::UpToDate)
+        }
+    }
 }
 
 pub(crate) fn preview_availability(preview: &ClientUpdatePreview) -> UpdateAvailability {

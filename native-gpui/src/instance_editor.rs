@@ -684,6 +684,21 @@ impl InstanceEditor {
         self.busy
     }
 
+    pub fn screenshots_view(&self) -> Entity<crate::screenshots::Screenshots> {
+        self.screenshots.clone()
+    }
+
+    pub fn open_folder(&mut self, cx: &mut Context<Self>) {
+        self.action("folder", cx);
+    }
+
+    pub fn open_screenshots(&mut self, id: String, cx: &mut Context<Self>) {
+        self.selected = Some(id.clone());
+        self.screenshots
+            .update(cx, |gallery, cx| gallery.open(Some(id), cx));
+        cx.notify();
+    }
+
     pub fn open_instance(&mut self, id: String, window: &mut Window, cx: &mut Context<Self>) {
         self.pending_instance = None;
         self.pending_recovery = false;
@@ -1948,15 +1963,17 @@ const TEXT_MAX: f32 = 420.;
 /// A card header: section title (and caption) left, an optional action right.
 fn card_head(
     t: &AuroraTheme,
+    _icon: Option<&'static str>,
     title: &'static str,
     caption: Option<&'static str>,
     action: Option<gpui::AnyElement>,
 ) -> Div {
     div()
         .flex()
-        .items_start()
+        .items_center()
         .justify_between()
         .gap(px(16.))
+        .pb(px(4.))
         .child(ui::section_header(
             t,
             title,
@@ -2009,6 +2026,7 @@ fn setting(
         .items_center()
         .justify_between()
         .gap(px(20.))
+        .min_h(px(58.))
         .py(px(10.))
         .when(!last, |this| {
             this.border_b_1().border_color(t.border_subtle)
@@ -2273,10 +2291,6 @@ impl Render for InstanceEditor {
         {
             let instance = self.selected_instance().cloned();
             let stored_icon = self.stored_icon().map(str::to_owned);
-            let active = self
-                .state
-                .as_ref()
-                .is_some_and(|s| s.config.selected_instance_id.as_deref() == Some(&id));
             let action_button = |id: &'static str,
                                  label: &'static str,
                                  icon: Option<&'static str>,
@@ -2294,90 +2308,10 @@ impl Render for InstanceEditor {
                 button
             };
 
-            if !active {
-                detail = detail.child(
-                    div().child(
-                        action_button("select", "Make active", None, ButtonVariant::Soft)
-                            .size(ButtonSize::Small),
-                    ),
-                );
-            }
-
-            let mut tabs = div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .gap(px(2.))
-                .p(px(2.))
-                .rounded(t.radius)
-                .bg(t.sunken)
-                .border_1()
-                .border_color(t.border_subtle);
-            for (index, label) in [
-                "General",
-                "Game version",
-                "Runtime",
-                "Java",
-                "Maintenance",
-                "Screenshots",
-            ]
-            .into_iter()
-            .enumerate()
+            // Narrower progression: all four short option groups flow on one clean
+            // text-first scrolling page directly inside Options (zero extra sub-nav level).
+            let mut panel = div().flex().flex_col().gap(px(16.)).w_full().min_w(px(0.));
             {
-                tabs = tabs.child(
-                    AuroraButton::new(("instance-section", index), label)
-                        .variant(ButtonVariant::Ghost)
-                        .size(ButtonSize::Small)
-                        .selected(self.section == index)
-                        .on_click(cx.listener(move |this, _, _, cx| {
-                            this.section = index;
-                            if index == 5 {
-                                let selected = this.selected.clone();
-                                this.screenshots
-                                    .update(cx, |gallery, cx| gallery.open(selected, cx));
-                            }
-                            cx.notify();
-                        })),
-                );
-                if index == 0 {
-                    tabs = tabs.child(
-                        AuroraButton::new("instance-pulsar", "Pulsar")
-                            .accessibility_label("Open Pulsar for selected instance")
-                            .variant(ButtonVariant::Ghost)
-                            .size(ButtonSize::Small)
-                            .disabled(busy || instance.is_none())
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if !this.busy {
-                                    if let Some(event) = pulsar_shortcut(this.selected_instance()) {
-                                        cx.emit(event);
-                                    }
-                                }
-                            })),
-                    );
-                    tabs = tabs.child(
-                        AuroraButton::new("instance-content", "Content")
-                            .accessibility_label("Open content for selected instance")
-                            .variant(ButtonVariant::Ghost)
-                            .size(ButtonSize::Small)
-                            .disabled(busy || instance.is_none())
-                            .on_click(cx.listener(|this, _, _, cx| {
-                                if this.busy {
-                                    return;
-                                }
-                                if let Some(instance) = this.selected_instance() {
-                                    cx.emit(InstanceEditorEvent::OpenContent {
-                                        instance: instance.id.clone(),
-                                    });
-                                }
-                            })),
-                    );
-                }
-            }
-            detail = detail.child(div().flex().child(tabs));
-            if self.section == 5 {
-                detail = detail.child(self.screenshots.clone());
-            }
-            if self.section == 0 {
                 // General settings and the reviewed Client transition.
                 // Aurora is a reviewed transition, never a direct configuration toggle.
                 let installed = self
@@ -2385,64 +2319,83 @@ impl Render for InstanceEditor {
                     .is_some_and(|instance| instance.aurora.is_some());
                 let aurora_note = match self.selected_instance() {
                     Some(instance) => match (&instance.aurora, instance.platform.kind.as_str()) {
-                        (Some(pin), _) => format!("Aurora Client {} installed.", pin.version),
-                        (None, "fabric") => "Aurora Client is not installed.".to_owned(),
-                        (None, _) => "Aurora Client requires Fabric.".to_owned(),
+                        (Some(pin), _) => format!("Installed ({})", pin.version),
+                        (None, "fabric") => "Not installed".to_owned(),
+                        (None, _) => "Requires Fabric".to_owned(),
                     },
                     None => String::new(),
                 };
+                let name_dirty = self.selected_instance().is_some_and(|inst| {
+                    let current = self.name.read(cx).value();
+                    let trimmed = current.trim();
+                    !trimmed.is_empty() && trimmed != inst.display_name
+                });
                 let aurora_view = this.clone();
                 let icon_view = this.clone();
-                detail = detail.child(ui::card(&t).flex_1().p(px(16.)).gap(px(0.)).child(rows(
+                panel = panel.child(form_card(
                     &t,
-                    vec![
+                    card_head(&t, None, "General", None, None),
+                    rows(
+                        &t,
+                        vec![
                             (
-                                "Instance name",
-                                Some("Press Rename to save the new name.".into()),
+                                "Name",
+                                None,
                                 div()
                                     .flex()
                                     .gap(px(8.))
-                                    .w(px(WIDE_W))
+                                    .w(px(SHORT_W))
                                     .child(
                                         div().flex_1().min_w(px(0.)).child(
                                             AuroraInput::new(&self.name).label("Instance name"),
                                         ),
                                     )
-                                    .child(action_button(
-                                        "rename",
-                                        "Rename",
-                                        None,
-                                        ButtonVariant::Default,
-                                    ))
-                                    .into_any_element(),
-                            ),
-                            (
-                                "Icon",
-                                Some(format!(
-                                    "Instance icon: {}",
-                                    symbols::caption(stored_icon.as_deref())
-                                )),
-                                AuroraButton::new("icon-change", "Change icon…")
-                                    .icon("image")
-                                    .disabled(busy)
-                                    .on_click(move |_, window, cx| {
-                                        icon_view
-                                            .update(cx, |v, cx| v.open_icon_picker(window, cx));
+                                    .when(name_dirty, |row| {
+                                        row.child(action_button(
+                                            "rename",
+                                            "Save",
+                                            None,
+                                            ButtonVariant::Soft,
+                                        ))
                                     })
                                     .into_any_element(),
                             ),
                             (
+                                "Icon",
+                                None,
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(12.))
+                                    .child(crate::instance_icon(
+                                        stored_icon.as_deref(),
+                                        40.,
+                                        installed,
+                                        &t,
+                                    ))
+                                    .child(
+                                        AuroraButton::new("icon-change", "Change")
+                                            .disabled(busy)
+                                            .on_click(move |_, window, cx| {
+                                                icon_view.update(cx, |v, cx| {
+                                                    v.open_icon_picker(window, cx)
+                                                });
+                                            }),
+                                    )
+                                    .into_any_element(),
+                            ),
+                            (
                                 "Aurora Client",
-                                Some(aurora_note),
+                                Some(aurora_note.clone()),
                                 AuroraButton::new(
                                     "editor-aurora",
-                                    if installed {
-                                        "Remove Aurora Client…"
-                                    } else {
-                                        "Install Aurora Client…"
-                                    },
+                                    if installed { "Remove…" } else { "Install" },
                                 )
-                                .icon(if installed { "remove" } else { "download" })
+                                .variant(if installed {
+                                    ButtonVariant::DangerSubtle
+                                } else {
+                                    ButtonVariant::Soft
+                                })
                                 .disabled(
                                     busy || !draft_clean
                                         || self.selected_instance().is_some_and(needs_install)
@@ -2457,72 +2410,18 @@ impl Render for InstanceEditor {
                                 .into_any_element(),
                             ),
                             (
-                                "Instance folder",
-                                Some("Worlds, mods, screenshots and logs.".into()),
-                                action_button(
-                                    "folder",
-                                    "Open folder",
-                                    Some("folder_open"),
-                                    ButtonVariant::Default,
-                                )
-                                .into_any_element(),
+                                "Folder",
+                                None,
+                                action_button("folder", "Open", None, ButtonVariant::Default)
+                                    .into_any_element(),
                             ),
                         ],
-                )));
+                    ),
+                ));
             }
-            // Saved runtime settings belong to this selected instance.
-            if instance.is_some() && self.section == 0 {
-                let memory = self
-                    .baseline
-                    .as_ref()
-                    .map(|config| format!("{} MiB", config.memory_mib))
-                    .unwrap_or_else(|| "—".to_owned());
-                let java = self
-                    .baseline
-                    .as_ref()
-                    .and_then(|config| config.custom_java().map(str::to_owned))
-                    .map(|_| "Custom path".to_owned())
-                    .unwrap_or_else(|| "Managed runtime".to_owned());
-                let lines = [("Memory", memory), ("Java", java)];
-                // Summarize saved values without exposing an editable draft here.
-                let grid = div()
-                    .flex()
-                    .flex_col()
-                    .children(
-                        lines
-                            .into_iter()
-                            .enumerate()
-                            .map(|(index, (label, value))| {
-                                div()
-                                    .flex()
-                                    .items_center()
-                                    .justify_between()
-                                    .gap(px(12.))
-                                    .py(px(8.))
-                                    .when(index > 0, |row| row.border_t_1().border_color(t.border))
-                                    .child(ui::caption(&t, label))
-                                    .child(
-                                        div()
-                                            .text_size(px(ui::TEXT_BODY))
-                                            .font_weight(gpui::FontWeight::MEDIUM)
-                                            .text_color(t.foreground)
-                                            .child(value),
-                                    )
-                            }),
-                    );
-                detail = detail.child(
-                    ui::card(&t)
-                        .gap(px(12.))
-                        .child(ui::section_header(
-                            &t,
-                            "Saved runtime",
-                            Some("Change these in Runtime or Java.".into()),
-                        ))
-                        .child(grid),
-                );
-            }
+            let _ = &instance;
 
-            if self.section == 1 {
+            {
                 // Game version and loader; official catalogs load lazily.
                 let snapshots_view = this.clone();
                 let game = self
@@ -2549,6 +2448,9 @@ impl Render for InstanceEditor {
                     .iter()
                     .map(|kind| platform_label(kind).into())
                     .collect();
+                let installed_loader = self
+                    .selected_instance()
+                    .and_then(|inst| inst.platform.version.as_deref());
                 let loader_values = self.loader_values();
                 let loader_options: Vec<SharedString> = loader_values
                     .iter()
@@ -2557,11 +2459,14 @@ impl Render for InstanceEditor {
                             return SharedString::from("Automatic compatible version");
                         }
                         match self.current_loaders().iter().find(|v| &v.version == value) {
-                            Some(found) if !found.stable => {
-                                format!("{} (unstable)", found.version).into()
+                            Some(found)
+                                if !found.stable
+                                    && installed_loader != Some(found.version.as_str()) =>
+                            {
+                                format!("{} (beta)", found.version).into()
                             }
                             Some(found) => found.version.clone().into(),
-                            None => format!("{value} (saved)").into(),
+                            None => value.clone().into(),
                         }
                     })
                     .collect();
@@ -2585,8 +2490,8 @@ impl Render for InstanceEditor {
                     .as_ref()
                     .is_some_and(|base| base.aurora_enabled);
                 let mut game_items: Vec<(&'static str, Option<String>, gpui::AnyElement)> = vec![(
-                    "Include snapshots",
-                    Some("Also list snapshot builds of Minecraft.".into()),
+                    "Snapshots",
+                    None,
                     AuroraToggle::new("editor-snapshots")
                         .label("Include snapshots")
                         .checked(self.snapshots)
@@ -2605,19 +2510,12 @@ impl Render for InstanceEditor {
                 for (ix, label, id) in [
                     (0usize, "Minecraft version", "editor-minecraft"),
                     (1, "Platform", "editor-platform"),
-                    (2, "Loader policy", "editor-loader"),
+                    (2, "Loader", "editor-loader"),
                 ] {
                     if ix == 2 && game.as_ref().is_some_and(|g| g.kind == "vanilla") {
                         continue;
                     }
-                    let description = match ix {
-                        1 if loader_locked => Some(
-                            "Aurora Client requires Fabric; disable Aurora before changing it."
-                                .into(),
-                        ),
-                        2 => Some("Automatic follows the newest compatible loader.".into()),
-                        _ => None,
-                    };
+                    let description: Option<String> = None;
                     if ix == 0 && self.catalog_loading {
                         game_items.push((
                             label,
@@ -2627,17 +2525,14 @@ impl Render for InstanceEditor {
                         continue;
                     }
                     if ix == 1 && loader_locked {
+                        let plat = game
+                            .as_ref()
+                            .map(|g| platform_label(&g.kind))
+                            .unwrap_or("—");
                         game_items.push((
                             label,
                             description,
-                            value_box(
-                                &t,
-                                game.as_ref()
-                                    .map(|g| platform_label(&g.kind))
-                                    .unwrap_or("—"),
-                                Some("lock"),
-                            )
-                            .into_any_element(),
+                            ui::badge(&t, plat, ui::Tone::Neutral).into_any_element(),
                         ));
                         continue;
                     }
@@ -2697,12 +2592,12 @@ impl Render for InstanceEditor {
                     &t,
                     card_head(
                         &t,
-                        "Game version and loader",
-                        Some("Version and loader changes apply after you save and install."),
+                        Some("extension"),
+                        "Version & loader",
+                        None,
                         Some(
-                            AuroraButton::new("editor-catalogs", "Refresh catalogs")
+                            AuroraButton::new("editor-catalogs", "Refresh versions")
                                 .size(ButtonSize::Small)
-                                .icon("refresh")
                                 .disabled(busy)
                                 .on_click(move |_, _, cx| {
                                     catalog_view.update(cx, |v, cx| {
@@ -2730,20 +2625,21 @@ impl Render for InstanceEditor {
                             .child("No supported loader versions for this Minecraft version."),
                     );
                 }
-                detail = detail.child(game_card);
+                panel = panel.child(game_card);
             }
-            if self.section == 2 {
-                // Memory and window.
-                detail = detail.child(
+            {
+                // Memory, window and Java runtime unified under Runtime.
+                panel = panel.child(
                     ui::card(&t)
+                        .p(px(16.))
                         .gap(px(4.))
-                        .child(card_head(&t, "Memory and window", None, None))
+                        .child(card_head(&t, Some("memory"), "Runtime", None, None))
                         .child(rows_with(
                             &t,
                             vec![
                                 (
                                     "Memory (MiB)",
-                                    Some("How much memory the game may use.".into()),
+                                    None,
                                     div()
                                         .w(px(SHORT_W))
                                         .child(AuroraInput::new(&self.memory).label("Memory (MiB)"))
@@ -2751,8 +2647,8 @@ impl Render for InstanceEditor {
                                     false,
                                 ),
                                 (
-                                    "Additional JVM arguments",
-                                    Some("Extra flags passed to Java when the game starts.".into()),
+                                    "JVM arguments",
+                                    None,
                                     div()
                                         .w(px(SHORT_W))
                                         .child(
@@ -2764,10 +2660,7 @@ impl Render for InstanceEditor {
                                 ),
                                 (
                                     "Window size",
-                                    Some(
-                                        "Width × height in pixels. Leave blank for the default."
-                                            .into(),
-                                    ),
+                                    Some("Width × height".into()),
                                     div()
                                         .flex()
                                         .items_center()
@@ -2805,7 +2698,7 @@ impl Render for InstanceEditor {
                                         AuroraButton::new(
                                             "memory-advice",
                                             if self.memory_details {
-                                                "Hide memory recommendation"
+                                                "Hide recommendation"
                                             } else {
                                                 "Memory recommendation"
                                             },
@@ -2826,17 +2719,17 @@ impl Render for InstanceEditor {
                         }),
                 );
             }
-            if self.section == 3 {
+            {
                 // Java. The managed runtime is read when validating or after an install.
-                detail = detail.child(form_card(
+                panel = panel.child(form_card(
                     &t,
-                    card_head(&t, "Java", None, None),
+                    card_head(&t, Some("computer"), "Java", None, None),
                     rows_with(
                         &t,
                         vec![
                             (
                                 "Custom Java path",
-                                Some("Leave blank to use the managed runtime.".into()),
+                                Some("Blank for managed runtime".into()),
                                 div()
                                     .w(px(SHORT_W))
                                     .child(
@@ -2847,111 +2740,66 @@ impl Render for InstanceEditor {
                                 false,
                             ),
                             (
-                                "Java runtime",
-                                Some(
-                                    self.runtime_text
-                                        .clone()
-                                        .filter(|text| !text.is_empty())
-                                        .unwrap_or_else(|| {
-                                            "Check the path above before launching.".into()
-                                        }),
-                                ),
-                                action_button(
-                                    "java",
-                                    "Validate custom Java",
-                                    None,
-                                    ButtonVariant::Default,
-                                )
-                                .into_any_element(),
+                                "Runtime check",
+                                self.runtime_text.clone().filter(|text| !text.is_empty()),
+                                action_button("java", "Validate", None, ButtonVariant::Default)
+                                    .into_any_element(),
                                 false,
                             ),
                         ],
                     ),
                 ));
             }
-            if self.section == 4 {
+            {
                 // Installation and recovery.
                 let recovery_view = this.clone();
-                detail = detail.child(form_card(
+                panel = panel.child(form_card(
                     &t,
-                    card_head(&t, "Installation and recovery", None, None),
-                    div().grid().grid_cols(2).gap(px(16.)).children(
-                        [
-                            (
-                                "Check installed files and the game runtime.",
-                                action_button(
-                                    "validate",
-                                    "Validate instance",
-                                    None,
-                                    ButtonVariant::Default,
-                                )
-                                .into_any_element(),
-                            ),
-                            (
-                                "Install the saved version, loader and Aurora choice.",
-                                action_button(
-                                    "install",
-                                    "Install saved configuration",
-                                    None,
-                                    ButtonVariant::Default,
-                                )
-                                .into_any_element(),
-                            ),
-                            (
-                                "Finish an interrupted or failed installation.",
-                                action_button(
-                                    "repair",
-                                    "Retry installation",
-                                    None,
-                                    ButtonVariant::Default,
-                                )
-                                .into_any_element(),
-                            ),
-                            (
-                                "Review what can be restored before applying changes.",
-                                AuroraButton::new("recovery", "Inspect recovery")
-                                    .disabled(busy)
-                                    .on_click(move |_, _, cx| {
-                                        recovery_view.update(cx, |v, cx| v.inspect_recovery(cx));
-                                    })
-                                    .into_any_element(),
-                            ),
-                        ]
-                        .into_iter()
-                        .map(|(description, action)| {
-                            div()
-                                .flex()
-                                .flex_col()
-                                .items_start()
-                                .min_w(px(0.))
-                                .gap(px(8.))
-                                .child(action)
-                                .child(ui::caption(&t, description))
-                        }),
-                    ),
+                    card_head(&t, Some("build"), "Maintenance", None, None),
+                    div().grid().grid_cols(2).gap(px(12.)).pt(px(6.)).children([
+                        action_button(
+                            "validate",
+                            "Validate instance",
+                            None,
+                            ButtonVariant::Default,
+                        )
+                        .into_any_element(),
+                        action_button(
+                            "install",
+                            "Install saved config",
+                            None,
+                            ButtonVariant::Default,
+                        )
+                        .into_any_element(),
+                        action_button("repair", "Retry installation", None, ButtonVariant::Default)
+                            .into_any_element(),
+                        AuroraButton::new("recovery", "Inspect recovery")
+                            .disabled(busy)
+                            .on_click(move |_, _, cx| {
+                                recovery_view.update(cx, |v, cx| v.inspect_recovery(cx));
+                            })
+                            .into_any_element(),
+                    ]),
                 ));
             }
-            if self.section == 4 {
-                // Danger zone, kept apart from everything else.
+            {
+                // Danger zone, kept apart from everything else inside Maintenance.
                 let delete_view = this.clone();
-                detail = detail.child(
+                panel = panel.child(
                     ui::card(&t)
                         .gap(px(4.))
                         .border_color(Hsla {
                             a: 0.30,
                             ..t.danger
                         })
-                        .child(card_head(&t, "Danger zone", None, None))
+                        .child(card_head(&t, Some("warning"), "Danger zone", None, None))
                         .child(rows(
                             &t,
                             vec![(
-                                "Delete this instance",
-                                Some(
-                                    "Permanently removes the instance and all of its data.".into(),
-                                ),
+                                "Delete instance",
+                                Some("Permanently removes this instance and its data.".into()),
                                 AuroraButton::new("delete", "Delete…")
                                     .variant(ButtonVariant::Danger)
-                                    .icon("delete")
                                     .disabled(busy)
                                     .on_click(move |_, window, cx| {
                                         delete_view.update(cx, |v, cx| {
@@ -2970,8 +2818,8 @@ impl Render for InstanceEditor {
             // The one primary action of the configuration form.
             let revert_view = this.clone();
             let revert_id = id.clone();
-            if (1..=3).contains(&self.section) || !draft_clean || !self.message.is_empty() {
-                detail = detail.child(
+            if !draft_clean || !self.message.is_empty() {
+                panel = panel.child(
                     ui::card(&t)
                         .flex_row()
                         .items_center()
@@ -2987,7 +2835,7 @@ impl Render for InstanceEditor {
                                 .flex_1()
                                 .min_w(px(0.))
                                 .child(if draft_clean {
-                                    ui::caption(&t, "No unsaved changes")
+                                    ui::caption(&t, "Saved")
                                 } else {
                                     ui::badge(&t, "Unsaved changes", ui::Tone::Warning)
                                 })
@@ -3007,7 +2855,7 @@ impl Render for InstanceEditor {
                                 .flex_shrink_0()
                                 .gap(px(8.))
                                 .child(
-                                    AuroraButton::new("revert", "Revert draft")
+                                    AuroraButton::new("revert", "Revert")
                                         .icon("history")
                                         .disabled(busy || draft_clean)
                                         .on_click(move |_, window, cx| {
@@ -3017,17 +2865,13 @@ impl Render for InstanceEditor {
                                         }),
                                 )
                                 .child(
-                                    action_button(
-                                        "save",
-                                        "Save configuration",
-                                        None,
-                                        ButtonVariant::Primary,
-                                    )
-                                    .disabled(busy || draft_clean),
+                                    action_button("save", "Save", None, ButtonVariant::Primary)
+                                        .disabled(busy || draft_clean),
                                 ),
                         ),
                 );
             }
+            detail = detail.child(panel);
         } else if !self.message.is_empty() {
             root = root.child(callout(&t, "info", t.ring, false, self.message.clone()));
         }

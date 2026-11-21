@@ -7,7 +7,7 @@ use std::path::PathBuf;
 
 use gpui_kit::{
     Context, EventEmitter, ExternalPaths, InteractiveElement as _, IntoElement, ParentElement as _,
-    Render, Styled, Window, div, px,
+    Render, Styled, Window, div, prelude::FluentBuilder as _, px,
 };
 use serde_json::Value;
 
@@ -25,6 +25,7 @@ pub enum PackImportEvent {
     /// The module's busy state changed. Each transition is reported once.
     BusyChanged(bool),
     InstallFolder(PreparedJob),
+    OpenSync,
     /// An exact published Modrinth pack version was recognized for the
     /// selected local file. Both IDs are nonempty; the parent opens the
     /// reviewed Discover pack workflow pinned to this exact version.
@@ -203,6 +204,7 @@ pub struct PackImport {
     core: PackImportCore,
     /// The parent's gate on new starts; never discards a running completion.
     blocked: bool,
+    import_menu_open: bool,
     error: Option<String>,
     folder_review: Option<Value>,
 }
@@ -221,6 +223,7 @@ impl PackImport {
             rt: runtime,
             core: PackImportCore::new(),
             blocked: false,
+            import_menu_open: false,
             error: None,
             folder_review: None,
         }
@@ -356,18 +359,22 @@ impl Render for PackImport {
             .items_center()
             .gap(px(8.))
             .child(
-                AuroraButton::new("pack-import-open", "Import modpack")
-                    .icon("upload")
+                AuroraButton::new("instances-open-sync", "Sync")
+                    .variant(crate::controls::ButtonVariant::Default)
+                    .disabled(busy)
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        cx.emit(PackImportEvent::OpenSync);
+                    })),
+            )
+            .child(
+                AuroraButton::new("pack-import-toggle", "Import")
+                    .selected(self.import_menu_open)
                     .disabled(disabled)
-                    .on_click(cx.listener(|this, _event, window, cx| {
-                        this.import(false, window, cx);
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.import_menu_open = !this.import_menu_open;
+                        cx.notify();
                     })),
             );
-        actions = actions.child(
-            AuroraButton::new("pack-import-folder", "Choose folder")
-                .disabled(disabled)
-                .on_click(cx.listener(|this, _event, window, cx| this.import(true, window, cx))),
-        );
         // "New instance" belongs to the creator; the page header hosts it.
         if let Some(new_instance) = crate::instance_creator::new_instance_button(cx) {
             actions = actions.child(new_instance);
@@ -383,22 +390,10 @@ impl Render for PackImport {
                     div()
                         .text_size(px(ui::TEXT_CAPTION))
                         .text_color(palette.muted_foreground)
-                        .child("Reviewing the selected modpack…"),
+                        .child("Reviewing modpack…"),
                 )
         } else {
             div()
-                .flex()
-                .items_center()
-                .gap(px(6.))
-                .child(crate::symbols::icon(
-                    Some("upload"),
-                    px(14.),
-                    palette.subtle_foreground,
-                ))
-                .child(ui::caption(
-                    &palette,
-                    "Drop a .mrpack file anywhere on this page to import a modpack.",
-                ))
         };
 
         let mut root = div()
@@ -427,13 +422,49 @@ impl Render for PackImport {
                     .items_center()
                     .justify_between()
                     .gap(px(16.))
-                    .child(ui::page_header(
-                        &palette,
-                        "Instances",
-                        Some("Import or drop a .mrpack file or extracted modpack folder.".into()),
-                    ))
+                    .child(ui::page_header(&palette, "Instances", None))
                     .child(actions),
             )
+            .when(self.import_menu_open && !busy, |col| {
+                col.child(
+                    ui::card(&palette)
+                        .flex_row()
+                        .flex_wrap()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(12.))
+                        .p(px(14.))
+                        .child(
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .items_center()
+                                .gap(px(8.))
+                                .child(
+                                    AuroraButton::new("pack-import-open", "Import .mrpack")
+                                        .variant(crate::controls::ButtonVariant::Soft)
+                                        .size(crate::controls::ButtonSize::Small)
+                                        .icon("upload")
+                                        .disabled(disabled)
+                                        .on_click(cx.listener(|this, _event, window, cx| {
+                                            this.import_menu_open = false;
+                                            this.import(false, window, cx);
+                                        })),
+                                )
+                                .child(
+                                    AuroraButton::new("pack-import-folder", "Import folder")
+                                        .size(crate::controls::ButtonSize::Small)
+                                        .icon("folder_open")
+                                        .disabled(disabled)
+                                        .on_click(cx.listener(|this, _event, window, cx| {
+                                            this.import_menu_open = false;
+                                            this.import(true, window, cx);
+                                        })),
+                                ),
+                        )
+                        .child(ui::caption(&palette, "Or drop a .mrpack anywhere here")),
+                )
+            })
             .children(busy.then_some(hint));
 
         if let Some(review) = &self.folder_review {

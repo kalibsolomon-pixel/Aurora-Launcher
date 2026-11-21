@@ -1155,7 +1155,7 @@ async fn fetch_document(
     url: &Url,
     options: &DownloadOptions,
 ) -> Result<Vec<u8>, NeoForgeMetadataError> {
-    let client = downloads::build_client(options);
+    let client = downloads::build_metadata_client(options);
     let response =
         client.get(url.clone()).send().await.map_err(|error| {
             NeoForgeMetadataError::Network(DownloadError::from_transport(error))

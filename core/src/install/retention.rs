@@ -202,7 +202,7 @@ pub(crate) fn seal_staging(
     // Enumeration never adopts discovered files: every observed path must
     // already be installer-supplied, and directory metadata comes from the
     // enumeration itself so no descendant is followed through a redirect.
-    let mut observed: BTreeMap<String, OwnedFile> = BTreeMap::new();
+    let mut files_to_hash: Vec<(PathBuf, String)> = Vec::with_capacity(expected.len());
     let mut pending: Vec<(PathBuf, String, usize)> = vec![(root.to_path_buf(), String::new(), 0)];
     let mut count = 0usize;
     while let Some((directory, prefix, depth)) = pending.pop() {
@@ -233,30 +233,87 @@ pub(crate) fn seal_staging(
                 pending.push((entry.path(), relative, depth + 1));
             } else if meta.is_file() {
                 // A stale seal from an interrupted attempt is never trusted.
-                if relative == SEAL {
+                if relative == SEAL || !expected.contains_key(&relative) {
                     return Err(unsafe_path());
                 }
-                let (size, sha256) = observe_bytes(&entry.path())?;
-                let item = OwnedFile {
-                    path: relative.clone(),
-                    size,
-                    sha256,
-                };
-                match expected.get(&relative) {
-                    // On-disk natives/completion bytes must equal the exact
-                    // installer-supplied observation.
-                    Some(Some(wanted)) if *wanted == item => {
-                        observed.insert(relative.clone(), wanted.clone());
-                    }
-                    // Manifest-recorded files adopt this one fresh reading.
-                    Some(None) => {
-                        observed.insert(relative.clone(), item);
-                    }
-                    _ => return Err(unsafe_path()),
-                }
+                files_to_hash.push((entry.path(), relative));
             } else {
                 return Err(unsafe_path());
             }
+        }
+    }
+
+    // Hash all verified staged files in parallel across bounded worker threads
+    // using the shared 128 KiB streaming buffer.
+    let workers = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1)
+        .min(8)
+        .min(files_to_hash.len().max(1));
+    let hashed: Vec<io::Result<(String, u64, String)>> = if workers <= 1 || files_to_hash.len() < 4
+    {
+        files_to_hash
+            .into_iter()
+            .map(|(path, relative)| {
+                let (size, sha256) = observe_bytes(&path)?;
+                Ok((relative, size, sha256))
+            })
+            .collect()
+    } else {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        let next = AtomicUsize::new(0);
+        let slots: Vec<std::sync::Mutex<Option<io::Result<(String, u64, String)>>>> = (0
+            ..files_to_hash.len())
+            .map(|_| std::sync::Mutex::new(None))
+            .collect();
+        std::thread::scope(|scope| {
+            for _ in 0..workers {
+                let next = &next;
+                let slots = &slots;
+                let files_to_hash = &files_to_hash;
+                scope.spawn(move || {
+                    loop {
+                        let index = next.fetch_add(1, Ordering::Relaxed);
+                        if index >= files_to_hash.len() {
+                            break;
+                        }
+                        let (ref path, ref relative) = files_to_hash[index];
+                        let outcome = observe_bytes(path)
+                            .map(|(size, sha256)| (relative.clone(), size, sha256));
+                        *slots[index].lock().expect("seal slot") = Some(outcome);
+                    }
+                });
+            }
+        });
+        slots
+            .into_iter()
+            .map(|slot| {
+                slot.into_inner()
+                    .expect("seal slot")
+                    .expect("every file hashed")
+            })
+            .collect()
+    };
+
+    let mut observed: BTreeMap<String, OwnedFile> = BTreeMap::new();
+    for outcome in hashed {
+        let (relative, size, sha256) = outcome?;
+        let item = OwnedFile {
+            path: relative.clone(),
+            size,
+            sha256,
+        };
+        match expected.get(&relative) {
+            // On-disk natives/completion bytes must equal the exact
+            // installer-supplied observation.
+            Some(Some(wanted)) if *wanted == item => {
+                observed.insert(relative, wanted.clone());
+            }
+            // Manifest-recorded files adopt this one fresh reading.
+            Some(None) => {
+                observed.insert(relative, item);
+            }
+            _ => return Err(unsafe_path()),
         }
     }
     // Everything the installer claims to have staged must have been present.
@@ -284,12 +341,10 @@ pub(crate) fn seal_staging(
 /// Open and hash one already-validated regular file without re-walking its
 /// ancestors; the caller's enumeration supplied the containment evidence.
 fn observe_bytes(path: &Path) -> io::Result<(u64, String)> {
-    let mut file = File::open(path)?;
-    let mut sha = Sha256::new();
-    let size = io::copy(&mut file, &mut sha)?;
+    let (size, raw) = crate::integrity::sha256_file_bytes(path)?;
     Ok((
         size,
-        crate::integrity::ArtifactDigest::from_sha256(sha.finalize().into()).as_hex(),
+        crate::integrity::ArtifactDigest::from_sha256(raw).as_hex(),
     ))
 }
 

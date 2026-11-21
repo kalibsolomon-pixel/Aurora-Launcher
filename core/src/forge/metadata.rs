@@ -531,7 +531,7 @@ async fn fetch_document(
     url: &Url,
     options: &DownloadOptions,
 ) -> Result<Vec<u8>, ForgeMetadataError> {
-    let client = downloads::build_client(options);
+    let client = downloads::build_metadata_client(options);
     let response = client
         .get(url.clone())
         .send()

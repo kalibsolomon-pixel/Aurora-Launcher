@@ -830,59 +830,121 @@ async fn fetch_document(
     context: &str,
     options: &DownloadOptions,
 ) -> Result<Vec<u8>, MetadataError> {
-    crate::performance::measure(crate::performance::Event::MojangMetadataHttp, async {
-        let client = downloads::build_client(options);
-        let response = client
-            .get(url.clone())
-            .send()
-            .await
-            .map_err(|error| MetadataError::Network(DownloadError::from_transport(error)))?;
+    use std::collections::HashMap;
+    use std::sync::{Mutex, OnceLock};
+    use std::time::{Duration, Instant};
 
-        let status = response.status();
-        if !status.is_success() {
-            return Err(MetadataError::Network(DownloadError::HttpStatus {
-                status: status.as_u16(),
-            }));
-        }
+    const MANIFEST_TTL: Duration = Duration::from_secs(120);
+    const MAX_VERIFIED_DOCS: usize = 32;
+    const MAX_UNVERIFIED_DOCS: usize = 4;
 
-        if response
-            .content_length()
-            .is_some_and(|declared| declared as usize > MAX_METADATA_DOCUMENT_BYTES)
+    static VERIFIED_CACHE: OnceLock<Mutex<HashMap<(String, Sha1Digest), Vec<u8>>>> =
+        OnceLock::new();
+    static MANIFEST_CACHE: OnceLock<Mutex<HashMap<String, (Instant, Vec<u8>)>>> = OnceLock::new();
+
+    let cacheable = url.scheme() == "https" && !downloads::is_loopback_host(url);
+    if cacheable {
+        if let Some(sha1) = expected_sha1 {
+            if let Ok(guard) = VERIFIED_CACHE
+                .get_or_init(|| Mutex::new(HashMap::new()))
+                .lock()
+            {
+                if let Some(cached) = guard.get(&(url.as_str().to_owned(), sha1)) {
+                    return Ok(cached.clone());
+                }
+            }
+        } else if let Ok(guard) = MANIFEST_CACHE
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
         {
-            return Err(MetadataError::ResponseTooLarge {
-                limit_bytes: MAX_METADATA_DOCUMENT_BYTES,
-            });
+            if let Some((stored_at, cached)) = guard.get(url.as_str()) {
+                if stored_at.elapsed() < MANIFEST_TTL {
+                    return Ok(cached.clone());
+                }
+            }
         }
+    }
 
-        let mut document = Vec::new();
-        let mut response = response;
-        while let Some(chunk) = response
-            .chunk()
-            .await
-            .map_err(|error| MetadataError::Network(DownloadError::from_transport(error)))?
-        {
-            if document.len() + chunk.len() > MAX_METADATA_DOCUMENT_BYTES {
+    let document =
+        crate::performance::measure(crate::performance::Event::MojangMetadataHttp, async {
+            let client = downloads::build_metadata_client(options);
+            let response =
+                client.get(url.clone()).send().await.map_err(|error| {
+                    MetadataError::Network(DownloadError::from_transport(error))
+                })?;
+
+            let status = response.status();
+            if !status.is_success() {
+                return Err(MetadataError::Network(DownloadError::HttpStatus {
+                    status: status.as_u16(),
+                }));
+            }
+
+            if response
+                .content_length()
+                .is_some_and(|declared| declared as usize > MAX_METADATA_DOCUMENT_BYTES)
+            {
                 return Err(MetadataError::ResponseTooLarge {
                     limit_bytes: MAX_METADATA_DOCUMENT_BYTES,
                 });
             }
-            document.extend_from_slice(&chunk);
-        }
 
-        if let Some(expected) = expected_sha1 {
-            let actual = Sha1Digest::compute(&document);
-            if actual != expected {
-                return Err(MetadataError::Integrity {
-                    context: format!("Minecraft version document '{context}'"),
-                    expected: expected.as_hex(),
-                    actual: actual.as_hex(),
-                });
+            let initial_cap = response.content_length().map_or(0, |declared| {
+                (declared as usize).min(MAX_METADATA_DOCUMENT_BYTES)
+            });
+            let mut document = Vec::with_capacity(initial_cap);
+            let mut response = response;
+            while let Some(chunk) = response
+                .chunk()
+                .await
+                .map_err(|error| MetadataError::Network(DownloadError::from_transport(error)))?
+            {
+                if document.len() + chunk.len() > MAX_METADATA_DOCUMENT_BYTES {
+                    return Err(MetadataError::ResponseTooLarge {
+                        limit_bytes: MAX_METADATA_DOCUMENT_BYTES,
+                    });
+                }
+                document.extend_from_slice(&chunk);
             }
-        }
 
-        Ok(document)
-    })
-    .await
+            if let Some(expected) = expected_sha1 {
+                let actual = Sha1Digest::compute(&document);
+                if actual != expected {
+                    return Err(MetadataError::Integrity {
+                        context: format!("Minecraft version document '{context}'"),
+                        expected: expected.as_hex(),
+                        actual: actual.as_hex(),
+                    });
+                }
+            }
+
+            Ok(document)
+        })
+        .await?;
+
+    if cacheable {
+        if let Some(sha1) = expected_sha1 {
+            if let Ok(mut guard) = VERIFIED_CACHE
+                .get_or_init(|| Mutex::new(HashMap::new()))
+                .lock()
+            {
+                if guard.len() >= MAX_VERIFIED_DOCS {
+                    guard.clear();
+                }
+                guard.insert((url.as_str().to_owned(), sha1), document.clone());
+            }
+        } else if let Ok(mut guard) = MANIFEST_CACHE
+            .get_or_init(|| Mutex::new(HashMap::new()))
+            .lock()
+        {
+            if guard.len() >= MAX_UNVERIFIED_DOCS {
+                guard.clear();
+            }
+            guard.insert(url.as_str().to_owned(), (Instant::now(), document.clone()));
+        }
+    }
+
+    Ok(document)
 }
 
 /// Decodes fetched bytes as document text.
