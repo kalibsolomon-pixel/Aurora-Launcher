@@ -9,7 +9,7 @@ use gpui_kit::base::{Align, Button, ElementExt, Placement, Positioner};
 
 use crate::{
     InstanceTab, Launcher, api, aurora_instance_icon, chrome,
-    controls::{AuroraButton, AuroraSelect, ButtonSize, ButtonVariant},
+    controls::{AuroraButton, AuroraInput, AuroraSelect, ButtonSize, ButtonVariant},
     downloads, images, instance_icon, instance_metadata, stored_icon, symbols,
     theme::AuroraTheme,
     ui,
@@ -643,7 +643,22 @@ impl Launcher {
             .count();
         let other_count = total_count.saturating_sub(aurora_count);
 
-        // Clean filter bar when there is a mix of Aurora Client & other instances.
+        // Search, filter, sort, and tag toolbar.
+        let mut toolbar = div()
+            .flex()
+            .flex_wrap()
+            .items_center()
+            .justify_between()
+            .gap(px(10.))
+            .w_full();
+        let mut left_controls = div().flex().flex_wrap().items_center().gap(px(8.));
+        if let Some(search) = &self.instances_search {
+            left_controls = left_controls.child(
+                div()
+                    .w(px(220.))
+                    .child(AuroraInput::new(search).label("Search instances")),
+            );
+        }
         if aurora_count > 0 && other_count > 0 {
             let mut filter_tabs = ui::segmented_tabs(t);
             for (idx, label) in [(0u8, "All"), (1u8, "Aurora Client"), (2u8, "Other")] {
@@ -658,16 +673,72 @@ impl Launcher {
                         })),
                 );
             }
-            out.push(
-                div()
-                    .flex()
-                    .items_center()
-                    .child(filter_tabs)
-                    .into_any_element(),
+            left_controls = left_controls.child(filter_tabs);
+        }
+        let mut sort_tabs = ui::segmented_tabs(t);
+        for (idx, label) in [(0u8, "Pinned"), (1u8, "Name"), (2u8, "Version")] {
+            sort_tabs = sort_tabs.child(
+                AuroraButton::new(("instances-sort", idx as usize), label)
+                    .variant(ButtonVariant::Ghost)
+                    .size(ButtonSize::Small)
+                    .selected(self.instances_sort == idx)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.instances_sort = idx;
+                        cx.notify();
+                    })),
             );
         }
+        toolbar = toolbar.child(left_controls).child(sort_tabs);
+        out.push(toolbar.into_any_element());
 
-        let visible: Vec<&api::InstanceSummary> = state
+        let mut all_tags: Vec<String> = self
+            .organization
+            .instances
+            .values()
+            .flat_map(|e| e.tags.iter().cloned())
+            .collect();
+        all_tags.sort();
+        all_tags.dedup();
+        if !all_tags.is_empty() {
+            let mut tag_row = div().flex().flex_wrap().items_center().gap(px(6.));
+            tag_row = tag_row.child(
+                AuroraButton::new("inst-tag-all", "All tags")
+                    .variant(ButtonVariant::Ghost)
+                    .size(ButtonSize::Small)
+                    .selected(self.instances_tag_filter.is_none())
+                    .on_click(cx.listener(|this, _, _, cx| {
+                        this.instances_tag_filter = None;
+                        cx.notify();
+                    })),
+            );
+            for (ti, tag) in all_tags.iter().enumerate() {
+                let tval = tag.clone();
+                let active_tag = self.instances_tag_filter.as_deref() == Some(tag.as_str());
+                tag_row = tag_row.child(
+                    AuroraButton::new(("inst-tag-chip", ti), format!("#{tag}"))
+                        .variant(ButtonVariant::Ghost)
+                        .size(ButtonSize::Small)
+                        .selected(active_tag)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            if this.instances_tag_filter.as_deref() == Some(tval.as_str()) {
+                                this.instances_tag_filter = None;
+                            } else {
+                                this.instances_tag_filter = Some(tval.clone());
+                            }
+                            cx.notify();
+                        })),
+                );
+            }
+            out.push(tag_row.into_any_element());
+        }
+
+        let search_q = self
+            .instances_search
+            .as_ref()
+            .map(|s| s.read(cx).value().trim().to_ascii_lowercase())
+            .unwrap_or_default();
+
+        let mut visible: Vec<&api::InstanceSummary> = state
             .instances
             .iter()
             .filter(|i| match self.instances_filter {
@@ -675,7 +746,61 @@ impl Launcher {
                 2 => i.aurora.is_none(),
                 _ => true,
             })
+            .filter(|i| {
+                if let Some(tag) = &self.instances_tag_filter {
+                    let has = self
+                        .organization
+                        .instances
+                        .get(&i.id)
+                        .is_some_and(|e| e.tags.iter().any(|t| t == tag));
+                    if !has {
+                        return false;
+                    }
+                }
+                if search_q.is_empty() {
+                    return true;
+                }
+                i.display_name.to_ascii_lowercase().contains(&search_q)
+                    || i.minecraft_version.to_ascii_lowercase().contains(&search_q)
+                    || short_platform_label(i)
+                        .to_ascii_lowercase()
+                        .contains(&search_q)
+                    || self.organization.instances.get(&i.id).is_some_and(|e| {
+                        e.tags
+                            .iter()
+                            .any(|t| t.to_ascii_lowercase().contains(&search_q))
+                    })
+            })
             .collect();
+
+        visible.sort_by(|a, b| {
+            let a_pin = self
+                .organization
+                .instances
+                .get(&a.id)
+                .is_some_and(|e| e.pinned);
+            let b_pin = self
+                .organization
+                .instances
+                .get(&b.id)
+                .is_some_and(|e| e.pinned);
+            match self.instances_sort {
+                1 => a
+                    .display_name
+                    .to_ascii_lowercase()
+                    .cmp(&b.display_name.to_ascii_lowercase()),
+                2 => b.minecraft_version.cmp(&a.minecraft_version).then_with(|| {
+                    a.display_name
+                        .to_ascii_lowercase()
+                        .cmp(&b.display_name.to_ascii_lowercase())
+                }),
+                _ => b_pin.cmp(&a_pin).then_with(|| {
+                    a.display_name
+                        .to_ascii_lowercase()
+                        .cmp(&b.display_name.to_ascii_lowercase())
+                }),
+            }
+        });
 
         let sb_width = sidebar_width(window.viewport_size().width, self.sidebar_collapsed);
         let available = (f32::from(window.viewport_size().width) - sb_width - 2. * PAGE_GUTTER)
@@ -793,6 +918,46 @@ impl Launcher {
                     }))
             };
 
+            let is_pinned = self
+                .organization
+                .instances
+                .get(&id)
+                .is_some_and(|e| e.pinned);
+            let card_tags: Vec<String> = self
+                .organization
+                .instances
+                .get(&id)
+                .map(|e| e.tags.clone())
+                .unwrap_or_default();
+            let pin_id = id.clone();
+            let pin_tags = card_tags.clone();
+            let pin_button = Button::new(SharedString::from(format!("inst-card-pin-{id}")))
+                .accessibility_label(if is_pinned {
+                    format!("Unpin {}", instance.display_name)
+                } else {
+                    format!("Pin {}", instance.display_name)
+                })
+                .flex()
+                .flex_none()
+                .items_center()
+                .justify_center()
+                .size(px(28.))
+                .rounded_full()
+                .hover(move |s| s.bg(hover_bg))
+                .child(
+                    div()
+                        .text_size(px(14.))
+                        .text_color(if is_pinned {
+                            t.ring
+                        } else {
+                            t.subtle_foreground
+                        })
+                        .child(if is_pinned { "★" } else { "☆" }),
+                )
+                .on_click(cx.listener(move |this, _, _, cx| {
+                    this.toggle_instance_pin(pin_id.clone(), !is_pinned, pin_tags.clone(), cx);
+                }));
+
             let card = div()
                 .flex()
                 .flex_row()
@@ -877,7 +1042,14 @@ impl Launcher {
                                                 ),
                                             }),
                                     ),
-                                ),
+                                )
+                                .when(!card_tags.is_empty(), |col| {
+                                    col.child(div().flex().flex_wrap().gap(px(4.)).children(
+                                        card_tags.iter().take(4).map(|tag| {
+                                            ui::badge(t, format!("#{tag}"), ui::Tone::Neutral)
+                                        }),
+                                    ))
+                                }),
                         )
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.open_instance(
@@ -890,7 +1062,14 @@ impl Launcher {
                             cx.notify();
                         })),
                 )
-                .child(primary_action);
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .child(pin_button)
+                        .child(primary_action),
+                );
             grid = grid.child(card);
         }
 
@@ -1067,12 +1246,13 @@ impl Launcher {
             )
             .child(header_actions);
 
-        // ONE unified text-only top-level tab strip (Overview, Content, Screenshots, Options).
+        // ONE unified text-only top-level tab strip (Overview, Content, Worlds, Screenshots, Options).
         let tabs = div().flex().child(
             ui::segmented_tabs(t).children(
                 [
                     (InstanceTab::Overview, "Overview"),
                     (InstanceTab::Content, "Content"),
+                    (InstanceTab::Worlds, "Worlds"),
                     (InstanceTab::Screenshots, "Screenshots"),
                     (InstanceTab::Settings, "Options"),
                 ]
@@ -1312,6 +1492,11 @@ impl Launcher {
             InstanceTab::Content => {
                 if let Some(content) = &self.content {
                     out.push(content.clone().into_any_element());
+                }
+            }
+            InstanceTab::Worlds => {
+                if let Some(worlds) = &self.worlds {
+                    out.push(worlds.clone().into_any_element());
                 }
             }
             InstanceTab::Screenshots => {

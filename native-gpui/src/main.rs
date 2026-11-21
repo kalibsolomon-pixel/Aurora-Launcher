@@ -8,6 +8,7 @@ mod backend;
 mod borealis;
 mod chrome;
 mod client_updates;
+mod command_palette;
 mod content;
 mod content_updates;
 mod controls;
@@ -29,10 +30,13 @@ mod settings;
 mod skin_preview;
 mod skins;
 mod skins_showcase;
+mod storage;
 mod symbols;
 mod syncing;
 mod theme;
+mod tray;
 mod ui;
+mod worlds;
 
 #[allow(dead_code)]
 #[path = "../../native/src/api.rs"]
@@ -101,6 +105,9 @@ enum Message {
     SyncInitialized(api::ApiResult<()>),
     RailAvatar(Option<Vec<u8>>),
     HeroActivity(String, Vec<(gpui::SharedString, gpui::SharedString)>),
+    Organization(api::ApiResult<api::InstanceOrganization>),
+    OnLaunchBehavior(api::OnLaunchBehavior),
+    PulsarCount(Option<usize>, bool),
     Event(String, serde_json::Value),
 }
 
@@ -412,6 +419,7 @@ enum LoadPlan {
 enum InstanceTab {
     Overview,
     Content,
+    Worlds,
     Screenshots,
     Settings,
 }
@@ -426,6 +434,8 @@ struct Launcher {
     instance_creator: Option<gpui::Entity<InstanceCreator>>,
     settings: Option<gpui::Entity<Settings>>,
     content: Option<gpui::Entity<Content>>,
+    worlds: Option<gpui::Entity<worlds::Worlds>>,
+    command_palette: Option<gpui::Entity<command_palette::CommandPalette>>,
     pulsar: Option<gpui::Entity<Pulsar>>,
     discover: Option<gpui::Entity<Discover>>,
     downloads: Option<gpui::Entity<Downloads>>,
@@ -434,6 +444,15 @@ struct Launcher {
     skins: Option<gpui::Entity<Skins>>,
     skin_preview: Option<gpui::Entity<SkinPreview>>,
     pack_import: Option<gpui::Entity<PackImport>>,
+    instances_search: Option<gpui::Entity<gpui_kit::base::input::InputState>>,
+    instances_sort: u8,
+    instances_tag_filter: Option<String>,
+    organization: api::InstanceOrganization,
+    on_launch_behavior: api::OnLaunchBehavior,
+    cli_launch_instance: Option<String>,
+    last_pulsar_count: Option<usize>,
+    main_hwnd: Option<isize>,
+    tray_active: bool,
     _subscriptions: Vec<gpui::Subscription>,
     host: Option<Host>,
     rt: tokio::runtime::Handle,
@@ -949,6 +968,7 @@ impl Launcher {
             let decision = api::PlayReadiness {
                 ready: signed_in,
                 can_prepare: false,
+                can_launch_offline: false,
                 instance_id: id,
                 account_name: self.accounts.selected_account_id.as_ref().and_then(|_| {
                     self.accounts
@@ -1305,7 +1325,7 @@ impl Launcher {
             self.maybe_open_log(id.clone());
         }
         let tx = self.tx.clone();
-        let account = self.accounts.selected_account_id.clone();
+        let account = self.effective_play_account(&id);
         let process_serial = self.process_serial;
         self.rt.spawn(async move {
             if op == "play" {
@@ -1392,6 +1412,19 @@ impl Launcher {
                     }
                 });
             }
+        } else if tab == InstanceTab::Worlds {
+            self.ensure_worlds(window, cx);
+            let qp_supported = self.launcher.as_ref().is_some_and(|s| {
+                s.instances
+                    .iter()
+                    .find(|i| i.id == instance)
+                    .is_some_and(|i| i.minecraft_version.as_str() >= "1.20")
+            });
+            if let Some(worlds) = &self.worlds {
+                worlds.update(cx, |worlds, cx| {
+                    worlds.set_instance(Some(instance.clone()), qp_supported, cx);
+                });
+            }
         } else if tab == InstanceTab::Screenshots {
             if let Some(editor) = &self.instance_editor {
                 editor.update(cx, |editor, cx| {
@@ -1463,6 +1496,303 @@ impl Launcher {
             },
         ));
         self.content = Some(content);
+    }
+
+    fn effective_play_account(&self, instance_id: &str) -> Option<String> {
+        if let Some(pref) = self.launcher.as_ref().and_then(|s| {
+            s.instances
+                .iter()
+                .find(|i| i.id == instance_id)
+                .and_then(|i| i.configuration.preferred_account_id.as_deref())
+        }) && self
+            .accounts
+            .accounts
+            .iter()
+            .any(|a| a.account_id == pref && a.status == "signedIn")
+        {
+            return Some(pref.to_owned());
+        }
+        self.accounts.selected_account_id.clone()
+    }
+
+    pub(crate) fn toggle_instance_pin(
+        &mut self,
+        id: String,
+        pinned: bool,
+        tags: Vec<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let Some(host) = self.host.clone() else {
+            return;
+        };
+        let tx = self.tx.clone();
+        self.rt.spawn(async move {
+            let r = guarded(api::set_instance_organization(host, id, pinned, tags)).await;
+            let _ = tx.send(Message::Organization(r)).await;
+        });
+        cx.notify();
+    }
+
+    fn ensure_worlds(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if self.worlds.is_some() {
+            return;
+        }
+        let worlds =
+            cx.new(|cx| worlds::Worlds::new(self.host.clone(), self.rt.clone(), window, cx));
+        self._subscriptions.push(cx.subscribe(
+            &worlds,
+            |this, _, event: &worlds::WorldsEvent, cx| match event {
+                worlds::WorldsEvent::QuickPlayWorld {
+                    instance_id,
+                    world_dir,
+                } => {
+                    this.quick_play_world_direct(instance_id.clone(), world_dir.clone(), cx);
+                }
+                worlds::WorldsEvent::Changed => {
+                    this.reload_guarded(cx);
+                }
+            },
+        ));
+        self.worlds = Some(worlds);
+    }
+
+    fn quick_play_world_direct(
+        &mut self,
+        instance_id: String,
+        world_dir: String,
+        cx: &mut Context<Self>,
+    ) {
+        if self.controls_blocked() {
+            return;
+        }
+        let Some(host) = self.host.clone() else {
+            return;
+        };
+        let Some(account) = self.effective_play_account(&instance_id) else {
+            self.status = "Select a signed-in Minecraft account first.".into();
+            cx.notify();
+            return;
+        };
+        self.launching = Some(instance_id.clone());
+        self.maybe_open_log(instance_id.clone());
+        self.busy = true;
+        self.serial = self.serial.wrapping_add(1);
+        self.readiness = None;
+        self.status = format!("Launching world {world_dir}…");
+        self.sync_mutation_guards(cx);
+        let tx = self.tx.clone();
+        let process_serial = self.process_serial;
+        self.rt.spawn(async move {
+            let target = format!("{instance_id}:{world_dir}");
+            let result = guarded(api::quick_play(
+                host,
+                "saved-world".into(),
+                target,
+                account,
+                None,
+            ))
+            .await;
+            let _ = tx
+                .send(Message::Launched(instance_id, process_serial, result))
+                .await;
+        });
+        cx.notify();
+    }
+
+    fn play_offline(&mut self, id: String, cx: &mut Context<Self>) {
+        if self.controls_blocked() {
+            return;
+        }
+        let Some(host) = self.host.clone() else {
+            return;
+        };
+        let Some(account) = self
+            .effective_play_account(&id)
+            .or_else(|| self.accounts.accounts.first().map(|a| a.account_id.clone()))
+        else {
+            self.status = "Sign in at least once online before playing offline.".into();
+            cx.notify();
+            return;
+        };
+        self.launching = Some(id.clone());
+        self.maybe_open_log(id.clone());
+        self.busy = true;
+        self.serial = self.serial.wrapping_add(1);
+        self.readiness = None;
+        self.status = "Launching offline…".into();
+        self.sync_mutation_guards(cx);
+        let tx = self.tx.clone();
+        let process_serial = self.process_serial;
+        self.rt.spawn(async move {
+            let result = guarded(api::play_offline(host, id.clone(), account)).await;
+            let _ = tx.send(Message::Launched(id, process_serial, result)).await;
+        });
+        cx.notify();
+    }
+
+    fn open_command_palette(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        use command_palette::{PaletteAction, PaletteItem};
+        let mut items = vec![
+            PaletteItem {
+                title: "Home".into(),
+                subtitle: "Launch hub and widgets (Ctrl+1)".into(),
+                group: "Navigation",
+                action: PaletteAction::NavigatePage(0),
+            },
+            PaletteItem {
+                title: "Instances".into(),
+                subtitle: "Browse and manage instances (Ctrl+2)".into(),
+                group: "Navigation",
+                action: PaletteAction::NavigatePage(3),
+            },
+            PaletteItem {
+                title: "Discover".into(),
+                subtitle: "Browse Modrinth mods and packs (Ctrl+3)".into(),
+                group: "Navigation",
+                action: PaletteAction::NavigatePage(5),
+            },
+            PaletteItem {
+                title: "Pulsar".into(),
+                subtitle: "Combat analytics and fight history (Ctrl+4)".into(),
+                group: "Navigation",
+                action: PaletteAction::NavigatePage(9),
+            },
+            PaletteItem {
+                title: "Skins".into(),
+                subtitle: "Skin library and 3D preview (Ctrl+5)".into(),
+                group: "Navigation",
+                action: PaletteAction::NavigatePage(7),
+            },
+            PaletteItem {
+                title: "Accounts".into(),
+                subtitle: "Manage Microsoft accounts".into(),
+                group: "Navigation",
+                action: PaletteAction::NavigatePage(1),
+            },
+            PaletteItem {
+                title: "Settings".into(),
+                subtitle: "Launcher preferences (Ctrl+,)".into(),
+                group: "Settings",
+                action: PaletteAction::NavigatePage(2),
+            },
+            PaletteItem {
+                title: "Storage & Cache Manager".into(),
+                subtitle: "Inspect disk usage and prune unused cache or Java runtimes".into(),
+                group: "Settings",
+                action: PaletteAction::OpenSettingsSection(5),
+            },
+            PaletteItem {
+                title: "Game & Launch Settings".into(),
+                subtitle: "Game log and on-launch window behavior".into(),
+                group: "Settings",
+                action: PaletteAction::OpenSettingsSection(4),
+            },
+            PaletteItem {
+                title: "Check Updates".into(),
+                subtitle: "Aurora Launcher & Aurora Client updates".into(),
+                group: "Settings",
+                action: PaletteAction::OpenSettingsSection(3),
+            },
+        ];
+        if self.selected_id().is_some() {
+            items.push(PaletteItem {
+                title: "Open Game Log".into(),
+                subtitle: "Live stdout/stderr and crash diagnostics (Ctrl+L)".into(),
+                group: "Actions",
+                action: PaletteAction::OpenGameLog,
+            });
+        }
+        if let Some(state) = &self.launcher {
+            for inst in &state.instances {
+                let sub = format!(
+                    "Minecraft {} · {}",
+                    inst.minecraft_version,
+                    navigation::short_platform_label(inst)
+                );
+                items.push(PaletteItem {
+                    title: format!("Open {}", inst.display_name),
+                    subtitle: sub.clone(),
+                    group: "Instances",
+                    action: PaletteAction::OpenInstance(inst.id.clone()),
+                });
+                items.push(PaletteItem {
+                    title: format!("Play {}", inst.display_name),
+                    subtitle: sub,
+                    group: "Launch",
+                    action: PaletteAction::PlayInstance(inst.id.clone()),
+                });
+            }
+        }
+        if let Some(palette) = &self.command_palette {
+            palette.update(cx, |p, cx| p.open_with(items, window, cx));
+        }
+    }
+
+    fn execute_palette_action(
+        &mut self,
+        action: command_palette::PaletteAction,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        use command_palette::PaletteAction;
+        match action {
+            PaletteAction::NavigatePage(p) => self.open_page(p, window, cx),
+            PaletteAction::OpenInstance(id) => {
+                self.open_instance(id, InstanceTab::Overview, 0, window, cx);
+            }
+            PaletteAction::PlayInstance(id) => {
+                if self.selected_id() == Some(id.as_str()) && self.can_play(&id) {
+                    self.action("play", id, cx);
+                } else {
+                    self.action("select", id, cx);
+                }
+            }
+            PaletteAction::OpenSettingsSection(sec) => {
+                self.open_page(2, window, cx);
+                if let Some(settings) = &self.settings {
+                    settings.update(cx, |s, cx| s.select_section(sec, cx));
+                }
+            }
+            PaletteAction::OpenGameLog => {
+                if let Some(id) = self.selected_id().map(str::to_owned) {
+                    self.open_game_log(id, cx);
+                }
+            }
+            PaletteAction::CreateInstance => {
+                self.open_page(3, window, cx);
+            }
+        }
+        cx.notify();
+    }
+
+    fn refresh_organization_and_behavior(&self) {
+        let Some(host) = self.host.clone() else {
+            return;
+        };
+        let tx = self.tx.clone();
+        self.rt.spawn(async move {
+            let org = guarded(api::instance_organization(host.clone())).await;
+            let _ = tx.send(Message::Organization(org)).await;
+            if let Ok(beh) = guarded(api::on_launch_behavior(host, None)).await {
+                let _ = tx.send(Message::OnLaunchBehavior(beh)).await;
+            }
+        });
+    }
+
+    fn check_pulsar_recap(&self, notify_if_increased: bool) {
+        let Some(host) = self.host.clone().filter(|_| !showcase()) else {
+            return;
+        };
+        let tx = self.tx.clone();
+        self.rt.spawn(async move {
+            let count = guarded(api::pulsar_recent_widget(host, None, 1))
+                .await
+                .ok()
+                .map(|w| w.total_fights);
+            let _ = tx
+                .send(Message::PulsarCount(count, notify_if_increased))
+                .await;
+        });
     }
 
     fn open_pulsar_for(&mut self, instance: String, window: &mut Window, cx: &mut Context<Self>) {
@@ -1908,8 +2238,10 @@ impl Launcher {
                 }
                 self.readiness();
                 self.refresh_rail_and_activity();
+                self.refresh_organization_and_behavior();
                 if startup {
                     self.start_update_check();
+                    self.check_pulsar_recap(false);
                 }
             }
             Message::Readiness(n, process_serial, result, process) => {
@@ -2026,6 +2358,29 @@ impl Launcher {
                     self.hero_activity.insert(id, stats);
                 }
             }
+            Message::Organization(result) => {
+                if let Ok(org) = result {
+                    self.organization = org;
+                }
+            }
+            Message::OnLaunchBehavior(behavior) => {
+                self.on_launch_behavior = behavior;
+            }
+            Message::PulsarCount(count, notify_if_increased) => {
+                if let Some(new_total) = count {
+                    if notify_if_increased
+                        && let Some(prev) = self.last_pulsar_count
+                        && new_total > prev
+                    {
+                        let added = new_total - prev;
+                        self.status = format!(
+                            "Pulsar recorded {added} new {} this session — press Ctrl+4 to review.",
+                            if added == 1 { "fight" } else { "fights" }
+                        );
+                    }
+                    self.last_pulsar_count = Some(new_total);
+                }
+            }
             Message::Event(name, payload) => {
                 if name == "instance-sync-state" {
                     if let Ok(status) = serde_json::from_value::<api::SyncStatus>(payload) {
@@ -2052,7 +2407,33 @@ impl Launcher {
                             }
                         }
                         self.process_serial += 1;
+                        let is_running = process.status == "running";
                         self.processes.insert(id.clone(), process);
+                        if is_running {
+                            if let Some(hwnd) = self.main_hwnd {
+                                match self.on_launch_behavior {
+                                    api::OnLaunchBehavior::KeepOpen => {}
+                                    api::OnLaunchBehavior::Minimize => tray::minimize_window(hwnd),
+                                    api::OnLaunchBehavior::HideToTray => {
+                                        self.tray_active = true;
+                                        tray::hide_to_tray(hwnd);
+                                    }
+                                }
+                            }
+                        }
+                        if terminal {
+                            let any_alive = self
+                                .processes
+                                .values()
+                                .any(|p| matches!(p.status.as_str(), "starting" | "running"));
+                            if !any_alive && self.tray_active {
+                                self.tray_active = false;
+                                if let Some(hwnd) = self.main_hwnd {
+                                    tray::restore_window(hwnd);
+                                }
+                            }
+                            self.check_pulsar_recap(true);
+                        }
                         if self.selected_id() == Some(id.as_str()) {
                             self.readiness = None;
                             if terminal && !self.busy && !self.account_busy {
@@ -2207,44 +2588,70 @@ impl Launcher {
                     .visible_blockers(&id)
                     .iter()
                     .any(|blocker| blocker.code == "launch_authentication_required");
+            let can_offline = !can_kill
+                && self
+                    .readiness
+                    .as_ref()
+                    .is_some_and(|r| r.instance_id == id && !r.ready && r.can_launch_offline);
+            let offline_id = id.clone();
             primary_cta = Some(
-                self.button(
-                    "play",
-                    if needs_sign_in {
-                        "Sign in to play"
-                    } else {
-                        self.play_label(&id)
-                    },
-                )
-                .variant(if can_kill {
-                    ButtonVariant::Danger
-                } else {
-                    ButtonVariant::Primary
-                })
-                .size(ButtonSize::Large)
-                .icon(if can_kill {
-                    "stop"
-                } else if needs_sign_in {
-                    "login"
-                } else {
-                    "play_arrow"
-                })
-                .disabled(if needs_sign_in {
-                    self.controls_blocked()
-                } else {
-                    !can_kill && !self.can_play(&id)
-                })
-                .on_click(cx.listener(move |this, _, window, cx| {
-                    if can_kill {
-                        this.request_kill(play_id.clone(), cx);
-                    } else if needs_sign_in {
-                        this.open_page(1, window, cx);
-                    } else {
-                        this.action("play", play_id.clone(), cx);
-                    }
-                    cx.notify();
-                }))
-                .into_any_element(),
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(8.))
+                    .when(can_offline, |row| {
+                        row.child(
+                            self.button("play-offline", "Play Offline")
+                                .variant(ButtonVariant::Default)
+                                .size(ButtonSize::Large)
+                                .icon("wifi_off")
+                                .disabled(self.controls_blocked())
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.play_offline(offline_id.clone(), cx);
+                                })),
+                        )
+                    })
+                    .child(
+                        self.button(
+                            "play",
+                            if needs_sign_in {
+                                "Sign in to play"
+                            } else {
+                                self.play_label(&id)
+                            },
+                        )
+                        .variant(if can_kill {
+                            ButtonVariant::Danger
+                        } else {
+                            ButtonVariant::Primary
+                        })
+                        .size(ButtonSize::Large)
+                        .icon(if can_kill {
+                            "stop"
+                        } else if needs_sign_in {
+                            "login"
+                        } else {
+                            "play_arrow"
+                        })
+                        .disabled(if needs_sign_in {
+                            self.controls_blocked()
+                        } else {
+                            !can_kill && !self.can_play(&id)
+                        })
+                        .on_click(cx.listener(
+                            move |this, _, window, cx| {
+                                if can_kill {
+                                    this.request_kill(play_id.clone(), cx);
+                                } else if needs_sign_in {
+                                    this.open_page(1, window, cx);
+                                } else {
+                                    this.action("play", play_id.clone(), cx);
+                                }
+                                cx.notify();
+                            },
+                        )),
+                    )
+                    .into_any_element(),
             );
         }
         // Spacious yet condensed Home launch card leaving prime canvas for widgets.
@@ -2755,47 +3162,68 @@ impl Render for Launcher {
                 })),
             );
         }
-        // Live running-game pill visible across every page.
-        if let Some((run_id, run_name, phase)) = self.launcher.as_ref().and_then(|s| {
-            s.instances.iter().find_map(|i| {
-                let phase = self.game_phase(&i.id);
-                matches!(phase, GamePhase::Running | GamePhase::Starting)
-                    .then(|| (i.id.clone(), i.display_name.clone(), phase))
-            })
-        }) {
-            let state_word = if phase == GamePhase::Running {
-                "Running"
-            } else {
-                "Starting…"
-            };
-            title_left = title_left.child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(px(6.))
-                    .child(ui::status_badge(
-                        &palette,
-                        format!("{run_name} · {state_word}"),
-                        if phase == GamePhase::Running {
-                            ui::Tone::Success
-                        } else {
-                            ui::Tone::Accent
-                        },
-                    ))
-                    .when(self.can_kill(&run_id), |row| {
-                        let stop_id = run_id.clone();
-                        row.child(
-                            AuroraButton::new("title-stop-game", "Stop")
-                                .variant(ButtonVariant::DangerSubtle)
+        // Live "Running now" strip across all concurrent active instances.
+        if let Some(state) = &self.launcher {
+            let active_runs: Vec<(String, String, GamePhase)> = state
+                .instances
+                .iter()
+                .filter_map(|i| {
+                    let phase = self.game_phase(&i.id);
+                    matches!(phase, GamePhase::Running | GamePhase::Starting)
+                        .then(|| (i.id.clone(), i.display_name.clone(), phase))
+                })
+                .collect();
+            for (idx, (run_id, run_name, phase)) in active_runs.iter().take(2).enumerate() {
+                let state_word = if *phase == GamePhase::Running {
+                    "Running"
+                } else {
+                    "Starting…"
+                };
+                let log_id = run_id.clone();
+                let stop_id = run_id.clone();
+                title_left = title_left.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(4.))
+                        .child(ui::status_badge(
+                            &palette,
+                            format!("{run_name} · {state_word}"),
+                            if *phase == GamePhase::Running {
+                                ui::Tone::Success
+                            } else {
+                                ui::Tone::Accent
+                            },
+                        ))
+                        .child(
+                            AuroraButton::new(("title-log-game", idx), "Log")
+                                .variant(ButtonVariant::Ghost)
                                 .size(ButtonSize::Small)
-                                .icon("stop")
                                 .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.request_kill(stop_id.clone(), cx);
-                                    cx.notify();
+                                    this.open_game_log(log_id.clone(), cx);
                                 })),
                         )
-                    }),
-            );
+                        .when(self.can_kill(run_id), |row| {
+                            row.child(
+                                AuroraButton::new(("title-stop-game", idx), "Stop")
+                                    .variant(ButtonVariant::DangerSubtle)
+                                    .size(ButtonSize::Small)
+                                    .icon("stop")
+                                    .on_click(cx.listener(move |this, _, _, cx| {
+                                        this.request_kill(stop_id.clone(), cx);
+                                        cx.notify();
+                                    })),
+                            )
+                        }),
+                );
+            }
+            if active_runs.len() > 2 {
+                title_left = title_left.child(ui::badge(
+                    &palette,
+                    format!("+{} more", active_runs.len() - 2),
+                    ui::Tone::Success,
+                ));
+            }
         }
 
         let refresh_disabled = self.busy
@@ -2836,6 +3264,49 @@ impl Render for Launcher {
             .bg(palette.background)
             .text_color(palette.foreground)
             .font_family("Segoe UI")
+            .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
+                let m = event.keystroke.modifiers;
+                if !(m.control || m.platform) || m.alt {
+                    return;
+                }
+                match event.keystroke.key.as_str() {
+                    "k" | "K" => {
+                        this.open_command_palette(window, cx);
+                        cx.stop_propagation();
+                    }
+                    "1" => {
+                        this.open_page(0, window, cx);
+                        cx.stop_propagation();
+                    }
+                    "2" => {
+                        this.open_page(3, window, cx);
+                        cx.stop_propagation();
+                    }
+                    "3" => {
+                        this.open_page(5, window, cx);
+                        cx.stop_propagation();
+                    }
+                    "4" => {
+                        this.open_page(9, window, cx);
+                        cx.stop_propagation();
+                    }
+                    "5" => {
+                        this.open_page(7, window, cx);
+                        cx.stop_propagation();
+                    }
+                    "," => {
+                        this.open_page(2, window, cx);
+                        cx.stop_propagation();
+                    }
+                    "l" | "L" => {
+                        if let Some(id) = this.selected_id().map(str::to_owned) {
+                            this.open_game_log(id, cx);
+                            cx.stop_propagation();
+                        }
+                    }
+                    _ => {}
+                }
+            }))
             .children(self.borealis.clone())
             .child(self.navigation_rail(&palette, downloads_active, window, cx))
             .child(
@@ -2886,10 +3357,22 @@ impl Render for Launcher {
                     ),
             )
             .children(self.downloads.clone())
+            .children(self.command_palette.clone())
             .child(self.kill_dialog(cx))
     }
 }
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let cli_launch_instance: Option<String> = {
+        let mut args = std::env::args().skip(1);
+        let mut found = None;
+        while let Some(arg) = args.next() {
+            if arg == "--launch-instance" {
+                found = args.next();
+                break;
+            }
+        }
+        found
+    };
     let showcase_root = showcase_root();
     #[cfg(debug_assertions)]
     if std::env::args().any(|a| a == "--showcase") && showcase_root.is_none() {
@@ -3004,8 +3487,27 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         cx.new(|cx| ClientUpdates::new(host.clone(), rt.clone(), window, cx));
                     let home_widgets =
                         cx.new(|cx| HomeWidgets::new(host.clone(), rt.clone(), window, cx));
+                    let command_palette =
+                        cx.new(|cx| command_palette::CommandPalette::new(window, cx));
+                    let instances_search = cx.new(|cx| {
+                        gpui_kit::base::input::InputState::new(window, cx)
+                            .placeholder("Search instances or #tag…")
+                    });
+                    let main_hwnd = file_picker::owner(window);
                     let mut subscriptions = vec![
-                        cx.subscribe(&home_widgets, |this: &mut Launcher, _, event: &HomeWidgetsEvent, cx| {
+                        cx.subscribe_in(
+                            &command_palette,
+                            window,
+                            |this: &mut Launcher, _, event: &command_palette::CommandPaletteEvent, window, cx| {
+                                if let command_palette::CommandPaletteEvent::Execute(action) = event {
+                                    this.execute_palette_action(action.clone(), window, cx);
+                                }
+                            },
+                        ),
+                        cx.subscribe(&instances_search, |_this: &mut Launcher, _, _: &gpui_kit::base::input::InputEvent, cx| {
+                            cx.notify();
+                        }),
+                        cx.subscribe_in(&home_widgets, window, |this: &mut Launcher, _, event: &HomeWidgetsEvent, window, cx| {
                             match event {
                                 // Home owns acknowledged layout/favorite state;
                                 // registry reloads would invalidate unrelated drafts.
@@ -3013,6 +3515,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                 HomeWidgetsEvent::BusyChanged(busy) => this.home_busy = *busy,
                                 HomeWidgetsEvent::QuickPlay { mode, target_id, instance_id } => {
                                     this.quick_play(mode.clone(), target_id.clone(), instance_id.clone(), cx);
+                                }
+                                HomeWidgetsEvent::OpenPulsar => {
+                                    this.open_page(9, window, cx);
                                 }
                             }
                             this.sync_mutation_guards(cx);
@@ -3116,6 +3621,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         instance_creator: Some(creator),
                         settings: None,
                         content: None,
+                        worlds: None,
+                        command_palette: Some(command_palette),
                         pulsar: None,
                         discover: None,
                         downloads: None,
@@ -3124,6 +3631,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         skins: None,
                         skin_preview: None,
                         pack_import: Some(pack_import),
+                        instances_search: Some(instances_search),
+                        instances_sort: 0,
+                        instances_tag_filter: None,
+                        organization: Default::default(),
+                        on_launch_behavior: api::OnLaunchBehavior::KeepOpen,
+                        cli_launch_instance: cli_launch_instance.clone(),
+                        last_pulsar_count: None,
+                        main_hwnd,
+                        tray_active: false,
                         _subscriptions: subscriptions,
                         host,
                         rt,
@@ -3285,6 +3801,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         if let Some(home) = &view.home_widgets {
                                             home.update(cx, |home, cx| home.set_state(view.launcher.clone(), view.serial, cx));
                                         }
+                                        if let Some(editor) = &view.instance_editor {
+                                            let accounts = view.accounts.accounts.clone();
+                                            editor.update(cx, |ed, _| ed.set_accounts(accounts));
+                                        }
+                                        if let Some(target_id) = view.cli_launch_instance.clone()
+                                            && view.launcher.as_ref().is_some_and(|s| s.instances.iter().any(|i| i.id == target_id))
+                                        {
+                                            if view.selected_id() != Some(target_id.as_str()) {
+                                                view.action("select", target_id, cx);
+                                            } else if view.can_play(&target_id) {
+                                                view.cli_launch_instance = None;
+                                                view.action("play", target_id, cx);
+                                            }
+                                        }
                                     }
                                     view.sync_mutation_guards(cx);
                                     if accounts_applied && !view.account_busy {
@@ -3363,6 +3893,8 @@ mod tests {
             instance_creator: None,
             settings: None,
             content: None,
+            worlds: None,
+            command_palette: None,
             pulsar: None,
             discover: None,
             downloads: None,
@@ -3371,6 +3903,15 @@ mod tests {
             skins: None,
             skin_preview: None,
             pack_import: None,
+            instances_search: None,
+            instances_sort: 0,
+            instances_tag_filter: None,
+            organization: Default::default(),
+            on_launch_behavior: api::OnLaunchBehavior::KeepOpen,
+            cli_launch_instance: None,
+            last_pulsar_count: None,
+            main_hwnd: None,
+            tray_active: false,
             _subscriptions: Vec::new(),
             host: None,
             rt: {

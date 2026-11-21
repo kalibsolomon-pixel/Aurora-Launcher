@@ -127,12 +127,86 @@ impl Pulsar {
                     })),
             );
         if let Some(s) = summary {
+            let is_bookmarked = s.annotation.as_ref().is_some_and(|a| a.bookmarked);
+            let bk_key = s.key.clone();
+            let bk_tags = s
+                .annotation
+                .as_ref()
+                .map(|a| a.tags.clone())
+                .unwrap_or_default();
+            let bk_note = s
+                .annotation
+                .as_ref()
+                .map(|a| a.note.clone())
+                .unwrap_or_default();
+            let save_key = s.key.clone();
             top_row = top_row.child(
                 div()
                     .flex()
                     .flex_wrap()
                     .items_center()
                     .gap(px(4.))
+                    .child(
+                        button(
+                            "fight-bookmark",
+                            if is_bookmarked {
+                                "★ Bookmarked"
+                            } else {
+                                "☆ Bookmark"
+                            },
+                        )
+                        .selected(is_bookmarked)
+                        .disabled(self.busy)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            let Some(host) = this.host.clone() else {
+                                return;
+                            };
+                            this.busy = true;
+                            let tx = this.tx.clone();
+                            let req = AnnotationRequest {
+                                key: bk_key.clone(),
+                                bookmarked: !is_bookmarked,
+                                tags: bk_tags.clone(),
+                                note: bk_note.clone(),
+                            };
+                            this.runtime.spawn(async move {
+                                let r = guarded(api::pulsar_set_annotation(host, req)).await;
+                                let _ = tx.send(Reply::AnnotationSaved(r)).await;
+                            });
+                            cx.notify();
+                        })),
+                    )
+                    .child(
+                        button("fight-save-note", "Save tags/note")
+                            .disabled(self.busy)
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                let Some(host) = this.host.clone() else {
+                                    return;
+                                };
+                                let tags: Vec<String> = this
+                                    .ann_tags
+                                    .read(cx)
+                                    .value()
+                                    .split(',')
+                                    .map(|s| s.trim().to_owned())
+                                    .filter(|s| !s.is_empty())
+                                    .collect();
+                                let note = this.ann_note.read(cx).value().to_string();
+                                this.busy = true;
+                                let tx = this.tx.clone();
+                                let req = AnnotationRequest {
+                                    key: save_key.clone(),
+                                    bookmarked: is_bookmarked,
+                                    tags,
+                                    note,
+                                };
+                                this.runtime.spawn(async move {
+                                    let r = guarded(api::pulsar_set_annotation(host, req)).await;
+                                    let _ = tx.send(Reply::AnnotationSaved(r)).await;
+                                });
+                                cx.notify();
+                            })),
+                    )
                     .child(
                         button("fight-export", "Export\u{2026}")
                             .icon("download")
@@ -235,6 +309,26 @@ impl Pulsar {
         }
         if !self.message.is_empty() {
             page = page.child(ui::caption(t, self.message.clone()));
+        }
+        if summary.is_some() {
+            page = page.child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .gap(px(8.))
+                    .child(
+                        div()
+                            .w(px(220.))
+                            .child(AuroraInput::new(&self.ann_tags).label("Fight tags")),
+                    )
+                    .child(
+                        div()
+                            .flex_1()
+                            .min_w(px(220.))
+                            .child(AuroraInput::new(&self.ann_note).label("Fight note")),
+                    ),
+            );
         }
         let mut strip = crate::ui::segmented_tabs(t)
             .flex_wrap()

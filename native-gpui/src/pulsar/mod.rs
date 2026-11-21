@@ -52,6 +52,7 @@ enum Reply {
     ),
     Compare(u64, api::ApiResult<CompareView>),
     Action(api::ApiResult<ActionReceipt>, bool),
+    AnnotationSaved(api::ApiResult<api::FightAnnotation>),
 }
 
 pub enum PulsarEvent {
@@ -138,6 +139,10 @@ pub struct Pulsar {
     show_data: bool,
     aim_density: bool,
     aim_third: usize,
+    date_preset: u8, // 0 = All time, 1 = Last 7d, 2 = Last 30d
+    ann_tags: Entity<gpui_kit::base::input::InputState>,
+    ann_note: Entity<gpui_kit::base::input::InputState>,
+    ann_loaded_key: Option<FightKey>,
     aim_selection: Option<i64>,
     delete_open: bool,
     delete_source: bool,
@@ -234,6 +239,9 @@ impl Pulsar {
                 cx.notify();
             },
         );
+        let ann_tags =
+            cx.new(|cx| InputState::new(window, cx).placeholder("Tags (comma-separated)"));
+        let ann_note = cx.new(|cx| InputState::new(window, cx).placeholder("Notes on this fight…"));
         let mut this = Self {
             host,
             runtime,
@@ -312,6 +320,10 @@ impl Pulsar {
             show_data: false,
             aim_density: false,
             aim_third: 0,
+            date_preset: 0,
+            ann_tags,
+            ann_note,
+            ann_loaded_key: None,
             aim_selection: None,
             delete_open: false,
             delete_source: false,
@@ -684,6 +696,23 @@ impl Pulsar {
                             self.close_detail();
                             self.refresh(cx);
                         }
+                    }
+                    Err(e) => self.error = Some(e.message),
+                }
+            }
+            Reply::AnnotationSaved(r) => {
+                self.busy = false;
+                match r {
+                    Ok(ann) => {
+                        if let Some(detail) = &mut self.detail {
+                            detail.summary.annotation = Some(ann.clone());
+                        }
+                        if let Some(sel) = &self.selected
+                            && let Some(row) = self.library.rows.iter_mut().find(|r| &r.key == sel)
+                        {
+                            row.annotation = Some(ann);
+                        }
+                        self.message = "Saved fight bookmark & notes.".into();
                     }
                     Err(e) => self.error = Some(e.message),
                 }

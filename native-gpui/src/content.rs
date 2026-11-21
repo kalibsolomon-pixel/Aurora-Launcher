@@ -34,10 +34,10 @@ use tokio::runtime::Handle;
 
 /// Icons requested per core call (the Slint host's `ICON_BATCH`).
 const ICON_BATCH: usize = 8;
-/// Retained icons, and how many leading rows may request one. The page lists
-/// every row without virtualization, so the leading rows stand in for the
-/// Slint host's visible set; later rows keep their placeholder.
-const ICON_CACHE: usize = 64;
+/// Retained icons per instance view; paged windowing keeps rendering fast and
+/// ensures every page's icons load instead of stopping at row 64.
+const ICON_CACHE: usize = 512;
+const CONTENT_PAGE_SIZE: usize = 48;
 
 pub enum ContentEvent {
     Changed,
@@ -598,6 +598,8 @@ enum Reply {
     Folder(Target, api::ApiResult<()>),
     /// One icon batch: the serial it was requested under, its keys, results.
     Icons(u64, Target, Vec<String>, Result<IconResults, ()>),
+    Bisect(String, api::ApiResult<Option<api::BisectView>>),
+    BulkDone(Target, String, api::ApiResult<usize>),
 }
 
 pub struct Content {
@@ -626,6 +628,10 @@ pub struct Content {
     actions_open: bool,
     updates: Entity<ContentUpdates>,
     _update_events: Subscription,
+    page: usize,
+    bulk_selected: HashSet<String>,
+    bisect: Option<api::BisectView>,
+    bisect_busy: bool,
 }
 impl Content {
     pub fn new(
@@ -637,7 +643,8 @@ impl Content {
         let (tx, rx) = async_channel::unbounded();
         let filter =
             cx.new(|cx| InputState::new(window, cx).placeholder("Filter installed content…"));
-        let filter_events = cx.subscribe(&filter, |_this: &mut Self, _, _: &InputEvent, cx| {
+        let filter_events = cx.subscribe(&filter, |this: &mut Self, _, _: &InputEvent, cx| {
+            this.page = 0;
             cx.notify();
         });
         let updates = cx.new(|cx| ContentUpdates::new(host.clone(), runtime.clone(), window, cx));
@@ -720,6 +727,10 @@ impl Content {
             actions_open: false,
             updates,
             _update_events: update_events,
+            page: 0,
+            bulk_selected: HashSet::new(),
+            bisect: None,
+            bisect_busy: false,
         };
         this.refresh(cx);
         this
@@ -948,8 +959,173 @@ impl Content {
                     };
                 }
             }
+            Reply::Bisect(inst_id, res) => {
+                self.bisect_busy = false;
+                if self.selected.as_deref() == Some(inst_id.as_str()) {
+                    match res {
+                        Ok(view) => {
+                            let changed = self.bisect != view;
+                            self.bisect = view;
+                            if changed {
+                                self.load();
+                                cx.emit(ContentEvent::Changed);
+                            }
+                        }
+                        Err(e) => self.message = error(e),
+                    }
+                }
+            }
+            Reply::BulkDone(t, label, res) => {
+                self.busy = false;
+                if self.target().as_ref().is_some_and(|now| current(now, &t)) {
+                    match res {
+                        Ok(count) => {
+                            self.bulk_selected.clear();
+                            self.message = format!("{label} ({count} mods).");
+                            self.revision = self.revision.wrapping_add(1);
+                            self.load();
+                        }
+                        Err(e) => self.message = error(e),
+                    }
+                }
+                cx.emit(ContentEvent::Changed);
+            }
         }
         self.sync_updates(cx);
+    }
+
+    fn load_bisect(&mut self) {
+        let (Some(host), Some(inst)) = (self.host.clone(), self.selected.clone()) else {
+            return;
+        };
+        if self.kind != Kind::Mod {
+            return;
+        }
+        let tx = self.tx.clone();
+        self.runtime.spawn(async move {
+            let res = guarded(api::mod_bisect(host, inst.clone())).await;
+            let _ = tx.send(Reply::Bisect(inst, res)).await;
+        });
+    }
+
+    fn start_bisect(&mut self, cx: &mut Context<Self>) {
+        let (Some(host), Some(inst)) = (self.host.clone(), self.selected.clone()) else {
+            return;
+        };
+        self.bisect_busy = true;
+        let tx = self.tx.clone();
+        self.runtime.spawn(async move {
+            let res = guarded(api::start_mod_bisect(host, inst.clone()))
+                .await
+                .map(Some);
+            let _ = tx.send(Reply::Bisect(inst, res)).await;
+        });
+        cx.notify();
+    }
+
+    fn bisect_outcome(&mut self, crashed: bool, cx: &mut Context<Self>) {
+        let (Some(host), Some(inst)) = (self.host.clone(), self.selected.clone()) else {
+            return;
+        };
+        self.bisect_busy = true;
+        let tx = self.tx.clone();
+        self.runtime.spawn(async move {
+            let res = guarded(api::record_mod_bisect_outcome(host, inst.clone(), crashed))
+                .await
+                .map(Some);
+            let _ = tx.send(Reply::Bisect(inst, res)).await;
+        });
+        cx.notify();
+    }
+
+    fn bisect_undo(&mut self, cx: &mut Context<Self>) {
+        let (Some(host), Some(inst)) = (self.host.clone(), self.selected.clone()) else {
+            return;
+        };
+        self.bisect_busy = true;
+        let tx = self.tx.clone();
+        self.runtime.spawn(async move {
+            let res = guarded(api::undo_mod_bisect(host, inst.clone()))
+                .await
+                .map(Some);
+            let _ = tx.send(Reply::Bisect(inst, res)).await;
+        });
+        cx.notify();
+    }
+
+    fn bisect_finish(&mut self, keep_culprit_disabled: bool, cx: &mut Context<Self>) {
+        let (Some(host), Some(inst)) = (self.host.clone(), self.selected.clone()) else {
+            return;
+        };
+        self.bisect_busy = true;
+        let tx = self.tx.clone();
+        self.runtime.spawn(async move {
+            let res = guarded(api::finish_mod_bisect(
+                host,
+                inst.clone(),
+                keep_culprit_disabled,
+            ))
+            .await
+            .map(|()| None);
+            let _ = tx.send(Reply::Bisect(inst, res)).await;
+        });
+        cx.notify();
+    }
+
+    fn bulk_set_enabled(&mut self, enabled: bool, cx: &mut Context<Self>) {
+        let (Some(host), Some(t)) = (self.host.clone(), self.target()) else {
+            return;
+        };
+        if self.busy || self.bulk_selected.is_empty() || t.kind != Kind::Mod {
+            return;
+        }
+        let ids: Vec<String> = self.bulk_selected.iter().cloned().collect();
+        self.busy = true;
+        let tx = self.tx.clone();
+        let label = if enabled {
+            "Enabled mods"
+        } else {
+            "Disabled mods"
+        }
+        .to_owned();
+        self.runtime.spawn(async move {
+            let res = guarded(api::set_mods_enabled_bulk(
+                host,
+                t.instance.clone(),
+                ids,
+                enabled,
+            ))
+            .await;
+            let _ = tx.send(Reply::BulkDone(t, label, res)).await;
+        });
+        cx.notify();
+    }
+
+    fn bulk_remove(&mut self, cx: &mut Context<Self>) {
+        let (Some(host), Some(t)) = (self.host.clone(), self.target()) else {
+            return;
+        };
+        if self.busy || self.bulk_selected.is_empty() || t.kind != Kind::Mod {
+            return;
+        }
+        let ids: Vec<String> = self
+            .entries
+            .iter()
+            .filter(|e| e.remove && self.bulk_selected.contains(&e.id))
+            .map(|e| e.id.clone())
+            .collect();
+        if ids.is_empty() {
+            return;
+        }
+        self.busy = true;
+        let tx = self.tx.clone();
+        self.runtime.spawn(async move {
+            let res = guarded(api::remove_mods_bulk(host, t.instance.clone(), ids)).await;
+            let _ = tx
+                .send(Reply::BulkDone(t, "Removed mods".into(), res))
+                .await;
+        });
+        cx.notify();
     }
     pub fn shows(&self, instance: &str) -> bool {
         self.selected.as_deref() == Some(instance)
@@ -971,8 +1147,12 @@ impl Content {
         self.updates_open = false;
         self.kind = Kind::from_index(kind);
         self.removing = None;
+        self.page = 0;
+        self.bulk_selected.clear();
+        self.bisect = None;
         self.icons.reset();
         self.load();
+        self.load_bisect();
         self.sync_updates(cx);
         cx.notify();
     }
@@ -992,8 +1172,12 @@ impl Content {
         self.revision = self.revision.wrapping_add(1);
         self.kind = kind;
         self.removing = None;
+        self.page = 0;
+        self.bulk_selected.clear();
+        self.bisect = None;
         self.icons.reset();
         self.load();
+        self.load_bisect();
         self.sync_updates(cx);
     }
     fn choose_path(&mut self, folder: bool, window: &mut Window, cx: &mut Context<Self>) {
@@ -1729,8 +1913,219 @@ impl Render for Content {
                     Some("Try a different name or file name, or clear the filter."),
                 ));
             }
+            if self.kind == Kind::Mod {
+                if let Some(bisect) = self.bisect.clone() {
+                    let mut bcard = ui::card(t)
+                        .border_color(t.accent)
+                        .flex()
+                        .flex_col()
+                        .gap(px(8.));
+                    match bisect.status {
+                        api::BisectStatus::InProgress => {
+                            bcard = bcard
+                                .child(ui::section_header(
+                                    t,
+                                    format!(
+                                        "Mod Bisect · Step {} of ~{}",
+                                        bisect.step, bisect.estimated_total_steps
+                                    ),
+                                    Some(
+                                        format!(
+                                            "{} suspects left · {} mods enabled in this test half. Launch the game, then report the result.",
+                                            bisect.remaining_suspects, bisect.active_test_count
+                                        )
+                                        .into(),
+                                    ),
+                                ))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_wrap()
+                                        .gap(px(8.))
+                                        .child(
+                                            AuroraButton::new("bisect-crashed", "Still crashed")
+                                                .variant(ButtonVariant::Danger)
+                                                .size(ButtonSize::Small)
+                                                .disabled(self.bisect_busy)
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.bisect_outcome(true, cx);
+                                                })),
+                                        )
+                                        .child(
+                                            AuroraButton::new("bisect-worked", "Worked (no crash)")
+                                                .variant(ButtonVariant::Primary)
+                                                .size(ButtonSize::Small)
+                                                .disabled(self.bisect_busy)
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.bisect_outcome(false, cx);
+                                                })),
+                                        )
+                                        .when(bisect.can_undo, |d| {
+                                            d.child(
+                                                AuroraButton::new("bisect-undo", "Undo")
+                                                    .size(ButtonSize::Small)
+                                                    .disabled(self.bisect_busy)
+                                                    .on_click(cx.listener(|this, _, _, cx| {
+                                                        this.bisect_undo(cx);
+                                                    })),
+                                            )
+                                        })
+                                        .child(
+                                            AuroraButton::new("bisect-cancel", "Cancel & restore all")
+                                                .variant(ButtonVariant::Ghost)
+                                                .size(ButtonSize::Small)
+                                                .disabled(self.bisect_busy)
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.bisect_finish(false, cx);
+                                                })),
+                                        ),
+                                );
+                        }
+                        api::BisectStatus::FoundCulprit => {
+                            let culprit = bisect
+                                .culprit_name
+                                .clone()
+                                .or(bisect.culprit_id.clone())
+                                .unwrap_or_else(|| "Unknown mod".into());
+                            bcard = bcard
+                                .child(ui::section_header(
+                                    t,
+                                    format!("Culprit identified: {culprit}"),
+                                    Some("All other original mods have been re-enabled so you can verify the fix.".into()),
+                                ))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_wrap()
+                                        .gap(px(8.))
+                                        .child(
+                                            AuroraButton::new("bisect-keep-off", "Keep culprit disabled & finish")
+                                                .variant(ButtonVariant::Primary)
+                                                .size(ButtonSize::Small)
+                                                .disabled(self.bisect_busy)
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.bisect_finish(true, cx);
+                                                })),
+                                        )
+                                        .child(
+                                            AuroraButton::new("bisect-restore", "Restore original mods")
+                                                .variant(ButtonVariant::Ghost)
+                                                .size(ButtonSize::Small)
+                                                .disabled(self.bisect_busy)
+                                                .on_click(cx.listener(|this, _, _, cx| {
+                                                    this.bisect_finish(false, cx);
+                                                })),
+                                        ),
+                                );
+                        }
+                        api::BisectStatus::NoCulpritFound => {
+                            bcard = bcard
+                                .child(ui::section_header(
+                                    t,
+                                    "Mod Bisect finished",
+                                    Some("No single crashing mod was isolated (the crash may require a combination of mods).".into()),
+                                ))
+                                .child(
+                                    AuroraButton::new("bisect-close", "Close & restore")
+                                        .size(ButtonSize::Small)
+                                        .disabled(self.bisect_busy)
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.bisect_finish(false, cx);
+                                        })),
+                                );
+                        }
+                    }
+                    list = list.child(bcard);
+                } else {
+                    let toggleable_enabled = self
+                        .entries
+                        .iter()
+                        .filter(|e| e.toggle && e.enabled == Some(true))
+                        .count();
+                    let mut bulk_bar = div()
+                        .flex()
+                        .flex_wrap()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(8.));
+                    let mut left = div().flex().flex_wrap().items_center().gap(px(6.));
+                    if toggleable_enabled >= 2 {
+                        left = left.child(
+                            AuroraButton::new("bisect-start", "Troubleshoot crash (Mod Bisect)")
+                                .variant(ButtonVariant::Ghost)
+                                .size(ButtonSize::Small)
+                                .disabled(busy || self.bisect_busy)
+                                .on_click(cx.listener(|this, _, _, cx| this.start_bisect(cx))),
+                        );
+                    }
+                    if !self.bulk_selected.is_empty() {
+                        left = left
+                            .child(ui::badge(
+                                t,
+                                format!("{} selected", self.bulk_selected.len()),
+                                ui::Tone::Accent,
+                            ))
+                            .child(
+                                AuroraButton::new("bulk-enable", "Enable")
+                                    .size(ButtonSize::Small)
+                                    .disabled(busy)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.bulk_set_enabled(true, cx);
+                                    })),
+                            )
+                            .child(
+                                AuroraButton::new("bulk-disable", "Disable")
+                                    .size(ButtonSize::Small)
+                                    .disabled(busy)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.bulk_set_enabled(false, cx);
+                                    })),
+                            )
+                            .child(
+                                AuroraButton::new("bulk-remove", "Delete")
+                                    .variant(ButtonVariant::Danger)
+                                    .size(ButtonSize::Small)
+                                    .disabled(busy)
+                                    .on_click(cx.listener(|this, _, _, cx| this.bulk_remove(cx))),
+                            )
+                            .child(
+                                AuroraButton::new("bulk-clear", "Clear")
+                                    .variant(ButtonVariant::Ghost)
+                                    .size(ButtonSize::Small)
+                                    .on_click(cx.listener(|this, _, _, cx| {
+                                        this.bulk_selected.clear();
+                                        cx.notify();
+                                    })),
+                            );
+                    } else if self.entries.iter().any(|e| e.toggle) {
+                        left = left.child(
+                            AuroraButton::new("bulk-select-all", "Select all mods")
+                                .variant(ButtonVariant::Ghost)
+                                .size(ButtonSize::Small)
+                                .on_click(cx.listener(|this, _, _, cx| {
+                                    for e in &this.entries {
+                                        if e.toggle {
+                                            this.bulk_selected.insert(e.id.clone());
+                                        }
+                                    }
+                                    cx.notify();
+                                })),
+                        );
+                    }
+                    bulk_bar = bulk_bar.child(left);
+                    list = list.child(bulk_bar);
+                }
+            }
+            let total_visible = visible.len();
+            let total_pages = total_visible.div_ceil(CONTENT_PAGE_SIZE).max(1);
+            if self.page >= total_pages {
+                self.page = total_pages - 1;
+            }
+            let page_start = self.page * CONTENT_PAGE_SIZE;
+            let page_end = (page_start + CONTENT_PAGE_SIZE).min(total_visible);
+            let page_slice = &visible[page_start..page_end];
             let mut cards = artwork::card_grid(artwork::card_columns(window.viewport_size().width));
-            for entry in visible {
+            for &entry in page_slice {
                 let e = entry.clone();
                 let v = view.clone();
                 let target = self.target().unwrap();
@@ -1856,28 +2251,31 @@ impl Render for Content {
                                 ),
                         )
                         .into_any_element(),
-                    Some(enabled) => div()
-                        .flex()
-                        .w(px(76.))
-                        .items_center()
-                        .justify_center()
-                        .gap(px(8.))
-                        .child(
-                            AuroraToggle::new(gpui::SharedString::from(format!(
-                                "toggle-{}",
-                                entry.id
-                            )))
-                            .label(format!("Enable {}", entry.name))
-                            .checked(enabled)
-                            .disabled(busy || !entry.toggle || required)
-                            .on_change(move |_, _, _, cx| {
-                                v.update(cx, |s, cx| {
-                                    s.toggle(&target, e.clone(), cx);
-                                    cx.notify();
-                                });
-                            }),
-                        )
-                        .into_any_element(),
+                    Some(enabled) => {
+                        let target_owned = target.to_owned();
+                        div()
+                            .flex()
+                            .w(px(76.))
+                            .items_center()
+                            .justify_center()
+                            .gap(px(8.))
+                            .child(
+                                AuroraToggle::new(gpui::SharedString::from(format!(
+                                    "toggle-{}",
+                                    entry.id
+                                )))
+                                .label(format!("Enable {}", entry.name))
+                                .checked(enabled)
+                                .disabled(busy || !entry.toggle || required)
+                                .on_change(move |_, _, _, cx| {
+                                    v.update(cx, |s, cx| {
+                                        s.toggle(&target_owned, e.clone(), cx);
+                                        cx.notify();
+                                    });
+                                }),
+                            )
+                            .into_any_element()
+                    }
                     None => div()
                         .w(px(76.))
                         .flex()
@@ -1948,6 +2346,26 @@ impl Render for Content {
                         })),
                     )
                 });
+                let bulk_check = (self.kind == Kind::Mod && entry.toggle).then(|| {
+                    let is_sel = self.bulk_selected.contains(&entry.id);
+                    let id_sel = entry.id.clone();
+                    AuroraButton::new(
+                        gpui::SharedString::from(format!("bulk-chk-{}", entry.id)),
+                        if is_sel { "✓" } else { "○" },
+                    )
+                    .variant(if is_sel {
+                        ButtonVariant::Primary
+                    } else {
+                        ButtonVariant::Ghost
+                    })
+                    .size(ButtonSize::Small)
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        if !this.bulk_selected.remove(&id_sel) {
+                            this.bulk_selected.insert(id_sel.clone());
+                        }
+                        cx.notify();
+                    }))
+                });
                 cards = cards.child(artwork::project_card(
                     t,
                     artwork::tile(
@@ -1964,12 +2382,56 @@ impl Render for Content {
                         .justify_end()
                         .items_center()
                         .gap(px(8.))
+                        .children(bulk_check)
                         .children(details)
                         .child(toggle)
                         .child(remove),
                 ));
             }
             list = list.child(cards);
+            if total_pages > 1 {
+                list = list.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .pt(px(8.))
+                        .child(ui::caption(
+                            t,
+                            format!(
+                                "Showing {}–{} of {} items (Page {} of {})",
+                                page_start + 1,
+                                page_end,
+                                total_visible,
+                                self.page + 1,
+                                total_pages
+                            ),
+                        ))
+                        .child(
+                            div()
+                                .flex()
+                                .gap(px(8.))
+                                .child(
+                                    AuroraButton::new("content-prev-page", "Previous")
+                                        .size(ButtonSize::Small)
+                                        .disabled(self.page == 0)
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.page = this.page.saturating_sub(1);
+                                            cx.notify();
+                                        })),
+                                )
+                                .child(
+                                    AuroraButton::new("content-next-page", "Next")
+                                        .size(ButtonSize::Small)
+                                        .disabled(self.page + 1 >= total_pages)
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.page += 1;
+                                            cx.notify();
+                                        })),
+                                ),
+                        ),
+                );
+            }
             // ------------------------------------------------------ local import
             let mut import = ui::card(t)
                 .gap(px(14.))

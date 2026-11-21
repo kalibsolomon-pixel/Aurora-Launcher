@@ -29,6 +29,16 @@ pub const CONFIG_SCHEMA_VERSION: u32 = 7;
 /// The schema version before appearance preferences existed.
 const LEGACY_CONFIG_SCHEMA_VERSION: u32 = 1;
 
+/// What the launcher window should do when Minecraft starts.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum OnLaunchBehavior {
+    #[default]
+    KeepOpen,
+    Minimize,
+    HideToTray,
+}
+
 /// Launcher preferences that are genuinely required now.
 ///
 /// Secrets never belong here. Settings for future features are added by later
@@ -43,8 +53,14 @@ pub struct LauncherConfig {
     discord: crate::discord::DiscordPreferences,
     #[serde(default)]
     show_game_log: bool,
+    #[serde(default, skip_serializing_if = "is_default_launch_behavior")]
+    on_launch_behavior: OnLaunchBehavior,
     #[serde(skip)]
     revision: ConfigRevision,
+}
+
+fn is_default_launch_behavior(value: &OnLaunchBehavior) -> bool {
+    *value == OnLaunchBehavior::KeepOpen
 }
 
 #[derive(Debug, Default)]
@@ -70,6 +86,7 @@ impl Default for LauncherConfig {
             home_widgets: Default::default(),
             discord: Default::default(),
             show_game_log: false,
+            on_launch_behavior: OnLaunchBehavior::KeepOpen,
             revision: Default::default(),
         }
     }
@@ -120,6 +137,12 @@ impl LauncherConfig {
     }
     pub fn set_show_game_log(&mut self, show: bool) {
         self.show_game_log = show;
+    }
+    pub fn on_launch_behavior(&self) -> OnLaunchBehavior {
+        self.on_launch_behavior
+    }
+    pub fn set_on_launch_behavior(&mut self, behavior: OnLaunchBehavior) {
+        self.on_launch_behavior = behavior;
     }
 
     /// Parses and validates a configuration from JSON text.
@@ -232,6 +255,7 @@ impl LauncherConfig {
                     home_widgets: Default::default(),
                     discord: Default::default(),
                     show_game_log: false,
+                    on_launch_behavior: OnLaunchBehavior::KeepOpen,
                     revision: Default::default(),
                 }
             }
@@ -245,6 +269,7 @@ impl LauncherConfig {
                     home_widgets: Default::default(),
                     discord: Default::default(),
                     show_game_log: false,
+                    on_launch_behavior: OnLaunchBehavior::KeepOpen,
                     revision: Default::default(),
                 }
             }
@@ -718,6 +743,7 @@ mod tests {
             home_widgets: Default::default(),
             discord: Default::default(),
             show_game_log: false,
+            on_launch_behavior: OnLaunchBehavior::KeepOpen,
             revision: Default::default(),
             appearance: AppearancePreferences {
                 aurora_motion_speed: 50,
@@ -896,6 +922,7 @@ mod tests {
             home_widgets: Default::default(),
             discord: Default::default(),
             show_game_log: false,
+            on_launch_behavior: OnLaunchBehavior::KeepOpen,
             revision: Default::default(),
             appearance: AppearancePreferences {
                 aurora_motion_speed: 50,

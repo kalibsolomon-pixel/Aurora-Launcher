@@ -14,6 +14,10 @@ mod desktop_acceptance;
 mod import_source;
 pub mod local_content;
 pub mod local_pack;
+pub mod mod_bisect;
+pub mod pack_export;
+pub mod storage;
+pub mod world_backups;
 // Bounded read-only NBT walking for saved-game discovery (servers.dat and
 // level.dat). Raw spans also support the server editor and instance sync;
 // those callers own their write-back semantics.

@@ -378,6 +378,10 @@ pub struct InstanceConfiguration {
     /// Absent: managed Java. `{ "kind": "custom", "path": … }` otherwise.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub java: Option<Value>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub fullscreen: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub preferred_account_id: Option<String>,
     #[serde(flatten)]
     pub other: serde_json::Map<String, Value>,
 }
@@ -436,6 +440,8 @@ pub struct PlayReadiness {
     pub ready: bool,
     #[serde(default)]
     pub can_prepare: bool,
+    #[serde(default)]
+    pub can_launch_offline: bool,
     pub instance_id: String,
     pub account_id: Option<String>,
     pub account_name: Option<String>,
@@ -2384,6 +2390,355 @@ pub async fn pulsar_export(host: Host, request: ExportRequest) -> ApiResult<Acti
 }
 pub async fn pulsar_delete(host: Host, request: DeleteRequest) -> ApiResult<ActionReceipt> {
     app::delete_pulsar_fight(host, request)
+        .await
+        .map_err(ApiError::from)
+}
+
+// ---------------------------------------------------------------------------
+// 2.6 Launcher Extensions (duplicate, organization, export, worlds, storage,
+// bisect, offline play, launch behavior, bulk content, Pulsar annotations)
+// ---------------------------------------------------------------------------
+
+pub use aurora_launcher_lib::config::OnLaunchBehavior;
+pub use aurora_launcher_lib::instances::duplicate::DuplicateOptions;
+pub use aurora_launcher_lib::instances::organization::{InstanceMeta, InstanceOrganization};
+pub use aurora_launcher_lib::mod_bisect::{BisectStatus, BisectView};
+pub use aurora_launcher_lib::pack_export::{ExportOptions, ExportPreview, ExportReceipt};
+pub use aurora_launcher_lib::pulsar::annotations::FightAnnotation;
+pub use aurora_launcher_lib::saved_worlds::DatapackEntry;
+pub use aurora_launcher_lib::storage::{
+    InstanceStorageEntry, PruneOptions, PruneReport, RuntimeStorageEntry, StorageOverview,
+};
+pub use aurora_launcher_lib::world_backups::WorldBackupSummary;
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct InstanceWorld {
+    pub directory: String,
+    pub display_name: String,
+    pub last_played_ms: u64,
+    pub game_mode: Option<String>,
+    pub version_name: Option<String>,
+    pub size_bytes: u64,
+    pub datapack_count: usize,
+    pub backup_count: usize,
+}
+
+pub async fn duplicate_instance(
+    host: Host,
+    source_instance_id: String,
+    display_name: String,
+    options: DuplicateOptions,
+) -> ApiResult<InstanceSummary> {
+    let req = app::DuplicateInstanceRequest {
+        source_instance_id,
+        display_name,
+        options,
+    };
+    convert(app::duplicate_instance(host, req).await)
+}
+
+pub async fn instance_organization(host: Host) -> ApiResult<InstanceOrganization> {
+    blocking(move || app::get_instance_organization(host).map_err(ApiError::from)).await?
+}
+
+pub async fn set_instance_organization(
+    host: Host,
+    instance_id: String,
+    pinned: bool,
+    tags: Vec<String>,
+) -> ApiResult<InstanceOrganization> {
+    blocking(move || {
+        app::set_instance_organization(
+            host,
+            app::SetInstanceOrganizationRequest {
+                instance_id,
+                pinned,
+                tags,
+            },
+        )
+        .map_err(ApiError::from)
+    })
+    .await?
+}
+
+pub async fn preview_pack_export(
+    host: Host,
+    instance_id: String,
+    options: ExportOptions,
+) -> ApiResult<ExportPreview> {
+    app::preview_pack_export(
+        host,
+        app::PackExportPreviewRequest {
+            instance_id,
+            options,
+        },
+    )
+    .await
+    .map_err(ApiError::from)
+}
+
+pub async fn export_instance_pack(
+    host: Host,
+    instance_id: String,
+    options: ExportOptions,
+    destination: String,
+) -> ApiResult<ExportReceipt> {
+    app::export_instance_pack(
+        host,
+        app::PackExportRequest {
+            instance_id,
+            options,
+            destination,
+        },
+    )
+    .await
+    .map_err(ApiError::from)
+}
+
+pub async fn instance_worlds(host: Host, instance_id: String) -> ApiResult<Vec<InstanceWorld>> {
+    convert(app::list_instance_worlds(host, instance_id).await)
+}
+
+pub async fn world_backups(
+    host: Host,
+    instance_id: String,
+    world_directory: String,
+) -> ApiResult<Vec<WorldBackupSummary>> {
+    app::list_world_backups(host, instance_id, world_directory)
+        .await
+        .map_err(ApiError::from)
+}
+
+pub async fn create_world_backup(
+    host: Host,
+    instance_id: String,
+    world_directory: String,
+    label: Option<String>,
+) -> ApiResult<WorldBackupSummary> {
+    app::create_world_backup(host, instance_id, world_directory, label)
+        .await
+        .map_err(ApiError::from)
+}
+
+pub async fn restore_world_backup(
+    host: Host,
+    instance_id: String,
+    world_directory: String,
+    backup_id: String,
+) -> ApiResult<()> {
+    app::restore_world_backup(host, instance_id, world_directory, backup_id)
+        .await
+        .map_err(ApiError::from)
+}
+
+pub async fn delete_world_backup(
+    host: Host,
+    instance_id: String,
+    world_directory: String,
+    backup_id: String,
+) -> ApiResult<()> {
+    app::delete_world_backup(host, instance_id, world_directory, backup_id)
+        .await
+        .map_err(ApiError::from)
+}
+
+pub async fn world_datapacks(
+    host: Host,
+    instance_id: String,
+    world_directory: String,
+) -> ApiResult<Vec<DatapackEntry>> {
+    app::list_world_datapacks(host, instance_id, world_directory)
+        .await
+        .map_err(ApiError::from)
+}
+
+pub async fn set_world_datapack_enabled(
+    host: Host,
+    instance_id: String,
+    world_directory: String,
+    file_name: String,
+    enabled: bool,
+) -> ApiResult<()> {
+    blocking(move || {
+        app::set_world_datapack_enabled(host, instance_id, world_directory, file_name, enabled)
+            .map_err(ApiError::from)
+    })
+    .await?
+}
+
+pub async fn remove_world_datapack(
+    host: Host,
+    instance_id: String,
+    world_directory: String,
+    file_name: String,
+) -> ApiResult<()> {
+    blocking(move || {
+        app::remove_world_datapack(host, instance_id, world_directory, file_name)
+            .map_err(ApiError::from)
+    })
+    .await?
+}
+
+pub async fn browse_datapacks(
+    host: Host,
+    instance_id: String,
+    query: String,
+    offset: u32,
+) -> ApiResult<SearchPage> {
+    convert(app::browse_datapacks(host, instance_id, query, offset).await)
+}
+
+pub async fn install_world_datapack(
+    host: Host,
+    instance_id: String,
+    world_directory: String,
+    project_id: String,
+) -> ApiResult<DatapackEntry> {
+    app::install_world_datapack(host, instance_id, world_directory, project_id)
+        .await
+        .map_err(ApiError::from)
+}
+
+pub async fn inspect_storage(host: Host) -> ApiResult<StorageOverview> {
+    app::inspect_storage(host).await.map_err(ApiError::from)
+}
+
+pub async fn prune_storage(host: Host, options: PruneOptions) -> ApiResult<PruneReport> {
+    app::prune_storage(host, options)
+        .await
+        .map_err(ApiError::from)
+}
+
+pub async fn mod_bisect(host: Host, instance_id: String) -> ApiResult<Option<BisectView>> {
+    blocking(move || app::get_mod_bisect(host, instance_id).map_err(ApiError::from)).await?
+}
+
+pub async fn start_mod_bisect(host: Host, instance_id: String) -> ApiResult<BisectView> {
+    blocking(move || app::start_mod_bisect(host, instance_id).map_err(ApiError::from)).await?
+}
+
+pub async fn record_mod_bisect_outcome(
+    host: Host,
+    instance_id: String,
+    crashed: bool,
+) -> ApiResult<BisectView> {
+    blocking(move || {
+        app::record_mod_bisect_outcome(host, instance_id, crashed).map_err(ApiError::from)
+    })
+    .await?
+}
+
+pub async fn undo_mod_bisect(host: Host, instance_id: String) -> ApiResult<BisectView> {
+    blocking(move || app::undo_mod_bisect(host, instance_id).map_err(ApiError::from)).await?
+}
+
+pub async fn finish_mod_bisect(
+    host: Host,
+    instance_id: String,
+    keep_culprit_disabled: bool,
+) -> ApiResult<()> {
+    blocking(move || {
+        app::finish_mod_bisect(host, instance_id, keep_culprit_disabled).map_err(ApiError::from)
+    })
+    .await?
+}
+
+pub async fn on_launch_behavior(
+    host: Host,
+    behavior: Option<OnLaunchBehavior>,
+) -> ApiResult<OnLaunchBehavior> {
+    blocking(move || app::on_launch_behavior(host, behavior).map_err(ApiError::from)).await?
+}
+
+pub async fn create_instance_desktop_shortcut(
+    host: Host,
+    instance_id: String,
+) -> ApiResult<String> {
+    blocking(move || {
+        app::create_instance_desktop_shortcut(host, instance_id).map_err(ApiError::from)
+    })
+    .await?
+}
+
+pub async fn active_launches() -> ApiResult<Vec<LaunchProcess>> {
+    blocking(move || convert(Ok(app::list_active_launches()))).await?
+}
+
+pub async fn set_mods_enabled_bulk(
+    host: Host,
+    instance_id: String,
+    entry_ids: Vec<String>,
+    enabled: bool,
+) -> ApiResult<usize> {
+    blocking(move || {
+        app::set_mods_enabled_bulk(host, instance_id, entry_ids, enabled).map_err(ApiError::from)
+    })
+    .await?
+}
+
+pub async fn remove_mods_bulk(
+    host: Host,
+    instance_id: String,
+    entry_ids: Vec<String>,
+) -> ApiResult<usize> {
+    blocking(move || app::remove_mods_bulk(host, instance_id, entry_ids).map_err(ApiError::from))
+        .await?
+}
+
+pub async fn open_instance_config_folder(host: Host, instance_id: String) -> ApiResult<()> {
+    blocking(move || app::open_instance_config_folder(host, instance_id).map_err(ApiError::from))
+        .await?
+}
+
+pub async fn increase_instance_memory_quick(
+    host: Host,
+    instance_id: String,
+    delta_mib: u32,
+) -> ApiResult<InstanceSummary> {
+    blocking(move || {
+        convert(app::increase_instance_memory_quick(
+            host,
+            instance_id,
+            delta_mib,
+        ))
+    })
+    .await?
+}
+
+pub async fn play_offline(
+    host: Host,
+    instance_id: String,
+    account_id: String,
+) -> ApiResult<LaunchProcess> {
+    let req = request(json!({"instanceId": instance_id, "accountId": account_id}))?;
+    convert(app::launch_instance_offline(host, req).await)
+}
+
+pub async fn pulsar_set_annotation(
+    host: Host,
+    request: AnnotationRequest,
+) -> ApiResult<FightAnnotation> {
+    app::set_pulsar_annotation(host, request)
+        .await
+        .map_err(ApiError::from)
+}
+
+pub async fn pulsar_recent_widget(
+    host: Host,
+    instance_id: Option<String>,
+    limit: usize,
+) -> ApiResult<RecentFightsWidgetSummary> {
+    app::get_pulsar_recent_widget(host, instance_id, limit)
+        .await
+        .map_err(ApiError::from)
+}
+
+pub async fn pulsar_export_stats(
+    host: Host,
+    request: StatsExportRequest,
+) -> ApiResult<ActionReceipt> {
+    app::export_pulsar_stats(host, request)
         .await
         .map_err(ApiError::from)
 }

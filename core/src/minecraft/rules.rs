@@ -20,10 +20,10 @@
 use std::collections::{BTreeMap, HashSet};
 use std::fmt;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 /// An operating system in Mojang's rule vocabulary.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum OperatingSystem {
     #[serde(rename = "windows")]
     Windows,
@@ -55,7 +55,7 @@ impl fmt::Display for OperatingSystem {
 /// Only `x86` (32-bit x86) is known to appear in official metadata today; the
 /// other spellings are accepted so a future document is not rejected for
 /// vocabulary alone. Comparison is exact equality within this vocabulary.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum Architecture {
     #[serde(rename = "x86")]
     X86,
@@ -85,7 +85,7 @@ impl fmt::Display for Architecture {
 ///
 /// Deliberately explicit: nothing in rule evaluation reads the environment, so
 /// the same document plans identically on any host once the profile is chosen.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub struct PlatformProfile {
     os: OperatingSystem,
     arch: Architecture,
@@ -156,7 +156,7 @@ impl std::error::Error for UnsupportedPlatform {}
 /// Feature flags are launch-time decisions (demo mode, window resolution,
 /// quick-play targets). Planning deliberately knows the vocabulary but enables
 /// none of them: feature-conditioned arguments stay unresolved in the plan.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Ord, PartialOrd, Serialize, Deserialize)]
 pub enum FeatureFlag {
     #[serde(rename = "is_demo_user")]
     IsDemoUser,

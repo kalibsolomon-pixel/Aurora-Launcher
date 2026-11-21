@@ -56,6 +56,17 @@ pub fn snapshot(instance_id: &str) -> ProcessSnapshot {
         .unwrap_or_else(|| ProcessSnapshot::stopped(instance_id))
 }
 
+/// Returns every instance currently in `Starting` or `Running` state.
+pub fn active_snapshots() -> Vec<ProcessSnapshot> {
+    process_states()
+        .lock()
+        .expect("launch process state is not poisoned")
+        .values()
+        .filter(|s| s.status.blocks_launch())
+        .cloned()
+        .collect()
+}
+
 /// Prevent spawn/starting transitions while a synchronous content transaction
 /// commits. Only process-local exclusion is claimed.
 pub(crate) fn lock_stopped(

@@ -91,6 +91,16 @@ pub struct InstanceConfiguration {
     /// before readiness and again at every launch (`runtime::external`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     java: Option<JavaSelection>,
+    /// Optional fullscreen startup toggle (`--fullscreen`).
+    #[serde(default, skip_serializing_if = "is_false")]
+    fullscreen: bool,
+    /// Optional preferred Microsoft account UUID for launching this instance.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    preferred_account_id: Option<String>,
+}
+
+fn is_false(value: &bool) -> bool {
+    !*value
 }
 
 /// A user-selected external Java executable for launching the game. Only the
@@ -257,6 +267,8 @@ impl Default for InstanceConfiguration {
             additional_jvm_arguments: String::new(),
             window: None,
             java: None,
+            fullscreen: false,
+            preferred_account_id: None,
         }
     }
 }
@@ -289,7 +301,25 @@ impl InstanceConfiguration {
             additional_jvm_arguments: additional_jvm_arguments.into(),
             window,
             java: None,
+            fullscreen: false,
+            preferred_account_id: None,
         }
+    }
+
+    pub fn fullscreen(&self) -> bool {
+        self.fullscreen
+    }
+
+    pub fn set_fullscreen(&mut self, fullscreen: bool) {
+        self.fullscreen = fullscreen;
+    }
+
+    pub fn preferred_account_id(&self) -> Option<&str> {
+        self.preferred_account_id.as_deref()
+    }
+
+    pub fn set_preferred_account_id(&mut self, account_id: Option<String>) {
+        self.preferred_account_id = account_id.filter(|id| !id.trim().is_empty());
     }
 
     /// Derives the migrated configuration for a schema-2 record: the

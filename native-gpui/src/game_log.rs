@@ -57,6 +57,8 @@ fn category_label(category: &str) -> &'static str {
         "modConfigurationConflict" => "Mod configuration conflict",
         "javaCompatibility" => "Java compatibility",
         "fabricDependencyResolution" => "Fabric dependencies",
+        "forgeDependencyResolution" => "Forge / NeoForge mod loading",
+        "corruptConfig" => "Corrupt configuration file",
         "mixinInitialization" => "Mixin initialization",
         "outOfMemory" => "Out of memory",
         "nativeCrash" => "Native library or driver crash",
@@ -384,22 +386,127 @@ impl Render for GameLog {
             ))
             .child(actions)
             .child(filters);
-        if let Some(d) = &self.diagnosis {
-            body = body.child(
-                ui::card(&t)
-                    .child(ui::section_header(
+        if let Some(d) = self.diagnosis.clone() {
+            let mut diag_card = ui::card(&t)
+                .child(ui::section_header(
+                    &t,
+                    "Local diagnosis",
+                    Some(category_label(&d.category).into()),
+                ))
+                .child(ui::muted(&t, d.message.clone()))
+                .when(!d.implicated_mod_ids.is_empty(), |card| {
+                    card.child(ui::caption(
                         &t,
-                        "Local diagnosis",
-                        Some(category_label(&d.category).into()),
+                        format!("Implicated mods: {}", d.implicated_mod_ids.join(", ")),
                     ))
-                    .child(ui::muted(&t, d.message.clone()))
-                    .when(!d.implicated_mod_ids.is_empty(), |card| {
-                        card.child(ui::caption(
-                            &t,
-                            format!("Implicated mods: {}", d.implicated_mod_ids.join(", ")),
-                        ))
-                    }),
-            );
+                });
+            let mut fix_row = div().flex().flex_wrap().gap(px(8.)).pt(px(4.));
+            let mut has_fix = false;
+            if d.suggested_action.as_deref() == Some("increaseMemory") {
+                has_fix = true;
+                fix_row = fix_row.child(
+                    AuroraButton::new("diag-fix-ram", "Increase RAM by +1 GiB")
+                        .variant(ButtonVariant::Primary)
+                        .disabled(self.busy)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            let Some(host) = this.host.clone() else {
+                                return;
+                            };
+                            this.busy = true;
+                            this.request(
+                                api::increase_instance_memory_quick(
+                                    host,
+                                    this.instance.clone(),
+                                    1024,
+                                ),
+                                cx,
+                                |this, res, _| {
+                                    this.busy = false;
+                                    match res {
+                                        Ok(inst) => {
+                                            this.message = format!(
+                                                "Updated instance memory to {} MiB.",
+                                                inst.configuration.memory_mib
+                                            );
+                                        }
+                                        Err(e) => this.message = e.message,
+                                    }
+                                },
+                            );
+                        })),
+                );
+            }
+            if d.suggested_action.as_deref() == Some("openConfigFolder") {
+                has_fix = true;
+                fix_row = fix_row.child(
+                    AuroraButton::new("diag-fix-cfg", "Open config folder")
+                        .variant(ButtonVariant::Primary)
+                        .disabled(self.busy)
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            let Some(host) = this.host.clone() else {
+                                return;
+                            };
+                            this.request(
+                                api::open_instance_config_folder(host, this.instance.clone()),
+                                cx,
+                                |this, res, _| {
+                                    if let Err(e) = res {
+                                        this.message = e.message;
+                                    }
+                                },
+                            );
+                        })),
+                );
+            }
+            if d.suggested_action.as_deref() == Some("disableMod")
+                && let Some(first_mod) = d.implicated_mod_ids.first().cloned()
+            {
+                has_fix = true;
+                let label = format!("Disable {first_mod}");
+                fix_row = fix_row.child(
+                    AuroraButton::new("diag-fix-mod", label)
+                        .variant(ButtonVariant::Primary)
+                        .disabled(self.busy)
+                        .on_click(cx.listener(move |this, _, _, cx| {
+                            let Some(host) = this.host.clone() else {
+                                return;
+                            };
+                            let target = first_mod.clone();
+                            let inst_id = this.instance.clone();
+                            this.busy = true;
+                            this.request(
+                                async move {
+                                    let inv = api::instance_mods(host.clone(), inst_id.clone()).await?;
+                                    if let Some(entry) = inv.entries.iter().find(|e| {
+                                        e.can_toggle
+                                            && (e.file_name.to_lowercase().contains(&target.to_lowercase())
+                                                || e.display_name.to_lowercase().contains(&target.to_lowercase()))
+                                    }) {
+                                        api::set_mod_enabled(host, inst_id, entry.entry_id.clone(), false).await?;
+                                        Ok(format!("Disabled {}.", entry.display_name))
+                                    } else {
+                                        Err(api::ApiError::new(
+                                            "mod_not_found",
+                                            format!("Could not match '{target}' to a toggleable mod file."),
+                                        ))
+                                    }
+                                },
+                                cx,
+                                |this, res, _| {
+                                    this.busy = false;
+                                    match res {
+                                        Ok(msg) => this.message = msg,
+                                        Err(e) => this.message = e.message,
+                                    }
+                                },
+                            );
+                        })),
+                );
+            }
+            if has_fix {
+                diag_card = diag_card.child(fix_row);
+            }
+            body = body.child(diag_card);
         }
         if let Some(upload) = self.upload.clone() {
             let copy = upload.url.clone();

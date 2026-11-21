@@ -237,7 +237,7 @@ impl PlannedLibrary {
 /// planned platform. Values are verbatim metadata strings: unresolved
 /// `${placeholder}` tokens stay unresolved; substituting real values is a
 /// launch resolution concern.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct LaunchArgument {
     pub features: Vec<FeatureFlag>,
     pub values: Vec<String>,

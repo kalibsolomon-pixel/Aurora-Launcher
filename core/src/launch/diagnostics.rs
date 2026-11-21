@@ -9,6 +9,8 @@ pub struct LaunchFailureDiagnostic {
     pub implicated_mod_ids: Vec<String>,
     pub requirement: Option<String>,
     pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub suggested_action: Option<String>,
 }
 
 fn bounded(value: &str) -> String {
@@ -21,7 +23,13 @@ fn bounded(value: &str) -> String {
 
 pub fn classify(output: &str, java_major: Option<u32>) -> LaunchFailureDiagnostic {
     let unknown = || {
-        LaunchFailureDiagnostic {category:"unknownCrash".into(),implicated_mod_ids:Vec::new(),requirement:None,message:"Minecraft exited unsuccessfully. Review the preserved instance launch log for the underlying exception.".into()}
+        LaunchFailureDiagnostic {
+        category: "unknownCrash".into(),
+        implicated_mod_ids: Vec::new(),
+        requirement: None,
+        message: "Minecraft exited unsuccessfully. Review the preserved instance launch log for the underlying exception.".into(),
+        suggested_action: None,
+    }
     };
     let output = if output.len() > 1024 * 1024 {
         let mut start = output.len() - 1024 * 1024;
@@ -64,6 +72,7 @@ pub fn classify(output: &str, java_major: Option<u32>) -> LaunchFailureDiagnosti
                             ids.join(" and "),
                             bounded(option)
                         ),
+                        suggested_action: Some("disableMod".into()),
                     };
                 }
             }
@@ -89,23 +98,71 @@ pub fn classify(output: &str, java_major: Option<u32>) -> LaunchFailureDiagnosti
                             ", but this instance uses managed Java {n}"
                         ))
                     ),
+                    suggested_action: Some("openJavaSettings".into()),
                 };
             }
         }
         if line.contains("Incompatible mods found!")
             || line.contains("Mod resolution encountered an incompatible mod set")
         {
-            return LaunchFailureDiagnostic {category:"fabricDependencyResolution".into(),implicated_mod_ids:Vec::new(),requirement:None,message:"Launch failed: Fabric dependency resolution. Fabric rejected the active mod requirements. Review its required/installed versions in the preserved launch log, then adjust the mod set explicitly.".into()};
+            return LaunchFailureDiagnostic {
+                category: "fabricDependencyResolution".into(),
+                implicated_mod_ids: Vec::new(),
+                requirement: None,
+                message: "Launch failed: Fabric dependency resolution. Fabric rejected the active mod requirements. Review its required/installed versions in the preserved launch log, then adjust the mod set explicitly.".into(),
+                suggested_action: Some("openContent".into()),
+            };
+        }
+        if line.contains("Missing or unsupported mandatory dependencies:")
+            || line.contains("net.minecraftforge.fml.ModLoadingException")
+            || line.contains("net.neoforged.fml.ModLoadingException")
+            || line.contains("Mod File Failure")
+        {
+            return LaunchFailureDiagnostic {
+                category: "forgeDependencyResolution".into(),
+                implicated_mod_ids: Vec::new(),
+                requirement: None,
+                message: "Launch failed: Forge/NeoForge mod loading error. One or more mods have missing dependencies or incompatible versions. Inspect the launch log and update or disable the implicated mods.".into(),
+                suggested_action: Some("openContent".into()),
+            };
         }
         if line.contains("UnsupportedClassVersionError:") {
-            return LaunchFailureDiagnostic {category:"javaCompatibility".into(),implicated_mod_ids:Vec::new(),requirement:None,message:"Launch failed: Java compatibility. A class requires a newer Java bytecode version. The preserved launch log identifies the class and supported versions.".into()};
+            return LaunchFailureDiagnostic {
+                category: "javaCompatibility".into(),
+                implicated_mod_ids: Vec::new(),
+                requirement: None,
+                message: "Launch failed: Java compatibility. A class requires a newer Java bytecode version. The preserved launch log identifies the class and supported versions.".into(),
+                suggested_action: Some("openJavaSettings".into()),
+            };
+        }
+        if (line.contains("ParsingException")
+            || line.contains("JsonSyntaxException")
+            || line.contains("ConfigLoadingException"))
+            && (line.contains("config/")
+                || line.contains("config\\")
+                || line.contains(".toml")
+                || line.contains(".json"))
+        {
+            return LaunchFailureDiagnostic {
+                category: "corruptConfig".into(),
+                implicated_mod_ids: Vec::new(),
+                requirement: None,
+                message: "Launch failed: a mod configuration file could not be parsed. Open the instance config folder, repair or remove the damaged config file named in the launch log, and retry.".into(),
+                suggested_action: Some("openConfigFolder".into()),
+            };
         }
     }
     if output.contains("MixinApplyError:")
         || output.contains("MixinInitialisationError:")
         || output.contains("MixinTransformerError:")
     {
-        return LaunchFailureDiagnostic {category:"mixinInitialization".into(),implicated_mod_ids:Vec::new(),requirement:None,message:"Launch failed: Mixin initialization. A mod transformation failed; review the underlying exception in the preserved launch log. No mod was disabled automatically.".into()};
+        return LaunchFailureDiagnostic {
+            category: "mixinInitialization".into(),
+            implicated_mod_ids: Vec::new(),
+            requirement: None,
+            message: "Launch failed: Mixin initialization. A mod transformation failed; review the underlying exception in the preserved launch log. No mod was disabled automatically.".into(),
+            suggested_action: Some("openContent".into()),
+        };
     }
     unknown()
 }
@@ -121,26 +178,48 @@ pub fn diagnose(
         if known.category != "unknownCrash" {
             return known;
         }
-        for (pattern, category, message) in [
+        for (pattern, category, message, action) in [
             (
                 "OutOfMemoryError",
                 "outOfMemory",
                 "The game ran out of memory. Increase the instance memory limit if your computer has enough free RAM, or reduce resource packs and mods.",
+                Some("increaseMemory"),
+            ),
+            (
+                "nvoglv64.dll",
+                "graphicsDriver",
+                "The NVIDIA OpenGL driver (nvoglv64.dll) crashed. Update your NVIDIA graphics driver or test disabling shader/rendering mods.",
+                None,
+            ),
+            (
+                "atio6axx.dll",
+                "graphicsDriver",
+                "The AMD OpenGL driver (atio6axx.dll) crashed. Update your AMD Radeon graphics driver or test disabling shader/rendering mods.",
+                None,
+            ),
+            (
+                "igxelpicd64.dll",
+                "graphicsDriver",
+                "The Intel graphics OpenGL driver (igxelpicd64.dll) crashed. Update your Intel graphics driver or test disabling shader/rendering mods.",
+                None,
             ),
             (
                 "EXCEPTION_ACCESS_VIOLATION",
                 "nativeCrash",
                 "A native library or graphics driver crashed. Update the graphics driver and review graphics mods in the crash report.",
+                None,
             ),
             (
                 "GLFW error 65542",
                 "graphicsDriver",
                 "OpenGL is unavailable. Install the graphics driver supplied by your GPU manufacturer.",
+                None,
             ),
             (
                 "No space left on device",
                 "diskFull",
                 "The disk is full. Free space on the instance drive before retrying.",
+                Some("openStorage"),
             ),
         ] {
             if text.contains(pattern) {
@@ -149,11 +228,18 @@ pub fn diagnose(
                     implicated_mod_ids: vec![],
                     requirement: None,
                     message: message.into(),
+                    suggested_action: action.map(str::to_owned),
                 };
             }
         }
     }
-    LaunchFailureDiagnostic { category: "noKnownProblem".into(), implicated_mod_ids: vec![], requirement: None, message: "No known problem detected. You can upload the redacted log to get help. Diagnosis runs locally and sends nothing.".into() }
+    LaunchFailureDiagnostic {
+        category: "noKnownProblem".into(),
+        implicated_mod_ids: vec![],
+        requirement: None,
+        message: "No known problem detected. You can upload the redacted log to get help. Diagnosis runs locally and sends nothing.".into(),
+        suggested_action: None,
+    }
 }
 
 #[cfg(test)]

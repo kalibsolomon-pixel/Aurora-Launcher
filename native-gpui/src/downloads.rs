@@ -700,6 +700,8 @@ enum Message {
         attempt: u64,
         result: api::ApiResult<Value>,
     },
+    /// Event-driven throttled byte/phase progress notification from core.
+    Progress,
     /// A lock-contention backoff elapsed for one exact task attempt.
     Backoff { id: u64, attempt: u64 },
     /// Begin fading a settled notification toast.
@@ -896,6 +898,9 @@ impl Downloads {
                 }
                 cx.notify();
             }
+            Message::Progress => {
+                cx.notify();
+            }
             Message::Backoff { id, attempt } => {
                 if self.state.waiting(id, attempt) {
                     self.pump();
@@ -930,9 +935,18 @@ impl Downloads {
                 break;
             };
             let tx = self.tx.clone();
+            let progress_tx = self.tx.clone();
+            let mut progress_rx = start.control.subscribe();
             let run = start.control.clone();
             let check = start.control.clone();
             let request = start.request;
+            let observer = self.rt.spawn(async move {
+                while progress_rx.changed().await.is_ok() {
+                    if progress_tx.send(Message::Progress).await.is_err() {
+                        break;
+                    }
+                }
+            });
             self.rt.spawn(async move {
                 let result = guarded(async move {
                     run.run(async move {
@@ -956,6 +970,7 @@ impl Downloads {
                     .await
                 })
                 .await;
+                observer.abort();
                 let _ = tx
                     .send(Message::Finished {
                         id: start.id,
@@ -1228,13 +1243,19 @@ impl Render for Downloads {
             let attempt = task.attempt;
             let fading = !matches!(task.phase, Phase::Pending | Phase::Running)
                 && self.fading_toasts.contains(&(id, attempt));
-            let (stage, message, streamed) = if task.phase == Phase::Running {
+            let (stage, message, streamed, speed_bps) = if task.phase == Phase::Running {
                 let (stage, message) =
                     running_status(task.control.phase(), task.control.stage(), &task.message);
-                let bytes = task.control.streamed_bytes();
-                (stage, message, (bytes > 0).then_some(bytes))
+                let snap = task.control.snapshot();
+                let bytes = snap.streamed_bytes;
+                (
+                    stage,
+                    message,
+                    (bytes > 0).then_some(bytes),
+                    snap.bytes_per_sec,
+                )
             } else {
-                (phase_label(task.phase), task.message.clone(), None)
+                (phase_label(task.phase), task.message.clone(), None, 0)
             };
             let cancelling = task.cancelling || task.control.phase() == JobPhase::Cancelling;
             let can_cancel = matches!(task.phase, Phase::Pending | Phase::Running) && !cancelling;
@@ -1243,6 +1264,12 @@ impl Render for Downloads {
             let running = task.phase == Phase::Running;
             let tone = phase_tone(task.phase);
             let detail = match streamed {
+                Some(bytes) if speed_bps >= 1024 => format!(
+                    "{} · {:.1} MB · {:.1} MB/s",
+                    task.detail,
+                    bytes as f64 / (1024.0 * 1024.0),
+                    speed_bps as f64 / (1024.0 * 1024.0),
+                ),
                 Some(bytes) => format!(
                     "{} · {:.1} MB",
                     task.detail,

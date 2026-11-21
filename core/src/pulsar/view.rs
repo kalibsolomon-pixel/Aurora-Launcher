@@ -42,6 +42,11 @@ pub struct LibraryQuery {
     pub search: String,
     pub outcome: OutcomeFilter,
     pub hits_only: bool,
+    pub bookmarked_only: bool,
+    pub tag: Option<String>,
+    pub server: Option<String>,
+    pub date_from_ms: Option<i64>,
+    pub date_to_ms: Option<i64>,
     pub sort: HistorySort,
     pub offset: usize,
     pub limit: usize,
@@ -212,6 +217,35 @@ pub struct FightSummary {
     pub report_available: bool,
     pub stale: bool,
     pub provenance: Provenance,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub annotation: Option<super::annotations::FightAnnotation>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct RecentFightsWidgetSummary {
+    pub total_fights: usize,
+    pub wins: usize,
+    pub losses: usize,
+    pub draws: usize,
+    pub recent: Vec<FightSummary>,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AnnotationRequest {
+    pub key: FightKey,
+    pub bookmarked: bool,
+    pub tags: Vec<String>,
+    pub note: String,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct StatsExportRequest {
+    pub query: LibraryQuery,
+    pub format: String,
+    pub destination: String,
 }
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
