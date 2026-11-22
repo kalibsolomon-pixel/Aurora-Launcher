@@ -111,20 +111,22 @@ impl StorageView {
                     Err(e) => self.message = e.message,
                 }
             }
-            Reply::Pruned(serial, res) if serial == self.serial => {
+            Reply::Pruned(serial, res) => {
                 self.pruning = false;
-                match res {
-                    Ok(report) => {
-                        self.message = format!(
-                            "Reclaimed {} ({} cache objects, {} artwork files, {} runtimes).",
-                            format_bytes(report.reclaimed_bytes),
-                            report.removed_cache_objects,
-                            report.removed_artwork_files,
-                            report.removed_runtimes
-                        );
-                        self.refresh(cx);
+                if serial == self.serial {
+                    match res {
+                        Ok(report) => {
+                            self.message = format!(
+                                "Reclaimed {} ({} cache objects, {} artwork files, {} runtimes).",
+                                format_bytes(report.reclaimed_bytes),
+                                report.removed_cache_objects,
+                                report.removed_artwork_files,
+                                report.removed_runtimes
+                            );
+                            self.refresh(cx);
+                        }
+                        Err(e) => self.message = e.message,
                     }
-                    Err(e) => self.message = e.message,
                 }
             }
             _ => {}
@@ -141,11 +143,14 @@ impl Render for StorageView {
             .flex()
             .items_center()
             .justify_between()
-            .child(ui::section_header(
-                &t,
-                "Storage & verified cache",
-                Some("Inspect disk usage across instances, shared caches, and managed Java runtimes. User worlds, mods, and configs are never pruned.".into()),
-            ))
+            .gap(px(12.))
+            .child(
+                div().flex_1().min_w(px(0.)).child(ui::section_header(
+                    &t,
+                    "Storage & verified cache",
+                    Some("Inspect disk usage across instances, shared caches, and managed Java runtimes. User worlds, mods, and configs are never pruned.".into()),
+                )),
+            )
             .child(
                 AuroraButton::new("storage-refresh", if self.loading { "Scanning…" } else { "Refresh" })
                     .size(ButtonSize::Small)
@@ -170,7 +175,14 @@ impl Render for StorageView {
         }
 
         let Some(overview) = self.overview.clone() else {
-            return root.child(ui::muted(&t, "Calculating managed storage…"));
+            return root.child(ui::muted(
+                &t,
+                if self.loading {
+                    "Calculating managed storage…"
+                } else {
+                    "Storage overview unavailable. Click Refresh to scan managed data."
+                },
+            ));
         };
 
         let summary_card = ui::card(&t)
@@ -235,6 +247,7 @@ impl Render for StorageView {
                         format_bytes(overview.unreferenced_cache_bytes)
                     ),
                 )
+                .with_visible_label()
                 .checked(self.prune_cache)
                 .disabled(self.pruning)
                 .on_change(move |checked, _, _, cx| {
@@ -253,6 +266,7 @@ impl Render for StorageView {
                         format_bytes(overview.unreferenced_runtimes_bytes)
                     ),
                 )
+                .with_visible_label()
                 .checked(self.prune_runtimes)
                 .disabled(self.pruning)
                 .on_change(move |checked, _, _, cx| {
@@ -271,6 +285,7 @@ impl Render for StorageView {
                         format_bytes(overview.artwork_cache_bytes)
                     ),
                 )
+                .with_visible_label()
                 .checked(self.prune_artwork)
                 .disabled(self.pruning)
                 .on_change(move |checked, _, _, cx| {

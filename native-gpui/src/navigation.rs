@@ -1073,6 +1073,33 @@ impl Launcher {
             grid = grid.child(card);
         }
 
+        if visible.is_empty() {
+            out.push(
+                ui::empty_state(
+                    t,
+                    "search",
+                    "No matching instances",
+                    "Try a different search term or clear your active filter.",
+                )
+                .child(
+                    AuroraButton::new("instances-clear-filters", "Clear filters")
+                        .size(ButtonSize::Small)
+                        .on_click(cx.listener(|this, _, window, cx| {
+                            this.instances_filter = 0;
+                            this.instances_tag_filter = None;
+                            if let Some(input) = &this.instances_search {
+                                input.update(cx, |state, cx| {
+                                    state.set_value("", window, cx);
+                                });
+                            }
+                            cx.notify();
+                        })),
+                )
+                .into_any_element(),
+            );
+            return out;
+        }
+
         out.push(grid.into_any_element());
         out
     }
@@ -1166,15 +1193,16 @@ impl Launcher {
                     })),
             );
         }
+        let folder_id = id.to_owned();
         let log_id = id.to_owned();
         header_actions = header_actions
             .child(
                 AuroraButton::new("detail-open-folder", "Folder")
                     .variant(ButtonVariant::Default)
                     .disabled(self.host.is_none())
-                    .on_click(cx.listener(|this, _, _, cx| {
+                    .on_click(cx.listener(move |this, _, _, cx| {
                         if let Some(editor) = &this.instance_editor {
-                            editor.update(cx, |ed, cx| ed.open_folder(cx));
+                            editor.update(cx, |ed, cx| ed.open_folder_for(folder_id.clone(), cx));
                         }
                     })),
             )
@@ -1380,15 +1408,20 @@ impl Launcher {
                                                 ButtonVariant::Default
                                             })
                                             .on_click(
-                                                cx.listener(|this, _, window, cx| {
-                                                    this.open_page(2, window, cx);
-                                                    if let Some(settings) = &this.settings {
-                                                        settings.update(cx, |s, cx| {
-                                                            s.select_section(3, cx)
-                                                        });
-                                                    }
-                                                    cx.notify();
-                                                }),
+                                                {
+                                                    let target_id = id.to_owned();
+                                                    cx.listener(move |this, _, window, cx| {
+                                                        this.client_update_instance =
+                                                            Some(target_id.clone());
+                                                        this.open_page(2, window, cx);
+                                                        if let Some(settings) = &this.settings {
+                                                            settings.update(cx, |s, cx| {
+                                                                s.select_section(3, cx)
+                                                            });
+                                                        }
+                                                        cx.notify();
+                                                    })
+                                                },
                                             ),
                                         ),
                                 ),

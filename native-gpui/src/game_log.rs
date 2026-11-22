@@ -700,20 +700,13 @@ impl crate::Launcher {
             .and_then(|s| s.instances.iter().find(|i| i.id == id))
             .map(|i| i.display_name.clone())
             .unwrap_or_else(|| "Instance".into());
-        let primary = cx.primary_display().map(|d| d.id());
-        let display = cx
-            .displays()
-            .into_iter()
-            .find(|d| Some(d.id()) != primary && d.bounds().size.height > d.bounds().size.width);
-        let display_id = display.as_ref().map(|d| d.id());
-        let bounds = gpui::Bounds::centered(display_id, gpui::size(px(900.), px(760.)), cx);
+        let bounds = gpui::Bounds::centered(None, gpui::size(px(900.), px(760.)), cx);
         let host = self.host.clone();
         let rt = self.rt.clone();
         let instance = id.clone();
         match cx.open_window(
             gpui::WindowOptions {
                 window_bounds: Some(gpui::WindowBounds::Windowed(bounds)),
-                display_id,
                 titlebar: Some(chrome::titlebar()),
                 window_min_size: Some(gpui::size(px(720.), px(520.))),
                 ..Default::default()

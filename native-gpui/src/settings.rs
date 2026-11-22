@@ -74,6 +74,7 @@ pub enum SettingsEvent {
     /// Borealis view.
     Motion(u8),
     Installing(bool),
+    LaunchBehavior(api::OnLaunchBehavior),
 }
 
 // ---------------------------------------------------------------------------
@@ -1505,6 +1506,7 @@ impl Settings {
                     }
                     Err(error) => {
                         self.downloaded_version = None;
+                        self.update_detail = None;
                         self.updates_error = Some(error.message);
                     }
                 }
@@ -1515,6 +1517,7 @@ impl Settings {
                     Ok(_) => cx.quit(),
                     Err(error) => {
                         cx.emit(SettingsEvent::Installing(false));
+                        self.update_detail = None;
                         self.updates_error = Some(error.message);
                     }
                 }
@@ -1523,8 +1526,13 @@ impl Settings {
                 self.update_busy = false;
                 match result {
                     Ok(overview) => {
+                        let offer = launcher_offer(&overview.launcher.availability);
+                        let keeps_downloaded = offer.is_some()
+                            && self.downloaded_version.as_deref() == offer.as_deref();
+                        if !keeps_downloaded {
+                            self.update_detail = None;
+                        }
                         self.updates = Some(overview);
-                        self.update_detail = None;
                         self.updates_error = None;
                     }
                     Err(error) => self.updates_error = Some(error.message),
@@ -2176,9 +2184,7 @@ impl Render for Settings {
                     )
                     .when(dot, |b| b.child(ui::update_dot(t)))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.cancel_previews(cx);
-                        this.section = index;
-                        cx.notify();
+                        this.select_section(index, cx);
                     })),
             );
         }
@@ -2418,19 +2424,16 @@ impl Render for Settings {
                                 env!("CARGO_PKG_VERSION")
                             ),
                         ))
-                        .child(ui::status_badge(
-                            t,
-                            if self.updates_pending {
-                                "Update available"
+                        .child({
+                            let (badge_label, badge_tone) = if self.updates_pending {
+                                ("Update available", ui::Tone::Accent)
+                            } else if let Some(overview) = &self.updates {
+                                availability_badge(&overview.launcher.availability)
                             } else {
-                                "Up to date"
-                            },
-                            if self.updates_pending {
-                                ui::Tone::Accent
-                            } else {
-                                ui::Tone::Success
-                            },
-                        )),
+                                ("Not checked", ui::Tone::Neutral)
+                            };
+                            ui::status_badge(t, badge_label, badge_tone)
+                        }),
                 );
             }
         }
@@ -2789,7 +2792,10 @@ impl Render for Settings {
                                     |this, res, cx| {
                                         this.launch_behavior_busy = false;
                                         match res {
-                                            Ok(saved) => this.on_launch_behavior = saved,
+                                            Ok(saved) => {
+                                                this.on_launch_behavior = saved;
+                                                cx.emit(SettingsEvent::LaunchBehavior(saved));
+                                            }
                                             Err(e) => this.desktop_error = Some(e.message),
                                         }
                                         cx.notify();
@@ -2845,6 +2851,10 @@ impl Render for Settings {
                         overview.launcher.installed_version.as_str()
                     });
                 let detail = availability.and_then(availability_detail);
+                let offer = self
+                    .updates
+                    .as_ref()
+                    .and_then(|o| launcher_offer(&o.launcher.availability));
                 let mut card = section_card(t)
                     .child(card_header(t, "Launcher updates", None, div().child(check)))
                     .child(
@@ -2852,15 +2862,11 @@ impl Render for Settings {
                             t,
                             format!("Installed version {installed}"),
                             detail.map(SharedString::from),
-                            false,
+                            offer.is_none(),
                         )
                         .child(control_slot(ui::status_badge(t, label, tone))),
                     );
-                if let Some(version) = self
-                    .updates
-                    .as_ref()
-                    .and_then(|o| launcher_offer(&o.launcher.availability))
-                {
+                if let Some(version) = offer {
                     let ready = self.downloaded_version.as_deref() == Some(&version);
                     let install = ready;
                     card = card.child(ui::setting_row(t, format!("Aurora Launcher {version}"), Some(if ready && self.install_blocked {

@@ -398,58 +398,64 @@ impl Worlds {
                     self.datapacks = dps;
                 }
             }
-            Reply::BackupCreated(rev, world, result) if rev == self.generation => {
+            Reply::BackupCreated(rev, _world, result) => {
                 self.busy = false;
-                match result {
-                    Ok(created) => {
-                        self.status =
-                            format!("Created backup ({}).", format_bytes(created.size_bytes));
-                        self.load_world_details(world, cx);
-                        self.refresh(cx);
-                        cx.emit(WorldsEvent::Changed);
+                if rev == self.generation {
+                    match result {
+                        Ok(created) => {
+                            self.status =
+                                format!("Created backup ({}).", format_bytes(created.size_bytes));
+                            self.refresh(cx);
+                            cx.emit(WorldsEvent::Changed);
+                        }
+                        Err(e) => self.status = e.message,
                     }
-                    Err(e) => self.status = e.message,
                 }
             }
-            Reply::BackupAction(rev, world, ok_msg, result) if rev == self.generation => {
+            Reply::BackupAction(rev, _world, ok_msg, result) => {
                 self.busy = false;
-                match result {
-                    Ok(()) => {
-                        self.status = ok_msg.into();
-                        self.load_world_details(world, cx);
-                        self.refresh(cx);
-                        cx.emit(WorldsEvent::Changed);
+                if rev == self.generation {
+                    match result {
+                        Ok(()) => {
+                            self.status = ok_msg.into();
+                            self.refresh(cx);
+                            cx.emit(WorldsEvent::Changed);
+                        }
+                        Err(e) => self.status = e.message,
                     }
-                    Err(e) => self.status = e.message,
                 }
             }
-            Reply::DatapackAction(rev, world, ok_msg, result) if rev == self.generation => {
+            Reply::DatapackAction(rev, _world, ok_msg, result) => {
                 self.busy = false;
-                match result {
-                    Ok(()) => {
-                        self.status = ok_msg.into();
-                        self.load_world_details(world, cx);
-                        self.refresh(cx);
+                if rev == self.generation {
+                    match result {
+                        Ok(()) => {
+                            self.status = ok_msg.into();
+                            self.refresh(cx);
+                        }
+                        Err(e) => self.status = e.message,
                     }
-                    Err(e) => self.status = e.message,
                 }
             }
-            Reply::DatapackSearch(rev, result) if rev == self.generation => {
+            Reply::DatapackSearch(rev, result) => {
                 self.dp_searching = false;
-                match result {
-                    Ok(page) => self.dp_results = page.hits.into_iter().take(8).collect(),
-                    Err(e) => self.status = e.message,
+                if rev == self.generation {
+                    match result {
+                        Ok(page) => self.dp_results = page.hits.into_iter().take(8).collect(),
+                        Err(e) => self.status = e.message,
+                    }
                 }
             }
-            Reply::DatapackInstalled(rev, world, result) if rev == self.generation => {
+            Reply::DatapackInstalled(rev, _world, result) => {
                 self.busy = false;
-                match result {
-                    Ok(entry) => {
-                        self.status = format!("Installed datapack {}.", entry.display_name);
-                        self.load_world_details(world, cx);
-                        self.refresh(cx);
+                if rev == self.generation {
+                    match result {
+                        Ok(entry) => {
+                            self.status = format!("Installed datapack {}.", entry.display_name);
+                            self.refresh(cx);
+                        }
+                        Err(e) => self.status = e.message,
                     }
-                    Err(e) => self.status = e.message,
                 }
             }
             _ => {}

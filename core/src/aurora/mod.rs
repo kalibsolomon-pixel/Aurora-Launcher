@@ -1171,14 +1171,18 @@ pub async fn install_managed_ephemera(
                     .collect::<PathBuf>(),
             );
             if let Ok(old_digest) = ArtifactDigest::parse(previous.artifact().sha256()) {
-                if verify_file(
-                    &old_path,
-                    &old_digest,
-                    Some(previous.artifact().size_bytes()),
-                )
-                .is_ok()
-                {
-                    let _ = std::fs::remove_file(&old_path);
+                let mut disabled_os = old_path.as_os_str().to_os_string();
+                disabled_os.push(".disabled");
+                for candidate in [old_path.clone(), PathBuf::from(disabled_os)] {
+                    if verify_file(
+                        &candidate,
+                        &old_digest,
+                        Some(previous.artifact().size_bytes()),
+                    )
+                    .is_ok()
+                    {
+                        let _ = std::fs::remove_file(&candidate);
+                    }
                 }
             }
         }

@@ -66,6 +66,8 @@ pub enum UpdateBlock {
 pub struct UpdateAvailability {
     pub content_type: ContentType,
     pub project_id: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_name: Option<String>,
     pub current_version: String,
     pub status: UpdateStatus,
     pub block: Option<UpdateBlock>,
@@ -149,6 +151,7 @@ pub async fn check_updates(
                 slots.push(Some(UpdateAvailability {
                     content_type: record.content_type,
                     project_id: record.project_id.clone(),
+                    file_name: Some(record.file_name.clone()),
                     current_version,
                     status: UpdateStatus::Blocked,
                     block: Some(UpdateBlock::PackOwned),
@@ -156,7 +159,7 @@ pub async fn check_updates(
                     pinned: record.pinned,
                     channel: record.update_channel,
                     detail: Some(format!(
-                        "Required by {} {}. Modpack components are updated through Update Modpack on the instance's Overview page, not individual updates.",
+                        "Required by {} {}. Modpack components are updated through Update Modpack in Content → Updates, not individual updates.",
                         pack.as_ref().unwrap().identity.name,
                         pack.as_ref().unwrap().identity.pack_version
                     )),
@@ -168,6 +171,7 @@ pub async fn check_updates(
             slots.push(Some(UpdateAvailability {
                 content_type: record.content_type,
                 project_id: record.project_id.clone(),
+                file_name: Some(record.file_name.clone()),
                 current_version,
                 status: UpdateStatus::Blocked,
                 block: Some(block),
@@ -233,6 +237,7 @@ pub async fn check_updates(
                     UpdateAvailability {
                         content_type: record.content_type,
                         project_id: record.project_id.clone(),
+                        file_name: Some(record.file_name.clone()),
                         current_version: current_version.to_owned(),
                         status,
                         block: None,
@@ -245,6 +250,7 @@ pub async fn check_updates(
                 Err(crate::modrinth::Error::NotFound) => UpdateAvailability {
                     content_type: record.content_type,
                     project_id: record.project_id.clone(),
+                    file_name: Some(record.file_name.clone()),
                     current_version: current_version.to_owned(),
                     status: UpdateStatus::CurrentVersionUnknown,
                     block: None,
@@ -258,6 +264,7 @@ pub async fn check_updates(
                 Err(crate::modrinth::Error::InvalidResponse) => UpdateAvailability {
                     content_type: record.content_type,
                     project_id: record.project_id.clone(),
+                    file_name: Some(record.file_name.clone()),
                     current_version: current_version.to_owned(),
                     status: UpdateStatus::CurrentVersionUnknown,
                     block: None,
@@ -272,6 +279,7 @@ pub async fn check_updates(
                 Err(crate::modrinth::Error::RateLimited(_)) => UpdateAvailability {
                     content_type: record.content_type,
                     project_id: record.project_id.clone(),
+                    file_name: Some(record.file_name.clone()),
                     current_version: current_version.to_owned(),
                     status: UpdateStatus::ProviderUnavailable,
                     block: None,
@@ -283,6 +291,7 @@ pub async fn check_updates(
                 Err(_) => UpdateAvailability {
                     content_type: record.content_type,
                     project_id: record.project_id.clone(),
+                    file_name: Some(record.file_name.clone()),
                     current_version: current_version.to_owned(),
                     status: UpdateStatus::ProviderUnavailable,
                     block: None,
@@ -332,6 +341,7 @@ pub async fn check_updates(
                 slots[slot] = Some(UpdateAvailability {
                     content_type: record.content_type,
                     project_id: record.project_id.clone(),
+                    file_name: Some(record.file_name.clone()),
                     current_version,
                     status: UpdateStatus::ProviderUnavailable,
                     block: None,

@@ -875,18 +875,15 @@ impl Downloads {
                         false
                     }
                     Some(Settled::Terminal { ok }) => {
-                        let tx = self.tx.clone();
-                        let hold = if ok {
-                            Duration::from_millis(4200)
-                        } else {
-                            Duration::from_millis(9000)
-                        };
-                        self.rt.spawn(async move {
-                            tokio::time::sleep(hold).await;
-                            let _ = tx.send(Message::FadeToast { id, attempt }).await;
-                            tokio::time::sleep(Duration::from_millis(800)).await;
-                            let _ = tx.send(Message::DismissToast { id, attempt }).await;
-                        });
+                        if ok {
+                            let tx = self.tx.clone();
+                            self.rt.spawn(async move {
+                                tokio::time::sleep(Duration::from_millis(4200)).await;
+                                let _ = tx.send(Message::FadeToast { id, attempt }).await;
+                                tokio::time::sleep(Duration::from_millis(800)).await;
+                                let _ = tx.send(Message::DismissToast { id, attempt }).await;
+                            });
+                        }
                         cx.emit(DownloadsEvent::Settled { ok });
                         true
                     }

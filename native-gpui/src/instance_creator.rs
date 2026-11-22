@@ -445,6 +445,10 @@ impl InstanceCreator {
             1 => {
                 if let Some(k) = self.kinds.get(ix) {
                     self.kind = Some(k.clone());
+                    if k != "fabric" {
+                        self.aurora = false;
+                        self.ephemera = false;
+                    }
                     self.pin = None;
                     self.reload_selection();
                 }

@@ -708,6 +708,9 @@ impl InstanceEditor {
             let r = guarded(api::launcher_state(host)).await;
             let _ = tx.send(Reply::State(serial, r)).await;
         });
+        if self.selected.is_some() {
+            self.load_ephemera();
+        }
     }
     pub fn set_accounts(&mut self, accounts: Vec<api::AccountSummary>) {
         self.accounts = accounts;
@@ -723,6 +726,18 @@ impl InstanceEditor {
 
     pub fn open_folder(&mut self, cx: &mut Context<Self>) {
         self.action("folder", cx);
+    }
+
+    pub fn open_folder_for(&mut self, id: String, cx: &mut Context<Self>) {
+        let Some(host) = self.host.clone() else {
+            return;
+        };
+        let tx = self.tx.clone();
+        self.runtime.spawn(async move {
+            let r = guarded(api::open_instance_folder(host, id)).await;
+            let _ = tx.send(Reply::Folder(r)).await;
+        });
+        cx.notify();
     }
 
     pub fn open_screenshots(&mut self, id: String, cx: &mut Context<Self>) {
@@ -891,6 +906,9 @@ impl InstanceEditor {
                 self.busy = false;
                 match result {
                     Ok(status) => {
+                        if let Some(base) = self.baseline.as_mut() {
+                            base.ephemera_enabled = Some(status.installed);
+                        }
                         self.message = if status.installed {
                             format!(
                                 "Ephemera {} installed.",
@@ -901,6 +919,7 @@ impl InstanceEditor {
                         };
                         self.ephemera_status = Some(status);
                         cx.emit(InstanceEditorEvent::Changed);
+                        self.refresh(cx);
                     }
                     Err(e) => self.message = error(e),
                 }
@@ -2578,6 +2597,12 @@ impl Render for InstanceEditor {
                     .ephemera_status
                     .as_ref()
                     .is_some_and(|status| status.installed);
+                let ephemera_missing = self
+                    .ephemera_status
+                    .as_ref()
+                    .is_some_and(|status| status.status == "missing");
+                let ephemera_update_view = this.clone();
+                let ephemera_remove_view = this.clone();
                 let ephemera_conflict = self
                     .ephemera_status
                     .as_ref()
@@ -2680,34 +2705,75 @@ impl Render for InstanceEditor {
                                 })
                                 .into_any_element(),
                             ),
-                            (
-                                "Ephemera Engine",
-                                Some(ephemera_note),
-                                AuroraButton::new(
-                                    "editor-ephemera",
-                                    if ephemera_installed {
-                                        "Remove"
-                                    } else {
-                                        "Install"
-                                    },
-                                )
-                                .variant(if ephemera_installed {
-                                    ButtonVariant::DangerSubtle
+                            ("Ephemera Engine", Some(ephemera_note), {
+                                let disabled_common = busy
+                                    || !installed
+                                    || self.selected_instance().is_some_and(needs_install);
+                                if ephemera_installed {
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(8.))
+                                        .child(
+                                            AuroraButton::new("editor-ephemera-update", "Update")
+                                                .variant(ButtonVariant::Soft)
+                                                .disabled(disabled_common)
+                                                .on_click(move |_, _, cx| {
+                                                    ephemera_update_view.update(cx, |v, cx| {
+                                                        v.set_ephemera(true, cx)
+                                                    });
+                                                }),
+                                        )
+                                        .child(
+                                            AuroraButton::new("editor-ephemera", "Remove")
+                                                .variant(ButtonVariant::DangerSubtle)
+                                                .disabled(disabled_common)
+                                                .on_click(move |_, _, cx| {
+                                                    ephemera_view.update(cx, |v, cx| {
+                                                        v.set_ephemera(false, cx)
+                                                    });
+                                                }),
+                                        )
+                                        .into_any_element()
+                                } else if ephemera_missing {
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(8.))
+                                        .child(
+                                            AuroraButton::new("editor-ephemera", "Reinstall")
+                                                .variant(ButtonVariant::Soft)
+                                                .disabled(
+                                                    disabled_common || ephemera_conflict.is_some(),
+                                                )
+                                                .on_click(move |_, _, cx| {
+                                                    ephemera_view.update(cx, |v, cx| {
+                                                        v.set_ephemera(true, cx)
+                                                    });
+                                                }),
+                                        )
+                                        .child(
+                                            AuroraButton::new("editor-ephemera-remove", "Remove")
+                                                .variant(ButtonVariant::DangerSubtle)
+                                                .disabled(disabled_common)
+                                                .on_click(move |_, _, cx| {
+                                                    ephemera_remove_view.update(cx, |v, cx| {
+                                                        v.set_ephemera(false, cx)
+                                                    });
+                                                }),
+                                        )
+                                        .into_any_element()
                                 } else {
-                                    ButtonVariant::Soft
-                                })
-                                .disabled(
-                                    busy || !installed
-                                        || self.selected_instance().is_some_and(needs_install)
-                                        || (!ephemera_installed && ephemera_conflict.is_some()),
-                                )
-                                .on_click(move |_, _, cx| {
-                                    ephemera_view.update(cx, |v, cx| {
-                                        v.set_ephemera(!ephemera_installed, cx)
-                                    });
-                                })
-                                .into_any_element(),
-                            ),
+                                    AuroraButton::new("editor-ephemera", "Install")
+                                        .variant(ButtonVariant::Soft)
+                                        .disabled(disabled_common || ephemera_conflict.is_some())
+                                        .on_click(move |_, _, cx| {
+                                            ephemera_view
+                                                .update(cx, |v, cx| v.set_ephemera(true, cx));
+                                        })
+                                        .into_any_element()
+                                }
+                            }),
                             (
                                 "Folder",
                                 None,
@@ -3645,6 +3711,14 @@ impl Render for InstanceEditor {
                 self.dup_opts.copy_screenshots,
                 |o, c| o.copy_screenshots = c,
             ))
+            .when(!self.message.is_empty(), |d| {
+                d.child(
+                    div()
+                        .text_size(px(ui::TEXT_CAPTION))
+                        .text_color(palette.danger)
+                        .child(self.message.clone()),
+                )
+            })
             .child(
                 div()
                     .flex()
@@ -3770,6 +3844,14 @@ impl Render for InstanceEditor {
                     .text_color(palette.muted_foreground)
                     .child(export_summary),
             )
+            .when(!self.message.is_empty(), |d| {
+                d.child(
+                    div()
+                        .text_size(px(ui::TEXT_CAPTION))
+                        .text_color(palette.danger)
+                        .child(self.message.clone()),
+                )
+            })
             .child(
                 div()
                     .flex()

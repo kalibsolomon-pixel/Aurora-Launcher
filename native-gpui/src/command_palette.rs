@@ -119,6 +119,9 @@ impl CommandPalette {
     }
 
     fn confirm(&mut self, cx: &mut Context<Self>) {
+        if !self.open {
+            return;
+        }
         let Some(&idx) = self.filtered.get(self.highlight) else {
             return;
         };
@@ -138,11 +141,12 @@ impl Render for CommandPalette {
         }
         let t = theme::theme(cx).clone();
         let mut list = div()
+            .id("palette-list")
             .flex()
             .flex_col()
             .gap(px(4.))
             .max_h(px(360.))
-            .overflow_hidden();
+            .overflow_y_scroll();
         if self.filtered.is_empty() {
             list = list.child(
                 div()
@@ -186,6 +190,8 @@ impl Render for CommandPalette {
                         .gap(px(12.))
                         .child(
                             div()
+                                .flex_1()
+                                .min_w(px(0.))
                                 .flex()
                                 .flex_col()
                                 .child(
@@ -193,12 +199,14 @@ impl Render for CommandPalette {
                                         .text_size(px(ui::TEXT_BODY))
                                         .font_weight(gpui::FontWeight::MEDIUM)
                                         .text_color(t.foreground)
+                                        .text_ellipsis()
                                         .child(item.title.clone()),
                                 )
-                                .child(ui::caption(&t, item.subtitle.clone())),
+                                .child(ui::caption(&t, item.subtitle.clone()).text_ellipsis()),
                         )
                         .child(
                             div()
+                                .flex_none()
                                 .px(px(8.))
                                 .py(px(2.))
                                 .rounded_full()
@@ -237,7 +245,7 @@ impl Render for CommandPalette {
                             } else {
                                 this.highlight - 1
                             };
-                            cx.stop_propagation();
+                            cx.notify();
                         }
                         cx.stop_propagation();
                     }

@@ -260,6 +260,7 @@ struct UpdatesState {
     in_flight: Option<Op>,
     message: String,
     error: Option<String>,
+    preserve_notice: bool,
     // managed content availability
     entries: Vec<api::UpdateEntry>,
     dependency_managed: usize,
@@ -636,13 +637,18 @@ impl UpdatesState {
                         self.entries = report.entries;
                         self.dependency_managed = report.dependency_managed;
                         self.checked = true;
-                        self.error = None;
-                        self.message.clear();
+                        if std::mem::take(&mut self.preserve_notice) {
+                            // Keep the post-mutation confirmation or error visible.
+                        } else {
+                            self.error = None;
+                            self.message.clear();
+                        }
                     }
                     Err(e) => {
                         self.entries.clear();
                         self.dependency_managed = 0;
                         self.checked = false;
+                        self.preserve_notice = false;
                         self.message.clear();
                         self.error = Some(format!("Update check failed: {}", error_text(&e)));
                     }
@@ -653,20 +659,27 @@ impl UpdatesState {
                     OpKind::Pin { pinned, project } => (*pinned, project.clone()),
                     _ => (false, String::new()),
                 };
+                let label = self
+                    .entries
+                    .iter()
+                    .find(|e| e.project_id == project)
+                    .map(entry_title)
+                    .unwrap_or_else(|| project.clone());
                 fx.changed = true;
                 match result {
                     Ok(_) => {
                         self.error = None;
                         self.message = if pinned {
                             format!(
-                                "Pinned {project}. It stays on its current version until unpinned."
+                                "Pinned {label}. It stays on its current version until unpinned."
                             )
                         } else {
-                            format!("Unpinned {project}. It can now be updated.")
+                            format!("Unpinned {label}. It can now be updated.")
                         };
                         if still_current {
                             self.checked = false;
                             self.entries.clear();
+                            self.preserve_notice = true;
                             fx.recheck = Some(Recheck::Content);
                         }
                     }
@@ -745,6 +758,7 @@ impl UpdatesState {
                 if still_current {
                     self.checked = false;
                     self.entries.clear();
+                    self.preserve_notice = true;
                     fx.recheck = Some(Recheck::Content);
                 }
             }
@@ -754,12 +768,15 @@ impl UpdatesState {
                 }
                 match result {
                     Ok(value) => {
-                        self.error = None;
-                        self.message.clear();
+                        if !std::mem::take(&mut self.preserve_notice) {
+                            self.error = None;
+                            self.message.clear();
+                        }
                         self.pack_status = Some(pack_check_summary(&value));
                     }
                     Err(e) => {
                         self.pack_status = None;
+                        self.preserve_notice = false;
                         self.message.clear();
                         self.error = Some(error_text(&e));
                     }
@@ -833,6 +850,7 @@ impl UpdatesState {
                 }
                 if still_current {
                     self.pack_status = None;
+                    self.preserve_notice = true;
                     fx.recheck = Some(Recheck::Pack);
                 }
             }
@@ -938,6 +956,30 @@ fn summarize(entries: &[api::UpdateEntry], dependencies: usize) -> String {
 
 fn error_text(e: &api::ApiError) -> String {
     format!("{} ({})", e.message, e.code)
+}
+
+fn entry_title(entry: &api::UpdateEntry) -> String {
+    if let Some(name) = entry.file_name.as_deref().filter(|s| !s.is_empty()) {
+        name.strip_suffix(".jar")
+            .or_else(|| name.strip_suffix(".zip"))
+            .unwrap_or(name)
+            .to_owned()
+    } else {
+        entry.project_id.clone()
+    }
+}
+
+fn kind_noun_count(kind: &str, count: usize) -> &'static str {
+    if count == 1 {
+        match kind {
+            "mod" => "mod",
+            "resourcepack" => "resource pack",
+            "shaderpack" => "shader pack",
+            _ => "item",
+        }
+    } else {
+        kind_noun(kind)
+    }
 }
 
 fn item_name(item: &Value) -> String {
@@ -1755,7 +1797,7 @@ impl Render for ContentUpdates {
                         .child(
                             ui::title_block(
                                 t,
-                                entry.project_id.clone(),
+                                entry_title(entry),
                                 Some(entry.current_version.clone().into()),
                             )
                             .flex_1(),
@@ -1931,6 +1973,11 @@ impl ContentUpdates {
         };
         let well = |text: &str| {
             div()
+                .id("cu-review-well")
+                .flex_1()
+                .min_h(px(0.))
+                .max_h(px(360.))
+                .overflow_y_scroll()
                 .p(px(12.))
                 .rounded(palette.radius)
                 .bg(palette.sunken)
@@ -1942,7 +1989,6 @@ impl ContentUpdates {
             .id("cu-review")
             .w(px(640.))
             .max_h(px(560.))
-            .overflow_y_scroll()
             .p(px(20.))
             .flex()
             .flex_col()
@@ -1962,8 +2008,8 @@ impl ContentUpdates {
         };
 
         if let Some(review) = self.state.review.clone() {
-            let noun = kind_noun(review.target.kind);
             let count = review.roots.len();
+            let noun = kind_noun_count(review.target.kind, count);
             let v = view.clone();
             let close = view.clone();
             panel = panel
@@ -2079,6 +2125,7 @@ mod tests {
         api::UpdateEntry {
             content_type: "mod".into(),
             project_id: project.into(),
+            file_name: None,
             current_version: "v1".into(),
             status: status.into(),
             block: None,

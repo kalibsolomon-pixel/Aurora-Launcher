@@ -743,7 +743,10 @@ impl Content {
         })
     }
     pub fn is_busy(&self, cx: &gpui::App) -> bool {
-        self.busy || self.local_import.picking || self.updates.read(cx).is_busy()
+        self.busy
+            || self.bisect_busy
+            || self.local_import.picking
+            || self.updates.read(cx).is_busy()
     }
     fn sync_updates(&self, cx: &mut Context<Self>) {
         let instance = self
@@ -967,6 +970,8 @@ impl Content {
                             let changed = self.bisect != view;
                             self.bisect = view;
                             if changed {
+                                self.revision = self.revision.wrapping_add(1);
+                                self.sync_updates(cx);
                                 self.load();
                                 cx.emit(ContentEvent::Changed);
                             }
@@ -2448,6 +2453,7 @@ impl Render for Content {
                                 .disabled(busy || previewing)
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.local_import.open = false;
+                                    this.invalidate_review();
                                     cx.notify();
                                 })),
                         ),

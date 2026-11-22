@@ -1813,6 +1813,8 @@ pub struct UpdateCandidate {
 pub struct UpdateEntry {
     pub content_type: String,
     pub project_id: String,
+    #[serde(default)]
+    pub file_name: Option<String>,
     pub current_version: String,
     pub status: String,
     #[serde(default)]
@@ -2432,14 +2434,12 @@ pub async fn pulsar_delete(host: Host, request: DeleteRequest) -> ApiResult<Acti
 
 pub use aurora_launcher_lib::config::OnLaunchBehavior;
 pub use aurora_launcher_lib::instances::duplicate::DuplicateOptions;
-pub use aurora_launcher_lib::instances::organization::{InstanceMeta, InstanceOrganization};
+pub use aurora_launcher_lib::instances::organization::InstanceOrganization;
 pub use aurora_launcher_lib::mod_bisect::{BisectStatus, BisectView};
 pub use aurora_launcher_lib::pack_export::{ExportOptions, ExportPreview, ExportReceipt};
 pub use aurora_launcher_lib::pulsar::annotations::FightAnnotation;
 pub use aurora_launcher_lib::saved_worlds::DatapackEntry;
-pub use aurora_launcher_lib::storage::{
-    InstanceStorageEntry, PruneOptions, PruneReport, RuntimeStorageEntry, StorageOverview,
-};
+pub use aurora_launcher_lib::storage::{PruneOptions, PruneReport, StorageOverview};
 pub use aurora_launcher_lib::world_backups::WorldBackupSummary;
 
 #[derive(Debug, Clone, Deserialize, Serialize)]

@@ -945,7 +945,6 @@ impl Render for ClientUpdates {
             );
             card = card.child(
                 div()
-                    .pl(px(40.))
                     .text_size(px(ui::TEXT_CAPTION))
                     .text_color(palette.foreground)
                     .child(message),
@@ -954,7 +953,6 @@ impl Render for ClientUpdates {
         if let Some(error) = &self.state.error {
             card = card.child(
                 div()
-                    .pl(px(40.))
                     .text_size(px(ui::TEXT_CAPTION))
                     .text_color(palette.danger)
                     .child(error.clone()),

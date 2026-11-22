@@ -746,7 +746,11 @@ impl Launcher {
                 || self
                     .content
                     .as_ref()
-                    .is_some_and(|v| v.read(cx).is_busy(cx));
+                    .is_some_and(|v| v.read(cx).is_busy(cx))
+                || self
+                    .instance_editor
+                    .as_ref()
+                    .is_some_and(|v| v.read(cx).is_busy());
             let pending = self.updates_pending();
             settings.update(cx, |settings, cx| {
                 settings.set_install_blocked(blocked, cx);
@@ -1155,6 +1159,15 @@ impl Launcher {
                     self.inspect_recovery(id);
                 }
             }
+            BlockerAction::ReviewMods => {
+                self.open_instance(id, InstanceTab::Content, 0, window, cx);
+            }
+            BlockerAction::JavaSettings => {
+                self.open_instance(id, InstanceTab::Settings, 0, window, cx);
+            }
+            BlockerAction::OpenInstance => {
+                self.open_instance(id, InstanceTab::Overview, 0, window, cx);
+            }
             other => {
                 if let Some(page) = other.page() {
                     self.open_page(page, window, cx);
@@ -1418,7 +1431,7 @@ impl Launcher {
                 s.instances
                     .iter()
                     .find(|i| i.id == instance)
-                    .is_some_and(|i| i.minecraft_version.as_str() >= "1.20")
+                    .is_some_and(|i| home_widgets::quick_play_supported(&i.minecraft_version))
             });
             if let Some(worlds) = &self.worlds {
                 worlds.update(cx, |worlds, cx| {
@@ -1479,6 +1492,7 @@ impl Launcher {
                         project_id,
                         title,
                     } => {
+                        this.open_page(5, window, cx);
                         if let Some(discover) = &this.discover {
                             discover.update(cx, |discover, cx| {
                                 discover.open_content_project(
@@ -2052,6 +2066,11 @@ impl Launcher {
                         cx.notify();
                         return;
                     }
+                    if let SettingsEvent::LaunchBehavior(behavior) = event {
+                        this.on_launch_behavior = *behavior;
+                        cx.notify();
+                        return;
+                    }
                     // The acknowledged state plus any live accent preview, so
                     // the root's `theme::apply` never overwrites a preview.
                     this.appearance = settings.read(cx).display_appearance();
@@ -2062,7 +2081,7 @@ impl Launcher {
                                 layer.set_background(background, cx)
                             }
                             SettingsEvent::Motion(speed) => layer.set_motion(*speed, cx),
-                            SettingsEvent::Installing(_) => {}
+                            SettingsEvent::Installing(_) | SettingsEvent::LaunchBehavior(_) => {}
                         });
                     }
                     // Invalidate older root snapshots before they can restore an old theme.
@@ -2873,6 +2892,9 @@ impl Launcher {
             if let Some(content) = &self.content {
                 content.update(cx, |content, cx| content.refresh(cx));
             }
+            if let Some(worlds) = &self.worlds {
+                worlds.update(cx, |worlds, cx| worlds.refresh(cx));
+            }
         }
         if self.page == 9 {
             if let Some(pulsar) = &self.pulsar {
@@ -3142,6 +3164,32 @@ impl Render for Launcher {
                     })),
             );
         }
+        // Global Launcher update chip: surfaces only when a signed launcher update is offered.
+        if let Some(ver) = self
+            .update_status
+            .as_ref()
+            .filter(|v| v["launcher"]["availability"]["status"].as_str() == Some("updateAvailable"))
+            .and_then(|v| v["launcher"]["availability"]["version"].as_str())
+            .filter(|v| !v.is_empty())
+            .map(str::to_owned)
+        {
+            title_left = title_left.child(
+                AuroraButton::new(
+                    "title-launcher-update",
+                    format!("Launcher {ver} update available"),
+                )
+                .variant(ButtonVariant::Soft)
+                .size(ButtonSize::Small)
+                .icon("system_update")
+                .on_click(cx.listener(|this, _, window, cx| {
+                    this.open_page(2, window, cx);
+                    if let Some(settings) = &this.settings {
+                        settings.update(cx, |s, cx| s.select_section(3, cx));
+                    }
+                    cx.notify();
+                })),
+            );
+        }
         // Global Aurora Client update chip: surfaces only when a real Client update is ready to review.
         if let Some(ver) = self.launcher.as_ref().and_then(|s| {
             s.instances
@@ -3158,6 +3206,9 @@ impl Render for Launcher {
                 .icon("system_update")
                 .on_click(cx.listener(|this, _, window, cx| {
                     this.open_page(2, window, cx);
+                    if let Some(settings) = &this.settings {
+                        settings.update(cx, |s, cx| s.select_section(3, cx));
+                    }
                     cx.notify();
                 })),
             );
@@ -3586,7 +3637,13 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             match event {
                                 PackImportEvent::BusyChanged(busy) => this.pack_import_busy = *busy,
                                 PackImportEvent::InstallFolder(job) => {
-                                    this.open_page(8, window, cx);
+                                    if this.downloads.is_none() {
+                                        let prev = this.page;
+                                        this.open_page(5, window, cx);
+                                        if prev != 5 {
+                                            this.open_page(prev, window, cx);
+                                        }
+                                    }
                                     let queued = this.downloads.as_ref().is_some_and(|downloads| {
                                         downloads.update(cx, |downloads, cx| downloads.submit(job.clone(), cx))
                                     });
