@@ -913,7 +913,7 @@ impl Launcher {
                     .focus_visible(move |s| s.border_color(play_ring))
                     .child(symbols::icon(Some("play_arrow"), px(18.), t.foreground))
                     .on_click(cx.listener(move |this, _, _, cx| {
-                        this.action("select", play_or_select_id.clone(), cx);
+                        this.select_and_play(play_or_select_id.clone(), cx);
                         cx.notify();
                     }))
             };

@@ -415,7 +415,7 @@ enum LoadPlan {
     },
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum InstanceTab {
     Overview,
     Content,
@@ -424,7 +424,28 @@ enum InstanceTab {
     Settings,
 }
 
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct NavLocation {
+    page: u8,
+    instance_detail: Option<(String, InstanceTab)>,
+    content_kind: i32,
+}
+
+impl NavLocation {
+    fn home() -> Self {
+        Self {
+            page: 0,
+            instance_detail: None,
+            content_kind: 0,
+        }
+    }
+}
+
 struct Launcher {
+    root_focus: Option<gpui::FocusHandle>,
+    nav_history: Vec<NavLocation>,
+    nav_index: usize,
+    nav_restoring: bool,
     /// The window background behind the chrome and pages; absent only in
     /// fixtures that have no window.
     borealis: Option<gpui::Entity<Borealis>>,
@@ -1451,8 +1472,78 @@ impl Launcher {
                 });
             }
         }
-        self.instance_detail = Some((instance, tab));
+        self.instance_detail = Some((instance.clone(), tab));
         self.reset_instance_scroll = true;
+        self.record_nav(NavLocation {
+            page: 3,
+            instance_detail: Some((instance, tab)),
+            content_kind: kind,
+        });
+    }
+
+    fn record_nav(&mut self, loc: NavLocation) {
+        if self.nav_restoring {
+            return;
+        }
+        if self.nav_history.get(self.nav_index) == Some(&loc) {
+            return;
+        }
+        if !self.nav_history.is_empty() {
+            self.nav_history.truncate(self.nav_index + 1);
+        }
+        self.nav_history.push(loc);
+        const MAX_NAV_HISTORY: usize = 64;
+        if self.nav_history.len() > MAX_NAV_HISTORY {
+            let excess = self.nav_history.len() - MAX_NAV_HISTORY;
+            self.nav_history.drain(0..excess);
+        }
+        self.nav_index = self.nav_history.len().saturating_sub(1);
+    }
+
+    fn can_go_back(&self) -> bool {
+        self.nav_index > 0
+    }
+
+    fn can_go_forward(&self) -> bool {
+        self.nav_index + 1 < self.nav_history.len()
+    }
+
+    fn go_back(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.can_go_back() || self.client_update_running(cx) {
+            return;
+        }
+        self.nav_index -= 1;
+        let loc = self.nav_history[self.nav_index].clone();
+        self.restore_nav(loc, window, cx);
+    }
+
+    fn go_forward(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+        if !self.can_go_forward() || self.client_update_running(cx) {
+            return;
+        }
+        self.nav_index += 1;
+        let loc = self.nav_history[self.nav_index].clone();
+        self.restore_nav(loc, window, cx);
+    }
+
+    fn restore_nav(&mut self, loc: NavLocation, window: &mut Window, cx: &mut Context<Self>) {
+        self.nav_restoring = true;
+        if let Some((instance, tab)) = loc.instance_detail {
+            self.open_instance(instance, tab, loc.content_kind, window, cx);
+        } else {
+            self.open_page(loc.page, window, cx);
+        }
+        self.nav_restoring = false;
+        cx.notify();
+    }
+
+    fn select_and_play(&mut self, id: String, cx: &mut Context<Self>) {
+        if self.selected_id() == Some(id.as_str()) && self.can_play(&id) {
+            self.action("play", id, cx);
+        } else {
+            self.cli_launch_instance = Some(id.clone());
+            self.action("select", id, cx);
+        }
     }
 
     fn return_to_content(
@@ -1755,11 +1846,7 @@ impl Launcher {
                 self.open_instance(id, InstanceTab::Overview, 0, window, cx);
             }
             PaletteAction::PlayInstance(id) => {
-                if self.selected_id() == Some(id.as_str()) && self.can_play(&id) {
-                    self.action("play", id, cx);
-                } else {
-                    self.action("select", id, cx);
-                }
+                self.select_and_play(id, cx);
             }
             PaletteAction::OpenSettingsSection(sec) => {
                 self.open_page(2, window, cx);
@@ -2104,6 +2191,15 @@ impl Launcher {
             self.settings = Some(settings);
         }
         self.page = page;
+        self.record_nav(NavLocation {
+            page,
+            instance_detail: if page == 3 {
+                self.instance_detail.clone()
+            } else {
+                None
+            },
+            content_kind: 0,
+        });
         self.sync_mutation_guards(cx);
     }
     fn refresh_rail_and_activity(&self) {
@@ -3133,37 +3229,60 @@ impl Render for Launcher {
                     }
                 }));
         }
-        // Clean contextual title-bar strip (single back link, live update or running-game status only).
-        let mut title_left = div().flex().items_center().gap(px(6.));
-        if self.page == 3 && self.instance_detail.is_some() {
-            let editor_busy = self
-                .instance_editor
-                .as_ref()
-                .is_some_and(|editor| editor.read(cx).is_busy());
-            title_left = title_left.child(
-                AuroraButton::new("title-breadcrumb-instances", "Instances")
-                    .variant(ButtonVariant::Ghost)
-                    .size(ButtonSize::Small)
-                    .icon("arrow_back")
-                    .disabled(editor_busy)
+        // Clean browser-style back/forward navigation + contextual status chips.
+        let mut title_left = div().flex().items_center().gap(px(4.));
+        let nav_busy = self.client_update_running(cx);
+        let back_enabled = self.can_go_back() && !nav_busy;
+        let forward_enabled = self.can_go_forward() && !nav_busy;
+        let nav_hover = palette.control_hover;
+        title_left = title_left
+            .child(
+                gpui_kit::base::Button::new("title-nav-back")
+                    .accessibility_label("Back (Alt+Left or Mouse Back)")
+                    .disabled(!back_enabled)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .size(px(28.))
+                    .rounded(palette.radius)
+                    .hover(move |s| s.bg(nav_hover))
+                    .child(symbols::icon(
+                        Some("arrow_back"),
+                        px(16.),
+                        if back_enabled {
+                            palette.foreground
+                        } else {
+                            palette.subtle_foreground
+                        },
+                    ))
                     .on_click(cx.listener(|this, _, window, cx| {
-                        this.open_page(3, window, cx);
-                        cx.notify();
+                        this.go_back(window, cx);
+                    })),
+            )
+            .child(
+                gpui_kit::base::Button::new("title-nav-forward")
+                    .accessibility_label("Forward (Alt+Right or Mouse Forward)")
+                    .disabled(!forward_enabled)
+                    .flex()
+                    .items_center()
+                    .justify_center()
+                    .size(px(28.))
+                    .mr(px(4.))
+                    .rounded(palette.radius)
+                    .hover(move |s| s.bg(nav_hover))
+                    .child(symbols::icon(
+                        Some("arrow_forward"),
+                        px(16.),
+                        if forward_enabled {
+                            palette.foreground
+                        } else {
+                            palette.subtle_foreground
+                        },
+                    ))
+                    .on_click(cx.listener(|this, _, window, cx| {
+                        this.go_forward(window, cx);
                     })),
             );
-        }
-        if self.page == 6 {
-            title_left = title_left.child(
-                AuroraButton::new("title-breadcrumb-sync-instances", "Instances")
-                    .variant(ButtonVariant::Ghost)
-                    .size(ButtonSize::Small)
-                    .icon("arrow_back")
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        this.open_page(3, window, cx);
-                        cx.notify();
-                    })),
-            );
-        }
         // Global Launcher update chip: surfaces only when a signed launcher update is offered.
         if let Some(ver) = self
             .update_status
@@ -3315,8 +3434,38 @@ impl Render for Launcher {
             .bg(palette.background)
             .text_color(palette.foreground)
             .font_family("Segoe UI")
+            .when_some(self.root_focus.clone(), |d, focus| d.track_focus(&focus))
+            .on_mouse_down(
+                gpui::MouseButton::Navigate(gpui::NavigationDirection::Back),
+                cx.listener(|this, _, window, cx| {
+                    this.go_back(window, cx);
+                    cx.stop_propagation();
+                }),
+            )
+            .on_mouse_down(
+                gpui::MouseButton::Navigate(gpui::NavigationDirection::Forward),
+                cx.listener(|this, _, window, cx| {
+                    this.go_forward(window, cx);
+                    cx.stop_propagation();
+                }),
+            )
             .on_key_down(cx.listener(|this, event: &gpui::KeyDownEvent, window, cx| {
                 let m = event.keystroke.modifiers;
+                if m.alt && !m.control && !m.platform && !m.shift {
+                    match event.keystroke.key.as_str() {
+                        "left" => {
+                            this.go_back(window, cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+                        "right" => {
+                            this.go_forward(window, cx);
+                            cx.stop_propagation();
+                            return;
+                        }
+                        _ => {}
+                    }
+                }
                 if !(m.control || m.platform) || m.alt {
                     return;
                 }
@@ -3670,7 +3819,15 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                             cx.notify();
                         },
                     ));
+                    let root_focus = cx.focus_handle();
+                    if !diagnostic {
+                        window.focus(&root_focus, cx);
+                    }
                     let mut view = Launcher {
+                        root_focus: Some(root_focus),
+                        nav_history: vec![NavLocation::home()],
+                        nav_index: 0,
+                        nav_restoring: false,
                         borealis: Some(borealis),
                         home_widgets: Some(home_widgets),
                         client_updates: Some(client_updates),
@@ -3830,6 +3987,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                         if *serial == view.serial && !view.load_pending);
                                     let startup_updates = matches!(&message, Message::StartupUpdates(_));
                                     let loaded = matches!(&message, Message::Loaded(..));
+                                    let readiness_settled = matches!(&message, Message::Readiness(..));
                                     if let Message::MaybeOpenLog(id, true) = &message { view.open_game_log(id.clone(), cx); }
                                     if let Message::Event(name, payload) = &message {
                                         if name == "launch-state" && payload.get("status").and_then(|v| v.as_str()) == Some("starting") {
@@ -3868,6 +4026,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                                             if view.selected_id() != Some(target_id.as_str()) {
                                                 view.action("select", target_id, cx);
                                             } else if view.can_play(&target_id) {
+                                                view.cli_launch_instance = None;
+                                                view.action("play", target_id, cx);
+                                            }
+                                        }
+                                    }
+                                    if readiness_settled {
+                                        if let Some(target_id) = view.cli_launch_instance.clone() {
+                                            if view.selected_id() == Some(target_id.as_str())
+                                                && view.can_play(&target_id)
+                                            {
                                                 view.cli_launch_instance = None;
                                                 view.action("play", target_id, cx);
                                             }
@@ -3940,9 +4108,52 @@ mod tests {
         assert!(!is_single_modpack(&[pack("a.mrpack"), pack("b.mrpack")]));
     }
 
+    #[test]
+    fn nav_history_tracks_back_forward_dedup_and_truncates_tail() {
+        let mut v = view();
+        assert!(!v.can_go_back());
+        assert!(!v.can_go_forward());
+
+        let instances = NavLocation {
+            page: 3,
+            instance_detail: None,
+            content_kind: 0,
+        };
+        let detail = NavLocation {
+            page: 3,
+            instance_detail: Some(("inst-1".into(), InstanceTab::Content)),
+            content_kind: 0,
+        };
+        v.record_nav(instances.clone());
+        v.record_nav(instances.clone()); // duplicate ignored
+        v.record_nav(detail.clone());
+        assert_eq!(v.nav_history.len(), 3);
+        assert!(v.can_go_back());
+        assert!(!v.can_go_forward());
+
+        v.nav_index = 1; // stepped back to instances
+        assert!(v.can_go_back());
+        assert!(v.can_go_forward());
+
+        // Navigating to a new page truncates forward history.
+        let settings = NavLocation {
+            page: 2,
+            instance_detail: None,
+            content_kind: 0,
+        };
+        v.record_nav(settings.clone());
+        assert_eq!(v.nav_history.len(), 3);
+        assert_eq!(v.nav_history[2], settings);
+        assert!(!v.can_go_forward());
+    }
+
     fn view() -> Launcher {
         let (tx, _) = async_channel::unbounded();
         Launcher {
+            root_focus: None,
+            nav_history: vec![NavLocation::home()],
+            nav_index: 0,
+            nav_restoring: false,
             borealis: None,
             home_widgets: None,
             client_updates: None,

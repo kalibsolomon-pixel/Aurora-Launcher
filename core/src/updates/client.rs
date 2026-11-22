@@ -212,14 +212,22 @@ pub fn select_candidate(
     })?;
 
     let mut newest: Option<(semver::Version, AuroraRelease)> = None;
+    let installed_loader = parse_release_version(installed_state.fabric_loader_version());
     for release in remote.releases() {
-        // Exact environment identity: a release for another Minecraft or
-        // Loader version is incompatible with this instance, whatever its
-        // version number says.
+        // Exact Minecraft & Java identity; Fabric Loader may match or upgrade
+        // automatically to a strictly newer version.
         if release.minecraft_version() != installed_state.minecraft_version()
-            || release.fabric_loader_version() != installed_state.fabric_loader_version()
             || release.java().major_version() != required_java_major
         {
+            continue;
+        }
+        let loader_compatible = release.fabric_loader_version()
+            == installed_state.fabric_loader_version()
+            || installed_loader
+                .as_ref()
+                .zip(parse_release_version(release.fabric_loader_version()).as_ref())
+                .is_some_and(|(cur, cand)| cand.cmp_precedence(cur).is_gt());
+        if !loader_compatible {
             continue;
         }
         let Some(version) = parse_release_version(release.aurora_version()) else {
@@ -414,19 +422,22 @@ pub fn preview_update(
             blockers.push("Quit Minecraft before updating the Aurora Client.".into());
         }
 
-        // Destination collisions the launcher refuses to guess at.
+        if release.fabric_loader_version() != state.fabric_loader_version() {
+            warnings.push(format!(
+                "Fabric Loader will automatically update from {} to {}.",
+                state.fabric_loader_version(),
+                release.fabric_loader_version()
+            ));
+        }
+
+        // Destination collisions and autonomous Aurora mod replacement.
         let aurora_target = aurora::managed_artifact_relative_path(release)
             .map_err(|error| invalid(error.to_string()))?;
         let retained =
             transition::retained_files(managed, id).map_err(|error| invalid(error.to_string()))?;
-        if retained
+        let mut will_replace_existing_aurora = retained
             .iter()
-            .any(|file| file.relative_path.eq_ignore_ascii_case(&aurora_target))
-        {
-            blockers.push(format!(
-                "Retained former Aurora content occupies {aurora_target}; resolve it in Mods first."
-            ));
-        }
+            .any(|file| file.relative_path.eq_ignore_ascii_case(&aurora_target));
         let provider =
             ContentState::load(managed, id).map_err(|error| invalid(error.to_string()))?;
         let inventory =
@@ -440,16 +451,16 @@ pub fn preview_update(
                 "Provider-managed content already occupies {aurora_name}; it will not be overwritten."
             ));
         }
-        // A foreign second Aurora identity (a user-installed copy) blocks;
-        // the launcher-managed old artifact being updated does not.
+        // Any other existing Aurora mod file (enabled or disabled) will be
+        // automatically retired and replaced with the new verified release.
         let managed_name = state
             .artifact()
             .relative_path()
             .strip_prefix("mods/")
             .expect("managed mod path");
+        let mods_dir = managed.instance_paths(id).mods().to_path_buf();
         if inventory.entries.iter().any(|entry| {
-            entry.enabled
-                && !entry.file_name.eq_ignore_ascii_case(aurora_name)
+            !entry.file_name.eq_ignore_ascii_case(aurora_name)
                 && !entry.file_name.eq_ignore_ascii_case(managed_name)
                 && entry.metadata.as_ref().is_some_and(|metadata| {
                     metadata.id == "aurora"
@@ -458,10 +469,13 @@ pub fn preview_update(
                             .iter()
                             .any(|nested| nested == "aurora")
                 })
-        }) {
-            blockers.push(
-                "Another active Aurora identity is installed; it must be removed first.".into(),
-            );
+        }) || std::fs::symlink_metadata(mods_dir.join(format!("{aurora_name}.disabled"))).is_ok()
+        {
+            will_replace_existing_aurora = true;
+        }
+        if will_replace_existing_aurora {
+            warnings
+                .push("Existing Aurora Client mod file(s) will be automatically replaced.".into());
         }
 
         // An active provider-owned Fabric API may be carried across only
@@ -482,9 +496,9 @@ pub fn preview_update(
             }
         }
 
-        // The release's own bootstrap preflight: disabled variants, foreign
-        // bytes at a planned destination, provider-collision rules.
-        if let Err(error) = aurora::preflight_bootstrap(managed, id, release) {
+        // Check Fabric API bootstrap preflight; Aurora mod files are replaced
+        // automatically during transactional activation.
+        if let Err(error) = aurora::preflight_bootstrap_for_update(managed, id, release) {
             blockers.push(error.to_string());
         }
         cached_inventory = Some(inventory);
@@ -611,29 +625,48 @@ pub async fn apply_update(
 
     // The Java assertion uses the resolved game plan, the same authority as
     // transitions; a release whose Java requirement disagrees with the
-    // instance's resolved game never installs.
+    // instance's resolved game never installs. If the release requires a newer
+    // Fabric Loader, resolve that upgraded game plan here as well.
+    let mut upgraded_fabric_plan = None;
     {
         let registry = InstanceRegistry::load(&managed.instance_registry_file())
             .map_err(|error| ClientUpdateError::Inapplicable(error.to_string()))?;
-        let record = registry
+        let mut record = registry
             .find(id)
             .ok_or_else(|| ClientUpdateError::Inapplicable("instance not found".into()))?
             .clone();
-        let current_release = lifecycle::resolve_optional_aurora(managed, endpoints, &record)
-            .map_err(|error| ClientUpdateError::Inapplicable(error.to_string()))?;
-        let plan = lifecycle::resolve_record_game_plan(
-            managed,
-            endpoints,
-            &record,
-            current_release.as_ref(),
-        )
-        .await
-        .map_err(|error| ClientUpdateError::Incompatible(error.to_string()))?;
+        let needs_fabric_upgrade =
+            record.installed().platform.version() != Some(release.fabric_loader_version());
+        let plan = if needs_fabric_upgrade {
+            let mut installed = record.installed().clone();
+            installed.platform = crate::instances::platform::PlatformPin::Fabric {
+                version: release.fabric_loader_version().to_owned(),
+            };
+            record.set_installed(installed);
+            lifecycle::resolve_record_game_plan(managed, endpoints, &record, Some(&release))
+                .await
+                .map_err(|error| ClientUpdateError::Incompatible(error.to_string()))?
+        } else {
+            let current_release =
+                lifecycle::resolve_optional_aurora(managed, endpoints, &record)
+                    .map_err(|error| ClientUpdateError::Inapplicable(error.to_string()))?;
+            lifecycle::resolve_record_game_plan(
+                managed,
+                endpoints,
+                &record,
+                current_release.as_ref(),
+            )
+            .await
+            .map_err(|error| ClientUpdateError::Incompatible(error.to_string()))?
+        };
         if plan.java().major_version() != release.java().major_version() {
             return Err(ClientUpdateError::Incompatible(
                 "Aurora Java compatibility assertion disagrees with the resolved game requirement"
                     .into(),
             ));
+        }
+        if needs_fabric_upgrade {
+            upgraded_fabric_plan = Some(plan);
         }
     }
 
@@ -687,6 +720,34 @@ pub async fn apply_update(
         ));
     }
 
+    // Automatically upgrade Fabric Loader before committing the new Aurora Client.
+    let fabric_upgraded = if let Some(plan) = &upgraded_fabric_plan {
+        if crate::launch::process::snapshot(id.as_str())
+            .status
+            .blocks_launch()
+        {
+            return Err(ClientUpdateError::InstanceRunning);
+        }
+        crate::install::install_game(
+            managed,
+            id,
+            plan,
+            endpoints.install_context(),
+            &mut |_| {},
+            crate::install::InstallFaults::default(),
+        )
+        .await
+        .map_err(|error| {
+            ClientUpdateError::Transaction(
+                "update_fabric_failed",
+                format!("Fabric Loader automatic upgrade failed: {error}"),
+            )
+        })?;
+        true
+    } else {
+        false
+    };
+
     let mut outcome = None;
     let locked = crate::instance_content::with_instance_lock(id, || {
         let _registry_guard = lifecycle::registry_lock();
@@ -699,6 +760,7 @@ pub async fn apply_update(
             &acquired,
             provider_api,
             fingerprint,
+            fabric_upgraded,
             progress,
             faults,
         ));
@@ -719,6 +781,7 @@ fn commit_update(
     acquired: &[(String, ArtifactDigest, u64, PathBuf)],
     provider_api: bool,
     fingerprint: &str,
+    fabric_upgraded: bool,
     progress: &mut (dyn FnMut(crate::updates::ClientPhase) + Send),
     faults: UpdateFaults,
 ) -> Result<InstanceRecord, ClientUpdateError> {
@@ -726,9 +789,10 @@ fn commit_update(
         |reason: String| ClientUpdateError::Transaction("update_transaction_failed", reason);
 
     // The world must still match the approval exactly, re-derived under the
-    // instance and registry locks.
+    // instance and registry locks (when Fabric Loader was just upgraded, the
+    // game manifest intentionally changed, so re-check candidate & blockers).
     let current = preview_update(managed, endpoints, id, remote)?;
-    if current.fingerprint != fingerprint {
+    if !fabric_upgraded && current.fingerprint != fingerprint {
         return Err(ClientUpdateError::Stale(
             "State changed during acquisition. Request a new preview.".into(),
         ));
@@ -785,11 +849,18 @@ fn commit_update(
             return Err(invalid("injected staging failure".into()));
         }
 
-        // Retire the previous valid artifacts by rename: fully recoverable
-        // until the new release commits.
+        // Retire the previous valid artifacts AND any other existing Aurora
+        // mod files (enabled, disabled, or differing at the target path) by
+        // rename: fully recoverable until the new release commits.
         let previous = aurora::load_installed_state(managed, id)
             .map_err(|error| invalid(error.to_string()))?
             .ok_or_else(|| invalid("no Aurora installation is present".into()))?;
+        let mut to_retire: Vec<PathBuf> = Vec::new();
+        let mut queue_retire = |path: PathBuf| {
+            if !to_retire.iter().any(|existing| existing == &path) {
+                to_retire.push(path);
+            }
+        };
         for artifact in std::iter::once(previous.artifact()).chain(
             previous
                 .fabric_api()
@@ -797,12 +868,59 @@ fn commit_update(
                 .map(|api| api.artifact()),
         ) {
             let target = root.join(artifact.relative_path().split('/').collect::<PathBuf>());
-            if staged
+            if !staged
                 .iter()
                 .any(|(destination, _, _, _)| destination == &target)
             {
-                continue;
+                queue_retire(target.clone());
             }
+            if artifact.relative_path().starts_with("mods/aurora-") {
+                let mut disabled = target.into_os_string();
+                disabled.push(".disabled");
+                queue_retire(PathBuf::from(disabled));
+            }
+        }
+        // Also retire any conflicting/disabled file at the new Aurora target
+        // path or any stray Aurora Client JAR in mods/.
+        let mods_dir = managed.instance_paths(id).mods().to_path_buf();
+        if let Some((aurora_target, _, aurora_digest, aurora_bytes)) =
+            staged.iter().find(|(dest, _, _, _)| {
+                dest.file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with("aurora-"))
+            })
+        {
+            let mut disabled = aurora_target.as_os_str().to_os_string();
+            disabled.push(".disabled");
+            queue_retire(PathBuf::from(disabled));
+            if std::fs::symlink_metadata(aurora_target).is_ok()
+                && verify_file(aurora_target, aurora_digest, Some(*aurora_bytes)).is_err()
+            {
+                queue_retire(aurora_target.clone());
+            }
+        }
+        if let Ok(inventory) = instance_mods::scan(managed, id) {
+            for entry in &inventory.entries {
+                let is_aurora = entry.metadata.as_ref().is_some_and(|metadata| {
+                    metadata.id == "aurora"
+                        || metadata
+                            .nested_mod_ids
+                            .iter()
+                            .any(|nested| nested == "aurora")
+                });
+                if !is_aurora {
+                    continue;
+                }
+                let path = mods_dir.join(&entry.file_name);
+                if staged.iter().any(|(dest, _, digest, bytes)| {
+                    dest == &path && verify_file(&path, digest, Some(*bytes)).is_ok()
+                }) {
+                    continue;
+                }
+                queue_retire(path);
+            }
+        }
+        for target in to_retire {
             match std::fs::symlink_metadata(&target) {
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
                 Err(error) => return Err(invalid(error.to_string())),
@@ -879,6 +997,9 @@ fn commit_update(
             .find_mut(id)
             .ok_or_else(|| invalid("instance not found".into()))?;
         let mut installed = record_handle.installed().clone();
+        installed.platform = crate::instances::platform::PlatformPin::Fabric {
+            version: release.fabric_loader_version().to_owned(),
+        };
         installed.aurora = Some(crate::instances::platform::AuroraPin {
             channel: release.channel(),
             version: release.aurora_version().to_owned(),
@@ -1203,7 +1324,13 @@ pub async fn fetch_update_manifest(
         .ok_or_else(|| {
             ClientUpdateError::Inapplicable("Installed Aurora release metadata is missing.".into())
         })?;
-    fetch_github_release_manifest(managed, endpoints.download_options(), template).await
+    super::github::release_manifest_with_fabric(
+        managed,
+        endpoints.download_options(),
+        endpoints.fabric(),
+        template,
+    )
+    .await
 }
 
 /// Pinned, public release source; also used by the explicit read-only release probe.
@@ -1900,9 +2027,9 @@ mod tests {
                 "0.4.1",
                 "stable",
                 "26.2",
-                "0.19.6",
+                "0.19.4",
                 25,
-                "/aurora/wrong-loader.jar",
+                "/aurora/older-loader.jar",
                 b"bytes",
                 None,
             ),
@@ -1916,7 +2043,7 @@ mod tests {
         .expect("preview runs");
         assert_eq!(
             preview.outcome, "upToDate",
-            "environment-incompatible releases are never candidates"
+            "wrong-Minecraft or older-Loader releases are never candidates"
         );
     }
 
@@ -2358,5 +2485,64 @@ mod tests {
         let validation =
             lifecycle::validate_instance(lab.world.managed(), &registry, &lab.instance).unwrap();
         assert_eq!(validation.status, lifecycle::InstanceStatus::Ready);
+    }
+
+    #[tokio::test]
+    async fn existing_stray_aurora_mod_file_is_automatically_replaced_on_update() {
+        let lab = Lab::new("replace-existing-aurora").await;
+        // Drop a stray user-placed Aurora Client JAR in mods/.
+        let mods_dir = lab
+            .world
+            .managed()
+            .instance_paths(&lab.instance)
+            .mods()
+            .to_path_buf();
+        let stray = mods_dir.join("aurora-client-old-manual.jar");
+        std::fs::write(&stray, &newer_artifact()).unwrap();
+        // Also drop a disabled copy of the target filename.
+        let disabled_target = mods_dir.join("aurora-0.4.0.jar.disabled");
+        std::fs::write(&disabled_target, b"old disabled bytes").unwrap();
+
+        lab.publish(vec![lab.newer_release(&newer_artifact())]);
+        let endpoints = lab.endpoints();
+        let remote = lab.remote().await;
+        let preview =
+            preview_update(lab.world.managed(), &endpoints, &lab.instance, &remote).unwrap();
+        assert_eq!(preview.outcome, "updateAvailable");
+        assert!(
+            preview.blockers.is_empty(),
+            "existing Aurora mod files should be replaced automatically, not block: {:?}",
+            preview.blockers
+        );
+        assert!(
+            preview
+                .warnings
+                .iter()
+                .any(|w| w.contains("automatically replaced")),
+            "preview should inform the user about automatic replacement"
+        );
+
+        let updated = apply_update(
+            lab.world.managed(),
+            &endpoints,
+            &lab.instance,
+            &preview.fingerprint,
+            &remote,
+            &lab.options(),
+            &mut |_| {},
+            UpdateFaults::default(),
+        )
+        .await
+        .expect("update replaces stray Aurora files cleanly");
+        assert_eq!(
+            updated.installed().aurora.as_ref().unwrap().version,
+            "0.4.0"
+        );
+        assert!(!stray.exists(), "stray manual Aurora JAR should be removed");
+        assert!(
+            !disabled_target.exists(),
+            "disabled target Aurora JAR should be removed"
+        );
+        assert!(mods_dir.join("aurora-0.4.0.jar").exists());
     }
 }

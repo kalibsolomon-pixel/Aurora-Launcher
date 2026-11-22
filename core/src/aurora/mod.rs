@@ -761,6 +761,23 @@ pub(crate) fn preflight_bootstrap(
     instance: &InstanceId,
     release: &AuroraRelease,
 ) -> Result<(), AuroraInstallError> {
+    preflight_bootstrap_inner(managed, instance, release, false)
+}
+
+pub(crate) fn preflight_bootstrap_for_update(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    release: &AuroraRelease,
+) -> Result<(), AuroraInstallError> {
+    preflight_bootstrap_inner(managed, instance, release, true)
+}
+
+fn preflight_bootstrap_inner(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    release: &AuroraRelease,
+    allow_aurora_replace: bool,
+) -> Result<(), AuroraInstallError> {
     load_installed_state(managed, instance)?;
     let paths = managed.instance_paths(instance);
     if !paths.mods().exists() {
@@ -773,11 +790,14 @@ pub(crate) fn preflight_bootstrap(
                 reason: error.to_string(),
             }
         })?;
-    let mut files = vec![(
-        managed_artifact_relative_path(release)?,
-        release.artifact().sha256(),
-        release.artifact().size_bytes(),
-    )];
+    let mut files = Vec::new();
+    if !allow_aurora_replace {
+        files.push((
+            managed_artifact_relative_path(release)?,
+            release.artifact().sha256(),
+            release.artifact().size_bytes(),
+        ));
+    }
     let provider_api = compatible_provider_api(managed, instance, release)?;
     if let Some(api) = release.fabric_api().filter(|_| !provider_api) {
         files.push((

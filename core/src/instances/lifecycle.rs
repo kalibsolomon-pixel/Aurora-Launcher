@@ -156,6 +156,9 @@ impl InstanceEndpoints {
     pub fn release_manifest(&self) -> &ReleaseManifest {
         &self.release_manifest
     }
+    pub(crate) fn fabric(&self) -> &FabricMetaEndpoints {
+        &self.fabric
+    }
     pub(crate) fn with_release_manifest(mut self, manifest: ReleaseManifest) -> Self {
         self.release_manifest = manifest;
         self

@@ -254,9 +254,13 @@ lives in `core/`; it has no Tauri, WebView or frontend runtime dependency.
   Update discovery, review and apply share `updates::client::fetch_update_manifest`.
   Accept only published stable version tags and the exact repository release JAR
   with GitHub's expected SHA-256 digest. Acquire through the verified cache before
-  inspecting metadata. Check artifact identity, Minecraft, existing exact Loader,
-  Java, Fabric API and mixin Java requirements; never silently change the Loader
-  or infer compatibility from a release title. Branch/CI artifacts remain excluded.
+  inspecting metadata. Check artifact identity, Minecraft, Java, Fabric API and
+  mixin Java requirements; never infer compatibility from a release title. Per
+  owner decision (2026-11-22), when a verified Aurora Client update requires a
+  newer Fabric Loader or an existing/stray Aurora Client mod file is present in
+  `mods/`, automatically upgrade Fabric Loader from official Fabric Meta and
+  transactionally replace the old Aurora mod file(s) with rollback safety.
+  Branch/CI artifacts remain excluded.
   Explicit diagnostic manifest overrides retain the deterministic loopback path.
   New-instance discovery and updates share per-environment GitHub asset validation. One stable Client tag may publish one JAR per distinct Minecraft suffix; duplicate suffixes or mixed generic/suffixed JARs are rejected. Release pins resolve by Client version and Minecraft environment. Launcher update authority is unchanged.
 - Home widget placements may carry optional bounded `grid` dimensions (1?6 columns,

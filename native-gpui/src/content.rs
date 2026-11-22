@@ -1778,26 +1778,16 @@ impl Render for Content {
                                         reload.update(cx, |s, cx| s.refresh(cx))
                                     }),
                             )
-                            .child(
-                                AuroraButton::new(
-                                    "content-updates-open",
-                                    if self.updates_open {
-                                        "Close updates"
-                                    } else {
-                                        "Updates"
-                                    },
+                            .when(self.kind == Kind::Mod, |row| {
+                                row.child(
+                                    AuroraButton::new("content-import-folder", "Choose folder")
+                                        .size(ButtonSize::Small)
+                                        .disabled(busy || previewing)
+                                        .on_click(cx.listener(|this, _, window, cx| {
+                                            this.choose_path(true, window, cx);
+                                        })),
                                 )
-                                .size(ButtonSize::Small)
-                                .icon("update")
-                                .selected(self.updates_open)
-                                .disabled(busy || previewing)
-                                .on_click(cx.listener(
-                                    |this, _, _, cx| {
-                                        this.updates_open = !this.updates_open;
-                                        cx.notify();
-                                    },
-                                )),
-                            ),
+                            }),
                     )
                 });
             let mut list = div()
@@ -1875,13 +1865,35 @@ impl Render for Content {
                                             this.choose_path(false, window, cx);
                                         })),
                                 )
+                                .when(self.kind != Kind::Mod, |row| {
+                                    row.child(
+                                        AuroraButton::new("content-import-folder", "Choose folder")
+                                            .size(ButtonSize::Small)
+                                            .disabled(busy || previewing)
+                                            .on_click(cx.listener(|this, _, window, cx| {
+                                                this.choose_path(true, window, cx);
+                                            })),
+                                    )
+                                })
                                 .child(
-                                    AuroraButton::new("content-import-folder", "Choose folder")
-                                        .size(ButtonSize::Small)
-                                        .disabled(busy || previewing)
-                                        .on_click(cx.listener(|this, _, window, cx| {
-                                            this.choose_path(true, window, cx);
-                                        })),
+                                    AuroraButton::new(
+                                        "content-updates-open",
+                                        if self.updates_open {
+                                            "Close updates"
+                                        } else {
+                                            "Updates"
+                                        },
+                                    )
+                                    .size(ButtonSize::Small)
+                                    .icon("update")
+                                    .selected(self.updates_open)
+                                    .disabled(busy || previewing)
+                                    .on_click(cx.listener(
+                                        |this, _, _, cx| {
+                                            this.updates_open = !this.updates_open;
+                                            cx.notify();
+                                        },
+                                    )),
                                 ),
                         )
                         .child(

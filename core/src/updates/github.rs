@@ -43,6 +43,7 @@ fn normalized_release(
     asset: &Asset,
     digest: &str,
     metadata: &instance_mods::ModMetadata,
+    resolved_fabric_loader: Option<&str>,
 ) -> Result<Option<AuroraRelease>, ClientUpdateError> {
     if crate::distribution::github::artifact_minecraft(&asset.name, version)
         .flatten()
@@ -60,7 +61,6 @@ fn normalized_release(
     }
     for (id, value) in [
         ("minecraft", template.minecraft_version().to_owned()),
-        ("fabricloader", template.fabric_loader_version().to_owned()),
         ("java", template.java().major_version().to_string()),
     ] {
         let Some(relation) = metadata.depends.iter().find(|d| d.mod_id == id) else {
@@ -76,6 +76,33 @@ fn normalized_release(
             return Ok(None);
         }
     }
+    let Some(loader_relation) = metadata.depends.iter().find(|d| d.mod_id == "fabricloader") else {
+        return Err(ClientUpdateError::ManifestInvalid(
+            "Published Aurora artifact omits its fabricloader compatibility requirement.".into(),
+        ));
+    };
+    let effective_loader = if satisfies(
+        template.fabric_loader_version(),
+        &loader_relation.requirement,
+    )
+    .map_err(|_| {
+        ClientUpdateError::ManifestInvalid(
+            "Unsupported fabricloader requirement in published artifact.".into(),
+        )
+    })? {
+        template.fabric_loader_version().to_owned()
+    } else if let Some(candidate_loader) = resolved_fabric_loader {
+        let newer = parse_release_version(candidate_loader)
+            .zip(parse_release_version(template.fabric_loader_version()))
+            .is_some_and(|(cand, cur)| cand.cmp_precedence(&cur).is_gt());
+        if newer && satisfies(candidate_loader, &loader_relation.requirement).unwrap_or(false) {
+            candidate_loader.to_owned()
+        } else {
+            return Ok(None);
+        }
+    } else {
+        return Ok(None);
+    };
     for dependency in &metadata.depends {
         if matches!(
             dependency.mod_id.as_str(),
@@ -111,8 +138,18 @@ fn normalized_release(
         .map_err(|e| ClientUpdateError::ManifestInvalid(e.to_string()))?;
     value["auroraVersion"] = version.into();
     value["channel"] = "stable".into();
+    value["fabricLoaderVersion"] = effective_loader.clone().into();
     value["artifact"] = serde_json::json!({"url":asset.browser_download_url,"sha256":digest,"sizeBytes":asset.size});
-    value["notes"] = format!("Published Aurora Client {version} on GitHub. Compatibility checked against its verified JAR.").into();
+    value["notes"] = if effective_loader != template.fabric_loader_version() {
+        format!(
+            "Published Aurora Client {version} on GitHub. Fabric Loader will automatically update to {effective_loader}."
+        )
+    } else {
+        format!(
+            "Published Aurora Client {version} on GitHub. Compatibility checked against its verified JAR."
+        )
+    }
+    .into();
     let manifest = ReleaseManifest::from_json(
         &serde_json::json!({"schemaVersion":1,"releases":[value]}).to_string(),
     )?;
@@ -122,6 +159,16 @@ fn normalized_release(
 pub(super) async fn release_manifest(
     managed: &ManagedPaths,
     options: &DownloadOptions,
+    template: &AuroraRelease,
+) -> Result<ReleaseManifest, ClientUpdateError> {
+    let fabric = crate::fabric::metadata::FabricMetaEndpoints::official();
+    release_manifest_with_fabric(managed, options, &fabric, template).await
+}
+
+pub(super) async fn release_manifest_with_fabric(
+    managed: &ManagedPaths,
+    options: &DownloadOptions,
+    fabric_endpoints: &crate::fabric::metadata::FabricMetaEndpoints,
     template: &AuroraRelease,
 ) -> Result<ReleaseManifest, ClientUpdateError> {
     let mut response = downloads::build_metadata_client(options)
@@ -166,6 +213,7 @@ pub(super) async fn release_manifest(
     let current = parse_release_version(template.aurora_version()).ok_or_else(|| {
         ClientUpdateError::Incompatible("Installed Aurora version cannot be compared.".into())
     })?;
+    let mut cached_loaders: Option<Vec<crate::fabric::metadata::LoaderVersionEntry>> = None;
     for publication in &publications {
         if publication.draft || publication.prerelease || publication.published_at.is_none() {
             continue;
@@ -204,7 +252,53 @@ pub(super) async fn release_manifest(
         let metadata = metadata.ok_or_else(|| {
             ClientUpdateError::ManifestInvalid("Published artifact is not a Fabric mod JAR.".into())
         })?;
-        if let Some(release) = normalized_release(template, version, asset, digest, &metadata)? {
+        let mut resolved_loader: Option<String> = None;
+        if let Some(loader_rel) = metadata.depends.iter().find(|d| d.mod_id == "fabricloader") {
+            let current_ok = satisfies(template.fabric_loader_version(), &loader_rel.requirement)
+                .unwrap_or(false);
+            if !current_ok {
+                if cached_loaders.is_none() {
+                    if let Ok(mc_id) = crate::minecraft::metadata::MinecraftVersionId::new(
+                        template.minecraft_version(),
+                    ) {
+                        if let Ok(list) = crate::fabric::metadata::fetch_game_loader_versions(
+                            fabric_endpoints,
+                            &mc_id,
+                            options,
+                        )
+                        .await
+                        {
+                            cached_loaders = Some(list);
+                        }
+                    }
+                }
+                if let Some(loaders) = &cached_loaders {
+                    let cur_ver = parse_release_version(template.fabric_loader_version());
+                    let pick = |require_stable: bool| {
+                        loaders.iter().find(|entry| {
+                            (!require_stable || entry.stable)
+                                && satisfies(&entry.version, &loader_rel.requirement)
+                                    .unwrap_or(false)
+                                && cur_ver
+                                    .as_ref()
+                                    .zip(parse_release_version(&entry.version).as_ref())
+                                    .is_some_and(|(cur, cand)| cand.cmp_precedence(cur).is_gt())
+                        })
+                    };
+                    if let Some(entry) = pick(true).or_else(|| pick(false)) {
+                        resolved_loader = Some(entry.version.clone());
+                    }
+                }
+            }
+        }
+        if let Some(release) = normalized_release(
+            template,
+            version,
+            asset,
+            digest,
+            &metadata,
+            resolved_loader.as_deref(),
+        )? {
             return ReleaseManifest::from_json(
                 &serde_json::json!({"schemaVersion":1,"releases":[release]}).to_string(),
             )
@@ -264,7 +358,7 @@ mod tests {
         };
         let digest = "fb7a7c0c10c383fd55da13627614099b35501d831b9372cac196bbb73ffaebb8";
         let mut data = metadata();
-        let release = normalized_release(template, "3.2.0", &asset, digest, &data)
+        let release = normalized_release(template, "3.2.0", &asset, digest, &data, None)
             .unwrap()
             .unwrap();
         assert_eq!(release.aurora_version(), "3.2.0");
@@ -276,33 +370,37 @@ mod tests {
         assert_eq!(release.artifact().sha256(), digest);
         data.depends[0].requirement = "1.20.1".into();
         assert!(
-            normalized_release(template, "3.2.0", &asset, digest, &data)
+            normalized_release(template, "3.2.0", &asset, digest, &data, None)
                 .unwrap()
                 .is_none()
         );
         data = metadata();
         data.depends[1].requirement = ">=0.99".into();
         assert!(
-            normalized_release(template, "3.2.0", &asset, digest, &data)
+            normalized_release(template, "3.2.0", &asset, digest, &data, None)
                 .unwrap()
                 .is_none()
         );
+        let upgraded = normalized_release(template, "3.2.0", &asset, digest, &data, Some("0.99.1"))
+            .unwrap()
+            .expect("newer compatible Fabric Loader is adopted automatically");
+        assert_eq!(upgraded.fabric_loader_version(), "0.99.1");
         data = metadata();
         data.depends[2].requirement = ">=25".into();
         assert!(
-            normalized_release(template, "3.2.0", &asset, digest, &data)
+            normalized_release(template, "3.2.0", &asset, digest, &data, None)
                 .unwrap()
                 .is_none()
         );
         data = metadata();
         data.id = "unrelated".into();
-        assert!(normalized_release(template, "3.2.0", &asset, digest, &data).is_err());
+        assert!(normalized_release(template, "3.2.0", &asset, digest, &data, None).is_err());
         data = metadata();
         data.depends.push(instance_mods::ModRelation {
             mod_id: "unknown".into(),
             requirement: "*".into(),
         });
-        assert!(normalized_release(template, "3.2.0", &asset, digest, &data).is_err());
+        assert!(normalized_release(template, "3.2.0", &asset, digest, &data, None).is_err());
     }
     #[test]
     fn only_published_stable_exact_assets_with_sha256_enter_discovery() {
@@ -332,7 +430,7 @@ mod tests {
             data.version = Some(version.into());
             data.depends[0].requirement = format!("~{minecraft}");
             data.depends[2].requirement = ">=25".into();
-            let normalized = normalized_release(template, parsed, asset, digest, &data)
+            let normalized = normalized_release(template, parsed, asset, digest, &data, None)
                 .unwrap()
                 .unwrap();
             assert_eq!(normalized.minecraft_version(), minecraft);
@@ -340,7 +438,7 @@ mod tests {
             assert_eq!(normalized.fabric_api(), template.fabric_api());
             let legacy = profiles.resolve_exact("3.0.0", None).unwrap();
             assert!(
-                normalized_release(legacy, parsed, asset, digest, &data)
+                normalized_release(legacy, parsed, asset, digest, &data, None)
                     .unwrap()
                     .is_none()
             );
@@ -351,7 +449,7 @@ mod tests {
                 .find(|profile| profile.minecraft_version() != minecraft)
                 .unwrap();
             assert!(
-                normalized_release(other, parsed, asset, digest, &data)
+                normalized_release(other, parsed, asset, digest, &data, None)
                     .unwrap()
                     .is_none()
             );
@@ -380,7 +478,7 @@ mod tests {
                 data.depends[0].requirement = format!("~{mc}");
                 data.depends[2].requirement = ">=25".into();
                 assert_eq!(
-                    normalized_release(template, version, asset, digest, &data)
+                    normalized_release(template, version, asset, digest, &data, None)
                         .unwrap()
                         .unwrap()
                         .minecraft_version(),
@@ -388,7 +486,7 @@ mod tests {
                 );
                 data.depends[0].requirement = "1.21.11".into();
                 assert!(
-                    normalized_release(template, version, asset, digest, &data)
+                    normalized_release(template, version, asset, digest, &data, None)
                         .unwrap()
                         .is_none()
                 );
