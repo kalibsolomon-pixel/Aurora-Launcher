@@ -542,11 +542,18 @@ fn review_description(value: &Value, kind: &str, merge: bool) -> (String, bool, 
             ));
         }
         if !conflicts.is_empty() {
-            text.push_str(
-                "\nInstallation blocked by file/mod conflicts. Review installed content first.\n",
-            );
+            text.push_str("\nConflicts detected:\n");
             for conflict in conflicts {
-                text.push_str(&format!("{conflict}\n"));
+                if let Some(file) = conflict["fileName"].as_str() {
+                    let reason = conflict["reason"].as_str().unwrap_or("");
+                    if reason.is_empty() {
+                        text.push_str(&format!("{file}\n"));
+                    } else {
+                        text.push_str(&format!("{file} — {reason}\n"));
+                    }
+                } else {
+                    text.push_str(&format!("{conflict}\n"));
+                }
             }
         }
     }
@@ -554,6 +561,37 @@ fn review_description(value: &Value, kind: &str, merge: bool) -> (String, bool, 
         text.push_str("\nThe service did not provide a valid review fingerprint.");
     }
     (fingerprint, allowed, text)
+}
+
+/// Whether a reviewed non-pack content install has conflicts that the user can
+/// explicitly opt to resolve by disabling the conflicting user/provider mods.
+fn has_resolvable_content_conflicts(value: &Value, kind: &str) -> bool {
+    if kind == "modpack" {
+        return false;
+    }
+    let fingerprint = value["previewFingerprint"].as_str().unwrap_or("");
+    if fingerprint.is_empty() {
+        return false;
+    }
+    let Some(conflicts) = value["conflicts"].as_array() else {
+        return false;
+    };
+    if conflicts.is_empty() {
+        return false;
+    }
+    conflicts.iter().all(|conflict| {
+        let is_optional_ephemera = conflict["modId"]
+            .as_str()
+            .is_some_and(|id| id.eq_ignore_ascii_case("ephemera"))
+            || conflict["fileName"]
+                .as_str()
+                .is_some_and(|name| name.to_ascii_lowercase().starts_with("ephemera-"));
+        is_optional_ephemera
+            || !matches!(
+                conflict["ownership"].as_str(),
+                Some("launcherBootstrap" | "launcherManagedRequired")
+            )
+    })
 }
 
 /// Review preparation status. The archive byte counter exists in the Slint
@@ -691,6 +729,8 @@ struct DiscoverState {
 
     // review
     review: Option<Review>,
+    review_resolvable_conflicts: bool,
+    resolve_conflicts_ack: bool,
     review_job: Option<Control>,
     review_cancellable: bool,
     review_progress: String,
@@ -796,10 +836,13 @@ impl DiscoverState {
     /// A completed, still-valid review is installable exactly once: the
     /// confirm path consumes it into a prepared job.
     fn can_install(&self) -> bool {
-        self.review.is_some()
+        self.review.is_some() && (!self.review_resolvable_conflicts || self.resolve_conflicts_ack)
     }
 
     fn confirm_label(&self) -> &'static str {
+        if self.review_resolvable_conflicts && self.resolve_conflicts_ack {
+            return "Disable conflicting & install";
+        }
         match (self.is_pack(), self.merging()) {
             (true, false) => "Create instance",
             (true, true) => "Add to instance",
@@ -1036,6 +1079,8 @@ impl DiscoverState {
         self.destination_serial += 1;
         self.details = None;
         self.review = None;
+        self.review_resolvable_conflicts = false;
+        self.resolve_conflicts_ack = false;
         self.review_text.clear();
         self.review_facts.clear();
         self.optional_files.clear();
@@ -1087,6 +1132,8 @@ impl DiscoverState {
         self.detail_serial += 1;
         self.destination_serial += 1;
         self.review = None;
+        self.review_resolvable_conflicts = false;
+        self.resolve_conflicts_ack = false;
         self.review_text.clear();
         self.review_facts.clear();
         self.optional_files.clear();
@@ -1122,6 +1169,8 @@ impl DiscoverState {
         self.stop_review();
         self.detail_serial += 1;
         self.review = None;
+        self.review_resolvable_conflicts = false;
+        self.resolve_conflicts_ack = false;
         self.optional_files.clear();
         self.selected_optional.clear();
         self.review_text.clear();
@@ -1139,6 +1188,8 @@ impl DiscoverState {
         self.stop_review();
         self.detail_serial += 1;
         self.review = None;
+        self.review_resolvable_conflicts = false;
+        self.resolve_conflicts_ack = false;
         self.review_facts.clear();
         self.review_text = "Review cancelled. Nothing was installed.".into();
         self.details_loading = false;
@@ -1153,6 +1204,8 @@ impl DiscoverState {
         }
         self.detail_serial += 1;
         self.review = None;
+        self.review_resolvable_conflicts = false;
+        self.resolve_conflicts_ack = false;
         self.review_facts.clear();
         self.review_text =
             "Optional selection changed. Review installation again before installing.".into();
@@ -1314,6 +1367,8 @@ impl DiscoverState {
         self.stop_review();
         self.detail_serial += 1;
         self.review = None;
+        self.review_resolvable_conflicts = false;
+        self.resolve_conflicts_ack = false;
         self.review_text.clear();
         self.review_facts.clear();
         self.details_loading = true;
@@ -1374,12 +1429,16 @@ impl DiscoverState {
             );
         }
         let (fingerprint, allowed, text) = review_description(value, snapshot.kind, snapshot.merge);
+        let resolvable_conflicts =
+            !allowed && has_resolvable_content_conflicts(value, snapshot.kind);
         snapshot.fingerprint = fingerprint;
         snapshot.request["fingerprint"] = json!(snapshot.fingerprint);
         self.review_text = text;
+        self.review_resolvable_conflicts = resolvable_conflicts;
+        self.resolve_conflicts_ack = false;
         // A completed review that blocks installation invalidates any prior
         // installable snapshot; display is never authority.
-        self.review = allowed.then_some(snapshot);
+        self.review = (allowed || resolvable_conflicts).then_some(snapshot);
     }
 
     /// Quick install from a result row (content kinds only): the core
@@ -1423,7 +1482,10 @@ impl DiscoverState {
         if !self.can_install() {
             return None;
         }
+        let resolve_conflicts = self.review_resolvable_conflicts && self.resolve_conflicts_ack;
         let snapshot = self.review.take()?;
+        self.review_resolvable_conflicts = false;
+        self.resolve_conflicts_ack = false;
         let title = self
             .details
             .as_ref()
@@ -1452,6 +1514,7 @@ impl DiscoverState {
                 project: snapshot.project.clone(),
                 version: snapshot.version.clone(),
                 fingerprint: snapshot.fingerprint.clone(),
+                resolve_conflicts,
             }
         };
         self.detail_serial += 1;
@@ -2938,12 +3001,12 @@ impl Render for Discover {
             s.summary()
         };
 
-        let mut list = div().flex().flex_col().gap(px(14.)).id("discover-results");
+        let mut list = div().flex().flex_col().gap(px(18.)).id("discover-results");
         let available_w = (f32::from(window.viewport_size().width)
             - crate::navigation::PAGE_CHROME)
             .min(ui::MAX_CONTENT_WIDTH);
-        let grid_cols = ((available_w + 14.) / 380.).floor().clamp(1., 2.) as u16;
-        let mut cards = div().grid().grid_cols(grid_cols).gap(px(14.)).w_full();
+        let grid_cols = ((available_w + 18.) / 430.).floor().clamp(1., 2.) as u16;
+        let mut cards = div().grid().grid_cols(grid_cols).gap(px(18.)).w_full();
         let total = s.results.len();
         let current_page = self.results_page.min(total.saturating_sub(1) / page_size);
         let start = current_page * page_size;
@@ -2962,14 +3025,14 @@ impl Render for Discover {
                 .to_owned();
             let hover_btn = palette.control_hover;
             let ring_btn = palette.ring;
-            let summary_clean = word_trim(&project.summary, 62);
+            let summary_clean = word_trim(&project.summary, 78);
             let meta_line = dl_short;
             let card_body = gpui_kit::base::Button::new(("discover-card-open", index))
                 .accessibility_label(format!("Details for {}", project.title))
                 .flex()
                 .flex_1()
                 .items_center()
-                .gap(px(14.))
+                .gap(px(16.))
                 .min_w(px(0.))
                 .p(px(4.))
                 .m(px(-4.))
@@ -2978,8 +3041,8 @@ impl Render for Discover {
                 .child(
                     div()
                         .flex_none()
-                        .p(px(3.))
-                        .rounded(px(12.))
+                        .p(px(4.))
+                        .rounded(px(14.))
                         .bg(palette.sunken)
                         .border_1()
                         .border_color(palette.border_subtle)
@@ -2987,7 +3050,7 @@ impl Render for Discover {
                             ("art", index),
                             s.artwork.cache.image(&project.project_id),
                             &artwork::letter(&project.title),
-                            px(58.),
+                            px(72.),
                             &palette,
                         )),
                 )
@@ -2997,12 +3060,12 @@ impl Render for Discover {
                         .flex_col()
                         .flex_1()
                         .min_w(px(0.))
-                        .gap(px(4.))
+                        .gap(px(6.))
                         .child(
                             div()
                                 .flex()
                                 .items_baseline()
-                                .gap(px(8.))
+                                .gap(px(10.))
                                 .w_full()
                                 .min_w(px(0.))
                                 .child(
@@ -3011,7 +3074,7 @@ impl Render for Discover {
                                         .overflow_hidden()
                                         .truncate()
                                         .text_size(px(ui::TEXT_SECTION))
-                                        .line_height(px(20.))
+                                        .line_height(px(24.))
                                         .font_weight(FontWeight::SEMIBOLD)
                                         .text_color(palette.foreground)
                                         .child(project.title.clone()),
@@ -3021,10 +3084,10 @@ impl Render for Discover {
                                         .flex()
                                         .flex_shrink_0()
                                         .items_center()
-                                        .gap(px(3.))
+                                        .gap(px(4.))
                                         .child(crate::symbols::icon(
                                             Some("download"),
-                                            px(14.),
+                                            px(15.),
                                             palette.muted_foreground,
                                         ))
                                         .child(ui::caption(&palette, meta_line)),
@@ -3036,8 +3099,8 @@ impl Render for Discover {
                                     .w_full()
                                     .min_w(px(0.))
                                     .pb(px(1.))
-                                    .line_height(px(18.))
-                                    .text_size(px(ui::TEXT_CAPTION))
+                                    .line_height(px(20.))
+                                    .text_size(px(ui::TEXT_BODY - 1.))
                                     .text_color(palette.muted_foreground)
                                     .child(summary_clean),
                             )
@@ -3059,7 +3122,7 @@ impl Render for Discover {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .size(px(36.))
+                            .size(px(44.))
                             .rounded_full()
                             .bg(gpui::Hsla {
                                 a: 0.14,
@@ -3067,7 +3130,7 @@ impl Render for Discover {
                             })
                             .child(crate::symbols::icon(
                                 Some("check_circle"),
-                                px(18.),
+                                px(22.),
                                 palette.success,
                             )),
                     )
@@ -3081,7 +3144,7 @@ impl Render for Discover {
                             .flex_none()
                             .items_center()
                             .justify_center()
-                            .size(px(36.))
+                            .size(px(44.))
                             .rounded_full()
                             .bg(palette.accent_soft)
                             .border_1()
@@ -3093,7 +3156,7 @@ impl Render for Discover {
                             .focus_visible(move |s| s.border_color(ring_btn))
                             .child(crate::symbols::icon(
                                 Some("download"),
-                                px(18.),
+                                px(22.),
                                 palette.foreground,
                             ))
                             .on_click(cx.listener(move |this, _, _, cx| {
@@ -3108,8 +3171,8 @@ impl Render for Discover {
                     .justify_between()
                     .w_full()
                     .min_w(px(0.))
-                    .p(px(14.))
-                    .gap(px(12.))
+                    .p(px(20.))
+                    .gap(px(16.))
                     .child(card_body)
                     .child(action),
             );
@@ -3725,6 +3788,40 @@ impl Discover {
                     px(ui::TEXT_BODY),
                 ));
             }
+            if s.review_resolvable_conflicts {
+                let ack = s.resolve_conflicts_ack;
+                let conflict_view = cx.entity();
+                review = review.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_between()
+                        .gap(px(12.))
+                        .pt(px(8.))
+                        .border_t_1()
+                        .border_color(palette.border_subtle)
+                        .child(
+                            div()
+                                .flex_1()
+                                .min_w(px(0.))
+                                .text_size(px(ui::TEXT_BODY))
+                                .font_weight(FontWeight::MEDIUM)
+                                .text_color(palette.warning)
+                                .child("Disable conflicting mod(s) and continue anyway"),
+                        )
+                        .child(
+                            crate::controls::AuroraToggle::new("discover-resolve-conflicts")
+                                .label("Disable conflicting mod(s) and continue anyway")
+                                .checked(ack)
+                                .on_change(move |checked, _, _, cx| {
+                                    conflict_view.update(cx, |this, cx| {
+                                        this.state.resolve_conflicts_ack = checked;
+                                        cx.notify();
+                                    });
+                                }),
+                        ),
+                );
+            }
             panel = panel.child(review);
         }
 
@@ -4160,6 +4257,22 @@ mod tests {
         assert!(allowed);
         assert!(display.contains("Your existing mods, left untouched (1)\nuser.jar\n"));
         assert!(!display.contains("Blocked"), "empty groups are omitted");
+
+        // Resolvable user/provider conflicts and optional Ephemera allow explicit
+        // opt-in continue; launcher-required Aurora/Fabric bootstrap stay protected.
+        assert!(has_resolvable_content_conflicts(&blocked, "mod"));
+        let ephemera_conflict = json!({
+            "previewFingerprint": "abc",
+            "preview": {"items": []},
+            "conflicts": [{"modId": "ephemera", "fileName": "ephemera-0.2.0.jar", "ownership": "launcherBootstrap"}]
+        });
+        assert!(has_resolvable_content_conflicts(&ephemera_conflict, "mod"));
+        let protected = json!({
+            "previewFingerprint": "abc",
+            "preview": {"items": []},
+            "conflicts": [{"fileName": "aurora-3.2.0.jar", "ownership": "launcherBootstrap"}]
+        });
+        assert!(!has_resolvable_content_conflicts(&protected, "mod"));
     }
 
     #[test]

@@ -554,6 +554,7 @@ pub struct InstanceEditor {
     runtime_text: Option<String>,
     ephemera_serial: u64,
     ephemera_status: Option<api::EphemeraStatus>,
+    ephemera_conflict_open: bool,
     /// The icon picker: bounded, off-thread search over the bundled symbols.
     icon_query: Entity<InputState>,
     icon_open: bool,
@@ -666,6 +667,7 @@ impl InstanceEditor {
             runtime_text: None,
             ephemera_serial: 0,
             ephemera_status: None,
+            ephemera_conflict_open: false,
             icon_query,
             icon_open: false,
             icon_serial: 0,
@@ -903,16 +905,28 @@ impl InstanceEditor {
             }
             Reply::EphemeraUpdated(result) => {
                 self.busy = false;
+                self.ephemera_conflict_open = false;
                 match result {
                     Ok(status) => {
                         if let Some(base) = self.baseline.as_mut() {
                             base.ephemera_enabled = Some(status.installed);
                         }
+                        let active_conflicts = ephemera_conflicts(&status);
                         self.message = if status.installed {
-                            format!(
-                                "Ephemera {} installed.",
-                                status.version.as_deref().unwrap_or("")
-                            )
+                            let ver = status.version.as_deref().unwrap_or("");
+                            if !status.disabled_conflicts.is_empty() {
+                                format!(
+                                    "Ephemera {ver} installed (disabled {} to resolve conflict).",
+                                    status.disabled_conflicts.join(", ")
+                                )
+                            } else if !active_conflicts.is_empty() {
+                                format!(
+                                    "Ephemera {ver} installed alongside {}.",
+                                    active_conflicts.join(", ")
+                                )
+                            } else {
+                                format!("Ephemera {ver} installed.")
+                            }
                         } else {
                             "Ephemera removed from this instance.".into()
                         };
@@ -1309,6 +1323,7 @@ impl InstanceEditor {
         self.memory_hint = None;
         self.runtime_text = None;
         self.ephemera_status = None;
+        self.ephemera_conflict_open = false;
     }
     /// Memory advice is read when an instance is opened, never per keystroke.
     fn load_advice(&mut self) {
@@ -1349,13 +1364,34 @@ impl InstanceEditor {
             let _ = tx.send(Reply::Ephemera(serial, id, r)).await;
         });
     }
-    fn set_ephemera(&mut self, enabled: bool, cx: &mut Context<Self>) {
+    fn request_ephemera_install(&mut self, cx: &mut Context<Self>) {
+        if self.busy {
+            return;
+        }
+        let has_conflicts = self
+            .ephemera_status
+            .as_ref()
+            .is_some_and(|status| !ephemera_conflicts(status).is_empty());
+        if has_conflicts {
+            self.ephemera_conflict_open = true;
+            cx.notify();
+            return;
+        }
+        self.set_ephemera(true, api::EphemeraConflictResolution::DisableConflicts, cx);
+    }
+    fn set_ephemera(
+        &mut self,
+        enabled: bool,
+        resolution: api::EphemeraConflictResolution,
+        cx: &mut Context<Self>,
+    ) {
         if self.busy {
             return;
         }
         let (Some(host), Some(id)) = (self.host.clone(), self.selected.clone()) else {
             return;
         };
+        self.ephemera_conflict_open = false;
         self.busy = true;
         self.message = if enabled {
             "Installing Ephemera…".into()
@@ -1364,7 +1400,7 @@ impl InstanceEditor {
         };
         let tx = self.tx.clone();
         self.runtime.spawn(async move {
-            let r = guarded(api::set_ephemera(host, id, enabled)).await;
+            let r = guarded(api::set_ephemera(host, id, enabled, resolution)).await;
             let _ = tx.send(Reply::EphemeraUpdated(r)).await;
         });
         cx.notify();
@@ -2602,16 +2638,15 @@ impl Render for InstanceEditor {
                     .is_some_and(|status| status.status == "missing");
                 let ephemera_update_view = this.clone();
                 let ephemera_remove_view = this.clone();
-                let ephemera_conflict = self
+                let ephemera_conflicts_list = self
                     .ephemera_status
                     .as_ref()
-                    .and_then(|status| status.conflicting_mod.clone());
+                    .map(ephemera_conflicts)
+                    .unwrap_or_default();
                 let ephemera_note = if !installed {
                     "Requires Aurora Client on Fabric".to_owned()
-                } else if let Some(conflict) = &ephemera_conflict {
-                    format!("Auto-skipped: {conflict} is installed")
                 } else if let Some(status) = &self.ephemera_status {
-                    match status.status.as_str() {
+                    let mut note = match status.status.as_str() {
                         "active" => format!(
                             "Ephemera {} active",
                             status.version.as_deref().unwrap_or("")
@@ -2623,7 +2658,14 @@ impl Render for InstanceEditor {
                         "modified" => "Modified externally; inspect in Mods".to_owned(),
                         "missing" => "File missing; reinstall or remove".to_owned(),
                         _ => "Not installed — optional rendering engine for Aurora".to_owned(),
+                    };
+                    if !ephemera_conflicts_list.is_empty() {
+                        note.push_str(&format!(
+                            " · Conflicts with {}",
+                            ephemera_conflicts_list.join(", ")
+                        ));
                     }
+                    note
                 } else {
                     "Checking status…".to_owned()
                 };
@@ -2719,7 +2761,7 @@ impl Render for InstanceEditor {
                                                 .disabled(disabled_common)
                                                 .on_click(move |_, _, cx| {
                                                     ephemera_update_view.update(cx, |v, cx| {
-                                                        v.set_ephemera(true, cx)
+                                                        v.request_ephemera_install(cx)
                                                     });
                                                 }),
                                         )
@@ -2729,7 +2771,11 @@ impl Render for InstanceEditor {
                                                 .disabled(disabled_common)
                                                 .on_click(move |_, _, cx| {
                                                     ephemera_view.update(cx, |v, cx| {
-                                                        v.set_ephemera(false, cx)
+                                                        v.set_ephemera(
+                                                            false,
+                                                            api::EphemeraConflictResolution::DisableConflicts,
+                                                            cx,
+                                                        )
                                                     });
                                                 }),
                                         )
@@ -2742,12 +2788,10 @@ impl Render for InstanceEditor {
                                         .child(
                                             AuroraButton::new("editor-ephemera", "Reinstall")
                                                 .variant(ButtonVariant::Soft)
-                                                .disabled(
-                                                    disabled_common || ephemera_conflict.is_some(),
-                                                )
+                                                .disabled(disabled_common)
                                                 .on_click(move |_, _, cx| {
                                                     ephemera_view.update(cx, |v, cx| {
-                                                        v.set_ephemera(true, cx)
+                                                        v.request_ephemera_install(cx)
                                                     });
                                                 }),
                                         )
@@ -2757,7 +2801,11 @@ impl Render for InstanceEditor {
                                                 .disabled(disabled_common)
                                                 .on_click(move |_, _, cx| {
                                                     ephemera_remove_view.update(cx, |v, cx| {
-                                                        v.set_ephemera(false, cx)
+                                                        v.set_ephemera(
+                                                            false,
+                                                            api::EphemeraConflictResolution::DisableConflicts,
+                                                            cx,
+                                                        )
                                                     });
                                                 }),
                                         )
@@ -2765,10 +2813,11 @@ impl Render for InstanceEditor {
                                 } else {
                                     AuroraButton::new("editor-ephemera", "Install")
                                         .variant(ButtonVariant::Soft)
-                                        .disabled(disabled_common || ephemera_conflict.is_some())
+                                        .disabled(disabled_common)
                                         .on_click(move |_, _, cx| {
-                                            ephemera_view
-                                                .update(cx, |v, cx| v.set_ephemera(true, cx));
+                                            ephemera_view.update(cx, |v, cx| {
+                                                v.request_ephemera_install(cx)
+                                            });
                                         })
                                         .into_any_element()
                                 }
@@ -3875,12 +3924,123 @@ impl Render for InstanceEditor {
                             }),
                     ),
             );
+        let ephemera_conflict_names = self
+            .ephemera_status
+            .as_ref()
+            .map(ephemera_conflicts)
+            .unwrap_or_default();
+        let ephemera_conflict_list = if ephemera_conflict_names.is_empty() {
+            "another renderer mod".to_owned()
+        } else {
+            ephemera_conflict_names.join(", ")
+        };
+        let eph_cancel_view = this.clone();
+        let eph_keep_view = this.clone();
+        let eph_disable_view = this.clone();
+        let eph_changed_view = this.clone();
+        let eph_veto_view = this.clone();
+        let ephemera_conflict_panel = dialog_surface(&palette, px(480.))
+            .child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(14.))
+                    .child(
+                        div()
+                            .flex()
+                            .flex_shrink_0()
+                            .items_center()
+                            .justify_center()
+                            .size(px(40.))
+                            .rounded(px(10.))
+                            .bg(Hsla {
+                                a: 0.14,
+                                ..palette.warning
+                            })
+                            .child(symbols::icon(Some("warning"), px(22.), palette.warning)),
+                    )
+                    .child(ui::section_header(
+                        &palette,
+                        "Renderer mod conflict",
+                        Some(format!("Detected: {ephemera_conflict_list}").into()),
+                    )),
+            )
+            .child(ui::muted(
+                &palette,
+                format!(
+                    "This instance has {ephemera_conflict_list} enabled, which may conflict with Ephemera Engine. Aurora can safely disable the conflicting mod(s) (reversible anytime in Mods) and install Ephemera, or install Ephemera while keeping them enabled."
+                ),
+            ))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .justify_end()
+                    .gap(px(8.))
+                    .child(
+                        AuroraButton::new("ephemera-conflict-cancel", "Cancel")
+                            .disabled(busy)
+                            .on_click(move |_, _, cx| {
+                                eph_cancel_view.update(cx, |v, cx| {
+                                    v.ephemera_conflict_open = false;
+                                    cx.notify();
+                                });
+                            }),
+                    )
+                    .child(
+                        AuroraButton::new("ephemera-conflict-keep", "Install anyway")
+                            .variant(ButtonVariant::Default)
+                            .disabled(busy)
+                            .on_click(move |_, _, cx| {
+                                eph_keep_view.update(cx, |v, cx| {
+                                    v.set_ephemera(
+                                        true,
+                                        api::EphemeraConflictResolution::KeepConflicts,
+                                        cx,
+                                    )
+                                });
+                            }),
+                    )
+                    .child(
+                        AuroraButton::new(
+                            "ephemera-conflict-disable",
+                            "Disable conflicting & install",
+                        )
+                        .variant(ButtonVariant::Primary)
+                        .disabled(busy)
+                        .on_click(move |_, _, cx| {
+                            eph_disable_view.update(cx, |v, cx| {
+                                v.set_ephemera(
+                                    true,
+                                    api::EphemeraConflictResolution::DisableConflicts,
+                                    cx,
+                                )
+                            });
+                        }),
+                    ),
+            );
         // Dialogs render out of flow; hold them in a zero-size box so the
         // closed ones add no gaps to the page.
         root.child(
             div()
                 .absolute()
                 .size_0()
+                .child(
+                    Dialog::new(cx)
+                        .open(self.ephemera_conflict_open)
+                        .accessibility_label("Renderer mod conflict")
+                        .close_on_backdrop_press(false)
+                        .on_ok(|_, _, _| false)
+                        .on_cancel(move |_, _, cx| !eph_veto_view.read(cx).busy)
+                        .on_open_change(move |open, _, _, cx| {
+                            eph_changed_view.update(cx, |v, cx| {
+                                v.ephemera_conflict_open = open;
+                                cx.notify();
+                            });
+                        })
+                        .backdrop(div().absolute().size_full().bg(gpui::rgba(0x000000a6)))
+                        .popup(ephemera_conflict_panel),
+                )
                 .child(
                     Dialog::new(cx)
                         .open(self.dup_open)
@@ -3981,6 +4141,16 @@ impl Render for InstanceEditor {
         )
     }
 }
+fn ephemera_conflicts(status: &api::EphemeraStatus) -> Vec<String> {
+    if !status.conflicting_mods.is_empty() {
+        status.conflicting_mods.clone()
+    } else if let Some(single) = &status.conflicting_mod {
+        vec![single.clone()]
+    } else {
+        Vec::new()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

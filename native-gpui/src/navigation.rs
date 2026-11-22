@@ -10,13 +10,13 @@ use gpui_kit::base::{Align, Button, ElementExt, Placement, Positioner};
 use crate::{
     InstanceTab, Launcher, api, aurora_instance_icon, chrome,
     controls::{AuroraButton, AuroraInput, AuroraSelect, ButtonSize, ButtonVariant},
-    downloads, images, instance_icon, instance_metadata, stored_icon, symbols,
+    downloads, instance_icon, instance_metadata, stored_icon, symbols,
     theme::AuroraTheme,
     ui,
 };
 
-const SIDEBAR_EXPANDED: f32 = 204.;
-const SIDEBAR_COLLAPSED: f32 = 90.;
+const SIDEBAR_EXPANDED: f32 = 224.;
+const SIDEBAR_COLLAPSED: f32 = 96.;
 const SIDEBAR_AUTOCOLLAPSE_WIDTH: f32 = 980.;
 pub(crate) const PAGE_GUTTER: f32 = 32.;
 pub(crate) const PAGE_CHROME: f32 = SIDEBAR_COLLAPSED + 2. * PAGE_GUTTER;
@@ -99,7 +99,7 @@ impl Launcher {
         let has_updates = self.updates_pending();
         let running = self.client_update_running(cx);
 
-        // Top brand lockup + collapse toggle (drag region stays separate from the toggle button).
+        // Minimal top drag region + sidebar collapse/expand toggle (no logo).
         let brand_row = if expanded {
             div()
                 .flex()
@@ -108,28 +108,10 @@ impl Launcher {
                 .justify_between()
                 .gap(px(8.))
                 .w_full()
-                .h(px(52.))
+                .h(px(48.))
                 .px(px(14.))
                 .child(chrome::drag_region(
-                    div()
-                        .id("brand")
-                        .flex()
-                        .flex_1()
-                        .min_w(px(0.))
-                        .h_full()
-                        .items_center()
-                        .gap(px(10.))
-                        .child(gpui::img(images::aurora_logo()).w(px(30.)).h(px(24.)))
-                        .child(
-                            div().flex().flex_col().min_w(px(0.)).child(
-                                div()
-                                    .text_size(px(14.))
-                                    .line_height(px(20.))
-                                    .font_weight(FontWeight::SEMIBOLD)
-                                    .text_color(t.foreground)
-                                    .child("Aurora Launcher"),
-                            ),
-                        ),
+                    div().id("brand").flex_1().min_w(px(0.)).h_full(),
                 ))
                 .child(
                     Button::new("sidebar-collapse-toggle")
@@ -138,12 +120,12 @@ impl Launcher {
                         .flex_none()
                         .items_center()
                         .justify_center()
-                        .size(px(28.))
+                        .size(px(34.))
                         .rounded(t.radius)
                         .hover(|s| s.bg(t.control_hover))
                         .child(symbols::icon(
                             Some("chevron_left"),
-                            px(18.),
+                            px(22.),
                             t.muted_foreground,
                         ))
                         .on_click(cx.listener(|this, _, _, cx| {
@@ -158,19 +140,23 @@ impl Launcher {
                 .flex_col()
                 .items_center()
                 .w_full()
-                .pt(px(12.))
-                .pb(px(10.))
+                .pt(px(10.))
+                .pb(px(6.))
                 .child(chrome::drag_region(
                     Button::new("sidebar-expand-toggle")
                         .accessibility_label("Expand sidebar")
                         .flex()
-                        .w_full()
-                        .h(px(42.))
+                        .w(px(76.))
+                        .h(px(36.))
                         .items_center()
                         .justify_center()
                         .rounded(t.radius)
                         .hover(|s| s.bg(t.control_hover))
-                        .child(gpui::img(images::aurora_logo()).w(px(36.)).h(px(28.)))
+                        .child(symbols::icon(
+                            Some("arrow_forward"),
+                            px(20.),
+                            t.muted_foreground,
+                        ))
                         .on_click(cx.listener(|this, _, _, cx| {
                             if this.sidebar_collapsed {
                                 this.sidebar_collapsed = false;
@@ -206,11 +192,11 @@ impl Launcher {
                 label.to_owned()
             };
             let item_h = px(if compact {
-                46.
+                52.
             } else if expanded {
-                42.
+                48.
             } else {
-                58.
+                66.
             });
             let icon_color = if disabled {
                 t.subtle_foreground
@@ -242,12 +228,12 @@ impl Launcher {
                 .flex_none()
                 .flex()
                 .items_center()
-                .when(expanded, |b| b.w_full().px(px(12.)).gap(px(8.)))
+                .when(expanded, |b| b.w_full().px(px(14.)).gap(px(10.)))
                 .when(!expanded, |b| {
-                    b.flex_col().w(px(72.)).justify_center().gap(px(4.))
+                    b.flex_col().w(px(78.)).justify_center().gap(px(5.))
                 })
                 .h(item_h)
-                .rounded(px(8.))
+                .rounded(px(10.))
                 .border_1()
                 .border_color(if selected {
                     t.border_subtle
@@ -259,13 +245,13 @@ impl Launcher {
                 .when(selected, |b| b.bg(t.accent_soft))
                 .child(symbols::icon(
                     Some(icon),
-                    px(if expanded { 20. } else { 24. }),
+                    px(if expanded { 24. } else { 28. }),
                     icon_color,
                 ))
                 .when(!expanded, |b| {
                     b.child(
                         div()
-                            .text_size(px(11.))
+                            .text_size(px(12.))
                             .line_height(px(16.))
                             .font_weight(if selected {
                                 FontWeight::SEMIBOLD
@@ -457,8 +443,8 @@ impl Launcher {
                     .flex_none()
                     .items_center()
                     .justify_center()
-                    .size(px(34.))
-                    .rounded(px(10.))
+                    .size(px(42.))
+                    .rounded(px(12.))
                     .overflow_hidden()
                     .bg(if account_signed_in {
                         t.accent_soft
@@ -632,7 +618,7 @@ impl Launcher {
         if let Some(search) = &self.instances_search {
             left_controls = left_controls.child(
                 div()
-                    .w(px(220.))
+                    .w(px(248.))
                     .child(AuroraInput::new(search).label("Search instances")),
             );
         }
@@ -782,13 +768,13 @@ impl Launcher {
         let sb_width = sidebar_width(window.viewport_size().width, self.sidebar_collapsed);
         let available = (f32::from(window.viewport_size().width) - sb_width - 2. * PAGE_GUTTER)
             .min(ui::MAX_CONTENT_WIDTH);
-        let columns = ((available + 16.) / 460.).floor().clamp(1., 3.) as u16;
+        let columns = ((available + 18.) / 430.).floor().clamp(1., 2.) as u16;
         let editor_busy = self
             .instance_editor
             .as_ref()
             .is_some_and(|editor| editor.read(cx).is_busy());
 
-        let mut grid = div().grid().grid_cols(columns).gap(px(16.)).w_full();
+        let mut grid = div().grid().grid_cols(columns).gap(px(18.)).w_full();
 
         for &instance in &visible {
             let id = instance.id.clone();
@@ -803,7 +789,11 @@ impl Launcher {
                     .iter()
                     .any(|b| b.code == "launch_authentication_required");
 
-            let card_border = if active { t.border } else { t.border_subtle };
+            let card_border = if active {
+                Hsla { a: 0.65, ..t.ring }
+            } else {
+                t.border_subtle
+            };
 
             let open_id = id.clone();
             let play_or_select_id = id.clone();
@@ -835,7 +825,7 @@ impl Launcher {
                     .flex_none()
                     .items_center()
                     .justify_center()
-                    .size(px(36.))
+                    .size(px(44.))
                     .rounded_full()
                     .bg(if can_kill { t.danger } else { t.accent_soft })
                     .border_1()
@@ -844,7 +834,7 @@ impl Launcher {
                     .focus_visible(move |s| s.border_1().border_color(play_ring))
                     .child(symbols::icon(
                         Some(icon),
-                        px(16.),
+                        px(22.),
                         if can_kill {
                             t.accent_foreground
                         } else {
@@ -869,14 +859,14 @@ impl Launcher {
                     .flex_none()
                     .items_center()
                     .justify_center()
-                    .size(px(36.))
+                    .size(px(44.))
                     .rounded_full()
                     .bg(t.control)
                     .border_1()
                     .border_color(t.border)
                     .hover(move |s| s.bg(play_hover))
                     .focus_visible(move |s| s.border_color(play_ring))
-                    .child(symbols::icon(Some("play_arrow"), px(18.), t.foreground))
+                    .child(symbols::icon(Some("play_arrow"), px(22.), t.foreground))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         this.select_and_play(play_or_select_id.clone(), cx);
                         cx.notify();
@@ -906,12 +896,12 @@ impl Launcher {
                 .flex_none()
                 .items_center()
                 .justify_center()
-                .size(px(28.))
+                .size(px(34.))
                 .rounded_full()
                 .hover(move |s| s.bg(hover_bg))
                 .child(
                     div()
-                        .text_size(px(14.))
+                        .text_size(px(17.))
                         .text_color(if is_pinned {
                             t.ring
                         } else {
@@ -928,8 +918,8 @@ impl Launcher {
                 .flex_row()
                 .items_center()
                 .justify_between()
-                .gap(px(12.))
-                .p(px(14.))
+                .gap(px(14.))
+                .p(px(18.))
                 .rounded(t.radius_lg)
                 .bg(if active {
                     Hsla { a: 0.14, ..t.ring }.blend(t.card)
@@ -939,6 +929,7 @@ impl Launcher {
                 .border_1()
                 .border_color(card_border)
                 .min_w(px(0.))
+                .child(primary_action)
                 .child(
                     Button::new(SharedString::from(format!("instance-grid-{id}")))
                         .disabled(editor_busy)
@@ -951,7 +942,7 @@ impl Launcher {
                         .flex()
                         .flex_1()
                         .items_center()
-                        .gap(px(12.))
+                        .gap(px(14.))
                         .min_w(px(0.))
                         .p(px(4.))
                         .m(px(-4.))
@@ -959,7 +950,7 @@ impl Launcher {
                         .hover(move |s| s.bg(hover_bg))
                         .child(aurora_instance_icon(
                             stored_icon(&state.icons, &id),
-                            56.,
+                            60.,
                             active || has_aurora,
                             has_aurora,
                             t,
@@ -968,7 +959,7 @@ impl Launcher {
                             div()
                                 .flex()
                                 .flex_col()
-                                .gap(px(4.))
+                                .gap(px(3.))
                                 .flex_1()
                                 .min_w(px(0.))
                                 .child(
@@ -995,7 +986,7 @@ impl Launcher {
                                             .whitespace_nowrap()
                                             .child(match instance.aurora.as_ref() {
                                                 Some(pin) => format!(
-                                                    "{} · {} · Aurora Client {}",
+                                                    "{} · {} · Aurora {}",
                                                     instance.minecraft_version,
                                                     short_platform_label(instance),
                                                     pin.version
@@ -1027,14 +1018,7 @@ impl Launcher {
                             cx.notify();
                         })),
                 )
-                .child(
-                    div()
-                        .flex()
-                        .items_center()
-                        .gap(px(4.))
-                        .child(pin_button)
-                        .child(primary_action),
-                );
+                .child(pin_button);
             grid = grid.child(card);
         }
 
@@ -1180,62 +1164,85 @@ impl Launcher {
                     })),
             );
 
-        let mut meta_badges =
-            div()
-                .flex()
-                .flex_wrap()
-                .items_center()
-                .gap(px(10.))
-                .child(ui::muted(
-                    t,
-                    format!(
-                        "{} · {}",
-                        instance.minecraft_version,
-                        short_platform_label(instance)
-                    ),
-                ));
-        if let Some(pin) = &instance.aurora {
-            meta_badges = meta_badges.child(ui::aurora_badge(
-                t,
-                format!("Aurora Client {}", pin.version),
-            ));
-        }
-        meta_badges = meta_badges.child(ui::status_badge(t, status, tone));
-
-        let header = div()
+        // Right-aligned pill-free metadata & actionable-only status indicator.
+        let mut right_meta = div()
             .flex()
             .flex_wrap()
             .items_center()
-            .justify_between()
-            .gap(px(16.))
-            .child(
+            .gap(px(10.))
+            .text_size(px(ui::TEXT_BODY - 1.));
+        if let Some(pin) = &instance.aurora {
+            right_meta = right_meta.child(
                 div()
                     .flex()
                     .items_center()
+                    .gap(px(5.))
+                    .text_color(t.ring)
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(symbols::icon(Some("auto_awesome"), px(13.), t.ring))
+                    .child(format!("Aurora {}", pin.version)),
+            );
+        }
+        right_meta = right_meta.child(div().text_color(t.muted_foreground).child(format!(
+            "{} · {}",
+            instance.minecraft_version,
+            short_platform_label(instance)
+        )));
+        if status != "Installed" && status != "Ready" {
+            let dot_color = match tone {
+                ui::Tone::Success => t.success,
+                ui::Tone::Warning => t.warning,
+                ui::Tone::Danger => t.danger,
+                ui::Tone::Accent => t.ring,
+                ui::Tone::Neutral => t.muted_foreground,
+            };
+            right_meta = right_meta.child(
+                div()
+                    .flex()
+                    .items_center()
+                    .gap(px(6.))
+                    .text_color(dot_color)
+                    .font_weight(FontWeight::MEDIUM)
+                    .child(div().size(px(6.)).rounded_full().bg(dot_color))
+                    .child(status),
+            );
+        }
+
+        // Pandora-style detail header: icon + title + primary action buttons on the LEFT,
+        // quiet version/status indicators on the RIGHT.
+        let header = div()
+            .flex()
+            .flex_col()
+            .gap(px(12.))
+            .child(
+                div()
+                    .flex()
+                    .flex_wrap()
+                    .items_center()
+                    .justify_between()
                     .gap(px(16.))
-                    .min_w(px(0.))
-                    .child(aurora_instance_icon(
-                        stored_icon(&state.icons, id),
-                        68.,
-                        active || instance.aurora.is_some(),
-                        instance.aurora.is_some(),
-                        t,
-                    ))
                     .child(
                         div()
                             .flex()
-                            .flex_col()
-                            .gap(px(6.))
+                            .items_center()
+                            .gap(px(14.))
                             .min_w(px(0.))
+                            .child(aurora_instance_icon(
+                                stored_icon(&state.icons, id),
+                                68.,
+                                active || instance.aurora.is_some(),
+                                instance.aurora.is_some(),
+                                t,
+                            ))
                             .child(
                                 div()
                                     .text_size(px(ui::TEXT_TITLE))
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(t.foreground)
                                     .child(instance.display_name.clone()),
-                            )
-                            .child(meta_badges),
-                    ),
+                            ),
+                    )
+                    .child(right_meta),
             )
             .child(header_actions);
 
@@ -1291,7 +1298,7 @@ impl Launcher {
                 };
                 let client_offer = self.client_offer(instance).map(str::to_owned);
 
-                // Row 1: Clean Aurora Client status card (Pulsar & Updates actions unified; zero decorative icon duplication).
+                // Row 1: Aurora Client card — action buttons on the LEFT, concise indicator on the RIGHT.
                 let aurora_hero = match (&instance.aurora, instance.platform.kind.as_str()) {
                     (Some(pin), _) => {
                         let channel_label = if pin.channel.eq_ignore_ascii_case("stable") {
@@ -1299,7 +1306,7 @@ impl Launcher {
                         } else {
                             pin.channel.clone()
                         };
-                        ui::aurora_card(t).p(px(20.)).child(
+                        ui::aurora_card(t).p(px(18.)).child(
                             div()
                                 .relative()
                                 .flex()
@@ -1310,8 +1317,9 @@ impl Launcher {
                                 .child(
                                     div()
                                         .flex()
-                                        .flex_col()
-                                        .gap(px(8.))
+                                        .flex_wrap()
+                                        .items_center()
+                                        .gap(px(12.))
                                         .child(
                                             div()
                                                 .text_size(px(ui::TEXT_SECTION + 2.))
@@ -1320,39 +1328,9 @@ impl Launcher {
                                                 .child("Aurora Client"),
                                         )
                                         .child(
-                                            div()
-                                                .flex()
-                                                .flex_wrap()
-                                                .items_center()
-                                                .gap(px(10.))
-                                                .child(ui::status_badge(
-                                                    t,
-                                                    if let Some(ver) = &client_offer {
-                                                        format!("v{ver} available")
-                                                    } else {
-                                                        "Verified".to_owned()
-                                                    },
-                                                    if client_offer.is_some() {
-                                                        ui::Tone::Accent
-                                                    } else {
-                                                        ui::Tone::Success
-                                                    },
-                                                ))
-                                                .child(ui::caption(
-                                                    t,
-                                                    format!("{channel_label} channel"),
-                                                )),
-                                        ),
-                                )
-                                .child(
-                                    div()
-                                        .flex()
-                                        .flex_wrap()
-                                        .items_center()
-                                        .gap(px(8.))
-                                        .child(
                                             AuroraButton::new("overview-open-pulsar", "Pulsar")
                                                 .variant(ButtonVariant::Default)
+                                                .size(ButtonSize::Small)
                                                 .on_click(cx.listener(|this, _, window, cx| {
                                                     this.open_page(9, window, cx);
                                                     cx.notify();
@@ -1367,6 +1345,7 @@ impl Launcher {
                                                     "Check updates"
                                                 },
                                             )
+                                            .size(ButtonSize::Small)
                                             .variant(if client_offer.is_some() {
                                                 ButtonVariant::Soft
                                             } else {
@@ -1389,6 +1368,23 @@ impl Launcher {
                                                 },
                                             ),
                                         ),
+                                )
+                                .child(
+                                    div()
+                                        .flex()
+                                        .items_center()
+                                        .gap(px(8.))
+                                        .text_size(px(ui::TEXT_CAPTION))
+                                        .text_color(if client_offer.is_some() {
+                                            t.ring
+                                        } else {
+                                            t.muted_foreground
+                                        })
+                                        .child(if let Some(ver) = &client_offer {
+                                            format!("v{ver} available · {channel_label}")
+                                        } else {
+                                            format!("v{} · {channel_label}", pin.version)
+                                        }),
                                 ),
                         )
                     }
@@ -1404,48 +1400,55 @@ impl Launcher {
                                 .child(
                                     div()
                                         .flex()
+                                        .flex_wrap()
                                         .items_center()
-                                        .gap(px(14.))
-                                        .child(instance_icon(Some("auto_awesome"), 54., false, t))
-                                        .child(ui::title_block(
-                                            t,
-                                            "Aurora Client",
-                                            Some("Not installed".into()),
-                                        )),
+                                        .gap(px(12.))
+                                        .child(
+                                            div()
+                                                .text_size(px(ui::TEXT_SECTION + 2.))
+                                                .font_weight(FontWeight::SEMIBOLD)
+                                                .text_color(t.foreground)
+                                                .child("Aurora Client"),
+                                        )
+                                        .child(
+                                            AuroraButton::new(
+                                                "overview-install-aurora",
+                                                "Install Aurora Client",
+                                            )
+                                            .variant(ButtonVariant::Soft)
+                                            .size(ButtonSize::Small)
+                                            .icon("auto_awesome")
+                                            .on_click(
+                                                cx.listener(move |this, _, window, cx| {
+                                                    this.open_instance(
+                                                        settings_id.clone(),
+                                                        InstanceTab::Settings,
+                                                        0,
+                                                        window,
+                                                        cx,
+                                                    );
+                                                    cx.notify();
+                                                }),
+                                            ),
+                                        ),
                                 )
-                                .child(
-                                    AuroraButton::new(
-                                        "overview-install-aurora",
-                                        "Install Aurora Client",
-                                    )
-                                    .variant(ButtonVariant::Soft)
-                                    .icon("auto_awesome")
-                                    .on_click(cx.listener(
-                                        move |this, _, window, cx| {
-                                            this.open_instance(
-                                                settings_id.clone(),
-                                                InstanceTab::Settings,
-                                                0,
-                                                window,
-                                                cx,
-                                            );
-                                            cx.notify();
-                                        },
-                                    )),
-                                ),
+                                .child(ui::caption(t, "Not installed")),
                         )
                     }
                     (None, _) => ui::card(t).child(
                         div()
                             .flex()
                             .items_center()
+                            .justify_between()
                             .gap(px(14.))
-                            .child(instance_icon(Some("auto_awesome"), 52., false, t))
-                            .child(ui::title_block(
-                                t,
-                                "Aurora Client",
-                                Some("Requires Fabric".into()),
-                            )),
+                            .child(
+                                div()
+                                    .text_size(px(ui::TEXT_SECTION + 2.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(t.foreground)
+                                    .child("Aurora Client"),
+                            )
+                            .child(ui::caption(t, "Requires Fabric")),
                     ),
                 };
                 out.push(aurora_hero.into_any_element());

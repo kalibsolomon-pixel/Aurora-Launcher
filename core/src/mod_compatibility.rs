@@ -62,6 +62,17 @@ pub struct CompatibilityIssue {
     pub installed_version: Option<String>,
     pub ownership: ModOwnership,
     pub message: String,
+    /// True when the declaring `entry` is a not-yet-installed planned artifact.
+    #[serde(skip_serializing)]
+    pub(crate) is_planned_source: bool,
+    /// The other mod involved in a pairwise conflict (`mod_declared_break` or
+    /// `mod_duplicate_root`), when present in `inventory`.
+    #[serde(skip_serializing)]
+    pub(crate) target_mod_id: Option<String>,
+    #[serde(skip_serializing)]
+    pub(crate) target_file_name: Option<String>,
+    #[serde(skip_serializing)]
+    pub(crate) target_ownership: Option<ModOwnership>,
 }
 
 pub(crate) fn version_for<'a>(metadata: &'a ModMetadata, id: &str) -> Option<&'a str> {
@@ -167,7 +178,30 @@ fn issue(
         installed_version,
         ownership: entry.ownership,
         message,
+        is_planned_source: entry.entry_id.starts_with("planned:"),
+        target_mod_id: None,
+        target_file_name: None,
+        target_ownership: None,
     }
+}
+
+fn pairwise_issue(
+    entry: &ModEntry,
+    other: &ModEntry,
+    code: &str,
+    requirement: Option<String>,
+    installed_version: Option<String>,
+    message: String,
+) -> CompatibilityIssue {
+    let mut item = issue(entry, code, requirement, installed_version, message);
+    item.target_mod_id = other
+        .metadata
+        .as_ref()
+        .map(|m| m.id.clone())
+        .or_else(|| Some(other.display_name.clone()));
+    item.target_file_name = Some(other.file_name.clone());
+    item.target_ownership = Some(other.ownership);
+    item
 }
 
 /// `java_major` comes only from the resolved game plan. None skips Java checks
@@ -297,8 +331,9 @@ pub fn validate(
                 {
                     match satisfies_for_family(version, &relation.requirement, loader_family) {
                         Ok(false) => {}
-                        result => issues.push(issue(
+                        result => issues.push(pairwise_issue(
                             entry,
+                            other,
                             "mod_declared_break",
                             Some(relation.requirement.clone()),
                             Some(version.into()),
@@ -329,7 +364,7 @@ pub fn validate(
         {
             let other_meta = other.metadata.as_ref().unwrap();
             if metadata.id == other_meta.id {
-                issues.push(issue(entry,"mod_duplicate_root",None,other_meta.version.clone(),format!("Top-level identity {} is provided by both {} and {}. No file will be adopted or replaced.",metadata.id,entry.file_name,other.file_name)));
+                issues.push(pairwise_issue(entry,other,"mod_duplicate_root",None,other_meta.version.clone(),format!("Top-level identity {} is provided by both {} and {}. No file will be adopted or replaced.",metadata.id,entry.file_name,other.file_name)));
             }
         }
         if let Some(java) = java_major {
@@ -364,6 +399,92 @@ mod tests {
     use super::*;
     use crate::instance_mods::inspect_fabric_metadata;
     use std::io::{Cursor, Write};
+
+    #[test]
+    fn planned_incoming_break_identifies_existing_target_mod() {
+        use crate::instance_mods::{
+            ModEntry, ModFileType, ModInventory, ModMetadata, ModOwnership, ModRelation,
+        };
+        use std::collections::HashMap;
+        let existing = ModEntry {
+            entry_id: "disk:ephemera-0.2.0.jar".into(),
+            file_name: "ephemera-0.2.0.jar".into(),
+            display_name: "Ephemera".into(),
+            enabled: true,
+            file_type: ModFileType::EnabledJar,
+            size_bytes: Some(128),
+            modified_unix_millis: None,
+            ownership: ModOwnership::LauncherBootstrap,
+            sha256: Some("a".repeat(64)),
+            provenance: None,
+            metadata: Some(ModMetadata {
+                id: "ephemera".into(),
+                name: Some("Ephemera".into()),
+                version: Some("0.2.0".into()),
+                description: None,
+                authors: vec![],
+                environment: Some("client".into()),
+                depends: vec![],
+                recommends: vec![],
+                suggests: vec![],
+                conflicts: vec![],
+                breaks: vec![],
+                has_declared_icon: false,
+                nested_mod_ids: vec![],
+                nested_mod_versions: HashMap::new(),
+                mixin_java_requirements: vec![],
+            }),
+            warnings: vec![],
+            can_toggle: true,
+            can_remove: true,
+            removal_blocked_reason: None,
+            action_blocked_reason: None,
+        };
+        let mut inventory = ModInventory {
+            instance_id: "inst".into(),
+            entries: vec![existing],
+            missing_managed: vec![],
+        };
+        add_artifact(
+            &mut inventory,
+            "sodium-0.6.0.jar".into(),
+            ModMetadata {
+                id: "sodium".into(),
+                name: Some("Sodium".into()),
+                version: Some("0.6.0".into()),
+                description: None,
+                authors: vec![],
+                environment: Some("client".into()),
+                depends: vec![],
+                recommends: vec![],
+                suggests: vec![],
+                conflicts: vec![],
+                breaks: vec![ModRelation {
+                    mod_id: "ephemera".into(),
+                    requirement: "*".into(),
+                }],
+                has_declared_icon: false,
+                nested_mod_ids: vec![],
+                nested_mod_versions: HashMap::new(),
+                mixin_java_requirements: vec![],
+            },
+            "b".repeat(64),
+            vec![],
+        );
+        let issues = validate(&inventory, "1.21.4", "0.16.10", Some(21), "fabric");
+        assert_eq!(issues.len(), 1);
+        assert_eq!(issues[0].code, "mod_declared_break");
+        assert!(issues[0].is_planned_source);
+        assert_eq!(issues[0].target_mod_id.as_deref(), Some("ephemera"));
+        assert_eq!(
+            issues[0].target_file_name.as_deref(),
+            Some("ephemera-0.2.0.jar")
+        );
+        assert_eq!(
+            issues[0].target_ownership,
+            Some(ModOwnership::LauncherBootstrap)
+        );
+    }
 
     #[test]
     fn forge_followup_builtins_compare_builds_for_dependencies_and_breaks() {

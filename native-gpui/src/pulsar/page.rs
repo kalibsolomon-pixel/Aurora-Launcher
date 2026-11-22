@@ -1524,9 +1524,21 @@ impl Pulsar {
 
         if self.library.total == 0 && self.error.is_none() {
             let launch_target = self
-                .library
-                .instances
-                .first()
+                .query
+                .instance_id
+                .as_deref()
+                .and_then(|wanted| {
+                    self.library
+                        .instances
+                        .iter()
+                        .find(|i| i.instance_id == wanted)
+                })
+                .or_else(|| {
+                    self.library
+                        .instances
+                        .iter()
+                        .find(|i| !i.source_roots.is_empty() || i.recordings > 0)
+                })
                 .map(|i| (i.instance_id.clone(), i.instance_name.clone()));
             let cta_label = launch_target
                 .as_ref()

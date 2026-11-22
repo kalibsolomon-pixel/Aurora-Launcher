@@ -2418,14 +2418,29 @@ impl Render for Settings {
                             format!("Aurora Launcher {}", env!("CARGO_PKG_VERSION")),
                         ))
                         .child({
-                            let (badge_label, badge_tone) = if self.updates_pending {
-                                ("Update available", ui::Tone::Accent)
+                            let (badge_label, accent) = if self.updates_pending {
+                                ("Update available", true)
                             } else if let Some(overview) = &self.updates {
-                                availability_badge(&overview.launcher.availability)
+                                let (label, tone) =
+                                    availability_badge(&overview.launcher.availability);
+                                (label, matches!(tone, ui::Tone::Accent))
                             } else {
-                                ("Not checked", ui::Tone::Neutral)
+                                ("Up to date check pending", false)
                             };
-                            ui::status_badge(t, badge_label, badge_tone)
+                            if accent {
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .text_size(px(ui::TEXT_CAPTION))
+                                    .font_weight(gpui::FontWeight::MEDIUM)
+                                    .text_color(t.ring)
+                                    .child(div().size(px(6.)).rounded_full().bg(t.ring))
+                                    .child(badge_label)
+                                    .into_any_element()
+                            } else {
+                                ui::caption(t, badge_label).into_any_element()
+                            }
                         }),
                 );
             }

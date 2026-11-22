@@ -334,7 +334,16 @@ pub(crate) fn instance_icon(
     } else {
         palette.border_subtle
     };
-    let radius = if size >= 48. { px(12.) } else { px(8.) };
+    let radius = if size >= 96. {
+        px(20.)
+    } else if size >= 72. {
+        px(16.)
+    } else if size >= 48. {
+        px(12.)
+    } else {
+        px(8.)
+    };
+    let glyph_ratio = if size >= 96. { 0.56 } else { 0.5 };
     div()
         .relative()
         .flex()
@@ -347,7 +356,7 @@ pub(crate) fn instance_icon(
         .bg(bg)
         .border_1()
         .border_color(border)
-        .child(symbols::icon(name, px((size * 0.5).round()), ink))
+        .child(symbols::icon(name, px((size * glyph_ratio).round()), ink))
 }
 
 /// Instance icon with a flat solid Aurora sparkle corner badge for Aurora Client instances.
@@ -496,6 +505,7 @@ struct Launcher {
     hero_activity: HashMap<String, Vec<(gpui::SharedString, gpui::SharedString)>>,
     appearance: Option<api::Appearance>,
     readiness: Option<api::PlayReadiness>,
+    readiness_cache: HashMap<String, api::PlayReadiness>,
     processes: HashMap<String, api::LaunchProcess>,
     process_serial: u64,
     game_showcase_applied: bool,
@@ -838,7 +848,7 @@ impl Launcher {
             .as_ref()
             .is_some_and(|r| Some(r.instance_id.as_str()) != self.selected_id())
         {
-            self.readiness = None;
+            self.readiness = self.cached_readiness_for_selected();
         }
         self.startup_pending |= startup;
         if self.load_in_flight {
@@ -924,12 +934,22 @@ impl Launcher {
         self.reload();
         self.sync_mutation_guards(cx);
     }
+    fn cached_readiness_for_selected(&self) -> Option<api::PlayReadiness> {
+        let id = self.selected_id()?;
+        self.readiness_cache
+            .get(id)
+            .filter(|r| r.account_id == self.accounts.selected_account_id)
+            .cloned()
+    }
+
     fn readiness(&mut self) {
         if self.readiness.as_ref().is_some_and(|r| {
             Some(r.instance_id.as_str()) != self.selected_id()
                 || r.account_id != self.accounts.selected_account_id
         }) {
-            self.readiness = None;
+            self.readiness = self.cached_readiness_for_selected();
+        } else if self.readiness.is_none() {
+            self.readiness = self.cached_readiness_for_selected();
         }
         self.begin_readiness();
     }
@@ -1340,13 +1360,27 @@ impl Launcher {
         self.busy = true;
         self.sync_mutation_guards(cx);
         self.serial += 1;
-        self.readiness = None;
-        self.status = if op == "runtime" {
-            "Installing Java…"
+        if op == "select" {
+            // Seamless Pandora-style instance switching: hydrate from the last
+            // verified snapshot for this instance while silently re-verifying,
+            // and never flash a transient "Working…" footer bar.
+            self.readiness = self
+                .readiness_cache
+                .get(&id)
+                .filter(|r| r.account_id == self.accounts.selected_account_id)
+                .cloned();
+            self.status.clear();
+        } else if op == "play" {
+            self.status.clear();
         } else {
-            "Working…"
+            self.readiness = None;
+            self.status = if op == "runtime" {
+                "Installing Java…"
+            } else {
+                "Working…"
+            }
+            .into();
         }
-        .into();
         if op == "play" {
             self.launching = Some(id.clone());
             self.maybe_open_log(id.clone());
@@ -2324,6 +2358,8 @@ impl Launcher {
                 self.load_error = None;
                 match s.launcher {
                     Ok(state) => {
+                        self.readiness_cache
+                            .retain(|id, _| state.instances.iter().any(|i| &i.id == id));
                         if self.instance_detail.as_ref().is_some_and(|(id, _)| {
                             !state.instances.iter().any(|instance| &instance.id == id)
                         }) {
@@ -2338,9 +2374,15 @@ impl Launcher {
                     }
                 }
                 match s.accounts {
-                    Ok(v) => self.accounts = v,
+                    Ok(v) => {
+                        if self.accounts.selected_account_id != v.selected_account_id {
+                            self.readiness_cache.clear();
+                        }
+                        self.accounts = v;
+                    }
                     Err(e) => {
                         self.accounts = Default::default();
+                        self.readiness_cache.clear();
                         self.load_error = Some(e.message);
                     }
                 }
@@ -2375,9 +2417,13 @@ impl Launcher {
                                 && self.accounts.selected_account_id == v.account_id =>
                         {
                             stale = stale_running(&v, self.processes.get(&v.instance_id));
+                            self.readiness_cache
+                                .insert(v.instance_id.clone(), v.clone());
                             self.readiness = Some(v)
                         }
-                        Ok(_) => {}
+                        Ok(v) => {
+                            self.readiness_cache.insert(v.instance_id.clone(), v);
+                        }
                         Err(e) => self.status = e.message,
                     }
                     if !stale {
@@ -2633,69 +2679,19 @@ impl Launcher {
             .as_deref()
             .and_then(|id| launcher.instances.iter().find(|i| i.id == id));
         let t = palette;
-        let has_aurora = instance.is_some_and(|i| i.aurora.is_some());
-        // Balanced, breathable two-line identity stack inside the Home instance card:
-        // condensed enough to leave prime room for widgets, spacious enough to feel primary.
-        let mut head = div().flex().flex_col().gap(px(10.)).flex_1().min_w(px(0.));
-        if let Some(instance) = instance {
-            head = head.child(div().flex().items_center().gap(px(10.)).child(
-                if launcher.instances.len() > 1 {
-                    self.instance_switcher(launcher, selected.as_deref(), window, cx)
-                        .into_any_element()
-                } else {
-                    div()
-                        .text_size(px(ui::TEXT_DISPLAY + 2.))
-                        .line_height(px(34.))
-                        .font_weight(gpui::FontWeight::BOLD)
-                        .text_color(t.foreground)
-                        .text_ellipsis()
-                        .child(instance.display_name.clone())
-                        .into_any_element()
-                },
-            ));
-            let mut metadata = div().flex().items_center().flex_wrap().gap(px(8.));
-            if let Some(pin) = &instance.aurora {
-                metadata = metadata.child(ui::aurora_badge(
-                    t,
-                    format!("Aurora Client {}", pin.version),
-                ));
-            }
-            metadata = metadata.child(ui::badge(
-                t,
-                format!(
-                    "{} · {}",
-                    instance.minecraft_version,
-                    navigation::short_platform_label(instance)
-                ),
-                ui::Tone::Neutral,
-            ));
-            if let Some((label, tone)) = self.readiness_badge(&instance.id) {
-                metadata = metadata.child(ui::status_badge(t, label, tone));
-            }
-            head = head.child(metadata);
-        } else {
-            head = head.child(self.instance_switcher(launcher, selected.as_deref(), window, cx));
-        }
+        // Prominent hero: large instance icon + split Play button (with built-in
+        // right-side instance selector) and selected instance displayed directly
+        // below Play; active status indicator on the right only when needed.
         let hero_icon = instance.map(|instance| {
-            aurora_instance_icon(
+            instance_icon(
                 stored_icon(&launcher.icons, &instance.id),
-                58.,
+                112.,
                 true,
-                instance.aurora.is_some(),
                 palette,
             )
         });
-        let details = div()
-            .relative()
-            .flex()
-            .items_center()
-            .gap(px(18.))
-            .flex_1()
-            .min_w(px(0.))
-            .children(hero_icon)
-            .child(head);
-        let mut primary_cta: Option<gpui::AnyElement> = None;
-        if let Some(id) = selected.clone() {
+        let split_h = px(56.);
+        let primary_cta: gpui::AnyElement = if let Some(id) = selected.clone() {
             let play_id = id.clone();
             let can_kill = self.can_kill(&id);
             let needs_sign_in = !can_kill
@@ -2709,99 +2705,168 @@ impl Launcher {
                     .as_ref()
                     .is_some_and(|r| r.instance_id == id && !r.ready && r.can_launch_offline);
             let offline_id = id.clone();
-            primary_cta = Some(
+            let has_switcher = !launcher.instances.is_empty();
+            div()
+                .flex()
+                .flex_wrap()
+                .items_center()
+                .gap(px(10.))
+                .child(
+                    div()
+                        .flex()
+                        .flex_shrink_0()
+                        .items_center()
+                        .child(
+                            self.button(
+                                "play",
+                                if needs_sign_in {
+                                    "Sign in to play"
+                                } else {
+                                    self.play_label(&id)
+                                },
+                            )
+                            .variant(if can_kill {
+                                ButtonVariant::Danger
+                            } else {
+                                ButtonVariant::Primary
+                            })
+                            .size(ButtonSize::Hero)
+                            .split_left(has_switcher)
+                            .icon(if can_kill {
+                                "stop"
+                            } else if needs_sign_in {
+                                "login"
+                            } else {
+                                "play_arrow"
+                            })
+                            .disabled(if needs_sign_in {
+                                self.controls_blocked()
+                            } else {
+                                !can_kill && !self.can_play(&id)
+                            })
+                            .on_click(cx.listener(
+                                move |this, _, window, cx| {
+                                    if can_kill {
+                                        this.request_kill(play_id.clone(), cx);
+                                    } else if needs_sign_in {
+                                        this.open_page(1, window, cx);
+                                    } else {
+                                        this.action("play", play_id.clone(), cx);
+                                    }
+                                    cx.notify();
+                                },
+                            )),
+                        )
+                        .when(has_switcher, |split| {
+                            split.child(
+                                self.instance_switcher(launcher, selected.as_deref(), window, cx)
+                                    .split_play_trigger(split_h, can_kill),
+                            )
+                        }),
+                )
+                .when(can_offline, |row| {
+                    row.child(
+                        self.button("play-offline", "Play Offline")
+                            .variant(ButtonVariant::Default)
+                            .size(ButtonSize::Large)
+                            .icon("wifi_off")
+                            .disabled(self.controls_blocked())
+                            .on_click(cx.listener(move |this, _, _, cx| {
+                                this.play_offline(offline_id.clone(), cx);
+                            })),
+                    )
+                })
+                .into_any_element()
+        } else {
+            self.instance_switcher(launcher, selected.as_deref(), window, cx)
+                .into_any_element()
+        };
+        let selected_instance_meta = instance.map(|instance| {
+            div()
+                .flex()
+                .flex_wrap()
+                .items_baseline()
+                .gap(px(10.))
+                .min_w(px(0.))
+                .child(
+                    div()
+                        .text_size(px(ui::TEXT_SECTION + 1.))
+                        .line_height(px(24.))
+                        .font_weight(gpui::FontWeight::SEMIBOLD)
+                        .text_color(t.foreground)
+                        .text_ellipsis()
+                        .child(instance.display_name.clone()),
+                )
+                .child(
+                    div()
+                        .text_size(px(ui::TEXT_BODY - 1.))
+                        .text_color(t.muted_foreground)
+                        .child(format!(
+                            "{} · {}",
+                            instance.minecraft_version,
+                            navigation::short_platform_label(instance)
+                        )),
+                )
+        });
+        let right_status = instance.and_then(|instance| {
+            self.readiness_badge(&instance.id).map(|(label, tone)| {
+                let dot_color = match tone {
+                    ui::Tone::Success => t.success,
+                    ui::Tone::Warning => t.warning,
+                    ui::Tone::Danger => t.danger,
+                    ui::Tone::Accent => t.ring,
+                    ui::Tone::Neutral => t.muted_foreground,
+                };
                 div()
                     .flex()
+                    .flex_shrink_0()
                     .items_center()
-                    .gap(px(8.))
-                    .when(can_offline, |row| {
-                        row.child(
-                            self.button("play-offline", "Play Offline")
-                                .variant(ButtonVariant::Default)
-                                .size(ButtonSize::Large)
-                                .icon("wifi_off")
-                                .disabled(self.controls_blocked())
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.play_offline(offline_id.clone(), cx);
-                                })),
-                        )
-                    })
-                    .child(
-                        self.button(
-                            "play",
-                            if needs_sign_in {
-                                "Sign in to play"
-                            } else {
-                                self.play_label(&id)
-                            },
-                        )
-                        .variant(if can_kill {
-                            ButtonVariant::Danger
-                        } else {
-                            ButtonVariant::Primary
-                        })
-                        .size(ButtonSize::Large)
-                        .icon(if can_kill {
-                            "stop"
-                        } else if needs_sign_in {
-                            "login"
-                        } else {
-                            "play_arrow"
-                        })
-                        .disabled(if needs_sign_in {
-                            self.controls_blocked()
-                        } else {
-                            !can_kill && !self.can_play(&id)
-                        })
-                        .on_click(cx.listener(
-                            move |this, _, window, cx| {
-                                if can_kill {
-                                    this.request_kill(play_id.clone(), cx);
-                                } else if needs_sign_in {
-                                    this.open_page(1, window, cx);
-                                } else {
-                                    this.action("play", play_id.clone(), cx);
-                                }
-                                cx.notify();
-                            },
-                        )),
-                    )
-                    .into_any_element(),
+                    .gap(px(7.))
+                    .text_size(px(ui::TEXT_BODY - 1.))
+                    .text_color(dot_color)
+                    .font_weight(gpui::FontWeight::MEDIUM)
+                    .child(div().size(px(7.)).rounded_full().bg(dot_color))
+                    .child(label)
+            })
+        });
+        let stacked = window.viewport_size().width < px(760.);
+        let left_group = div()
+            .relative()
+            .flex()
+            .items_center()
+            .gap(px(24.))
+            .min_w(px(0.))
+            .children(hero_icon)
+            .child(
+                div()
+                    .flex()
+                    .flex_col()
+                    .gap(px(10.))
+                    .min_w(px(0.))
+                    .child(primary_cta)
+                    .children(selected_instance_meta),
             );
-        }
-        // Spacious yet condensed Home launch card leaving prime canvas for widgets.
-        let stacked = window.viewport_size().width < px(900.);
-        let hero_card = if has_aurora {
-            ui::aurora_card(t)
-        } else {
-            ui::card(t)
-        };
         out.push(
-            hero_card
-                .px(px(22.))
-                .py(px(18.))
+            ui::card(t)
+                .px(px(28.))
+                .py(px(24.))
                 .when(!stacked, |card| {
                     card.flex_row().items_center().justify_between()
                 })
-                .gap(px(20.))
-                .child(details)
-                .when_some(primary_cta, |card, cta| {
-                    card.child(div().relative().flex().flex_shrink_0().child(cta))
-                })
+                .gap(px(18.))
+                .child(left_group)
+                .children(right_status)
                 .into_any_element(),
         );
         if let Some(id) = selected.clone() {
             if let Some(process) = self.processes.get(&id) {
                 let label = match process.status.as_str() {
-                    "starting" => "Starting Minecraft…".into(),
-                    "running" => "Minecraft is running.".into(),
-                    "exited" => format!(
+                    "exited" if process.exit_code.is_some_and(|code| code != 0) => format!(
                         "Minecraft closed (exit code {}).",
                         process
                             .exit_code
                             .map_or("unknown".into(), |code| code.to_string())
                     ),
-                    "stopped" if process.message.is_some() => "Stopped by you.".into(),
                     "failed" => process
                         .diagnostic
                         .as_ref()
@@ -2815,18 +2880,6 @@ impl Launcher {
                 if !label.is_empty() {
                     out.push(ui::muted(t, label).into_any_element());
                 }
-            }
-            if self.readiness.is_none()
-                && self.host.is_some()
-                && (self.readiness_in_flight || self.load_in_flight)
-            {
-                out.push(
-                    div()
-                        .text_sm()
-                        .text_color(muted)
-                        .child("Checking readiness…")
-                        .into_any_element(),
-                );
             }
             for (i, blocker) in self
                 .visible_blockers(&id)
@@ -2933,7 +2986,7 @@ impl Launcher {
             .as_ref()
             .filter(|decision| decision.instance_id == id);
         match decision {
-            Some(decision) if decision.ready => Some(("Ready", ui::Tone::Success)),
+            Some(decision) if decision.ready => None,
             Some(decision) if decision.can_prepare => {
                 Some(("Needs preparation", ui::Tone::Warning))
             }
@@ -2946,9 +2999,6 @@ impl Launcher {
                 Some(("Sign in needed", ui::Tone::Warning))
             }
             Some(_) => Some(("Action needed", ui::Tone::Warning)),
-            None if self.readiness_in_flight || self.load_in_flight => {
-                Some(("Checking", ui::Tone::Neutral))
-            }
             None => None,
         }
     }
@@ -3116,8 +3166,7 @@ impl Render for Launcher {
                         div()
                             .flex()
                             .items_center()
-                            .justify_between()
-                            .gap(px(16.))
+                            .gap(px(14.))
                             .child(ui::page_header(&palette, "Home", None))
                             .when_some(self.home_widgets.as_ref(), |header, home| {
                                 header.child(home.read(cx).customize_button(home.clone()))
@@ -3332,7 +3381,9 @@ impl Render for Launcher {
                 })),
             );
         }
-        // Live "Running now" strip across all concurrent active instances.
+        // Live "Running now" controls: action buttons on the LEFT, subtle
+        // pill-free running indicator on the RIGHT beside Refresh.
+        let mut title_right_indicators = div().flex().items_center().gap(px(10.));
         if let Some(state) = &self.launcher {
             let active_runs: Vec<(String, String, GamePhase)> = state
                 .instances
@@ -3349,6 +3400,11 @@ impl Render for Launcher {
                 } else {
                     "Starting…"
                 };
+                let dot_color = if *phase == GamePhase::Running {
+                    palette.success
+                } else {
+                    palette.ring
+                };
                 let log_id = run_id.clone();
                 let stop_id = run_id.clone();
                 title_left = title_left.child(
@@ -3356,23 +3412,6 @@ impl Render for Launcher {
                         .flex()
                         .items_center()
                         .gap(px(4.))
-                        .child(ui::status_badge(
-                            &palette,
-                            format!("{run_name} · {state_word}"),
-                            if *phase == GamePhase::Running {
-                                ui::Tone::Success
-                            } else {
-                                ui::Tone::Accent
-                            },
-                        ))
-                        .child(
-                            AuroraButton::new(("title-log-game", idx), "Log")
-                                .variant(ButtonVariant::Ghost)
-                                .size(ButtonSize::Small)
-                                .on_click(cx.listener(move |this, _, _, cx| {
-                                    this.open_game_log(log_id.clone(), cx);
-                                })),
-                        )
                         .when(self.can_kill(run_id), |row| {
                             row.child(
                                 AuroraButton::new(("title-stop-game", idx), "Stop")
@@ -3384,15 +3423,34 @@ impl Render for Launcher {
                                         cx.notify();
                                     })),
                             )
-                        }),
+                        })
+                        .child(
+                            AuroraButton::new(("title-log-game", idx), "Log")
+                                .variant(ButtonVariant::Ghost)
+                                .size(ButtonSize::Small)
+                                .on_click(cx.listener(move |this, _, _, cx| {
+                                    this.open_game_log(log_id.clone(), cx);
+                                })),
+                        ),
+                );
+                title_right_indicators = title_right_indicators.child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .gap(px(6.))
+                        .text_size(px(ui::TEXT_CAPTION))
+                        .text_color(palette.muted_foreground)
+                        .child(div().size(px(6.)).rounded_full().bg(dot_color))
+                        .child(format!("{run_name} · {state_word}")),
                 );
             }
             if active_runs.len() > 2 {
-                title_left = title_left.child(ui::badge(
-                    &palette,
-                    format!("+{} more", active_runs.len() - 2),
-                    ui::Tone::Success,
-                ));
+                title_right_indicators = title_right_indicators.child(
+                    div()
+                        .text_size(px(ui::TEXT_CAPTION))
+                        .text_color(palette.muted_foreground)
+                        .child(format!("+{} more", active_runs.len() - 2)),
+                );
             }
         }
 
@@ -3403,26 +3461,28 @@ impl Render for Launcher {
             || self.load_in_flight
             || self.host.is_none();
         let hover_refresh = palette.control_hover;
-        let title_right = gpui_kit::base::Button::new("title-refresh-launcher")
-            .accessibility_label("Refresh")
-            .disabled(refresh_disabled)
-            .flex()
-            .items_center()
-            .justify_center()
-            .size(px(30.))
-            .mr(px(6.))
-            .rounded(palette.radius)
-            .hover(move |s| s.bg(hover_refresh))
-            .child(symbols::icon(
-                Some("refresh"),
-                px(18.),
-                if refresh_disabled {
-                    palette.subtle_foreground
-                } else {
-                    palette.muted_foreground
-                },
-            ))
-            .on_click(cx.listener(|this, _, _, cx| this.refresh_page(cx)));
+        let title_right = title_right_indicators.child(
+            gpui_kit::base::Button::new("title-refresh-launcher")
+                .accessibility_label("Refresh")
+                .disabled(refresh_disabled)
+                .flex()
+                .items_center()
+                .justify_center()
+                .size(px(30.))
+                .mr(px(6.))
+                .rounded(palette.radius)
+                .hover(move |s| s.bg(hover_refresh))
+                .child(symbols::icon(
+                    Some("refresh"),
+                    px(18.),
+                    if refresh_disabled {
+                        palette.subtle_foreground
+                    } else {
+                        palette.muted_foreground
+                    },
+                ))
+                .on_click(cx.listener(|this, _, _, cx| this.refresh_page(cx))),
+        );
 
         div()
             .size_full()
@@ -3892,6 +3952,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         hero_activity: HashMap::new(),
                         appearance: None,
                         readiness: None,
+                        readiness_cache: HashMap::new(),
                         processes: HashMap::new(),
                         game_showcase_applied: false,
                         launching: None,
@@ -4226,6 +4287,7 @@ mod tests {
             hero_activity: HashMap::new(),
             appearance: None,
             readiness: None,
+            readiness_cache: HashMap::new(),
             processes: HashMap::new(),
             game_showcase_applied: false,
             launching: None,

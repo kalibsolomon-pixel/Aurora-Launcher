@@ -120,7 +120,7 @@ const GRID_GAP: f32 = 16.0;
 const MIN_CARD_WIDTH: f32 = 120.0;
 /// Sized so a typical four-row Servers list fills its card cleanly with zero
 /// bottom clipping or dead space while the Playtime chart keeps crisp proportions.
-const CARD_HEIGHT: f32 = 408.0;
+const CARD_HEIGHT: f32 = 464.0;
 
 /// Saved columns for a viewport width; clamping renders, it never writes.
 pub(crate) fn responsive_columns(width_px: f32) -> i32 {
@@ -3896,22 +3896,54 @@ impl HomeWidgets {
                         let favorite_target = row.id.clone();
                         let play_target = row.id.clone();
                         let motd = row.motd.replace('\n', " · ");
+                        let play_hover = palette.accent;
+                        let play_ring = palette.ring;
                         list = list.child(
                             list_row(&palette, index == last_index)
-                                .h(px(80.))
+                                .h(px(94.))
                                 .flex_none()
                                 .id(format!("server-row-{}", row.id))
-                                .child(server_avatar(&palette, row.picture.clone(), &row.name, 42.))
+                                .child(
+                                    Button::new(format!("server-play-{}", row.id))
+                                        .aria_label(format!("Play {name}"))
+                                        .disabled(!playable)
+                                        .flex()
+                                        .flex_none()
+                                        .items_center()
+                                        .justify_center()
+                                        .size(px(40.))
+                                        .rounded_full()
+                                        .bg(gpui::transparent_black())
+                                        .border_1()
+                                        .border_color(palette.border_subtle)
+                                        .opacity(0.75)
+                                        .hover(move |s| {
+                                            s.bg(play_hover).border_color(play_hover).opacity(1.0)
+                                        })
+                                        .focus_visible(move |s| s.border_color(play_ring))
+                                        .styles(|styles| {
+                                            styles.disabled(|style| style.opacity(0.45))
+                                        })
+                                        .child(crate::symbols::icon(
+                                            Some("play_arrow"),
+                                            px(22.),
+                                            palette.foreground,
+                                        ))
+                                        .on_click(cx.listener(move |this, _, _, cx| {
+                                            this.quick_play(mode, &play_target, cx);
+                                        })),
+                                )
+                                .child(server_avatar(&palette, row.picture.clone(), &row.name, 54.))
                                 .child(
                                     div()
                                         .flex()
                                         .flex_col()
-                                        .gap(px(1.))
+                                        .gap(px(3.))
                                         .flex_1()
                                         .min_w(px(0.))
                                         .child(
                                             row_title(&palette, row.name.clone())
-                                                .text_size(px(ui::TEXT_SECTION))
+                                                .text_size(px(ui::TEXT_SECTION - 1.))
                                                 .font_weight(FontWeight::SEMIBOLD),
                                         )
                                         .when(!motd.is_empty(), |this| {
@@ -3940,39 +3972,7 @@ impl HomeWidgets {
                                             this.toggle_favorite(&favorite_target, cx);
                                         },
                                     )),
-                                )
-                                .child({
-                                    let play_hover = palette.accent;
-                                    let play_ring = palette.ring;
-                                    Button::new(format!("server-play-{}", row.id))
-                                        .aria_label(format!("Play {name}"))
-                                        .disabled(!playable)
-                                        .flex()
-                                        .flex_none()
-                                        .items_center()
-                                        .justify_center()
-                                        .size(px(32.))
-                                        .rounded_full()
-                                        .bg(gpui::transparent_black())
-                                        .border_1()
-                                        .border_color(palette.border_subtle)
-                                        .opacity(0.68)
-                                        .hover(move |s| {
-                                            s.bg(play_hover).border_color(play_hover).opacity(1.0)
-                                        })
-                                        .focus_visible(move |s| s.border_color(play_ring))
-                                        .styles(|styles| {
-                                            styles.disabled(|style| style.opacity(0.45))
-                                        })
-                                        .child(crate::symbols::icon(
-                                            Some("play_arrow"),
-                                            px(18.),
-                                            palette.foreground,
-                                        ))
-                                        .on_click(cx.listener(move |this, _, _, cx| {
-                                            this.quick_play(mode, &play_target, cx);
-                                        }))
-                                }),
+                                ),
                         );
                     }
                     card = card.child(
@@ -4024,7 +4024,8 @@ impl HomeWidgets {
                         .flex_1()
                         .min_h(px(0.))
                         .overflow_y_scroll()
-                        .track_scroll(&scroll);
+                        .track_scroll(&scroll)
+                        .pr(px(10.));
                     let last_index = rows.len().saturating_sub(1);
                     for (index, row) in rows.into_iter().enumerate() {
                         let target = row.id.clone();
@@ -4045,38 +4046,75 @@ impl HomeWidgets {
                         } else {
                             format!("{value} · {}", row.detail)
                         };
+                        let play_hover = palette.accent;
+                        let play_ring = palette.ring;
+                        let world_name = row.label.clone();
                         list = list.child(
                             list_row(&palette, index == last_index)
+                                .h(px(84.))
+                                .flex_none()
                                 .id(format!("world-row-{}", row.id))
-                                .child(avatar(&palette, row.picture.clone(), "landscape", 32.))
                                 .child(
-                                    div()
-                                        .flex()
-                                        .flex_col()
-                                        .gap(px(1.))
-                                        .flex_1()
-                                        .min_w(px(0.))
-                                        .child(row_title(&palette, row.label.clone()))
-                                        .child(row_detail(&palette, detail)),
-                                )
-                                .child(
-                                    AuroraButton::new(format!("world-play-{}", row.id), "Play")
-                                        .size(ButtonSize::Small)
-                                        .variant(if self.needs_sign_in {
-                                            ButtonVariant::Default
-                                        } else {
-                                            ButtonVariant::Soft
-                                        })
-                                        .icon("play_arrow")
+                                    Button::new(format!("world-play-{}", row.id))
+                                        .aria_label(format!("Play {world_name}"))
                                         .disabled(!playable)
+                                        .flex()
+                                        .flex_none()
+                                        .items_center()
+                                        .justify_center()
+                                        .size(px(40.))
+                                        .rounded_full()
+                                        .bg(gpui::transparent_black())
+                                        .border_1()
+                                        .border_color(palette.border_subtle)
+                                        .opacity(0.75)
+                                        .hover(move |s| {
+                                            s.bg(play_hover).border_color(play_hover).opacity(1.0)
+                                        })
+                                        .focus_visible(move |s| s.border_color(play_ring))
+                                        .styles(|styles| {
+                                            styles.disabled(|style| style.opacity(0.45))
+                                        })
+                                        .child(crate::symbols::icon(
+                                            Some("play_arrow"),
+                                            px(22.),
+                                            palette.foreground,
+                                        ))
                                         .on_click(cx.listener(move |this, _, _, cx| {
                                             let target = target.clone();
                                             this.quick_play(mode, &target, cx);
                                         })),
+                                )
+                                .child(avatar(&palette, row.picture.clone(), "landscape", 48.))
+                                .child(
+                                    div()
+                                        .flex()
+                                        .flex_col()
+                                        .gap(px(3.))
+                                        .flex_1()
+                                        .min_w(px(0.))
+                                        .child(
+                                            row_title(&palette, row.label.clone())
+                                                .text_size(px(ui::TEXT_SECTION - 1.))
+                                                .font_weight(FontWeight::SEMIBOLD),
+                                        )
+                                        .child(row_detail(&palette, detail)),
                                 ),
                         );
                     }
-                    card = card.child(list);
+                    card = card.child(
+                        div()
+                            .relative()
+                            .flex()
+                            .flex_col()
+                            .flex_1()
+                            .min_h(px(0.))
+                            .child(list)
+                            .child(
+                                ui::scrollbar(&palette, "home-worlds-scrollbar", &scroll)
+                                    .mode(gpui_kit::base::ScrollbarMode::Always),
+                            ),
+                    );
                 }
             }
             "instance-details" => {
@@ -4296,8 +4334,8 @@ fn list_row(t: &theme::AuroraTheme, last: bool) -> Div {
     div()
         .flex()
         .items_center()
-        .gap(px(10.))
-        .py(px(8.))
+        .gap(px(14.))
+        .py(px(12.))
         .when(!last, |this| {
             this.border_b_1().border_color(t.border_subtle)
         })

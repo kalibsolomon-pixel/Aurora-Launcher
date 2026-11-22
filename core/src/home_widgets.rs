@@ -81,13 +81,13 @@ impl Default for HomeLayout {
                 WidgetPlacement {
                     id: "recent-worlds".into(),
                     enabled: true,
-                    size: WidgetSize::Small,
+                    size: WidgetSize::Wide,
                     grid: None,
                 },
                 WidgetPlacement {
                     id: "recent-servers".into(),
                     enabled: true,
-                    size: WidgetSize::Small,
+                    size: WidgetSize::Wide,
                     grid: None,
                 },
                 WidgetPlacement {

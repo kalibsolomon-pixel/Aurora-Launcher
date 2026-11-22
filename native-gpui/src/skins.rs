@@ -1987,7 +1987,9 @@ impl Render for Skins {
                     )
                     .when_some(
                         match signed_in {
-                            Some(_) => preview_name.map(gpui_kit::SharedString::from),
+                            Some(_) => preview_name
+                                .or_else(|| active_skin_name.map(|name| format!("Wearing {name}")))
+                                .map(gpui_kit::SharedString::from),
                             None if account.is_some() => {
                                 Some("Sign in again to apply skins.".into())
                             }
@@ -2144,7 +2146,15 @@ impl Render for Skins {
                                     })),
                             )
                             .child(if cape.selected {
-                                ui::status_badge(&palette, "Equipped", ui::Tone::Success)
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(5.))
+                                    .text_size(px(ui::TEXT_CAPTION))
+                                    .font_weight(gpui_kit::FontWeight::MEDIUM)
+                                    .text_color(palette.success)
+                                    .child(div().size(px(6.)).rounded_full().bg(palette.success))
+                                    .child("Equipped")
                                     .into_any_element()
                             } else {
                                 AuroraButton::new(format!("skins-cape-wear-{}", cape.id), "Equip")
@@ -2180,18 +2190,11 @@ impl Render for Skins {
             .flex_wrap()
             .items_center()
             .gap(px(ui::PAGE_GAP));
-        // Put the account and its quick actions first when the columns stack.
-        if f32::from(window.viewport_size().width) < 900. {
-            appearance = appearance.child(details);
-            if let Some(preview) = &self.preview {
-                appearance = appearance.child(preview.clone());
-            }
-        } else {
-            if let Some(preview) = &self.preview {
-                appearance = appearance.child(preview.clone());
-            }
-            appearance = appearance.child(details);
+        // Keep the 3D skin preview visible first at every window width.
+        if let Some(preview) = &self.preview {
+            appearance = appearance.child(preview.clone());
         }
+        appearance = appearance.child(details);
         content = content.child(appearance);
 
         let import_select = &self.import_model;
@@ -2495,11 +2498,15 @@ impl Render for Skins {
                                                         model_label(&preset.model),
                                                     ))
                                                     .when(applied, |row| {
-                                                        row.child(ui::status_badge(
-                                                            &palette,
-                                                            "Equipped",
-                                                            ui::Tone::Success,
-                                                        ))
+                                                        row.child(
+                                                            div()
+                                                                .text_size(px(ui::TEXT_CAPTION))
+                                                                .font_weight(
+                                                                    gpui_kit::FontWeight::MEDIUM,
+                                                                )
+                                                                .text_color(palette.success)
+                                                                .child("· Equipped"),
+                                                        )
                                                     }),
                                             ),
                                     )

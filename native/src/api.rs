@@ -1353,6 +1353,25 @@ pub struct EphemeraStatus {
     pub file_name: Option<String>,
     pub status: String,
     pub conflicting_mod: Option<String>,
+    #[serde(default)]
+    pub conflicting_mods: Vec<String>,
+    #[serde(default)]
+    pub disabled_conflicts: Vec<String>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EphemeraConflictResolution {
+    DisableConflicts,
+    KeepConflicts,
+}
+
+impl EphemeraConflictResolution {
+    fn as_str(self) -> &'static str {
+        match self {
+            Self::DisableConflicts => "disableConflicts",
+            Self::KeepConflicts => "keepConflicts",
+        }
+    }
 }
 
 pub async fn ephemera_status(host: Host, instance_id: String) -> ApiResult<EphemeraStatus> {
@@ -1364,8 +1383,13 @@ pub async fn set_ephemera(
     host: Host,
     instance_id: String,
     enabled: bool,
+    conflict_resolution: EphemeraConflictResolution,
 ) -> ApiResult<EphemeraStatus> {
-    let req = request(json!({ "instanceId": instance_id, "enabled": enabled }))?;
+    let req = request(json!({
+        "instanceId": instance_id,
+        "enabled": enabled,
+        "conflictResolution": conflict_resolution.as_str(),
+    }))?;
     convert(app::set_instance_ephemera(host, req).await)
 }
 
@@ -1732,10 +1756,16 @@ pub async fn install_content(
     project: String,
     version: String,
     fingerprint: String,
+    resolve_conflicts: bool,
 ) -> ApiResult<Value> {
-    let request = request(
-        json!({"instanceId": instance, "contentType": kind, "projectId": project, "versionId": version, "previewFingerprint": fingerprint}),
-    )?;
+    let request = request(json!({
+        "instanceId": instance,
+        "contentType": kind,
+        "projectId": project,
+        "versionId": version,
+        "previewFingerprint": fingerprint,
+        "resolveConflicts": resolve_conflicts,
+    }))?;
     convert(app::install_modrinth(host, request).await)
 }
 

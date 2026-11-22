@@ -1599,46 +1599,66 @@ async fn resolve_instance_game_plan_under_gate(
             reason: "managed Java can only be prepared after instance content is ready".to_owned(),
         });
     }
-    let (blocked, status_label, blocking) = match gate {
+    match gate {
         PlanResolutionGate::LaunchBlocking => {
             let managed_owned = managed.clone();
             let registry_owned = registry.clone();
             let id_owned = instance_id.clone();
-            let content = tokio::task::spawn_blocking(move || {
+            let release = resolve_optional_aurora(managed, endpoints, &record);
+            let validation_fut = tokio::task::spawn_blocking(move || {
                 validate_instance(&managed_owned, &registry_owned, &id_owned)
-            })
-            .await
-            .map_err(|e| InstanceError::ReleaseInvalid(format!("validation task failed: {e}")))??;
+            });
+            let plan_fut = async {
+                match &release {
+                    Ok(rel) => {
+                        resolve_record_game_plan(managed, endpoints, &record, rel.as_ref()).await
+                    }
+                    Err(_) => Err(InstanceError::NotReady {
+                        instance_id: instance_id.to_string(),
+                        reason: String::new(),
+                    }),
+                }
+            };
+            let (validation_res, plan_res) = tokio::join!(validation_fut, plan_fut);
+            let content = validation_res.map_err(|e| {
+                InstanceError::ReleaseInvalid(format!("validation task failed: {e}"))
+            })??;
             let blocking: Vec<String> = content
                 .problems
                 .iter()
                 .filter(|problem| gate.blocks(problem))
                 .map(|problem| format!("{}: {}", problem.component, problem.reason))
                 .collect();
-            (
-                content.status != InstanceStatus::Ready,
-                content.status.as_str(),
-                blocking,
-            )
+            if content.status != InstanceStatus::Ready {
+                return Err(InstanceError::NotReady {
+                    instance_id: instance_id.to_string(),
+                    reason: format!(
+                        "instance content validation reported {}: {}",
+                        content.status.as_str(),
+                        blocking.join("; ")
+                    ),
+                });
+            }
+            let _ = release?;
+            plan_res
         }
         PlanResolutionGate::RuntimeMaintenance => {
             // Runtime maintenance only needs platform and version consistency;
             // avoid hashing thousands of game files and scanning user mods.
             let blocking = validate_runtime_maintenance_consistency(managed, &record)?;
-            (!blocking.is_empty(), "damaged", blocking)
+            if !blocking.is_empty() {
+                return Err(InstanceError::NotReady {
+                    instance_id: instance_id.to_string(),
+                    reason: format!(
+                        "instance content validation reported damaged: {}",
+                        blocking.join("; ")
+                    ),
+                });
+            }
+            let release = resolve_optional_aurora(managed, endpoints, &record)?;
+            resolve_record_game_plan(managed, endpoints, &record, release.as_ref()).await
         }
-    };
-    if blocked {
-        return Err(InstanceError::NotReady {
-            instance_id: instance_id.to_string(),
-            reason: format!(
-                "instance content validation reported {status_label}: {}",
-                blocking.join("; ")
-            ),
-        });
     }
-    let release = resolve_optional_aurora(managed, endpoints, &record)?;
-    resolve_record_game_plan(managed, endpoints, &record, release.as_ref()).await
 }
 
 fn validate_runtime_maintenance_consistency(
@@ -1971,24 +1991,19 @@ pub(crate) fn validate_instance_under_game_lock(
                     // The ownership document is bootstrap evidence, not an
                     // immutable-presence requirement. Disabled/missing files
                     // stay absent; only active original files must reverify.
+                    let mods = crate::instance_mods::validate_mods_directory(managed, record.id())
+                        .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?;
+                    let providers =
+                        crate::instance_content::ContentState::load(managed, record.id())
+                            .map_err(|error| InstanceError::ReleaseInvalid(error.to_string()))?;
                     for artifact in std::iter::once(state.artifact())
                         .chain(state.fabric_api().map(|api| api.artifact()))
                         .chain(state.ephemera().map(|ephemera| ephemera.artifact()))
                     {
-                        let mods =
-                            crate::instance_mods::validate_mods_directory(managed, record.id())
-                                .map_err(|error| {
-                                    InstanceError::ReleaseInvalid(error.to_string())
-                                })?;
                         let file_name = artifact
                             .relative_path()
                             .strip_prefix("mods/")
                             .expect("validated bootstrap path");
-                        let providers =
-                            crate::instance_content::ContentState::load(managed, record.id())
-                                .map_err(|error| {
-                                    InstanceError::ReleaseInvalid(error.to_string())
-                                })?;
                         if let Some(provider) = providers.entries.iter().find(|provider| {
                             provider.content_type == crate::instance_content::ContentType::Mod
                                 && provider.file_name.eq_ignore_ascii_case(file_name)

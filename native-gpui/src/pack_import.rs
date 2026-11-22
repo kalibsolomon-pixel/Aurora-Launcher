@@ -353,19 +353,13 @@ impl Render for PackImport {
         // The whole header is a drop target for a `.mrpack`; the wash says
         // whether the dragged file would be accepted.
         let (accept, reject) = (palette.accent, palette.danger);
-        let mut actions = div()
-            .flex()
-            .flex_shrink_0()
-            .items_center()
-            .gap(px(8.))
-            .child(
-                AuroraButton::new("instances-open-sync", "Sync")
-                    .variant(crate::controls::ButtonVariant::Default)
-                    .disabled(busy)
-                    .on_click(cx.listener(|_, _, _, cx| {
-                        cx.emit(PackImportEvent::OpenSync);
-                    })),
-            )
+        // Main page actions stay to the left (primary action first), matching
+        // Pandora's action-first layout.
+        let mut actions = div().flex().flex_shrink_0().items_center().gap(px(8.));
+        if let Some(new_instance) = crate::instance_creator::new_instance_button(cx) {
+            actions = actions.child(new_instance);
+        }
+        actions = actions
             .child(
                 AuroraButton::new("pack-import-toggle", "Import")
                     .selected(self.import_menu_open)
@@ -374,11 +368,15 @@ impl Render for PackImport {
                         this.import_menu_open = !this.import_menu_open;
                         cx.notify();
                     })),
+            )
+            .child(
+                AuroraButton::new("instances-open-sync", "Sync")
+                    .variant(crate::controls::ButtonVariant::Default)
+                    .disabled(busy)
+                    .on_click(cx.listener(|_, _, _, cx| {
+                        cx.emit(PackImportEvent::OpenSync);
+                    })),
             );
-        // "New instance" belongs to the creator; the page header hosts it.
-        if let Some(new_instance) = crate::instance_creator::new_instance_button(cx) {
-            actions = actions.child(new_instance);
-        }
 
         let hint = if busy {
             div()
@@ -420,7 +418,6 @@ impl Render for PackImport {
                     .flex()
                     .flex_wrap()
                     .items_center()
-                    .justify_between()
                     .gap(px(16.))
                     .child(ui::page_header(&palette, "Instances", None))
                     .child(actions),

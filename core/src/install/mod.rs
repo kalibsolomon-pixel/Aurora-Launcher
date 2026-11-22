@@ -97,7 +97,7 @@ const REPLACED_GAME_DIR_NAME: &str = "replaced-game";
 /// indexes are well under one megabyte).
 const MAX_ASSET_INDEX_BYTES: usize = 8 * 1024 * 1024;
 const SMALL_ARTIFACT_CONCURRENCY: usize = 16;
-const STAGED_VALIDATION_CONCURRENCY: usize = 8;
+const STAGED_VALIDATION_CONCURRENCY: usize = 16;
 
 /// Everything the installer needs beyond the plan itself.
 #[derive(Debug, Clone)]
@@ -1311,15 +1311,13 @@ pub(crate) fn validate_game_directory_with_manifest(
             .collect()
     } else {
         let next = AtomicUsize::new(0);
-        let slots: Vec<std::sync::Mutex<Option<Result<u64, String>>>> = (0..files.len())
-            .map(|_| std::sync::Mutex::new(None))
-            .collect();
-        std::thread::scope(|scope| {
+        let worker_results: Vec<Vec<(usize, Result<u64, String>)>> = std::thread::scope(|scope| {
+            let mut handles = Vec::with_capacity(workers);
             for _ in 0..workers {
                 let next = &next;
-                let slots = &slots;
                 let parent_checks = &parent_checks;
-                scope.spawn(move || {
+                handles.push(scope.spawn(move || {
+                    let mut local = Vec::with_capacity(files.len() / workers + 1);
                     loop {
                         let index = next.fetch_add(1, Ordering::Relaxed);
                         if index >= files.len() {
@@ -1330,18 +1328,26 @@ pub(crate) fn validate_game_directory_with_manifest(
                             &files[index],
                             parent_checks,
                         );
-                        *slots[index].lock().expect("validation slot") = Some(outcome);
+                        local.push((index, outcome));
                     }
-                });
+                    local
+                }));
             }
+            handles
+                .into_iter()
+                .map(|handle| handle.join().expect("validation worker"))
+                .collect()
         });
-        slots
+        let mut ordered: Vec<Option<Result<u64, String>>> =
+            (0..files.len()).map(|_| None).collect();
+        for batch in worker_results {
+            for (index, outcome) in batch {
+                ordered[index] = Some(outcome);
+            }
+        }
+        ordered
             .into_iter()
-            .map(|slot| {
-                slot.into_inner()
-                    .expect("validation slot")
-                    .expect("every file checked")
-            })
+            .map(|slot| slot.expect("every file checked"))
             .collect()
     };
 

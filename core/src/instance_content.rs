@@ -2531,7 +2531,37 @@ pub(crate) fn validate_projected_pack_artifacts(
     )
 }
 
-fn validate_projected_artifacts_scoped(
+fn issue_to_provider_conflict(
+    problem: &crate::mod_compatibility::CompatibilityIssue,
+) -> ProviderConflict {
+    if problem.is_planned_source
+        && let Some(target_file) = &problem.target_file_name
+    {
+        return ProviderConflict {
+            mod_id: problem.target_mod_id.clone(),
+            file_name: target_file.clone(),
+            ownership: problem
+                .target_ownership
+                .unwrap_or(crate::instance_mods::ModOwnership::Unknown),
+            reason: problem.message.clone(),
+        };
+    }
+    ProviderConflict {
+        mod_id: Some(problem.mod_id.clone()),
+        file_name: problem.file_name.clone(),
+        ownership: problem.ownership,
+        reason: problem.message.clone(),
+    }
+}
+
+fn is_pairwise_mod_conflict(problem: &crate::mod_compatibility::CompatibilityIssue) -> bool {
+    matches!(
+        problem.code.as_str(),
+        "mod_declared_break" | "mod_duplicate_root"
+    ) && problem.target_file_name.is_some()
+}
+
+fn projected_artifact_issues(
     managed: &ManagedPaths,
     instance: &InstanceId,
     removed: &[ProviderRecord],
@@ -2539,11 +2569,11 @@ fn validate_projected_artifacts_scoped(
     artifacts: &[(ProviderRecord, PathBuf, u64)],
     java_major: Option<u32>,
     target: Option<(&str, &str)>,
-) -> Result<(), ContentError> {
+) -> Result<Vec<crate::mod_compatibility::CompatibilityIssue>, ContentError> {
     let registry = crate::instances::InstanceRegistry::load(&managed.instance_registry_file())
         .map_err(|e| ContentError::StateMalformed(e.to_string()))?;
     let Some(record) = registry.find(instance) else {
-        return Ok(());
+        return Ok(Vec::new());
     };
     let (minecraft_version, loader_version) = match target {
         Some((minecraft, loader)) => (minecraft.to_string(), loader.to_string()),
@@ -2559,7 +2589,7 @@ fn validate_projected_artifacts_scoped(
     };
     let loader_family = record.installed().platform.kind();
     if !record.installed().platform.supports_mods() {
-        return Ok(());
+        return Ok(Vec::new());
     }
     let mut inventory = match std::fs::symlink_metadata(managed.instance_paths(instance).mods()) {
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
@@ -2613,21 +2643,31 @@ fn validate_projected_artifacts_scoped(
             warnings,
         );
     }
-    if let Some(problem) = crate::mod_compatibility::validate(
+    Ok(crate::mod_compatibility::validate(
         &inventory,
         &minecraft_version,
         &loader_version,
         java_major,
         loader_family,
-    )
-    .first()
-    {
-        return Err(ContentError::ModCollision(ProviderConflict {
-            mod_id: Some(problem.mod_id.clone()),
-            file_name: problem.file_name.clone(),
-            ownership: problem.ownership,
-            reason: problem.message.clone(),
-        }));
+    ))
+}
+
+fn validate_projected_artifacts_scoped(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    removed: &[ProviderRecord],
+    tolerated: &[String],
+    artifacts: &[(ProviderRecord, PathBuf, u64)],
+    java_major: Option<u32>,
+    target: Option<(&str, &str)>,
+) -> Result<(), ContentError> {
+    let issues = projected_artifact_issues(
+        managed, instance, removed, tolerated, artifacts, java_major, target,
+    )?;
+    if let Some(problem) = issues.first() {
+        return Err(ContentError::ModCollision(issue_to_provider_conflict(
+            problem,
+        )));
     }
     Ok(())
 }
@@ -2653,6 +2693,56 @@ pub async fn preview_provider_requirements(
         ));
     }
     validate_projected_artifacts(managed, instance, &artifacts, Some(java_major))
+}
+
+/// Evaluates projected mod requirements and returns all pairwise conflicts
+/// against existing on-disk mods (such as `breaks` or duplicate root IDs) as
+/// reviewable `ProviderConflict` entries, while still failing closed on hard
+/// environmental incompatibilities (missing dependencies, wrong Minecraft/Java).
+pub async fn preview_provider_requirement_conflicts(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    plans: &[ProviderInstallPlan],
+    java_major: u32,
+) -> Result<Vec<ProviderConflict>, ContentError> {
+    let cache = ArtifactCache::new(managed.clone());
+    let mut artifacts = Vec::new();
+    for plan in plans.iter().filter(|p| p.content_type == ContentType::Mod) {
+        let artifact = match &plan.source {
+            ProviderArtifactSource::Sha256(s) => cache.acquire(s).await,
+            ProviderArtifactSource::Sha512(s) => cache.acquire_sha512(s).await,
+        }
+        .map_err(|e| ContentError::Acquisition(e.to_string()))?;
+        artifacts.push((
+            plan.record(artifact.sha256.as_hex(), ProviderOrigin::Direct),
+            artifact.path,
+            artifact.bytes,
+        ));
+    }
+    let issues = projected_artifact_issues(
+        managed,
+        instance,
+        &[],
+        &[],
+        &artifacts,
+        Some(java_major),
+        None,
+    )?;
+    let mut conflicts = Vec::new();
+    for problem in &issues {
+        if !is_pairwise_mod_conflict(problem) {
+            return Err(ContentError::ModCollision(issue_to_provider_conflict(
+                problem,
+            )));
+        }
+        let conflict = issue_to_provider_conflict(problem);
+        if !conflicts.iter().any(|existing: &ProviderConflict| {
+            existing.file_name.eq_ignore_ascii_case(&conflict.file_name)
+        }) {
+            conflicts.push(conflict);
+        }
+    }
+    Ok(conflicts)
 }
 
 struct RetiredFile {

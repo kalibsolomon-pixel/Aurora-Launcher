@@ -2792,11 +2792,23 @@ pub struct EphemeraStatusRequest {
     instance_id: String,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub enum EphemeraConflictResolution {
+    /// Safely disable conflicting renderer mods (`.disabled`) and install Ephemera.
+    #[default]
+    DisableConflicts,
+    /// Leave conflicting renderer mods enabled and install Ephemera anyway.
+    KeepConflicts,
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SetInstanceEphemeraRequest {
     instance_id: String,
     enabled: bool,
+    #[serde(default)]
+    conflict_resolution: EphemeraConflictResolution,
 }
 
 /// Returns the read-only launcher-managed Ephemera status for one instance.
@@ -2857,19 +2869,8 @@ pub async fn set_instance_ephemera(
         .require_fabric()
         .map_err(|reason| CommandError::new("ephemera_requires_fabric", reason))?;
 
+    let mut disabled_conflicts = Vec::new();
     if request.enabled {
-        if let Some(conflict) =
-            crate::aurora::conflicting_renderer_mod(&managed, &id).map_err(|error| {
-                CommandError::new("ephemera_conflict_check_failed", error.to_string())
-            })?
-        {
-            return Err(CommandError::new(
-                "ephemera_conflict",
-                format!(
-                    "Ephemera cannot run alongside {conflict}. Disable or remove {conflict} in Mods first."
-                ),
-            ));
-        }
         let endpoints = crate::instances::lifecycle::InstanceEndpoints::operational()
             .map_err(|e| CommandError::new("aurora_manifest_invalid", e.to_string()))?;
         let merged =
@@ -2910,31 +2911,24 @@ pub async fn set_instance_ephemera(
                 "Quit Minecraft before changing Ephemera.",
             ));
         }
-        match crate::aurora::install_managed_ephemera(
+        let policy = match request.conflict_resolution {
+            EphemeraConflictResolution::DisableConflicts => {
+                crate::aurora::EphemeraConflictPolicy::DisableConflictingAndInstall
+            }
+            EphemeraConflictResolution::KeepConflicts => {
+                crate::aurora::EphemeraConflictPolicy::KeepConflictingAndInstall
+            }
+        };
+        let result = crate::aurora::install_managed_ephemera_with_policy(
             &managed,
             &id,
             &release,
             endpoints.download_options(),
+            policy,
         )
         .await
-        .map_err(|error| CommandError::new("ephemera_install_failed", error.to_string()))?
-        {
-            crate::aurora::EphemeraInstallOutcome::Installed(_) => {}
-            crate::aurora::EphemeraInstallOutcome::SkippedConflict { conflicting_mod } => {
-                return Err(CommandError::new(
-                    "ephemera_conflict",
-                    format!(
-                        "Ephemera cannot run alongside {conflicting_mod}. Disable or remove {conflicting_mod} in Mods first."
-                    ),
-                ));
-            }
-            crate::aurora::EphemeraInstallOutcome::SkippedExisting => {
-                return Err(CommandError::new(
-                    "ephemera_already_installed",
-                    "An existing Ephemera JAR is already installed in Mods.",
-                ));
-            }
-        }
+        .map_err(|error| CommandError::new("ephemera_install_failed", error.to_string()))?;
+        disabled_conflicts = result.disabled_conflicts;
     } else {
         let _process_guard = crate::launch::process::lock_stopped(id.as_str()).map_err(|_| {
             CommandError::new(
@@ -2947,13 +2941,14 @@ pub async fn set_instance_ephemera(
     }
 
     {
+        // Registry before process, matching the launcher-wide lock order.
+        let _guard = crate::instances::lifecycle::registry_lock();
         let _process_guard = crate::launch::process::lock_stopped(id.as_str()).map_err(|_| {
             CommandError::new(
                 "instance_running",
                 "Quit Minecraft before changing Ephemera.",
             )
         })?;
-        let _guard = crate::instances::lifecycle::registry_lock();
         let mut registry = InstanceRegistry::load(&registry_path)?;
         if let Some(stored) = registry.find_mut(&id) {
             let mut config = stored.configuration().clone();
@@ -2963,8 +2958,10 @@ pub async fn set_instance_ephemera(
         }
     }
 
-    crate::aurora::ephemera_status(&managed, &id)
-        .map_err(|error| CommandError::new("ephemera_status_failed", error.to_string()))
+    let mut status = crate::aurora::ephemera_status(&managed, &id)
+        .map_err(|error| CommandError::new("ephemera_status_failed", error.to_string()))?;
+    status.disabled_conflicts = disabled_conflicts;
+    Ok(status)
 }
 
 /// One lifecycle progress event payload; the game installer's item progress
@@ -3904,6 +3901,8 @@ pub struct ModrinthInstallRequest {
     project_id: String,
     version_id: String,
     preview_fingerprint: String,
+    #[serde(default)]
+    resolve_conflicts: bool,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -4022,6 +4021,40 @@ fn provider_fingerprint(
 
 fn provider_error(error: crate::modrinth::Error) -> CommandError {
     CommandError::new(error.code(), error.to_string())
+}
+
+async fn preview_provider_requirement_conflicts(
+    managed: &ManagedPaths,
+    instance: &crate::instances::InstanceId,
+    context: &crate::modrinth::Context,
+    resolved: &crate::modrinth::Resolved,
+) -> Result<Vec<crate::instance_content::ProviderConflict>, CommandError> {
+    if resolved.plans.is_empty()
+        || resolved
+            .plans
+            .iter()
+            .all(|plan| plan.content_type != crate::instance_content::ContentType::Mod)
+    {
+        return Ok(Vec::new());
+    }
+    let plan = crate::minecraft::resolve_install_plan(
+        &crate::minecraft::metadata::MetadataEndpoints::official(),
+        &crate::minecraft::metadata::MinecraftVersionId::new(&context.minecraft_version)
+            .map_err(|e| CommandError::new("provider_invalid_response", e.to_string()))?,
+        crate::minecraft::rules::PlatformProfile::current()?,
+        &crate::downloads::DownloadOptions::default(),
+    )
+    .await
+    .map_err(|e| CommandError::new("provider_dependency_unresolved", e.to_string()))?;
+    Ok(
+        crate::instance_content::preview_provider_requirement_conflicts(
+            managed,
+            instance,
+            &resolved.plans,
+            plan.java().major_version(),
+        )
+        .await?,
+    )
 }
 
 async fn check_provider_requirements(
@@ -4706,16 +4739,76 @@ pub async fn preview_modrinth_install(
         .map_err(provider_error)?;
     crate::instance_content::reconcile_provider_resolution(&managed, &instance, &mut resolved)
         .await?;
-    check_provider_requirements(&managed, &instance, &context, &resolved).await?;
+    let mut conflicts =
+        preview_provider_requirement_conflicts(&managed, &instance, &context, &resolved).await?;
     let preview_fingerprint = provider_fingerprint(&instance, &resolved);
-    let conflicts =
+    for conflict in
         crate::instance_content::preview_provider_conflicts(&managed, &instance, &resolved.plans)
-            .await?;
+            .await?
+    {
+        if !conflicts
+            .iter()
+            .any(|existing| existing.file_name.eq_ignore_ascii_case(&conflict.file_name))
+        {
+            conflicts.push(conflict);
+        }
+    }
     Ok(ModrinthPreviewResponse {
         preview: resolved.preview,
         preview_fingerprint,
         conflicts,
     })
+}
+
+fn is_optional_ephemera_conflict(conflict: &crate::instance_content::ProviderConflict) -> bool {
+    conflict
+        .mod_id
+        .as_deref()
+        .is_some_and(|id| id.eq_ignore_ascii_case("ephemera"))
+        || conflict
+            .file_name
+            .to_ascii_lowercase()
+            .starts_with("ephemera-")
+}
+
+fn disable_conflicting_mods(
+    managed: &ManagedPaths,
+    instance: &crate::instances::InstanceId,
+    conflicts: &[crate::instance_content::ProviderConflict],
+) -> Result<bool, CommandError> {
+    let mut changed = false;
+    let inventory = crate::instance_mods::scan(managed, instance)?;
+    for conflict in conflicts {
+        if matches!(
+            conflict.ownership,
+            crate::instance_mods::ModOwnership::LauncherBootstrap
+                | crate::instance_mods::ModOwnership::LauncherManagedRequired
+        ) && !is_optional_ephemera_conflict(conflict)
+        {
+            return Err(CommandError::new(
+                "provider_content_collision",
+                format!(
+                    "Cannot automatically disable launcher-required file '{}': {}",
+                    conflict.file_name, conflict.reason
+                ),
+            ));
+        }
+        if let Some(entry) = inventory.entries.iter().find(|entry| {
+            entry.enabled
+                && entry.can_toggle
+                && (entry.file_name.eq_ignore_ascii_case(&conflict.file_name)
+                    || conflict.mod_id.as_deref().is_some_and(|id| {
+                        entry
+                            .metadata
+                            .as_ref()
+                            .is_some_and(|m| m.id.eq_ignore_ascii_case(id))
+                    }))
+        }) {
+            crate::instance_mods::set_enabled(managed, instance, &entry.entry_id, false)?;
+            changed = true;
+        }
+    }
+    Ok(changed)
 }
 
 pub async fn install_modrinth(
@@ -4737,13 +4830,35 @@ pub async fn install_modrinth(
         .map_err(provider_error)?;
     crate::instance_content::reconcile_provider_resolution(&managed, &instance, &mut resolved)
         .await?;
-    check_provider_requirements(&managed, &instance, &context, &resolved).await?;
     if provider_fingerprint(&instance, &resolved) != request.preview_fingerprint {
         return Err(CommandError::new(
             "provider_install_failed",
             "The dependency preview changed. Review it again before installing.",
         ));
     }
+    if request.resolve_conflicts {
+        let mut conflicts = crate::instance_content::preview_provider_conflicts(
+            &managed,
+            &instance,
+            &resolved.plans,
+        )
+        .await?;
+        for conflict in
+            preview_provider_requirement_conflicts(&managed, &instance, &context, &resolved).await?
+        {
+            if !conflicts
+                .iter()
+                .any(|existing| existing.file_name.eq_ignore_ascii_case(&conflict.file_name))
+            {
+                conflicts.push(conflict);
+            }
+        }
+        if !conflicts.is_empty() && disable_conflicting_mods(&managed, &instance, &conflicts)? {
+            // Re-reconcile revision after intentionally disabling conflicting mods.
+            resolved.preview.inventory_revision = None;
+        }
+    }
+    check_provider_requirements(&managed, &instance, &context, &resolved).await?;
     install_resolved_provider_plans(&managed, &instance, resolved).await
 }
 
@@ -7118,74 +7233,85 @@ async fn calculate_play_readiness(
         }
     };
 
-    let mut mod_issues = Vec::new();
-    if let (Some(plan), Some(record)) = (&runtime_plan, registry.find(instance_id)) {
-        let loader_family = record.installed().platform.kind();
-        if record.installed().platform.supports_mods()
-            && managed.instance_paths(instance_id).mods().is_dir()
-        {
-            let managed_owned = managed.clone();
-            let id_owned = instance_id.clone();
-            let mc_version = record.installed().minecraft_version.clone();
-            let loader_version = record
-                .installed()
-                .platform
-                .version()
-                .unwrap_or("")
-                .to_owned();
-            let required_java = plan.required_major_version();
-            mod_issues = tokio::task::spawn_blocking(move || -> Result<_, CommandError> {
-                let mut inventory = crate::instance_mods::scan(&managed_owned, &id_owned)?;
-                crate::instance_mods::add_loader_builtins(
-                    &managed_owned,
-                    &id_owned,
-                    &mut inventory,
-                );
-                Ok(crate::mod_compatibility::validate(
-                    &inventory,
-                    &mc_version,
-                    &loader_version,
-                    Some(required_java),
-                    loader_family,
-                ))
-            })
-            .await
-            .map_err(|e| CommandError::new("mod_scan_failed", e.to_string()))??;
-        }
-    }
     // A custom Java selection replaces the managed runtime for launch only;
     // it is never silently swapped back while selected.
     let custom_java = registry
         .find(instance_id)
         .and_then(|record| record.configuration().java().cloned());
-    let mut custom_problem = None;
-    let runtime = if let Some(plan) = runtime_plan {
-        if let Some(java) = &custom_java {
-            match crate::runtime::external::validate_for_readiness(
-                java.custom_path(),
-                plan.required_major_version(),
-            )
-            .await
+
+    let mod_scan_fut = async {
+        if let (Some(plan), Some(record)) = (&runtime_plan, registry.find(instance_id)) {
+            let loader_family = record.installed().platform.kind();
+            if record.installed().platform.supports_mods()
+                && managed.instance_paths(instance_id).mods().is_dir()
             {
-                Ok(_) => LaunchRuntimeStatus::Ready,
-                Err(error) => {
-                    custom_problem = Some(error.message);
-                    LaunchRuntimeStatus::CustomInvalid
+                let managed_owned = managed.clone();
+                let id_owned = instance_id.clone();
+                let mc_version = record.installed().minecraft_version.clone();
+                let loader_version = record
+                    .installed()
+                    .platform
+                    .version()
+                    .unwrap_or("")
+                    .to_owned();
+                let required_java = plan.required_major_version();
+                return tokio::task::spawn_blocking(move || -> Result<_, CommandError> {
+                    let mut inventory = crate::instance_mods::scan(&managed_owned, &id_owned)?;
+                    crate::instance_mods::add_loader_builtins(
+                        &managed_owned,
+                        &id_owned,
+                        &mut inventory,
+                    );
+                    Ok(crate::mod_compatibility::validate(
+                        &inventory,
+                        &mc_version,
+                        &loader_version,
+                        Some(required_java),
+                        loader_family,
+                    ))
+                })
+                .await
+                .map_err(|e| CommandError::new("mod_scan_failed", e.to_string()))?;
+            }
+        }
+        Ok(Vec::new())
+    };
+
+    let runtime_fut = async {
+        let mut custom_problem = None;
+        let runtime = if let Some(plan) = &runtime_plan {
+            if let Some(java) = &custom_java {
+                match crate::runtime::external::validate_for_readiness(
+                    java.custom_path(),
+                    plan.required_major_version(),
+                )
+                .await
+                {
+                    Ok(_) => LaunchRuntimeStatus::Ready,
+                    Err(error) => {
+                        custom_problem = Some(error.message);
+                        LaunchRuntimeStatus::CustomInvalid
+                    }
+                }
+            } else {
+                match crate::runtime::install::validate_runtime_eligibility(managed, plan)
+                    .await?
+                    .status
+                {
+                    RuntimeValidationStatus::Ready => LaunchRuntimeStatus::Ready,
+                    RuntimeValidationStatus::Missing => LaunchRuntimeStatus::Missing,
+                    RuntimeValidationStatus::Damaged => LaunchRuntimeStatus::Damaged,
                 }
             }
         } else {
-            match crate::runtime::install::validate_runtime_eligibility(managed, &plan)
-                .await?
-                .status
-            {
-                RuntimeValidationStatus::Ready => LaunchRuntimeStatus::Ready,
-                RuntimeValidationStatus::Missing => LaunchRuntimeStatus::Missing,
-                RuntimeValidationStatus::Damaged => LaunchRuntimeStatus::Damaged,
-            }
-        }
-    } else {
-        LaunchRuntimeStatus::Unresolved
+            LaunchRuntimeStatus::Unresolved
+        };
+        Ok::<_, CommandError>((runtime, custom_problem))
     };
+
+    let (mod_issues_res, runtime_res) = tokio::join!(mod_scan_fut, runtime_fut);
+    let mod_issues = mod_issues_res?;
+    let (runtime, custom_problem) = runtime_res?;
 
     let (account, account_name) = launch_account_status(managed, account_id)?;
     let mut readiness = PlayReadiness::evaluate(instance, runtime, account, process.status);

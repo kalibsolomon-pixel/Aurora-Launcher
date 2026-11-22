@@ -961,19 +961,29 @@ pub fn validate_artifact(
     Ok(())
 }
 
-/// Mods that replace Minecraft's terrain renderer and therefore cannot run
-/// alongside Ephemera.
+/// Mods that replace Minecraft's terrain renderer and therefore may conflict
+/// when running alongside Ephemera.
 const CONFLICTING_RENDERER_MOD_IDS: &[&str] = &["sodium", "iris", "vulkanmod", "nvidium"];
 
-/// Returns the first enabled conflicting renderer mod ID present in the
-/// instance's `mods/` directory, if any.
-pub fn conflicting_renderer_mod(
+/// One enabled renderer mod in `mods/` that may conflict with Ephemera.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConflictingRendererMod {
+    pub entry_id: String,
+    pub file_name: String,
+    pub mod_id: String,
+    pub display_name: String,
+    pub can_toggle: bool,
+}
+
+/// Returns every enabled conflicting renderer mod present in the instance's
+/// `mods/` directory.
+pub fn conflicting_renderer_mods(
     managed: &ManagedPaths,
     instance: &InstanceId,
-) -> Result<Option<String>, AuroraInstallError> {
+) -> Result<Vec<ConflictingRendererMod>, AuroraInstallError> {
     let paths = managed.instance_paths(instance);
     if !paths.mods().is_dir() {
-        return Ok(None);
+        return Ok(Vec::new());
     }
     let inventory = crate::instance_mods::scan(managed, instance).map_err(|error| {
         AuroraInstallError::Materialization {
@@ -981,17 +991,46 @@ pub fn conflicting_renderer_mod(
             reason: error.to_string(),
         }
     })?;
+    let mut found = Vec::new();
     for entry in inventory.entries.iter().filter(|entry| entry.enabled) {
         if let Some(meta) = &entry.metadata {
             if let Some(conflict) = CONFLICTING_RENDERER_MOD_IDS
                 .iter()
                 .find(|&&id| meta.id == id || meta.nested_mod_ids.iter().any(|n| n == id))
             {
-                return Ok(Some((*conflict).to_owned()));
+                found.push(ConflictingRendererMod {
+                    entry_id: entry.entry_id.clone(),
+                    file_name: entry.file_name.clone(),
+                    mod_id: (*conflict).to_owned(),
+                    display_name: entry.display_name.clone(),
+                    can_toggle: entry.can_toggle,
+                });
             }
         }
     }
-    Ok(None)
+    Ok(found)
+}
+
+/// Returns the first enabled conflicting renderer mod ID present in the
+/// instance's `mods/` directory, if any.
+pub fn conflicting_renderer_mod(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+) -> Result<Option<String>, AuroraInstallError> {
+    Ok(conflicting_renderer_mods(managed, instance)?
+        .into_iter()
+        .next()
+        .map(|entry| entry.mod_id))
+}
+
+fn unique_conflict_ids(entries: &[ConflictingRendererMod]) -> Vec<String> {
+    let mut ids = Vec::new();
+    for entry in entries {
+        if !ids.iter().any(|existing| existing == &entry.mod_id) {
+            ids.push(entry.mod_id.clone());
+        }
+    }
+    ids
 }
 
 /// Read-only status of launcher-managed Ephemera on one instance.
@@ -1004,6 +1043,10 @@ pub struct EphemeraStatus {
     /// One of `"active"`, `"disabled"`, `"modified"`, `"missing"`, `"notInstalled"`.
     pub status: String,
     pub conflicting_mod: Option<String>,
+    #[serde(default)]
+    pub conflicting_mods: Vec<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub disabled_conflicts: Vec<String>,
 }
 
 /// Inspects the launcher-managed Ephemera status for one instance without
@@ -1012,7 +1055,9 @@ pub fn ephemera_status(
     managed: &ManagedPaths,
     instance: &InstanceId,
 ) -> Result<EphemeraStatus, AuroraInstallError> {
-    let conflicting_mod = conflicting_renderer_mod(managed, instance)?;
+    let conflicting_entries = conflicting_renderer_mods(managed, instance)?;
+    let conflicting_mods = unique_conflict_ids(&conflicting_entries);
+    let conflicting_mod = conflicting_mods.first().cloned();
     let Some(state) = load_installed_state(managed, instance)? else {
         return Ok(EphemeraStatus {
             installed: false,
@@ -1020,6 +1065,8 @@ pub fn ephemera_status(
             file_name: None,
             status: "notInstalled".into(),
             conflicting_mod,
+            conflicting_mods,
+            disabled_conflicts: Vec::new(),
         });
     };
     let Some(ephemera) = state.ephemera() else {
@@ -1029,6 +1076,8 @@ pub fn ephemera_status(
             file_name: None,
             status: "notInstalled".into(),
             conflicting_mod,
+            conflicting_mods,
+            disabled_conflicts: Vec::new(),
         });
     };
     let file_name = ephemera
@@ -1066,7 +1115,27 @@ pub fn ephemera_status(
         file_name: Some(file_name),
         status: status.into(),
         conflicting_mod,
+        conflicting_mods,
+        disabled_conflicts: Vec::new(),
     })
+}
+
+/// How [`install_managed_ephemera_with_policy`] handles conflicting renderer
+/// mods (`sodium`, `iris`, `vulkanmod`, `nvidium`) or an existing unmanaged
+/// Ephemera JAR.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum EphemeraConflictPolicy {
+    /// Automatic background bundling: skip without modifying existing mods.
+    SkipIfConflicting,
+    /// Explicit user install with automatic conflict resolution: safely disable
+    /// conflicting renderer mods (and any duplicate unmanaged Ephemera JAR) to
+    /// `.disabled` before activating managed Ephemera.
+    #[default]
+    DisableConflictingAndInstall,
+    /// Explicit user install keeping existing renderer mods enabled (only
+    /// disabling a duplicate unmanaged Ephemera JAR if present so Fabric does
+    /// not reject duplicate `ephemera` IDs).
+    KeepConflictingAndInstall,
 }
 
 /// Outcome of attempting to install or update launcher-managed Ephemera on an
@@ -1076,6 +1145,14 @@ pub enum EphemeraInstallOutcome {
     Installed(InstalledEphemera),
     SkippedConflict { conflicting_mod: String },
     SkippedExisting,
+}
+
+/// Result of [`install_managed_ephemera_with_policy`], including any
+/// conflicting mod IDs that were disabled to resolve conflicts.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct EphemeraInstallResult {
+    pub outcome: EphemeraInstallOutcome,
+    pub disabled_conflicts: Vec<String>,
 }
 
 /// Acquires a verified Ephemera release through [`ArtifactCache`], materializes
@@ -1090,26 +1167,54 @@ pub async fn install_managed_ephemera(
     release: &crate::distribution::ephemera::EphemeraRelease,
     options: &DownloadOptions,
 ) -> Result<EphemeraInstallOutcome, AuroraInstallError> {
+    install_managed_ephemera_with_policy(
+        managed,
+        instance,
+        release,
+        options,
+        EphemeraConflictPolicy::SkipIfConflicting,
+    )
+    .await
+    .map(|result| result.outcome)
+}
+
+/// Acquires and activates a verified Ephemera release using the requested
+/// conflict-handling policy.
+///
+/// For user-initiated policies (`DisableConflictingAndInstall` and
+/// `KeepConflictingAndInstall`), the Ephemera artifact is acquired and verified
+/// before any existing mod is touched.
+pub async fn install_managed_ephemera_with_policy(
+    managed: &ManagedPaths,
+    instance: &InstanceId,
+    release: &crate::distribution::ephemera::EphemeraRelease,
+    options: &DownloadOptions,
+    policy: EphemeraConflictPolicy,
+) -> Result<EphemeraInstallResult, AuroraInstallError> {
     let mut state = load_installed_state(managed, instance)?.ok_or_else(|| {
         AuroraInstallError::ReleaseInvalid(
             "Aurora Client must be installed before bundling Ephemera.".into(),
         )
     })?;
-    if let Some(conflicting_mod) = conflicting_renderer_mod(managed, instance)? {
-        return Ok(EphemeraInstallOutcome::SkippedConflict { conflicting_mod });
+    if policy == EphemeraConflictPolicy::SkipIfConflicting {
+        if let Some(conflicting_mod) = conflicting_renderer_mod(managed, instance)? {
+            return Ok(EphemeraInstallResult {
+                outcome: EphemeraInstallOutcome::SkippedConflict { conflicting_mod },
+                disabled_conflicts: Vec::new(),
+            });
+        }
     }
 
     let relative = crate::distribution::ephemera::managed_artifact_relative_path(release.version())
         .map_err(AuroraInstallError::ReleaseInvalid)?;
     validate_ephemera_relative_path(&relative).map_err(AuroraInstallError::ReleaseInvalid)?;
 
-    // Never overwrite or duplicate an existing user-installed or provider-managed Ephemera jar.
     let instance_paths = managed.instance_paths(instance);
-    if instance_paths.mods().is_dir() {
-        let managed_file_name = state
-            .ephemera()
-            .and_then(|e| e.artifact().relative_path().strip_prefix("mods/"))
-            .map(str::to_owned);
+    let managed_file_name = state
+        .ephemera()
+        .and_then(|e| e.artifact().relative_path().strip_prefix("mods/"))
+        .map(str::to_owned);
+    if policy == EphemeraConflictPolicy::SkipIfConflicting && instance_paths.mods().is_dir() {
         let inventory = crate::instance_mods::scan(managed, instance).map_err(|error| {
             AuroraInstallError::Materialization {
                 path: relative.clone(),
@@ -1130,7 +1235,10 @@ pub async fn install_managed_ephemera(
                     .is_some_and(|meta| meta.id == "ephemera")
         });
         if has_unmanaged_ephemera {
-            return Ok(EphemeraInstallOutcome::SkippedExisting);
+            return Ok(EphemeraInstallResult {
+                outcome: EphemeraInstallOutcome::SkippedExisting,
+                disabled_conflicts: Vec::new(),
+            });
         }
     }
 
@@ -1149,6 +1257,52 @@ pub async fn install_managed_ephemera(
         .await
         .map_err(AuroraInstallError::Acquisition)?;
 
+    // Resolve conflicts only after the new Ephemera artifact has been acquired
+    // and cryptographically verified, so download/hash failures leave mods untouched.
+    let mut disabled_conflicts = Vec::new();
+    if policy == EphemeraConflictPolicy::DisableConflictingAndInstall {
+        for conflict in conflicting_renderer_mods(managed, instance)? {
+            if conflict.can_toggle
+                && crate::instance_mods::set_enabled(managed, instance, &conflict.entry_id, false)
+                    .is_ok()
+                && !disabled_conflicts
+                    .iter()
+                    .any(|existing| existing == &conflict.mod_id)
+            {
+                disabled_conflicts.push(conflict.mod_id);
+            }
+        }
+    }
+    if policy != EphemeraConflictPolicy::SkipIfConflicting && instance_paths.mods().is_dir() {
+        if let Ok(inventory) = crate::instance_mods::scan(managed, instance) {
+            for entry in inventory
+                .entries
+                .iter()
+                .filter(|e| e.enabled && e.can_toggle)
+            {
+                let is_current_managed = managed_file_name.as_deref().is_some_and(|name| {
+                    entry.file_name.eq_ignore_ascii_case(name)
+                        || entry
+                            .file_name
+                            .eq_ignore_ascii_case(&format!("{name}.disabled"))
+                });
+                let is_unmanaged_ephemera = !is_current_managed
+                    && entry
+                        .metadata
+                        .as_ref()
+                        .is_some_and(|meta| meta.id == "ephemera");
+                if is_unmanaged_ephemera {
+                    let _ = crate::instance_mods::set_enabled(
+                        managed,
+                        instance,
+                        &entry.entry_id,
+                        false,
+                    );
+                }
+            }
+        }
+    }
+
     let target = instance_paths
         .root()
         .join(relative.split('/').collect::<PathBuf>());
@@ -1163,6 +1317,36 @@ pub async fn install_managed_ephemera(
             path: relative.clone(),
             reason: error.to_string(),
         })?;
+    }
+
+    // If the user previously disabled this exact verified Ephemera version
+    // (`.jar.disabled`), clear that disabled sibling cleanly before materializing
+    // so re-enabling/updating never trips the duplicate-bootstrap guard or leaves
+    // status as `modified`.
+    {
+        let mut target_disabled_os = target.as_os_str().to_os_string();
+        target_disabled_os.push(".disabled");
+        let target_disabled = PathBuf::from(target_disabled_os);
+        if verify_file(&target_disabled, &expected, Some(verified.bytes)).is_ok() {
+            let disabled_name = target_disabled
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned());
+            let mut reenabled = false;
+            if let (Some(disabled_name), Ok(inventory)) =
+                (disabled_name, crate::instance_mods::scan(managed, instance))
+            {
+                if let Some(entry) = inventory.entries.iter().find(|e| {
+                    !e.enabled && e.can_toggle && e.file_name.eq_ignore_ascii_case(&disabled_name)
+                }) {
+                    reenabled =
+                        crate::instance_mods::set_enabled(managed, instance, &entry.entry_id, true)
+                            .is_ok();
+                }
+            }
+            if !reenabled {
+                let _ = std::fs::remove_file(&target_disabled);
+            }
+        }
     }
 
     materialize_bootstrap(
@@ -1218,7 +1402,10 @@ pub async fn install_managed_ephemera(
     };
     state.set_ephemera(Some(installed.clone()));
     write_installed_state(managed, instance, &state)?;
-    Ok(EphemeraInstallOutcome::Installed(installed))
+    Ok(EphemeraInstallResult {
+        outcome: EphemeraInstallOutcome::Installed(installed),
+        disabled_conflicts,
+    })
 }
 
 /// Removes launcher-managed Ephemera from one instance and clears its ownership
@@ -1838,6 +2025,123 @@ mod tests {
         let status = ephemera_status(&managed, &instance).unwrap();
         assert!(!status.installed);
         assert_eq!(status.conflicting_mod.as_deref(), Some("sodium"));
+        assert_eq!(status.conflicting_mods, vec!["sodium"]);
+
+        // Explicit user override (KeepConflictingAndInstall): installs Ephemera
+        // alongside Sodium without refusing or touching Sodium.
+        let ephemera_served = ephemera_body.clone();
+        let eph_server = TestServer::spawn(Arc::new(move |_| TestResponse::ok(&ephemera_served)));
+        let eph_artifact = crate::distribution::ReleaseArtifact::new(
+            format!("{}/ephemera-0.2.0-mc26.2.jar", eph_server.base_url()),
+            sha256_of(&ephemera_body),
+            Some(ephemera_body.len() as u64),
+        )
+        .unwrap();
+        let eph_release = crate::distribution::ephemera::EphemeraRelease::new(
+            "0.2.0",
+            "26.2",
+            25,
+            eph_artifact,
+            None,
+        )
+        .unwrap();
+
+        let kept = install_managed_ephemera_with_policy(
+            &managed,
+            &instance,
+            &eph_release,
+            &quick_options(),
+            EphemeraConflictPolicy::KeepConflictingAndInstall,
+        )
+        .await
+        .unwrap();
+        assert!(matches!(kept.outcome, EphemeraInstallOutcome::Installed(_)));
+        assert!(kept.disabled_conflicts.is_empty());
+        assert!(
+            managed
+                .instance_paths(&instance)
+                .mods()
+                .join("sodium-0.9.2.jar")
+                .is_file(),
+            "KeepConflictingAndInstall must keep Sodium enabled"
+        );
+        let kept_status = ephemera_status(&managed, &instance).unwrap();
+        assert!(kept_status.installed);
+        assert_eq!(kept_status.status, "active");
+        assert_eq!(kept_status.conflicting_mod.as_deref(), Some("sodium"));
+
+        // Explicit user resolution (DisableConflictingAndInstall): safely disables
+        // Sodium to .disabled and installs/keeps Ephemera active.
+        let resolved = install_managed_ephemera_with_policy(
+            &managed,
+            &instance,
+            &eph_release,
+            &quick_options(),
+            EphemeraConflictPolicy::DisableConflictingAndInstall,
+        )
+        .await
+        .unwrap();
+        assert!(matches!(
+            resolved.outcome,
+            EphemeraInstallOutcome::Installed(_)
+        ));
+        assert_eq!(resolved.disabled_conflicts, vec!["sodium"]);
+        assert!(
+            !managed
+                .instance_paths(&instance)
+                .mods()
+                .join("sodium-0.9.2.jar")
+                .exists()
+        );
+        assert!(
+            managed
+                .instance_paths(&instance)
+                .mods()
+                .join("sodium-0.9.2.jar.disabled")
+                .is_file(),
+            "DisableConflictingAndInstall must disable Sodium reversibly without deleting it"
+        );
+        let resolved_status = ephemera_status(&managed, &instance).unwrap();
+        assert!(resolved_status.installed);
+        assert_eq!(resolved_status.status, "active");
+        assert!(resolved_status.conflicting_mod.is_none());
+        assert!(resolved_status.conflicting_mods.is_empty());
+
+        // If Ephemera itself was disabled in Mods and the user updates/reinstalls
+        // the same version, the stale `.disabled` sibling is retired cleanly so
+        // status returns to `active` rather than `modified`.
+        let active_eph = managed
+            .instance_paths(&instance)
+            .mods()
+            .join("ephemera-0.2.0.jar");
+        let disabled_eph = managed
+            .instance_paths(&instance)
+            .mods()
+            .join("ephemera-0.2.0.jar.disabled");
+        std::fs::rename(&active_eph, &disabled_eph).unwrap();
+        assert_eq!(
+            ephemera_status(&managed, &instance).unwrap().status,
+            "disabled"
+        );
+        let reenabled = install_managed_ephemera_with_policy(
+            &managed,
+            &instance,
+            &eph_release,
+            &quick_options(),
+            EphemeraConflictPolicy::DisableConflictingAndInstall,
+        )
+        .await
+        .unwrap();
+        assert!(matches!(
+            reenabled.outcome,
+            EphemeraInstallOutcome::Installed(_)
+        ));
+        assert!(active_eph.is_file());
+        assert!(!disabled_eph.exists());
+        assert_eq!(
+            ephemera_status(&managed, &instance).unwrap().status,
+            "active"
+        );
         let _ = root;
     }
 }

@@ -166,6 +166,9 @@ pub fn duplicate(
                     "An installation is still using this instance.".into(),
                 )
             })?;
+            // Lock order matches every other registry writer: content ->
+            // registry -> process. Inverting it deadlocks against deletion.
+            let _registry_guard = registry_lock();
             let _process = launch::process::lock_stopped(source_id.as_str()).map_err(|_| {
                 DuplicateError(
                     "instance_duplicate_busy",
@@ -173,7 +176,6 @@ pub fn duplicate(
                 )
             })?;
 
-            let _registry_guard = registry_lock();
             let mut registry =
                 InstanceRegistry::load(&managed.instance_registry_file()).map_err(failed)?;
             let source = registry.find(source_id).cloned().ok_or_else(|| {

@@ -79,6 +79,7 @@ pub enum JobRequest {
         project: String,
         version: String,
         fingerprint: String,
+        resolve_conflicts: bool,
     },
     Pack {
         merge: bool,
@@ -158,6 +159,7 @@ async fn execute(host: &Host, request: &JobRequest) -> api::ApiResult<Value> {
             project,
             version,
             fingerprint,
+            resolve_conflicts,
         } => {
             api::install_content(
                 host.clone(),
@@ -166,6 +168,7 @@ async fn execute(host: &Host, request: &JobRequest) -> api::ApiResult<Value> {
                 project.clone(),
                 version.clone(),
                 fingerprint.clone(),
+                *resolve_conflicts,
             )
             .await
         }
@@ -1994,6 +1997,7 @@ mod tests {
                 project: "MOD0001".into(),
                 version: "1".into(),
                 fingerprint: "fp".into(),
+                resolve_conflicts: false,
             },
         };
         assert_eq!(content.key().as_deref(), Some("i1"));

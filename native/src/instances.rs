@@ -2054,7 +2054,7 @@ fn create() {
         return;
     };
     ui::spawn(
-        api::create_instance(ui::host(), name, version, loader, aurora),
+        api::create_instance(ui::host(), name, version, loader, aurora, None),
         |result| {
             crate::home::clear_progress();
             ui::with(|window, _| window.global::<Instances>().set_create_busy(false));

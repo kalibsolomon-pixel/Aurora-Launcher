@@ -1229,6 +1229,7 @@ fn confirm_install() {
                     snapshot.project,
                     snapshot.version,
                     snapshot.fingerprint,
+                    false,
                 )
                 .await
             }

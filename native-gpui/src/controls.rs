@@ -64,6 +64,8 @@ pub enum ButtonSize {
     #[default]
     Medium,
     Large,
+    /// Prominent primary hero action (e.g. Home Play button).
+    Hero,
 }
 
 /// A themed button on the unstyled [`Button`] behavior root.
@@ -82,6 +84,7 @@ pub struct AuroraButton {
     size: ButtonSize,
     icon: Option<&'static str>,
     full_width: bool,
+    split_left: bool,
     disabled: bool,
     selected: bool,
     on_click: Option<ClickHandler>,
@@ -98,6 +101,7 @@ impl AuroraButton {
             size: ButtonSize::Medium,
             icon: None,
             full_width: false,
+            split_left: false,
             disabled: false,
             selected: false,
             on_click: None,
@@ -133,6 +137,13 @@ impl AuroraButton {
 
     pub fn full_width(mut self) -> Self {
         self.full_width = true;
+        self
+    }
+
+    /// Rounds only the left corners and omits the right border so an attached
+    /// split-button trigger can fuse cleanly onto the right edge.
+    pub fn split_left(mut self, split: bool) -> Self {
+        self.split_left = split;
         self
     }
 
@@ -205,10 +216,12 @@ impl RenderOnce for AuroraButton {
             ),
         };
         let (height, pad, text, icon_size) = match self.size {
-            ButtonSize::Small => (28., 12., 12., 16.),
-            ButtonSize::Medium => (36., 16., 14., 16.),
-            ButtonSize::Large => (44., 20., 14., 20.),
+            ButtonSize::Small => (36., 14., 13., 18.),
+            ButtonSize::Medium => (42., 18., 15., 20.),
+            ButtonSize::Large => (50., 22., 15.5, 22.),
+            ButtonSize::Hero => (56., 28., 18., 24.),
         };
+        let is_hero = self.size == ButtonSize::Hero;
         let (ring, selected_fg, selected_bg, selected_border) =
             (t.ring, t.foreground, t.accent_soft, t.border);
         let (disabled_bg, disabled_fg, disabled_border) =
@@ -236,17 +249,28 @@ impl RenderOnce for AuroraButton {
             .flex()
             .flex_shrink_0()
             .items_center()
-            .gap(px(8.))
+            .gap(px(if is_hero { 10. } else { 8. }))
             .when(self.full_width, |b| b.w_full())
+            .when(is_hero && !self.full_width, |b| {
+                b.min_w(px(if self.split_left { 176. } else { 196. }))
+            })
             .justify_center()
             .h(px(height))
             .px(px(pad))
-            .rounded(t.radius)
+            .when(self.split_left, |b| {
+                b.rounded_l(if is_hero { t.radius_lg } else { t.radius })
+                    .border_t_1()
+                    .border_l_1()
+                    .border_b_1()
+            })
+            .when(!self.split_left, |b| {
+                b.rounded(if is_hero { t.radius_lg } else { t.radius })
+                    .border_1()
+            })
             .text_size(px(text))
             .font_weight(weight)
             .bg(bg)
             .text_color(fg)
-            .border_1()
             .border_color(border)
             .hover(|style| style.bg(hover_bg))
             .active(|style| style.opacity(0.88))
@@ -372,8 +396,8 @@ impl RenderOnce for AuroraInput {
             .flex()
             .items_center()
             .w_full()
-            .h(px(36.))
-            .px(px(12.))
+            .h(px(42.))
+            .px(px(14.))
             .rounded(t.radius)
             .bg(t.sunken)
             .border_1()
@@ -466,8 +490,8 @@ impl RenderOnce for AuroraToggle {
             .disabled(self.disabled)
             .accessibility_label(self.label)
             .relative()
-            .w(px(44.))
-            .h(px(36.))
+            .w(px(48.))
+            .h(px(40.))
             .flex()
             .items_center()
             .justify_center()
@@ -476,8 +500,8 @@ impl RenderOnce for AuroraToggle {
                     .checked(self.checked)
                     .disabled(self.disabled)
                     .relative()
-                    .w(px(40.))
-                    .h(px(24.))
+                    .w(px(44.))
+                    .h(px(26.))
                     .flex()
                     .items_center()
                     .px(px(4.))
@@ -840,6 +864,7 @@ pub struct AuroraSelect {
     rows: Option<Vec<AnyElement>>,
     placeholder: SharedString,
     title_trigger: bool,
+    split_trigger: Option<(Pixels, bool)>,
     trigger_value: Option<SharedString>,
     menu_width: Option<Pixels>,
     highlight: usize,
@@ -872,6 +897,7 @@ impl AuroraSelect {
             rows: None,
             placeholder: "—".into(),
             title_trigger: false,
+            split_trigger: None,
             trigger_value: None,
             menu_width: None,
             highlight: 0,
@@ -895,6 +921,14 @@ impl AuroraSelect {
         self.placeholder = "Choose an instance".into();
         self.title_trigger = true;
         self.menu_width = Some(menu_width);
+        self
+    }
+
+    /// Renders the trigger as the attached right-hand chevron half of a split
+    /// primary Play button.
+    pub fn split_play_trigger(mut self, height: Pixels, danger: bool) -> Self {
+        self.split_trigger = Some((height, danger));
+        self.width = px(48.);
         self
     }
 
@@ -1021,77 +1055,165 @@ impl RenderOnce for AuroraSelect {
         };
 
         let clear = gpui_kit::transparent_black();
-        let trigger = div()
-            .id((self.id.clone(), "trigger"))
-            .flex()
-            .items_center()
-            .when(!self.title_trigger, |d| d.justify_between().w_full())
-            .when(self.title_trigger, |d| {
-                d.justify_start().ml(px(-8.)).max_w_full()
-            })
-            .gap(px(8.))
-            .h(px(36.))
-            .px(px(if self.title_trigger { 8. } else { 12. }))
-            .rounded(t.radius)
-            .bg(if self.title_trigger && !self.open && !focused {
-                clear
+        let trigger = if let Some((split_h, danger)) = self.split_trigger {
+            let (bg, hover_bg, fg, border_c, div_c) = if danger {
+                (
+                    Hsla {
+                        a: 0.12,
+                        ..t.danger
+                    },
+                    Hsla {
+                        a: 0.22,
+                        ..t.danger
+                    },
+                    t.danger,
+                    Hsla {
+                        a: 0.32,
+                        ..t.danger
+                    },
+                    Hsla {
+                        a: 0.28,
+                        ..t.danger
+                    },
+                )
             } else {
-                t.control
-            })
-            .border_1()
-            .border_color(if self.open || focused {
-                t.ring
-            } else if self.title_trigger {
-                clear
-            } else {
-                t.border_subtle
-            })
-            .text_size(px(if self.title_trigger { 20. } else { 12. }))
-            .when(self.title_trigger, |trigger| {
-                trigger.font_weight(gpui_kit::FontWeight::SEMIBOLD)
-            })
-            .when(self.disabled, |style| style.opacity(0.45))
-            .hover(|style| {
-                style.bg(if self.title_trigger {
-                    t.control_hover
+                (
+                    t.accent,
+                    t.accent_hover,
+                    t.accent_foreground,
+                    t.accent,
+                    Hsla {
+                        a: 0.26,
+                        ..t.accent_foreground
+                    },
+                )
+            };
+            div()
+                .id((self.id.clone(), "trigger"))
+                .flex()
+                .items_center()
+                .justify_center()
+                .w(px(48.))
+                .h(split_h)
+                .rounded_r(t.radius_lg)
+                .bg(bg)
+                .border_t_1()
+                .border_r_1()
+                .border_b_1()
+                .when(self.open || focused, |d| d.border_l_1())
+                .border_color(if self.open || focused {
+                    t.ring
                 } else {
-                    t.surface_hover
+                    border_c
                 })
-            })
-            .child(
-                div()
-                    .when(!self.title_trigger, |d| {
-                        d.flex_1().min_w(px(0.)).overflow_hidden().text_ellipsis()
-                    })
-                    .when(self.title_trigger, |d| d.flex_shrink_0())
-                    .whitespace_nowrap()
-                    .child(current.clone()),
-            )
-            .child(crate::symbols::icon(
-                Some("expand_more"),
-                px(if self.title_trigger { 20. } else { 16. }),
-                t.muted_foreground,
-            ))
-            .on_click({
-                let on_open_change = self.on_open_change.clone();
-                let content = self.content_focus.clone();
-                let close = close.clone();
-                let open = self.open;
-                let disabled = self.disabled;
-                move |_, window, cx| {
-                    if disabled {
-                        return;
-                    }
-                    if open {
-                        close(window, cx);
-                    } else {
-                        if let Some(handler) = on_open_change.as_ref() {
-                            handler(true, window, cx);
+                .when(!self.open && !focused, |d| {
+                    d.child(
+                        div()
+                            .absolute()
+                            .left_0()
+                            .top(px(11.))
+                            .bottom(px(11.))
+                            .w(px(1.))
+                            .bg(div_c),
+                    )
+                })
+                .relative()
+                .when(self.disabled, |style| style.opacity(0.55))
+                .hover(move |style| style.bg(hover_bg))
+                .child(crate::symbols::icon(Some("expand_more"), px(22.), fg))
+                .on_click({
+                    let on_open_change = self.on_open_change.clone();
+                    let content = self.content_focus.clone();
+                    let close = close.clone();
+                    let open = self.open;
+                    let disabled = self.disabled;
+                    move |_, window, cx| {
+                        if disabled {
+                            return;
                         }
-                        content.focus(window, cx);
+                        if open {
+                            close(window, cx);
+                        } else {
+                            if let Some(handler) = on_open_change.as_ref() {
+                                handler(true, window, cx);
+                            }
+                            content.focus(window, cx);
+                        }
                     }
-                }
-            });
+                })
+        } else {
+            div()
+                .id((self.id.clone(), "trigger"))
+                .flex()
+                .items_center()
+                .when(!self.title_trigger, |d| d.justify_between().w_full())
+                .when(self.title_trigger, |d| {
+                    d.justify_start().ml(px(-8.)).max_w_full()
+                })
+                .gap(px(10.))
+                .h(px(42.))
+                .px(px(if self.title_trigger { 10. } else { 14. }))
+                .rounded(t.radius)
+                .bg(if self.title_trigger && !self.open && !focused {
+                    clear
+                } else {
+                    t.control
+                })
+                .border_1()
+                .border_color(if self.open || focused {
+                    t.ring
+                } else if self.title_trigger {
+                    clear
+                } else {
+                    t.border_subtle
+                })
+                .text_size(px(if self.title_trigger { 22. } else { 14. }))
+                .when(self.title_trigger, |trigger| {
+                    trigger.font_weight(gpui_kit::FontWeight::SEMIBOLD)
+                })
+                .when(self.disabled, |style| style.opacity(0.45))
+                .hover(|style| {
+                    style.bg(if self.title_trigger {
+                        t.control_hover
+                    } else {
+                        t.surface_hover
+                    })
+                })
+                .child(
+                    div()
+                        .when(!self.title_trigger, |d| {
+                            d.flex_1().min_w(px(0.)).overflow_hidden().text_ellipsis()
+                        })
+                        .when(self.title_trigger, |d| d.flex_shrink_0())
+                        .whitespace_nowrap()
+                        .child(current.clone()),
+                )
+                .child(crate::symbols::icon(
+                    Some("expand_more"),
+                    px(if self.title_trigger { 20. } else { 16. }),
+                    t.muted_foreground,
+                ))
+                .on_click({
+                    let on_open_change = self.on_open_change.clone();
+                    let content = self.content_focus.clone();
+                    let close = close.clone();
+                    let open = self.open;
+                    let disabled = self.disabled;
+                    move |_, window, cx| {
+                        if disabled {
+                            return;
+                        }
+                        if open {
+                            close(window, cx);
+                        } else {
+                            if let Some(handler) = on_open_change.as_ref() {
+                                handler(true, window, cx);
+                            }
+                            content.focus(window, cx);
+                        }
+                    }
+                })
+        };
 
         let mut rows = self.rows.into_iter().flatten();
         let mut items: Vec<_> = self
@@ -1238,7 +1360,11 @@ impl RenderOnce for AuroraSelect {
                     deferred(
                         Positioner::side(bounds)
                             .placement(Placement::Bottom)
-                            .align(Align::Start)
+                            .align(if self.split_trigger.is_some() {
+                                Align::End
+                            } else {
+                                Align::Start
+                            })
                             .offset(px(4.))
                             .margin(px(8.))
                             .child(

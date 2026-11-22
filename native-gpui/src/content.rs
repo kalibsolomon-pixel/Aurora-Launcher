@@ -1802,6 +1802,8 @@ impl Render for Content {
                 })
                 .collect();
             if !self.loading {
+                // Action-first Pandora-style toolbar: primary buttons on the LEFT,
+                // filter input + subtle item count on the RIGHT.
                 list = list.child(
                     div()
                         .flex()
@@ -1809,8 +1811,7 @@ impl Render for Content {
                         .gap(px(10.))
                         .items_center()
                         .justify_between()
-                        .px(px(16.))
-                        .py(px(8.))
+                        .pb(px(8.))
                         .border_b_1()
                         .border_color(palette.border_subtle)
                         .child(
@@ -1818,42 +1819,18 @@ impl Render for Content {
                                 .flex()
                                 .flex_wrap()
                                 .items_center()
-                                .gap(px(if window.viewport_size().width < px(1000.) {
-                                    12.
-                                } else {
-                                    16.
-                                }))
-                                .child(ui::caption(
-                                    t,
-                                    if query.trim().is_empty() {
-                                        format!("{} installed", self.entries.len())
-                                    } else {
-                                        format!("{} of {} shown", visible.len(), self.entries.len())
-                                    },
-                                ))
-                                .child(
-                                    div()
-                                        .w(px(if window.viewport_size().width < px(1000.) {
-                                            180.
-                                        } else {
-                                            250.
-                                        }))
-                                        .child(
-                                            AuroraInput::new(&self.filter)
-                                                .label("Filter installed content"),
-                                        ),
-                                )
+                                .gap(px(8.))
                                 .child(
                                     AuroraButton::new("content-find-more", "Find more")
                                         .size(ButtonSize::Small)
-                                        .variant(ButtonVariant::Default)
+                                        .variant(ButtonVariant::Primary)
                                         .icon("explore")
                                         .on_click(move |_, _, cx| {
                                             find.update(cx, |s, cx| s.find_more(cx))
                                         }),
                                 )
                                 .child(
-                                    AuroraButton::new("content-import-open", "Import local")
+                                    AuroraButton::new("content-import-open", "Import")
                                         .size(ButtonSize::Small)
                                         .icon("upload_file")
                                         .selected(self.local_import.open)
@@ -1891,20 +1868,45 @@ impl Render for Content {
                                             cx.notify();
                                         },
                                     )),
+                                )
+                                .child(
+                                    AuroraButton::new("content-actions", "Manage")
+                                        .size(ButtonSize::Small)
+                                        .variant(ButtonVariant::Default)
+                                        .icon("tune")
+                                        .selected(self.actions_open)
+                                        .on_click(cx.listener(|this, _, _, cx| {
+                                            this.actions_open = !this.actions_open;
+                                            cx.notify();
+                                        })),
                                 ),
                         )
                         .child(
-                            div().flex().items_center().gap(px(6.)).child(
-                                AuroraButton::new("content-actions", "Manage content")
-                                    .size(ButtonSize::Small)
-                                    .variant(ButtonVariant::Default)
-                                    .icon("tune")
-                                    .selected(self.actions_open)
-                                    .on_click(cx.listener(|this, _, _, cx| {
-                                        this.actions_open = !this.actions_open;
-                                        cx.notify();
-                                    })),
-                            ),
+                            div()
+                                .flex()
+                                .flex_wrap()
+                                .items_center()
+                                .gap(px(10.))
+                                .child(
+                                    div()
+                                        .w(px(if window.viewport_size().width < px(1000.) {
+                                            170.
+                                        } else {
+                                            220.
+                                        }))
+                                        .child(
+                                            AuroraInput::new(&self.filter)
+                                                .label("Filter installed content"),
+                                        ),
+                                )
+                                .child(ui::caption(
+                                    t,
+                                    if query.trim().is_empty() {
+                                        format!("{} installed", self.entries.len())
+                                    } else {
+                                        format!("{} of {}", visible.len(), self.entries.len())
+                                    },
+                                )),
                         ),
                 );
             }
@@ -2138,8 +2140,21 @@ impl Render for Content {
             let page_start = self.page * CONTENT_PAGE_SIZE;
             let page_end = (page_start + CONTENT_PAGE_SIZE).min(total_visible);
             let page_slice = &visible[page_start..page_end];
-            let mut cards = artwork::card_grid(artwork::card_columns(window.viewport_size().width));
-            for &entry in page_slice {
+            // Pandora-style high-density single-column mod/pack list:
+            // primary enable/disable toggle on the LEFT, concise metadata,
+            // compact actions + status on the RIGHT.
+            let bulk_mode = !self.bulk_selected.is_empty();
+            let last_row = page_slice.len().saturating_sub(1);
+            let mut rows_card = div()
+                .flex()
+                .flex_col()
+                .w_full()
+                .rounded(t.radius_lg)
+                .bg(t.card)
+                .border_1()
+                .border_color(t.border_subtle)
+                .overflow_hidden();
+            for (row_idx, &entry) in page_slice.iter().enumerate() {
                 let e = entry.clone();
                 let v = view.clone();
                 let target = self.target().unwrap();
@@ -2171,8 +2186,8 @@ impl Render for Content {
                 let mut text = div()
                     .flex()
                     .flex_col()
-                    .gap(px(6.))
-                    .line_height(px(20.))
+                    .flex_1()
+                    .gap(px(2.))
                     .min_w(px(0.))
                     .child(
                         div()
@@ -2183,17 +2198,16 @@ impl Render for Content {
                             .child(
                                 div()
                                     .min_w(px(0.))
-                                    .text_size(px(ui::TEXT_TITLE - 4.))
-                                    .line_height(px(24.))
+                                    .text_size(px(ui::TEXT_SECTION - 1.))
+                                    .line_height(px(22.))
                                     .font_weight(gpui::FontWeight::SEMIBOLD)
                                     .text_color(palette.foreground)
-                                    .when(disabled_row, |d| d.opacity(0.8))
+                                    .when(disabled_row, |d| d.opacity(0.65))
+                                    .overflow_hidden()
                                     .text_ellipsis()
+                                    .whitespace_nowrap()
                                     .child(entry.name.clone()),
                             )
-                            .when(disabled_row, |name| {
-                                name.child(ui::badge(t, "Disabled", ui::Tone::Neutral))
-                            })
                             .when(!warnings.is_empty(), |name| {
                                 name.child(warning_marker(t, &entry.id, &entry.name, &warnings))
                             }),
@@ -2201,9 +2215,12 @@ impl Render for Content {
                     .child(
                         div()
                             .min_w(px(0.))
-                            .text_size(px(ui::TEXT_BODY - 1.))
-                            .text_color(palette.foreground.opacity(0.75))
+                            .text_size(px(ui::TEXT_CAPTION))
+                            .line_height(px(16.))
+                            .text_color(palette.subtle_foreground)
+                            .overflow_hidden()
                             .text_ellipsis()
+                            .whitespace_nowrap()
                             .child(line.join(" · ")),
                     )
                     .when_some(required_by.clone(), |text, label| {
@@ -2228,83 +2245,53 @@ impl Render for Content {
                     );
                 }
                 let toggle = match entry.enabled {
-                    // Locked on: other enabled mods depend on this one. The
-                    // switch keeps the column's rhythm; the lock on its thumb
-                    // says it cannot be turned off.
                     Some(true) if required => div()
+                        .id(gpui::SharedString::from(format!("locked-{}", entry.id)))
+                        .aria_label(format!("{} is required and stays enabled", entry.name))
                         .flex()
-                        .w(px(76.))
+                        .flex_none()
                         .items_center()
-                        .justify_center()
+                        .justify_end()
+                        .px(px(3.))
+                        .w(px(40.))
+                        .h(px(24.))
+                        .rounded_full()
+                        .bg(palette.accent)
                         .child(
                             div()
-                                .id(gpui::SharedString::from(format!("locked-{}", entry.id)))
-                                .aria_label(format!("{} is required and stays enabled", entry.name))
+                                .flex_none()
+                                .size(px(18.))
+                                .rounded_full()
+                                .bg(palette.accent_foreground)
                                 .flex()
                                 .items_center()
-                                .justify_end()
-                                .px(px(3.))
-                                .w(px(40.))
-                                .h(px(24.))
-                                .rounded_full()
-                                .bg(palette.accent)
-                                .child(
-                                    div()
-                                        .flex_none()
-                                        .size(px(18.))
-                                        .rounded_full()
-                                        .bg(palette.accent_foreground)
-                                        .flex()
-                                        .items_center()
-                                        .justify_center()
-                                        .child(crate::symbols::icon(
-                                            Some("lock"),
-                                            px(12.),
-                                            palette.accent,
-                                        )),
-                                ),
+                                .justify_center()
+                                .child(crate::symbols::icon(Some("lock"), px(12.), palette.accent)),
                         )
                         .into_any_element(),
                     Some(enabled) => {
                         let target_owned = target.to_owned();
-                        div()
-                            .flex()
-                            .w(px(76.))
-                            .items_center()
-                            .justify_center()
-                            .gap(px(8.))
-                            .child(
-                                AuroraToggle::new(gpui::SharedString::from(format!(
-                                    "toggle-{}",
-                                    entry.id
-                                )))
-                                .label(format!("Enable {}", entry.name))
-                                .checked(enabled)
-                                .disabled(busy || !entry.toggle || required)
-                                .on_change(move |_, _, _, cx| {
-                                    v.update(cx, |s, cx| {
-                                        s.toggle(&target_owned, e.clone(), cx);
-                                        cx.notify();
-                                    });
-                                }),
-                            )
+                        AuroraToggle::new(gpui::SharedString::from(format!("toggle-{}", entry.id)))
+                            .label(format!("Enable {}", entry.name))
+                            .checked(enabled)
+                            .disabled(busy || !entry.toggle || required)
+                            .on_change(move |_, _, _, cx| {
+                                v.update(cx, |s, cx| {
+                                    s.toggle(&target_owned, e.clone(), cx);
+                                    cx.notify();
+                                });
+                            })
                             .into_any_element()
                     }
-                    None => div()
-                        .w(px(76.))
-                        .flex()
-                        .items_center()
-                        .justify_center()
-                        .child(ui::status_badge(
-                            t,
-                            if status_word == Some("Activation managed in game") {
-                                "In game"
-                            } else {
-                                "Unknown"
-                            },
-                            ui::Tone::Neutral,
-                        ))
-                        .into_any_element(),
+                    None => ui::caption(
+                        t,
+                        if status_word == Some("Activation managed in game") {
+                            "In game"
+                        } else {
+                            "Unknown"
+                        },
+                    )
+                    .into_any_element(),
                 };
                 let e = entry.clone();
                 let v = view.clone();
@@ -2315,7 +2302,7 @@ impl Render for Content {
                 )
                 .accessibility_label(format!("Delete {}", entry.name))
                 .icon("delete")
-                .variant(ButtonVariant::Default)
+                .variant(ButtonVariant::Ghost)
                 .size(ButtonSize::Small)
                 .disabled(busy || !entry.remove)
                 .on_click(move |_, _, cx| {
@@ -2347,6 +2334,7 @@ impl Render for Content {
                             gpui::SharedString::from(format!("details-{}", entry.id)),
                             "Details",
                         )
+                        .variant(ButtonVariant::Ghost)
                         .size(ButtonSize::Small)
                         .icon("open_in_new")
                         .accessibility_label(format!("Details for {title}"))
@@ -2360,7 +2348,9 @@ impl Render for Content {
                         })),
                     )
                 });
-                let bulk_check = (self.kind == Kind::Mod && entry.toggle).then(|| {
+                // Show bulk selection checkboxes only while bulk selection is active
+                // (avoiding unexplained stray circles on every resting mod row).
+                let bulk_check = (bulk_mode && self.kind == Kind::Mod && entry.toggle).then(|| {
                     let is_sel = self.bulk_selected.contains(&entry.id);
                     let id_sel = entry.id.clone();
                     AuroraButton::new(
@@ -2380,29 +2370,49 @@ impl Render for Content {
                         cx.notify();
                     }))
                 });
-                cards = cards.child(artwork::project_card(
-                    t,
-                    artwork::tile(
-                        gpui::SharedString::from(format!("icon-{}", entry.id)),
-                        icon,
-                        &entry.letter,
-                        px(artwork::CARD_ART_SIDE),
-                        &palette,
-                    ),
-                    text,
-                    div()
-                        .flex()
-                        .flex_wrap()
-                        .justify_end()
-                        .items_center()
-                        .gap(px(8.))
-                        .children(bulk_check)
-                        .children(details)
-                        .child(toggle)
-                        .child(remove),
-                ));
+                let row = div()
+                    .flex()
+                    .items_center()
+                    .justify_between()
+                    .gap(px(18.))
+                    .px(px(20.))
+                    .py(px(16.))
+                    .when(row_idx != last_row, |r| {
+                        r.border_b_1().border_color(t.border_subtle)
+                    })
+                    .child(
+                        div()
+                            .flex()
+                            .items_center()
+                            .gap(px(16.))
+                            .flex_1()
+                            .min_w(px(0.))
+                            .children(bulk_check)
+                            .child(artwork::tile(
+                                gpui::SharedString::from(format!("icon-{}", entry.id)),
+                                icon,
+                                &entry.letter,
+                                px(56.),
+                                &palette,
+                            ))
+                            .child(text),
+                    )
+                    .child(
+                        div()
+                            .flex()
+                            .flex_shrink_0()
+                            .items_center()
+                            .gap(px(10.))
+                            .when(disabled_row, |r| r.child(ui::caption(t, "Disabled")))
+                            .children(details)
+                            .child(toggle)
+                            .child(remove),
+                    );
+                rows_card = rows_card.child(row);
             }
-            list = list.child(cards);
+            if !page_slice.is_empty() {
+                list = list.child(rows_card);
+            }
             if total_pages > 1 {
                 list = list.child(
                     div()

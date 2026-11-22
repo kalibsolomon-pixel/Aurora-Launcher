@@ -648,7 +648,7 @@ fn validate_root_against_state(
     let workers = std::thread::available_parallelism()
         .map(|n| n.get())
         .unwrap_or(1)
-        .min(8)
+        .min(16)
         .min(entries.len().max(1));
     let outcomes: Vec<(u32, u64, Vec<String>)> = if workers <= 1 || entries.len() < 4 {
         entries
@@ -656,34 +656,41 @@ fn validate_root_against_state(
             .map(|entry| validate_runtime_entry(root, entry))
             .collect()
     } else {
-        use std::sync::Mutex;
         use std::sync::atomic::{AtomicUsize, Ordering};
         let next = AtomicUsize::new(0);
-        let slots: Vec<Mutex<Option<(u32, u64, Vec<String>)>>> =
-            (0..entries.len()).map(|_| Mutex::new(None)).collect();
-        std::thread::scope(|scope| {
-            for _ in 0..workers {
-                let next = &next;
-                let slots = &slots;
-                scope.spawn(move || {
-                    loop {
-                        let index = next.fetch_add(1, Ordering::Relaxed);
-                        if index >= entries.len() {
-                            break;
+        let worker_results: Vec<Vec<(usize, (u32, u64, Vec<String>))>> =
+            std::thread::scope(|scope| {
+                let mut handles = Vec::with_capacity(workers);
+                for _ in 0..workers {
+                    let next = &next;
+                    handles.push(scope.spawn(move || {
+                        let mut local = Vec::with_capacity(entries.len() / workers + 1);
+                        loop {
+                            let index = next.fetch_add(1, Ordering::Relaxed);
+                            if index >= entries.len() {
+                                break;
+                            }
+                            let result = validate_runtime_entry(root, &entries[index]);
+                            local.push((index, result));
                         }
-                        let result = validate_runtime_entry(root, &entries[index]);
-                        *slots[index].lock().expect("runtime slot") = Some(result);
-                    }
-                });
+                        local
+                    }));
+                }
+                handles
+                    .into_iter()
+                    .map(|handle| handle.join().expect("runtime worker"))
+                    .collect()
+            });
+        let mut ordered: Vec<Option<(u32, u64, Vec<String>)>> =
+            (0..entries.len()).map(|_| None).collect();
+        for batch in worker_results {
+            for (index, result) in batch {
+                ordered[index] = Some(result);
             }
-        });
-        slots
+        }
+        ordered
             .into_iter()
-            .map(|slot| {
-                slot.into_inner()
-                    .expect("runtime slot")
-                    .expect("every runtime entry checked")
-            })
+            .map(|slot| slot.expect("every runtime entry checked"))
             .collect()
     };
     let mut checked_files = 0u32;

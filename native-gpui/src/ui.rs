@@ -15,19 +15,19 @@ use gpui_kit::{
 
 use crate::theme::AuroraTheme;
 
-/// Type scale (logical px, aligned to 4pt rhythm).
-pub const TEXT_DISPLAY: f32 = 28.;
-pub const TEXT_TITLE: f32 = 24.;
-pub const TEXT_SECTION: f32 = 16.;
-pub const TEXT_BODY: f32 = 14.;
-pub const TEXT_CAPTION: f32 = 12.;
-pub const TEXT_MICRO: f32 = 11.;
+/// Type scale (logical px, generous desktop proportions matching compact balance).
+pub const TEXT_DISPLAY: f32 = 30.;
+pub const TEXT_TITLE: f32 = 26.;
+pub const TEXT_SECTION: f32 = 18.;
+pub const TEXT_BODY: f32 = 15.;
+pub const TEXT_CAPTION: f32 = 13.;
+pub const TEXT_MICRO: f32 = 11.5;
 
 /// Vertical rhythm between page blocks and inside cards.
-pub const PAGE_GAP: f32 = 20.;
-pub const CARD_PADDING: f32 = 20.;
-/// Comfortable maximum reading width for main page content on wide displays.
-pub const MAX_CONTENT_WIDTH: f32 = 1220.;
+pub const PAGE_GAP: f32 = 24.;
+pub const CARD_PADDING: f32 = 24.;
+/// Comfortable maximum reading width so expanded windows keep crisp proportions.
+pub const MAX_CONTENT_WIDTH: f32 = 1040.;
 
 /// A persistent native scroll affordance, painted only when content overflows.
 pub fn scrollbar(

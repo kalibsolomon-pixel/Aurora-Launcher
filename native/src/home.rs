@@ -312,7 +312,7 @@ pub(crate) fn quick_play(mode: String, target_id: String) {
     render();
     let Some(account) = account else { return };
     ui::spawn_api(
-        api::quick_play(ui::host(), mode, target_id, account),
+        api::quick_play(ui::host(), mode, target_id, account, None),
         |result| {
             ui::with(|_, state| {
                 state.play_busy = false;

@@ -14,7 +14,10 @@ pub(super) struct GroupView {
 
 impl GroupView {
     fn dirty(&self) -> bool {
-        matches!((&self.overview, &self.draft), (Some(o), Some(d)) if o.config != *d)
+        matches!(
+            (&self.overview, &self.draft),
+            (Some(o), Some(d)) if Self::draft_from(o) != *d
+        )
     }
 
     /// The saved group, not the draft, decides whether it is in charge.
@@ -223,7 +226,21 @@ impl Syncing {
                         .items_center()
                         .gap(px(12.))
                         .when_some(status_badge, |row, (label, tone)| {
-                            row.child(ui::status_badge(t, label, tone))
+                            let color = match tone {
+                                ui::Tone::Warning => t.warning,
+                                ui::Tone::Success => t.success,
+                                _ => t.muted_foreground,
+                            };
+                            row.child(
+                                div()
+                                    .flex()
+                                    .items_center()
+                                    .gap(px(6.))
+                                    .text_size(px(ui::TEXT_CAPTION))
+                                    .text_color(color)
+                                    .child(div().size(px(6.)).rounded_full().bg(color))
+                                    .child(label),
+                            )
                         })
                         .child(
                             AuroraToggle::new("sync-group-enabled")
