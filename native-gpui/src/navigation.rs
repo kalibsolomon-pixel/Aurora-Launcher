@@ -121,25 +121,14 @@ impl Launcher {
                         .gap(px(10.))
                         .child(gpui::img(images::aurora_logo()).w(px(30.)).h(px(24.)))
                         .child(
-                            div()
-                                .flex()
-                                .flex_col()
-                                .min_w(px(0.))
-                                .child(
-                                    div()
-                                        .text_size(px(14.))
-                                        .line_height(px(17.))
-                                        .font_weight(FontWeight::BOLD)
-                                        .text_color(t.foreground)
-                                        .child("Aurora Launcher"),
-                                )
-                                .child(
-                                    div()
-                                        .text_size(px(11.))
-                                        .line_height(px(14.))
-                                        .text_color(t.subtle_foreground)
-                                        .child("for Aurora Client"),
-                                ),
+                            div().flex().flex_col().min_w(px(0.)).child(
+                                div()
+                                    .text_size(px(14.))
+                                    .line_height(px(20.))
+                                    .font_weight(FontWeight::SEMIBOLD)
+                                    .text_color(t.foreground)
+                                    .child("Aurora Launcher"),
+                            ),
                         ),
                 ))
                 .child(
@@ -253,43 +242,31 @@ impl Launcher {
                 .flex_none()
                 .flex()
                 .items_center()
-                .when(expanded, |b| b.w_full().px(px(10.)).gap(px(10.)))
+                .when(expanded, |b| b.w_full().px(px(12.)).gap(px(8.)))
                 .when(!expanded, |b| {
                     b.flex_col().w(px(72.)).justify_center().gap(px(4.))
                 })
                 .h(item_h)
-                .rounded(px(12.))
+                .rounded(px(8.))
                 .border_1()
                 .border_color(if selected {
-                    Hsla { a: 0.52, ..t.ring }
+                    t.border_subtle
                 } else {
                     gpui::transparent_black()
                 })
                 .hover(move |style| style.bg(hover))
                 .focus_visible(move |style| style.border_color(ring))
-                .when(selected, |b| {
-                    let bright = Hsla {
-                        l: (t.ring.l + 0.06).min(0.78),
-                        a: 0.28,
-                        ..t.ring
-                    };
-                    let deep = Hsla { a: 0.16, ..t.ring };
-                    b.bg(gpui::linear_gradient(
-                        135.,
-                        gpui::linear_color_stop(bright, 0.),
-                        gpui::linear_color_stop(deep, 1.),
-                    ))
-                })
+                .when(selected, |b| b.bg(t.accent_soft))
                 .child(symbols::icon(
                     Some(icon),
-                    px(if expanded { 22. } else { 26. }),
+                    px(if expanded { 20. } else { 24. }),
                     icon_color,
                 ))
                 .when(!expanded, |b| {
                     b.child(
                         div()
                             .text_size(px(11.))
-                            .line_height(px(13.))
+                            .line_height(px(16.))
                             .font_weight(if selected {
                                 FontWeight::SEMIBOLD
                             } else {
@@ -826,20 +803,12 @@ impl Launcher {
                     .iter()
                     .any(|b| b.code == "launch_authentication_required");
 
-            let card_border = if active {
-                Hsla { a: 0.85, ..t.ring }
-            } else if has_aurora {
-                Hsla { a: 0.26, ..t.ring }
-            } else {
-                t.border_subtle
-            };
+            let card_border = if active { t.border } else { t.border_subtle };
 
             let open_id = id.clone();
             let play_or_select_id = id.clone();
             let hover_bg = t.control_hover;
 
-            // Uniform circular card-level Play control (accent fill on hover only so
-            // active selection is signaled cleanly by the card outline alone).
             let play_hover = if can_kill { t.danger_hover } else { t.accent };
             let play_ring = t.ring;
             let primary_action = if active {
@@ -870,16 +839,12 @@ impl Launcher {
                     .rounded_full()
                     .bg(if can_kill { t.danger } else { t.accent_soft })
                     .border_1()
-                    .border_color(if can_kill {
-                        t.danger
-                    } else {
-                        Hsla { a: 0.45, ..t.ring }
-                    })
+                    .border_color(if can_kill { t.danger } else { t.border })
                     .hover(move |s| s.bg(play_hover))
                     .focus_visible(move |s| s.border_1().border_color(play_ring))
                     .child(symbols::icon(
                         Some(icon),
-                        px(18.),
+                        px(16.),
                         if can_kill {
                             t.accent_foreground
                         } else {
@@ -1403,7 +1368,7 @@ impl Launcher {
                                                 },
                                             )
                                             .variant(if client_offer.is_some() {
-                                                ButtonVariant::Primary
+                                                ButtonVariant::Soft
                                             } else {
                                                 ButtonVariant::Default
                                             })

@@ -879,8 +879,6 @@ impl Downloads {
                             let tx = self.tx.clone();
                             self.rt.spawn(async move {
                                 tokio::time::sleep(Duration::from_millis(4200)).await;
-                                let _ = tx.send(Message::FadeToast { id, attempt }).await;
-                                tokio::time::sleep(Duration::from_millis(800)).await;
                                 let _ = tx.send(Message::DismissToast { id, attempt }).await;
                             });
                         }
@@ -1133,8 +1131,8 @@ impl Render for Downloads {
                 return div()
                     .id("downloads-toast-stack")
                     .absolute()
-                    .right(px(18.))
-                    .bottom(px(18.))
+                    .right(px(16.))
+                    .bottom(px(16.))
                     .w(px(336.))
                     .flex()
                     .flex_col()
@@ -1142,7 +1140,6 @@ impl Render for Downloads {
                     .bg(solid_raised)
                     .border_1()
                     .border_color(t.border)
-                    .shadow_lg()
                     .overflow_hidden()
                     .child(
                         div()
@@ -1222,8 +1219,8 @@ impl Render for Downloads {
         let mut stack = div()
             .id("downloads-toast-stack")
             .absolute()
-            .right(px(18.))
-            .bottom(px(18.))
+            .right(px(16.))
+            .bottom(px(16.))
             .w(px(336.))
             .flex()
             .flex_col()
@@ -1231,7 +1228,6 @@ impl Render for Downloads {
             .bg(solid_raised)
             .border_1()
             .border_color(t.border)
-            .shadow_lg()
             .overflow_hidden();
 
         for (idx, task) in visible_tasks.into_iter().enumerate() {

@@ -15,13 +15,13 @@ use gpui_kit::{
 
 use crate::theme::AuroraTheme;
 
-/// Type scale (logical px).
+/// Type scale (logical px, aligned to 4pt rhythm).
 pub const TEXT_DISPLAY: f32 = 28.;
 pub const TEXT_TITLE: f32 = 24.;
 pub const TEXT_SECTION: f32 = 16.;
 pub const TEXT_BODY: f32 = 14.;
-pub const TEXT_CAPTION: f32 = 13.;
-pub const TEXT_MICRO: f32 = 12.;
+pub const TEXT_CAPTION: f32 = 12.;
+pub const TEXT_MICRO: f32 = 11.;
 
 /// Vertical rhythm between page blocks and inside cards.
 pub const PAGE_GAP: f32 = 20.;
@@ -84,7 +84,7 @@ pub fn section_header(
     div()
         .flex()
         .flex_col()
-        .gap(px(2.))
+        .gap(px(4.))
         .child(
             div()
                 .text_size(px(TEXT_SECTION))
@@ -107,11 +107,11 @@ pub fn update_dot(t: &AuroraTheme) -> Div {
     div().size(px(8.)).flex_none().rounded_full().bg(t.accent)
 }
 
-/// Small uppercase group label (sidebar groups, dense forms).
+/// Small uppercase group label (kept small at 11px for quiet hierarchy).
 pub fn eyebrow(t: &AuroraTheme, text: impl Into<SharedString>) -> Div {
     div()
         .text_size(px(TEXT_MICRO))
-        .font_weight(FontWeight::BOLD)
+        .font_weight(FontWeight::SEMIBOLD)
         .text_color(t.muted_foreground)
         .child(text.into())
 }
@@ -129,22 +129,8 @@ pub fn card(t: &AuroraTheme) -> Div {
         .border_color(t.border_subtle)
 }
 
-/// An Aurora-accented hero card anchored to the single active theme accent
-/// with a subtle analogous glow and uniform accent border.
+/// An Aurora-featured hero card: flat solid surface with a crisp border (no gradients or glow).
 pub fn aurora_card(t: &AuroraTheme) -> Div {
-    let h1 = t.ring.h;
-    let primary = Hsla {
-        h: h1,
-        s: t.ring.s.clamp(0.45, 0.92),
-        l: 0.58,
-        a: 0.28,
-    };
-    let secondary = Hsla {
-        h: h1,
-        s: t.ring.s.clamp(0.38, 0.88),
-        l: 0.46,
-        a: 0.12,
-    };
     div()
         .flex()
         .flex_col()
@@ -153,20 +139,7 @@ pub fn aurora_card(t: &AuroraTheme) -> Div {
         .rounded(t.radius_lg)
         .bg(t.card)
         .border_1()
-        .border_color(Hsla { a: 0.48, ..t.ring })
-        .shadow_md()
-        .relative()
-        .overflow_hidden()
-        .child(div().absolute().inset_0().bg(gpui_kit::linear_gradient(
-            122.,
-            gpui_kit::linear_color_stop(primary, 0.),
-            gpui_kit::linear_color_stop(secondary, 0.52),
-        )))
-        .child(div().absolute().inset_0().bg(gpui_kit::linear_gradient(
-            302.,
-            gpui_kit::linear_color_stop(Hsla { a: 0.12, ..primary }, 0.),
-            gpui_kit::linear_color_stop(gpui_kit::transparent_black(), 0.48),
-        )))
+        .border_color(t.border)
 }
 
 /// Unified segmented tab container used across Instance detail, Settings, Discover, and Pulsar.
@@ -175,96 +148,49 @@ pub fn segmented_tabs(t: &AuroraTheme) -> Div {
         .flex()
         .flex_wrap()
         .items_center()
-        .gap(px(3.))
-        .p(px(3.))
+        .gap(px(4.))
+        .p(px(4.))
         .rounded(t.radius)
         .bg(t.sunken)
         .border_1()
         .border_color(t.border_subtle)
 }
 
-/// Signature Aurora Client badge anchored to the single active theme accent.
+/// Compact Aurora Client badge using flat accent surface (no gradients or glow).
 pub fn aurora_badge(t: &AuroraTheme, label: impl Into<SharedString>) -> Div {
-    let h1 = t.ring.h;
-    let start = Hsla {
-        h: h1,
-        s: t.ring.s.clamp(0.40, 0.90),
-        l: 0.60,
-        a: 0.16,
-    };
-    let end = Hsla {
-        h: h1,
-        s: t.ring.s.clamp(0.35, 0.86),
-        l: 0.52,
-        a: 0.10,
-    };
-    let ink = Hsla {
-        h: h1,
-        s: t.ring.s.clamp(0.30, 0.90),
-        l: 0.86,
-        a: 1.0,
-    };
     div()
         .flex()
         .flex_shrink_0()
         .items_center()
-        .gap(px(5.))
-        .h(px(22.))
-        .px(px(9.))
+        .gap(px(4.))
+        .h(px(24.))
+        .px(px(8.))
         .rounded_full()
-        .bg(gpui_kit::linear_gradient(
-            120.,
-            gpui_kit::linear_color_stop(start, 0.),
-            gpui_kit::linear_color_stop(end, 1.),
-        ))
+        .bg(t.accent_soft)
         .border_1()
-        .border_color(Hsla { a: 0.44, ..t.ring })
-        .text_size(px(TEXT_MICRO))
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(ink)
-        .child(crate::symbols::icon(Some("auto_awesome"), px(12.), ink))
+        .border_color(t.border_subtle)
+        .text_size(px(TEXT_CAPTION))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(t.ring)
+        .child(crate::symbols::icon(Some("auto_awesome"), px(12.), t.ring))
         .child(label.into())
 }
 
-/// Compact Aurora version pill without a second sparkle glyph (for cards whose
-/// large icon tile already carries the glowing Aurora sparkle corner emblem).
+/// Compact Aurora version pill without a second sparkle glyph.
 pub fn aurora_version_pill(t: &AuroraTheme, label: impl Into<SharedString>) -> Div {
-    let h1 = t.ring.h;
-    let start = Hsla {
-        h: h1,
-        s: t.ring.s.clamp(0.40, 0.90),
-        l: 0.60,
-        a: 0.22,
-    };
-    let end = Hsla {
-        h: h1,
-        s: t.ring.s.clamp(0.35, 0.86),
-        l: 0.52,
-        a: 0.12,
-    };
-    let ink = Hsla {
-        h: h1,
-        s: t.ring.s.clamp(0.30, 0.90),
-        l: 0.84,
-        a: 1.0,
-    };
     div()
         .flex()
         .flex_shrink_0()
         .items_center()
-        .h(px(22.))
-        .px(px(9.))
+        .h(px(24.))
+        .px(px(8.))
         .rounded_full()
-        .bg(gpui_kit::linear_gradient(
-            120.,
-            gpui_kit::linear_color_stop(start, 0.),
-            gpui_kit::linear_color_stop(end, 1.),
-        ))
+        .bg(t.accent_soft)
         .border_1()
-        .border_color(Hsla { a: 0.38, ..t.ring })
-        .text_size(px(TEXT_MICRO))
-        .font_weight(FontWeight::SEMIBOLD)
-        .text_color(ink)
+        .border_color(t.border_subtle)
+        .text_size(px(TEXT_CAPTION))
+        .font_weight(FontWeight::MEDIUM)
+        .text_color(t.ring)
         .child(label.into())
 }
 
@@ -280,8 +206,8 @@ pub fn setting_row_icon(
         .flex()
         .items_center()
         .justify_between()
-        .gap(px(20.))
-        .py(px(14.))
+        .gap(px(16.))
+        .py(px(12.))
         .when(!last, |this| {
             this.border_b_1().border_color(t.border_subtle)
         })
@@ -332,11 +258,11 @@ pub fn title_block(
     div()
         .flex()
         .flex_col()
-        .gap(px(2.))
+        .gap(px(4.))
         .min_w(px(0.))
         .child(
             div()
-                .text_size(px(TEXT_BODY + 1.))
+                .text_size(px(TEXT_BODY))
                 .line_height(px(20.))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(t.foreground)
@@ -347,7 +273,7 @@ pub fn title_block(
             this.child(
                 div()
                     .text_size(px(TEXT_CAPTION))
-                    .line_height(px(17.))
+                    .line_height(px(16.))
                     .text_color(t.muted_foreground)
                     .text_ellipsis()
                     .child(detail),
@@ -409,11 +335,11 @@ fn pill(t: &AuroraTheme, label: SharedString, tone: Tone, dot: bool) -> Div {
         .flex()
         .flex_shrink_0()
         .items_center()
-        .gap(px(5.))
-        .h(px(22.))
-        .px(px(9.))
+        .gap(px(4.))
+        .h(px(24.))
+        .px(px(8.))
         .rounded_full()
-        .bg(Hsla { a: 0.18, ..color })
+        .bg(Hsla { a: 0.16, ..color })
         .text_size(px(TEXT_CAPTION))
         .font_weight(FontWeight::MEDIUM)
         .text_color(if tone == Tone::Neutral {
@@ -422,53 +348,29 @@ fn pill(t: &AuroraTheme, label: SharedString, tone: Tone, dot: bool) -> Div {
             color
         })
         .when(dot, |this| {
-            this.child(div().size(px(6.)).rounded_full().bg(color))
+            this.child(div().size(px(8.)).rounded_full().bg(color))
         })
         .child(label)
 }
 
-/// A rounded square holding a symbol (instances, empty states, settings rows).
+/// A rounded square holding a symbol (flat solid fill, 4pt corner radius).
 pub fn icon_tile(t: &AuroraTheme, icon: Option<&str>, size: f32, accent: bool) -> Div {
     let glyph = if accent { t.ring } else { t.muted_foreground };
-    let h1 = t.ring.h;
-    let h2 = (h1 - 0.05).rem_euclid(1.0);
-    let start = Hsla {
-        h: h1,
-        s: t.ring.s.clamp(0.40, 0.90),
-        l: 0.58,
-        a: 0.24,
-    };
-    let end = Hsla {
-        h: h2,
-        s: t.ring.s.clamp(0.35, 0.86),
-        l: 0.54,
-        a: 0.14,
-    };
+    let radius = if size >= 48. { px(12.) } else { px(8.) };
     div()
         .flex()
         .flex_shrink_0()
         .items_center()
         .justify_center()
         .size(px(size))
-        .rounded(px((size * 0.26).clamp(8., 22.)))
-        .when(accent, |d| {
-            d.bg(gpui_kit::linear_gradient(
-                135.,
-                gpui_kit::linear_color_stop(start, 0.),
-                gpui_kit::linear_color_stop(end, 1.),
-            ))
-        })
-        .when(!accent, |d| d.bg(t.control))
+        .rounded(radius)
+        .bg(if accent { t.accent_soft } else { t.control })
         .border_1()
-        .border_color(if accent {
-            Hsla { a: 0.36, ..t.ring }
-        } else {
-            t.border_subtle
-        })
-        .child(crate::symbols::icon(icon, px(size * 0.54), glyph))
+        .border_color(t.border_subtle)
+        .child(crate::symbols::icon(icon, px((size * 0.5).round()), glyph))
 }
 
-/// A centered placeholder for empty lists and pages.
+/// A clean left-aligned placeholder for empty lists and pages.
 pub fn empty_state(
     t: &AuroraTheme,
     icon: &str,
@@ -478,30 +380,34 @@ pub fn empty_state(
     div()
         .flex()
         .flex_col()
-        .items_center()
-        .gap(px(10.))
-        .py(px(40.))
-        .px(px(24.))
+        .items_start()
+        .gap(px(12.))
+        .py(px(24.))
+        .px(px(20.))
         .rounded(t.radius_lg)
         .bg(t.card)
         .border_1()
         .border_color(t.border_subtle)
-        .child(icon_tile(t, Some(icon), 60., true))
+        .child(icon_tile(t, Some(icon), 40., false))
         .child(
             div()
-                .pt(px(4.))
-                .text_size(px(TEXT_SECTION))
-                .font_weight(FontWeight::SEMIBOLD)
-                .text_color(t.foreground)
-                .child(title.into()),
-        )
-        .child(
-            div()
-                .max_w(px(440.))
-                .text_size(px(TEXT_BODY))
-                .text_color(t.muted_foreground)
-                .text_center()
-                .child(body.into()),
+                .flex()
+                .flex_col()
+                .gap(px(4.))
+                .child(
+                    div()
+                        .text_size(px(TEXT_SECTION))
+                        .font_weight(FontWeight::SEMIBOLD)
+                        .text_color(t.foreground)
+                        .child(title.into()),
+                )
+                .child(
+                    div()
+                        .max_w(px(520.))
+                        .text_size(px(TEXT_BODY))
+                        .text_color(t.muted_foreground)
+                        .child(body.into()),
+                ),
         )
 }
 
@@ -514,16 +420,16 @@ pub fn stat(
     div()
         .flex()
         .flex_col()
-        .gap(px(2.))
+        .gap(px(4.))
         .child(
             div()
-                .text_size(px(TEXT_BODY))
+                .text_size(px(TEXT_CAPTION))
                 .text_color(t.muted_foreground)
                 .child(label.into()),
         )
         .child(
             div()
-                .text_size(px(TEXT_BODY + 1.))
+                .text_size(px(TEXT_BODY))
                 .font_weight(FontWeight::MEDIUM)
                 .text_color(t.foreground)
                 .child(value.into()),
@@ -543,7 +449,7 @@ pub fn setting_row(
         .items_center()
         .justify_between()
         .gap(px(24.))
-        .min_h(px(62.))
+        .min_h(px(56.))
         .py(px(12.))
         .when(!last, |this| {
             this.border_b_1().border_color(t.border_subtle)
@@ -552,12 +458,12 @@ pub fn setting_row(
             div()
                 .flex()
                 .flex_col()
-                .gap(px(2.))
+                .gap(px(4.))
                 .flex_1()
                 .min_w(px(0.))
                 .child(
                     div()
-                        .text_size(px(TEXT_BODY + 1.))
+                        .text_size(px(TEXT_BODY))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(t.foreground)
                         .child(title.into()),
@@ -583,10 +489,10 @@ pub fn list_button(t: &AuroraTheme, id: impl Into<ElementId>, selected: bool) ->
         .selected(selected)
         .flex()
         .items_center()
-        .gap(px(10.))
+        .gap(px(8.))
         .w_full()
         .px(px(8.))
-        .py(px(5.))
+        .py(px(8.))
         .rounded(t.radius)
         .when(selected, |b| b.bg(t.accent_soft))
         .hover(move |style| style.bg(hover))
@@ -609,11 +515,7 @@ pub fn tile_button(t: &AuroraTheme, id: impl Into<ElementId>, selected: bool) ->
         .rounded(t.radius_lg)
         .bg(if selected { t.accent_soft } else { t.card })
         .border_1()
-        .border_color(if selected {
-            Hsla { a: 0.55, ..ring }
-        } else {
-            t.border_subtle
-        })
+        .border_color(if selected { t.border } else { t.border_subtle })
         .hover(move |style| style.bg(hover))
         .focus(move |style| style.border_color(ring))
 }

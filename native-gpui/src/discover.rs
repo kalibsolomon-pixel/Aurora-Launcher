@@ -3424,13 +3424,12 @@ impl Discover {
             .rounded(palette.radius_lg)
             .bg(palette.raised)
             .border_1()
-            .border_color(palette.border_subtle)
-            .shadow_lg()
+            .border_color(palette.border)
             .child(
                 div()
                     .flex()
                     .items_center()
-                    .gap(px(14.))
+                    .gap(px(12.))
                     .children(details.map(|p| {
                         artwork::tile(
                             "details-art",

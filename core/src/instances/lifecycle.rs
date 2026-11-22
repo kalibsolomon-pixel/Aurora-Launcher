@@ -1601,7 +1601,14 @@ async fn resolve_instance_game_plan_under_gate(
     }
     let (blocked, status_label, blocking) = match gate {
         PlanResolutionGate::LaunchBlocking => {
-            let content = validate_instance(managed, &registry, instance_id)?;
+            let managed_owned = managed.clone();
+            let registry_owned = registry.clone();
+            let id_owned = instance_id.clone();
+            let content = tokio::task::spawn_blocking(move || {
+                validate_instance(&managed_owned, &registry_owned, &id_owned)
+            })
+            .await
+            .map_err(|e| InstanceError::ReleaseInvalid(format!("validation task failed: {e}")))??;
             let blocking: Vec<String> = content
                 .problems
                 .iter()

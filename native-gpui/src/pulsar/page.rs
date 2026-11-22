@@ -1534,39 +1534,36 @@ impl Pulsar {
                 .unwrap_or_else(|| "Launch Aurora Client".to_owned());
             let target_id = launch_target.map(|(id, _)| id);
             let hero = ui::aurora_card(&t)
-                .items_center()
+                .items_start()
                 .w_full()
-                .max_w(px(620.))
-                .mx_auto()
-                .py(px(48.))
-                .px(px(32.))
-                .gap(px(14.))
-                .child(crate::instance_icon(Some("timeline"), 76., true, &t))
+                .max_w(px(640.))
+                .p(px(24.))
+                .gap(px(16.))
+                .child(crate::instance_icon(Some("timeline"), 48., true, &t))
                 .child(
                     div()
-                        .relative()
-                        .pt(px(2.))
-                        .text_size(px(ui::TEXT_TITLE))
-                        .font_weight(gpui::FontWeight::SEMIBOLD)
-                        .text_color(t.foreground)
-                        .child("Combat analytics for Aurora Client"),
+                        .flex()
+                        .flex_col()
+                        .gap(px(4.))
+                        .child(
+                            div()
+                                .text_size(px(ui::TEXT_TITLE))
+                                .font_weight(gpui::FontWeight::SEMIBOLD)
+                                .text_color(t.foreground)
+                                .child("No recorded fights yet"),
+                        )
+                        .child(
+                            div()
+                                .text_size(px(ui::TEXT_BODY))
+                                .text_color(t.muted_foreground)
+                                .child("Enable Pulsar in Aurora Client settings to record fights."),
+                        ),
                 )
                 .child(
                     div()
-                        .relative()
-                        .text_size(px(ui::TEXT_BODY))
-                        .text_color(t.muted_foreground)
-                        .text_center()
-                        .child("Enable Pulsar in-game to record fights automatically."),
-                )
-                .child(
-                    div()
-                        .relative()
                         .flex()
                         .flex_wrap()
-                        .justify_center()
-                        .gap(px(10.))
-                        .pt(px(4.))
+                        .gap(px(8.))
                         .child(
                             AuroraButton::new("pulsar-setup", cta_label)
                                 .variant(ButtonVariant::Primary)
@@ -1588,27 +1585,12 @@ impl Pulsar {
                         ),
                 )
                 .when(self.disclosures.contains("enable-help"), |d| {
-                    d.child(
-                        div()
-                            .relative()
-                            .max_w(px(520.))
-                            .pt(px(6.))
-                            .text_center()
-                            .child(ui::muted(
-                                &t,
-                                "1. Launch an instance with Aurora Client installed.  2. Enable Pulsar recording in Aurora settings.  3. Play a fight, then press Refresh.",
-                            )),
-                    )
+                    d.child(ui::muted(
+                        &t,
+                        "1. Launch an Aurora Client instance.  2. Enable Pulsar in Aurora settings.  3. Play a fight, then click Refresh.",
+                    ))
                 });
-            return page.child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .justify_center()
-                    .w_full()
-                    .min_h(px(620.))
-                    .child(hero),
-            );
+            return page.child(hero);
         }
 
         // Keep Overview calm and uncluttered: show search + instance toolbar on

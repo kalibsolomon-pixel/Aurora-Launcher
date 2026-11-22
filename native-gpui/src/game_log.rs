@@ -298,6 +298,7 @@ impl Render for GameLog {
             .flex_col()
             .bg(t.background)
             .text_color(t.foreground)
+            .font_family(t.font_family)
             .text_size(px(ui::TEXT_BODY));
         if chrome::custom() {
             root = root.child(chrome::title_bar(window, cx, &t));

@@ -786,16 +786,11 @@ impl Settings {
                 }
             }),
         ];
-        let storage_view = host.as_ref().map(|_| {
-            let h = host.clone();
-            let rt = runtime.clone();
-            cx.new(|cx| crate::storage::StorageView::new(h, rt, cx))
-        });
         let mut view = Self {
             show_game_log: None,
             on_launch_behavior: api::OnLaunchBehavior::KeepOpen,
             launch_behavior_busy: false,
-            storage_view,
+            storage_view: None,
             log_preference_busy: false,
             section: 0,
             host: host.clone(),
@@ -854,10 +849,14 @@ impl Settings {
 
     pub fn select_section(&mut self, section: usize, cx: &mut Context<Self>) {
         self.section = section.min(5);
-        if self.section == 5
-            && let Some(storage) = &self.storage_view
-        {
-            storage.update(cx, |view, cx| view.refresh(cx));
+        if self.section == 5 {
+            if let Some(storage) = &self.storage_view {
+                storage.update(cx, |view, cx| view.refresh(cx));
+            } else if self.host.is_some() {
+                let h = self.host.clone();
+                let rt = self.rt.clone();
+                self.storage_view = Some(cx.new(|cx| crate::storage::StorageView::new(h, rt, cx)));
+            }
         }
         cx.notify();
     }
@@ -2151,15 +2150,12 @@ impl Render for Settings {
                     .relative()
                     .flex()
                     .items_center()
-                    .h(px(38.))
+                    .h(px(36.))
                     .px(px(12.))
                     .rounded(palette.radius)
                     .border_1()
                     .border_color(if selected {
-                        gpui::Hsla {
-                            a: 0.38,
-                            ..palette.ring
-                        }
+                        palette.border_subtle
                     } else {
                         gpui::transparent_black()
                     })
@@ -2419,10 +2415,7 @@ impl Render for Settings {
                         .py(px(14.))
                         .child(ui::caption(
                             t,
-                            format!(
-                                "Aurora Launcher {} · Built for Aurora Client",
-                                env!("CARGO_PKG_VERSION")
-                            ),
+                            format!("Aurora Launcher {}", env!("CARGO_PKG_VERSION")),
                         ))
                         .child({
                             let (badge_label, badge_tone) = if self.updates_pending {
@@ -2589,25 +2582,19 @@ impl Render for Settings {
                     }
                     let [left, right] = columns;
                     card = card.child(
-                        div()
-                            .flex()
-                            .flex_col()
-                            .gap(px(8.))
-                            .pt(px(14.))
-                            .child(ui::eyebrow(t, "SHARED DETAILS"))
-                            .child(
-                                div()
-                                    .flex()
-                                    .gap(px(32.))
-                                    .px(px(16.))
-                                    .py(px(6.))
-                                    .rounded(palette.radius)
-                                    .bg(palette.sunken)
-                                    .border_1()
-                                    .border_color(palette.border_subtle)
-                                    .child(left)
-                                    .child(right),
-                            ),
+                        div().flex().flex_col().gap(px(8.)).pt(px(12.)).child(
+                            div()
+                                .flex()
+                                .gap(px(32.))
+                                .px(px(16.))
+                                .py(px(8.))
+                                .rounded(palette.radius)
+                                .bg(palette.sunken)
+                                .border_1()
+                                .border_color(palette.border_subtle)
+                                .child(left)
+                                .child(right),
+                        ),
                     );
                 }
                 if let Some(error) = &self.discord_error {

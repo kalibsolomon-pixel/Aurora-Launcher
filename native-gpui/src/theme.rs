@@ -52,6 +52,10 @@ pub struct AuroraTheme {
     pub radius: Pixels,
     /// Cards and panels.
     pub radius_lg: Pixels,
+    /// Primary UI typeface (Apple SF Pro Text, bundled and registered at startup).
+    pub font_family: &'static str,
+    /// Monospace typeface for logs and technical details.
+    pub mono_font_family: &'static str,
 }
 
 impl Global for AuroraTheme {}
@@ -86,6 +90,8 @@ impl Default for AuroraTheme {
             warning: rgb(0xf2c26b).into(),
             radius: px(8.),
             radius_lg: px(12.),
+            font_family: "SF Pro Text",
+            mono_font_family: "Consolas",
         }
     }
 }
@@ -173,9 +179,37 @@ pub fn apply(appearance: Option<&crate::api::Appearance>, cx: &mut App) {
     }
 }
 
-/// Installs the default palette. Call once after `gpui_kit::base::init`.
+/// Installs the default palette and registers bundled SF Pro Text weights.
+/// Call once after `gpui_kit::base::init`.
 pub fn init(cx: &mut App) {
+    load_sf_pro_fonts(cx);
     cx.set_global(AuroraTheme::default());
+}
+
+fn load_sf_pro_fonts(cx: &mut App) {
+    static PACKED: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sf_pro_fonts.deflate"));
+    let Ok(raw) = aurora_launcher_lib::inflate_raw(PACKED) else {
+        return;
+    };
+    if raw.len() < 4 {
+        return;
+    }
+    let count = u32::from_le_bytes(raw[0..4].try_into().unwrap()) as usize;
+    let mut offset = 4;
+    let mut fonts: Vec<std::borrow::Cow<'static, [u8]>> = Vec::with_capacity(count);
+    for _ in 0..count {
+        if offset + 4 > raw.len() {
+            return;
+        }
+        let len = u32::from_le_bytes(raw[offset..offset + 4].try_into().unwrap()) as usize;
+        offset += 4;
+        if offset + len > raw.len() {
+            return;
+        }
+        fonts.push(std::borrow::Cow::Owned(raw[offset..offset + len].to_vec()));
+        offset += len;
+    }
+    let _ = cx.text_system().add_fonts(fonts);
 }
 
 /// Reads the installed palette.

@@ -542,7 +542,7 @@ impl Render for Worlds {
                         .when(self.quick_play_supported, |d| {
                             d.child(
                                 AuroraButton::new(("world-play", idx), "Play")
-                                    .variant(ButtonVariant::Primary)
+                                    .variant(ButtonVariant::Soft)
                                     .size(ButtonSize::Small)
                                     .on_click(cx.listener(move |_, _, _, cx| {
                                         cx.emit(WorldsEvent::QuickPlayWorld {
@@ -618,16 +618,13 @@ impl Render for Worlds {
                         )
                         .child(
                             AuroraButton::new("world-create-backup", "Create backup")
-                                .variant(ButtonVariant::Primary)
+                                .variant(ButtonVariant::Soft)
                                 .disabled(self.busy)
                                 .on_click(cx.listener(|this, _, _, cx| this.create_backup(cx))),
                         ),
                 );
                 if self.backups.is_empty() {
-                    detail = detail.child(ui::muted(
-                        &t,
-                        "No backups for this world yet. Backups are compressed ZIP snapshots stored locally.",
-                    ));
+                    detail = detail.child(ui::muted(&t, "No backups yet."));
                 } else {
                     for (idx, bk) in self.backups.iter().enumerate() {
                         let bk_restore = bk.clone();

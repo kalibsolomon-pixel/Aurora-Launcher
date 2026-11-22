@@ -2377,13 +2377,33 @@ impl Render for Skins {
         } else if count == 0 {
             let filtered = self.core.favorites_only
                 && self.core.library.as_ref().is_some_and(|l| !l.is_empty());
-            library_section = library_section.child(ui::card(&palette).items_center()
-                .child(ui::empty_state(&palette, if filtered { "star" } else { "checkroom" },
-                    if filtered { "No favorite skins yet" } else { "Make this look yours" },
-                    if filtered { "Turn off Favorites only to see all your skins." } else { "Import a skin PNG to start your library. Try it on here before applying it." }).border_0().p(px(0.)))
-                .when(!filtered, |d| d.child(AuroraButton::new("skins-empty-import", "Import PNG…")
-                    .variant(ButtonVariant::Primary).icon("upload").disabled(locked)
-                    .on_click(cx.listener(|this, _, window, cx| this.open_import(window, cx))))));
+            library_section = library_section.child(
+                ui::empty_state(
+                    &palette,
+                    if filtered { "star" } else { "checkroom" },
+                    if filtered {
+                        "No favorite skins"
+                    } else {
+                        "No saved skins"
+                    },
+                    if filtered {
+                        "Turn off Favorites only to see all skins."
+                    } else {
+                        "Import a skin PNG to start your library."
+                    },
+                )
+                .when(!filtered, |d| {
+                    d.child(
+                        AuroraButton::new("skins-empty-import", "Import PNG…")
+                            .variant(ButtonVariant::Default)
+                            .icon("upload")
+                            .disabled(locked)
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.open_import(window, cx)),
+                            ),
+                    )
+                }),
+            );
         } else {
             // The parent reserves 212px for navigation and 32px page padding
             // on either side. Recompute on resize; no saved layout is changed.

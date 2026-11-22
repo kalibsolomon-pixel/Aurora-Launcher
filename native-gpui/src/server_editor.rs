@@ -325,7 +325,7 @@ impl Render for ServerEditor {
                             .size(ButtonSize::Small)
                             .selected(self.state.packs == value)
                             .variant(if self.state.packs == value {
-                                ButtonVariant::Primary
+                                ButtonVariant::Soft
                             } else {
                                 ButtonVariant::Default
                             })

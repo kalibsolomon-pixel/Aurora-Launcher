@@ -743,11 +743,12 @@ pub(crate) fn playtime_view(
         empty_period: false,
     };
     let Some(data) = data else {
-        return unavailable("Daily playtime is unavailable.");
+        return unavailable(if loading {
+            "Loading playtime…"
+        } else {
+            "Daily playtime is unavailable."
+        });
     };
-    if loading {
-        return unavailable("Loading playtime…");
-    }
     let bins = match period {
         Period::Week => playtime_bins(data.history(), data.today, 7, 7),
         Period::Month | Period::AllTime if narrow => {
@@ -1438,11 +1439,15 @@ impl Core {
 
     fn begin_data_refresh(&mut self) -> Option<HistoryRead> {
         self.data_serial += 1;
-        self.instance = self.selected_instance_id().map(str::to_owned);
+        let next_instance = self.selected_instance_id().map(str::to_owned);
+        let instance_changed = next_instance != self.instance;
+        self.instance = next_instance;
         self.saved_errors.clear();
-        self.worlds.clear();
-        self.saved_servers_rows.clear();
-        self.saved_worlds_rows.clear();
+        if instance_changed {
+            self.worlds.clear();
+            self.saved_servers_rows.clear();
+            self.saved_worlds_rows.clear();
+        }
         let shown = self.visible();
         let wants_history = shown
             .iter()
@@ -1487,8 +1492,12 @@ impl Core {
             self.server_error = results.servers.is_err();
             self.server_enriching = false;
             self.servers = server_entries(&results.servers.clone().unwrap_or_default());
-            self.presentations.clear();
-            self.server_pictures.clear();
+            let active_ids: std::collections::HashSet<&str> =
+                self.servers.iter().map(|t| t.id.as_str()).collect();
+            self.presentations
+                .retain(|p| active_ids.contains(p.target_id.as_str()));
+            self.server_pictures
+                .retain(|id, _| active_ids.contains(id.as_str()));
             let ids: Vec<String> = self
                 .servers
                 .iter()
@@ -2319,7 +2328,11 @@ impl HomeWidgets {
                 let worlds_fut = {
                     let host = host.clone();
                     let instance = instance.clone();
+                    let fetch = request.worlds;
                     async move {
+                        if !fetch {
+                            return Ok(Vec::new());
+                        }
                         match instance {
                             Some(id) => api::recent_worlds(host, Some(id), WORLD_READ).await,
                             None => Ok(Vec::new()),
@@ -3674,7 +3687,12 @@ impl HomeWidgets {
                                     .id("playtime-chart")
                                     .role(Role::Group)
                                     .aria_label("Playtime chart")
-                                    .aria_description(format!("{}; scale 0, {}, {}", chart_note_description(period, narrow), projection.midpoint, projection.peak))
+                                    .aria_description(format!(
+                                        "{}; scale 0, {}, {}",
+                                        chart_note_description(period, narrow),
+                                        projection.midpoint,
+                                        projection.peak
+                                    ))
                                     .flex()
                                     .w_full()
                                     .flex_1()
@@ -3688,23 +3706,30 @@ impl HomeWidgets {
                                             .pb(px(AXIS_HEIGHT + 8.))
                                             .pr(px(10.))
                                             .child(
-                                                div().relative().flex_1().w(px(if count > 7 { 58. } else { 36. })).children(
-                                                    [
-                                                        (0., compact_tick(&projection.peak)),
-                                                        (0.5, compact_tick(&projection.midpoint)),
-                                                        (1., "0".into()),
-                                                    ]
-                                                    .map(|(at, text)| {
-                                                        label(text)
-                                                            .absolute()
-                                                            .left(px(0.))
-                                                            .right(px(0.))
-                                                            .text_right()
-                                                            .top(gpui_kit::relative(at))
-                                                            .mt(px(-8.))
-                                                            .line_height(px(16.))
-                                                    }),
-                                                ),
+                                                div()
+                                                    .relative()
+                                                    .flex_1()
+                                                    .w(px(if count > 7 { 58. } else { 36. }))
+                                                    .children(
+                                                        [
+                                                            (0., compact_tick(&projection.peak)),
+                                                            (
+                                                                0.5,
+                                                                compact_tick(&projection.midpoint),
+                                                            ),
+                                                            (1., "0".into()),
+                                                        ]
+                                                        .map(|(at, text)| {
+                                                            label(text)
+                                                                .absolute()
+                                                                .left(px(0.))
+                                                                .right(px(0.))
+                                                                .text_right()
+                                                                .top(gpui_kit::relative(at))
+                                                                .mt(px(-8.))
+                                                                .line_height(px(16.))
+                                                        }),
+                                                    ),
                                             ),
                                     )
                                     .child(
@@ -3780,24 +3805,13 @@ impl HomeWidgets {
                                                                 .child(if point.fraction > 0. {
                                                                     div()
                                                                         .w_full()
-                                                                        .min_w(px(2.))
-                                                                        .max_w(px(26.))
+                                                                        .min_w(px(4.))
+                                                                        .max_w(px(24.))
                                                                         .h(relative_bar(
                                                                             point.fraction,
                                                                         ))
                                                                         .rounded_t(px(4.))
-                                                                        .rounded_b(px(1.))
-                                                                        .bg(gpui_kit::linear_gradient(
-                                                                            180.,
-                                                                            gpui_kit::linear_color_stop(
-                                                                                palette.ring.opacity(0.92),
-                                                                                0.,
-                                                                            ),
-                                                                            gpui_kit::linear_color_stop(
-                                                                                palette.accent.opacity(0.66),
-                                                                                1.,
-                                                                            ),
-                                                                        ))
+                                                                        .bg(palette.accent)
                                                                 } else {
                                                                     div()
                                                                         .w_full()
@@ -4253,26 +4267,26 @@ fn segment(
         .selected(selected)
 }
 
-/// A centred, quiet message that fills the card body.
+/// A left-aligned quiet message inside an empty widget card.
 fn empty_note(t: &theme::AuroraTheme, icon: &str, text: impl Into<gpui_kit::SharedString>) -> Div {
     div()
         .flex()
         .flex_col()
         .flex_1()
-        .items_center()
-        .justify_center()
+        .items_start()
+        .justify_start()
         .gap(px(8.))
+        .pt(px(8.))
         .child(crate::symbols::icon(
             Some(icon),
-            px(22.),
+            px(20.),
             t.subtle_foreground,
         ))
         .child(
             div()
-                .max_w(px(300.))
+                .max_w(px(320.))
                 .text_size(px(ui::TEXT_CAPTION))
                 .text_color(t.muted_foreground)
-                .text_center()
                 .child(text.into()),
         )
 }

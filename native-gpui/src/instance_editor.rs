@@ -620,7 +620,7 @@ impl InstanceEditor {
             crate::screenshots::Screenshots::new(host.clone(), runtime.clone(), window, cx)
         });
         let dup_name = cx.new(|cx| InputState::new(window, cx).placeholder("New instance name"));
-        let mut this = Self {
+        let this = Self {
             section: 0,
             screenshots,
             memory_details: false,
@@ -692,7 +692,6 @@ impl InstanceEditor {
             export_opts: api::ExportOptions::default(),
             export_preview: None,
         };
-        this.refresh(cx);
         this
     }
     pub fn refresh(&mut self, cx: &mut Context<Self>) {

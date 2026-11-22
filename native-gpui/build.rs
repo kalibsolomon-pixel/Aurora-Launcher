@@ -4,6 +4,7 @@ use std::path::PathBuf;
 
 fn main() {
     pack_material_symbols();
+    pack_sf_pro_fonts();
 
     #[cfg(windows)]
     {
@@ -116,6 +117,28 @@ fn write_deflated(path: &std::path::Path, raw: &[u8]) {
     encoder.write_all(raw).expect("deflate write");
     let compressed = encoder.finish().expect("deflate finish");
     fs::write(path, compressed).expect("write deflated symbols blob");
+}
+
+/// Compresses the subsetted SF Pro Text font weights (Regular, Medium,
+/// Semibold, Bold) into a single raw-DEFLATE blob (`sf_pro_fonts.deflate`)
+/// so the binary stays small while shipping Apple's SF Pro typography.
+fn pack_sf_pro_fonts() {
+    const WEIGHTS: [&str; 4] = [
+        "assets/fonts/SF-Pro-Text-Regular.otf",
+        "assets/fonts/SF-Pro-Text-Medium.otf",
+        "assets/fonts/SF-Pro-Text-Semibold.otf",
+        "assets/fonts/SF-Pro-Text-Bold.otf",
+    ];
+    let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR set by cargo"));
+    let mut raw = Vec::with_capacity(800_000);
+    raw.extend_from_slice(&(WEIGHTS.len() as u32).to_le_bytes());
+    for rel in WEIGHTS {
+        println!("cargo:rerun-if-changed={rel}");
+        let bytes = fs::read(rel).unwrap_or_else(|e| panic!("failed to read {rel}: {e}"));
+        raw.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
+        raw.extend_from_slice(&bytes);
+    }
+    write_deflated(&out_dir.join("sf_pro_fonts.deflate"), &raw);
 }
 
 fn parse_rust_str(input: &str) -> Option<(String, &str)> {

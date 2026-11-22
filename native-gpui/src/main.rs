@@ -316,19 +316,25 @@ pub(crate) fn icon_palette(
     }
 }
 
-/// Rounded icon well following the active single color theme.
+/// Rounded icon well with flat solid fill and 4pt corner radius.
 pub(crate) fn instance_icon(
     name: Option<&str>,
     size: f32,
     active: bool,
     palette: &theme::AuroraTheme,
 ) -> gpui::Div {
-    let (start, end, ink) = icon_palette(name, active, palette);
-    let border = if active {
-        gpui::Hsla { a: 0.44, ..ink }
+    let (_start, _end, ink) = icon_palette(name, active, palette);
+    let bg = if active {
+        palette.accent_soft
     } else {
-        palette.border
+        palette.surface
     };
+    let border = if active {
+        palette.border
+    } else {
+        palette.border_subtle
+    };
+    let radius = if size >= 48. { px(12.) } else { px(8.) };
     div()
         .relative()
         .flex()
@@ -337,18 +343,14 @@ pub(crate) fn instance_icon(
         .justify_center()
         .w(px(size))
         .h(px(size))
-        .rounded(px((size * 0.24).min(28.)))
-        .bg(gpui::linear_gradient(
-            142.,
-            gpui::linear_color_stop(start, 0.),
-            gpui::linear_color_stop(end, 1.),
-        ))
+        .rounded(radius)
+        .bg(bg)
         .border_1()
         .border_color(border)
-        .child(symbols::icon(name, px(size * 0.54), ink))
+        .child(symbols::icon(name, px((size * 0.5).round()), ink))
 }
 
-/// Instance icon with a signature single-theme Aurora sparkle corner emblem for Aurora Client instances.
+/// Instance icon with a flat solid Aurora sparkle corner badge for Aurora Client instances.
 pub(crate) fn aurora_instance_icon(
     name: Option<&str>,
     size: f32,
@@ -360,47 +362,24 @@ pub(crate) fn aurora_instance_icon(
     if !has_aurora {
         return tile;
     }
-    let badge_size = (size * 0.34).clamp(24., 32.);
-    let h1 = palette.ring.h;
-    let light = gpui::Hsla {
-        h: h1,
-        s: palette.ring.s.clamp(0.45, 0.94),
-        l: 0.68,
-        a: 1.0,
-    };
-    let primary = gpui::Hsla {
-        h: h1,
-        s: palette.ring.s.clamp(0.45, 0.92),
-        l: 0.56,
-        a: 1.0,
-    };
+    let badge_size = if size >= 56. { 24. } else { 20. };
     tile.child(
         div()
             .absolute()
-            .bottom(px(-5.))
-            .right(px(-5.))
+            .bottom(px(-4.))
+            .right(px(-4.))
             .size(px(badge_size))
             .rounded_full()
             .flex()
             .items_center()
             .justify_center()
-            .bg(gpui::linear_gradient(
-                135.,
-                gpui::linear_color_stop(light, 0.),
-                gpui_kit::linear_color_stop(primary, 1.),
-            ))
+            .bg(palette.accent)
             .border_2()
             .border_color(palette.card)
-            .shadow_sm()
             .child(symbols::icon(
                 Some("auto_awesome"),
-                px(badge_size * 0.60),
-                gpui::Hsla {
-                    h: 0.,
-                    s: 0.,
-                    l: 1.,
-                    a: 1.,
-                },
+                px(12.),
+                palette.accent_foreground,
             )),
     )
 }
@@ -513,6 +492,7 @@ struct Launcher {
     launcher: Option<api::LauncherState>,
     accounts: api::AccountsState,
     rail_avatar: Option<Arc<gpui::RenderImage>>,
+    rail_avatar_account: Option<String>,
     hero_activity: HashMap<String, Vec<(gpui::SharedString, gpui::SharedString)>>,
     appearance: Option<api::Appearance>,
     readiness: Option<api::PlayReadiness>,
@@ -848,10 +828,18 @@ impl Launcher {
     }
 
     /// Bumps the serial (superseding every earlier load) and decides whether a
-    /// load starts now or coalesces into a single follow-up.
+    /// load starts now or coalesces into a single follow-up. Preserves the
+    /// currently displayed readiness decision for the same selected instance
+    /// so reloads do not flash the Play button or jump the Home layout.
     fn plan_load(&mut self, startup: bool) -> LoadPlan {
         self.serial += 1;
-        self.readiness = None;
+        if self
+            .readiness
+            .as_ref()
+            .is_some_and(|r| Some(r.instance_id.as_str()) != self.selected_id())
+        {
+            self.readiness = None;
+        }
         self.startup_pending |= startup;
         if self.load_in_flight {
             self.load_pending = true;
@@ -937,7 +925,12 @@ impl Launcher {
         self.sync_mutation_guards(cx);
     }
     fn readiness(&mut self) {
-        self.readiness = None;
+        if self.readiness.as_ref().is_some_and(|r| {
+            Some(r.instance_id.as_str()) != self.selected_id()
+                || r.account_id != self.accounts.selected_account_id
+        }) {
+            self.readiness = None;
+        }
         self.begin_readiness();
     }
 
@@ -2202,18 +2195,21 @@ impl Launcher {
         });
         self.sync_mutation_guards(cx);
     }
-    fn refresh_rail_and_activity(&self) {
+    fn refresh_rail_and_activity(&mut self) {
         let Some(host) = self.host.clone() else {
             return;
         };
-        // Load player head avatar for the sidebar rail (cached by core, non-blocking).
+        // Load player head avatar only when missing or when the active signed-in
+        // account changes, avoiding repeated disk reads and GPU atlas churn.
         let account_id = self.accounts.selected_account_id.clone().filter(|id| {
             self.accounts
                 .accounts
                 .iter()
                 .any(|a| &a.account_id == id && a.status == "signedIn")
         });
-        if account_id.is_some() || showcase() {
+        let avatar_stale = self.rail_avatar.is_none() || self.rail_avatar_account != account_id;
+        if avatar_stale && (account_id.is_some() || showcase()) {
+            self.rail_avatar_account = account_id.clone();
             let host_avatar = host.clone();
             let tx = self.tx.clone();
             self.rt.spawn(async move {
@@ -2235,8 +2231,12 @@ impl Launcher {
                 let _ = tx.send(Message::RailAvatar(rgba)).await;
             });
         }
-        // Load lightweight local gameplay history summary for the active instance.
-        if let Some(instance_id) = self.selected_id().map(str::to_owned) {
+        // Only query gameplay history summary when viewing Instance Detail or
+        // before the active instance has an initial summary cached.
+        if let Some(instance_id) = self.selected_id().map(str::to_owned)
+            && ((self.page == 3 && self.instance_detail.is_some())
+                || !self.hero_activity.contains_key(&instance_id))
+        {
             let tx = self.tx.clone();
             self.rt.spawn(async move {
                 let (playtime, servers) = tokio::join!(
@@ -3433,7 +3433,7 @@ impl Render for Launcher {
             .relative()
             .bg(palette.background)
             .text_color(palette.foreground)
-            .font_family("Segoe UI")
+            .font_family(palette.font_family)
             .when_some(self.root_focus.clone(), |d, focus| d.track_focus(&focus))
             .on_mouse_down(
                 gpui::MouseButton::Navigate(gpui::NavigationDirection::Back),
@@ -3602,8 +3602,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         )?;
     }
     let runtime = tokio::runtime::Builder::new_multi_thread()
-        .worker_threads(2)
-        .max_blocking_threads(8)
+        .worker_threads(4)
+        .max_blocking_threads(16)
         .enable_all()
         .build()?;
     let rt = runtime.handle().clone();
@@ -3888,6 +3888,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                         launcher: None,
                         accounts: Default::default(),
                         rail_avatar: None,
+                        rail_avatar_account: None,
                         hero_activity: HashMap::new(),
                         appearance: None,
                         readiness: None,
@@ -4221,6 +4222,7 @@ mod tests {
             launcher: None,
             accounts: Default::default(),
             rail_avatar: None,
+            rail_avatar_account: None,
             hero_activity: HashMap::new(),
             appearance: None,
             readiness: None,

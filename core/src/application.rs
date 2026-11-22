@@ -7124,15 +7124,33 @@ async fn calculate_play_readiness(
         if record.installed().platform.supports_mods()
             && managed.instance_paths(instance_id).mods().is_dir()
         {
-            let mut inventory = crate::instance_mods::scan(managed, instance_id)?;
-            crate::instance_mods::add_loader_builtins(managed, instance_id, &mut inventory);
-            mod_issues = crate::mod_compatibility::validate(
-                &inventory,
-                &record.installed().minecraft_version,
-                record.installed().platform.version().unwrap_or(""),
-                Some(plan.required_major_version()),
-                loader_family,
-            );
+            let managed_owned = managed.clone();
+            let id_owned = instance_id.clone();
+            let mc_version = record.installed().minecraft_version.clone();
+            let loader_version = record
+                .installed()
+                .platform
+                .version()
+                .unwrap_or("")
+                .to_owned();
+            let required_java = plan.required_major_version();
+            mod_issues = tokio::task::spawn_blocking(move || -> Result<_, CommandError> {
+                let mut inventory = crate::instance_mods::scan(&managed_owned, &id_owned)?;
+                crate::instance_mods::add_loader_builtins(
+                    &managed_owned,
+                    &id_owned,
+                    &mut inventory,
+                );
+                Ok(crate::mod_compatibility::validate(
+                    &inventory,
+                    &mc_version,
+                    &loader_version,
+                    Some(required_java),
+                    loader_family,
+                ))
+            })
+            .await
+            .map_err(|e| CommandError::new("mod_scan_failed", e.to_string()))??;
         }
     }
     // A custom Java selection replaces the managed runtime for launch only;

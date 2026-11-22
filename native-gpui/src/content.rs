@@ -825,8 +825,6 @@ impl Content {
             return;
         };
         self.loading = true;
-        self.entries.clear();
-        self.icons.supersede();
         self.inventory_serial = self.inventory_serial.wrapping_add(1);
         let serial = self.inventory_serial;
         let tx = self.tx.clone();
@@ -1634,24 +1632,23 @@ impl Render for WarningTooltip {
         div()
             .flex()
             .flex_col()
-            .gap(px(6.))
+            .gap(px(8.))
             // Fixed width: GPUI sizes tooltips before wrapping, so a max
             // width alone lets wrapped lines spill past the background.
             .w(px(360.))
-            .p(px(10.))
+            .p(px(12.))
             .rounded(t.radius)
             .bg(t.raised)
             .border_1()
             .border_color(t.border)
-            .shadow_md()
             .text_size(px(ui::TEXT_CAPTION))
-            .line_height(px(17.))
+            .line_height(px(16.))
             .text_color(t.foreground)
             .children(self.lines.iter().map(|line| {
                 div()
                     .flex()
                     .items_start()
-                    .gap(px(6.))
+                    .gap(px(8.))
                     .child(div().flex_none().pt(px(2.)).child(crate::symbols::icon(
                         Some("warning"),
                         px(12.),

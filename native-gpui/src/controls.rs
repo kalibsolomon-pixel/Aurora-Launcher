@@ -205,11 +205,12 @@ impl RenderOnce for AuroraButton {
             ),
         };
         let (height, pad, text, icon_size) = match self.size {
-            ButtonSize::Small => (30., 10., 13., 15.),
-            ButtonSize::Medium => (34., 14., 14., 16.),
-            ButtonSize::Large => (44., 22., 15., 20.),
+            ButtonSize::Small => (28., 12., 12., 16.),
+            ButtonSize::Medium => (36., 16., 14., 16.),
+            ButtonSize::Large => (44., 20., 14., 20.),
         };
-        let (ring, selected_fg) = (t.ring, t.foreground);
+        let (ring, selected_fg, selected_bg, selected_border) =
+            (t.ring, t.foreground, t.accent_soft, t.border);
         let (disabled_bg, disabled_fg, disabled_border) =
             (t.control, t.muted_foreground, t.border_subtle);
         let icon_color = if self.disabled {
@@ -235,7 +236,7 @@ impl RenderOnce for AuroraButton {
             .flex()
             .flex_shrink_0()
             .items_center()
-            .gap(px(7.))
+            .gap(px(8.))
             .when(self.full_width, |b| b.w_full())
             .justify_center()
             .h(px(height))
@@ -243,22 +244,7 @@ impl RenderOnce for AuroraButton {
             .rounded(t.radius)
             .text_size(px(text))
             .font_weight(weight)
-            .when(primary && !self.disabled, |b| {
-                b.bg(gpui_kit::linear_gradient(
-                    125.,
-                    gpui_kit::linear_color_stop(t.accent, 0.),
-                    gpui_kit::linear_color_stop(
-                        Hsla {
-                            h: t.accent.h,
-                            s: t.accent.s,
-                            l: (t.accent.l + 0.05).min(0.72),
-                            a: 1.0,
-                        },
-                        1.,
-                    ),
-                ))
-            })
-            .when(!primary || self.disabled, |b| b.bg(bg))
+            .bg(bg)
             .text_color(fg)
             .border_1()
             .border_color(border)
@@ -269,8 +255,8 @@ impl RenderOnce for AuroraButton {
                 styles
                     .selected(|style| {
                         style
-                            .bg(Hsla { a: 0.24, ..ring })
-                            .border_color(Hsla { a: 0.58, ..ring })
+                            .bg(selected_bg)
+                            .border_color(selected_border)
                             .text_color(selected_fg)
                     })
                     .disabled(|style| {
@@ -386,7 +372,7 @@ impl RenderOnce for AuroraInput {
             .flex()
             .items_center()
             .w_full()
-            .h(px(34.))
+            .h(px(36.))
             .px(px(12.))
             .rounded(t.radius)
             .bg(t.sunken)
@@ -494,7 +480,7 @@ impl RenderOnce for AuroraToggle {
                     .h(px(24.))
                     .flex()
                     .items_center()
-                    .px(px(2.))
+                    .px(px(4.))
                     .when(self.checked, |this| this.justify_end())
                     .rounded_full()
                     .bg(track_off)
@@ -507,7 +493,7 @@ impl RenderOnce for AuroraToggle {
                         SwitchThumb::new(self.checked)
                             .disabled(self.disabled)
                             .flex_shrink_0()
-                            .size(px(18.))
+                            .size(px(16.))
                             .rounded_full()
                             .bg(thumb_off)
                             .styles(|styles| styles.checked(|style| style.bg(thumb_on))),
@@ -592,7 +578,7 @@ impl RenderOnce for AuroraCheckbox {
             .flex()
             .items_center()
             .when(self.visible_label, |this| {
-                this.gap(px(10.)).h(px(34.)).px(px(8.))
+                this.gap(px(8.)).h(px(36.)).px(px(8.))
             })
             .when(!self.visible_label, |this| {
                 this.justify_center().size(px(36.))
@@ -610,7 +596,7 @@ impl RenderOnce for AuroraCheckbox {
                     .flex()
                     .items_center()
                     .justify_center()
-                    .rounded(px(5.))
+                    .rounded(px(4.))
                     .border_1()
                     .border_color(match (self.checked, self.dormant) {
                         (true, false) => t.accent,
@@ -622,7 +608,7 @@ impl RenderOnce for AuroraCheckbox {
                         (true, true) => t.control_hover,
                         _ => t.sunken,
                     })
-                    .child(crate::symbols::icon(Some("check"), px(15.), mark)),
+                    .child(crate::symbols::icon(Some("check"), px(16.), mark)),
             )
             .when(self.visible_label, |this| {
                 this.child(
@@ -1003,7 +989,7 @@ impl RenderOnce for AuroraSelect {
         let bounds = self.bounds.get().unwrap_or_default();
         let available_height = (bounds.top() - px(12.))
             .max(window.viewport_size().height - bounds.bottom() - px(12.))
-            .max(px(30.));
+            .max(px(32.));
         let t = theme(cx);
         let current = self.selected.and_then(|ix| self.options.get(ix)).cloned();
         let current = self.trigger_value.or(current).unwrap_or(self.placeholder);
@@ -1043,8 +1029,8 @@ impl RenderOnce for AuroraSelect {
             .when(self.title_trigger, |d| {
                 d.justify_start().ml(px(-8.)).max_w_full()
             })
-            .gap(px(6.))
-            .h(px(if self.title_trigger { 36. } else { 34. }))
+            .gap(px(8.))
+            .h(px(36.))
             .px(px(if self.title_trigger { 8. } else { 12. }))
             .rounded(t.radius)
             .bg(if self.title_trigger && !self.open && !focused {
@@ -1060,9 +1046,9 @@ impl RenderOnce for AuroraSelect {
             } else {
                 t.border_subtle
             })
-            .text_size(px(if self.title_trigger { 22. } else { 13. }))
+            .text_size(px(if self.title_trigger { 20. } else { 12. }))
             .when(self.title_trigger, |trigger| {
-                trigger.font_weight(gpui_kit::FontWeight::BOLD)
+                trigger.font_weight(gpui_kit::FontWeight::SEMIBOLD)
             })
             .when(self.disabled, |style| style.opacity(0.45))
             .hover(|style| {
@@ -1083,7 +1069,7 @@ impl RenderOnce for AuroraSelect {
             )
             .child(crate::symbols::icon(
                 Some("expand_more"),
-                px(if self.title_trigger { 20. } else { 18. }),
+                px(if self.title_trigger { 20. } else { 16. }),
                 t.muted_foreground,
             ))
             .on_click({
@@ -1123,12 +1109,12 @@ impl RenderOnce for AuroraSelect {
                     .aria_label(option.clone())
                     .aria_selected(selected)
                     .when(highlighted, |this| this.aria_active_descendant())
-                    .px(px(10.))
-                    .py(px(6.))
-                    .rounded(px(6.))
+                    .px(px(8.))
+                    .py(px(8.))
+                    .rounded(px(4.))
                     .flex_shrink_0()
                     .text_ellipsis()
-                    .text_size(px(13.))
+                    .text_size(px(12.))
                     .when(highlighted, |this| this.bg(t.surface_hover))
                     .when(selected, |this| this.text_color(t.accent))
                     .hover(|style| style.bg(t.surface_hover))
@@ -1164,7 +1150,6 @@ impl RenderOnce for AuroraSelect {
             .border_1()
             .border_color(t.border)
             .bg(t.raised)
-            .shadow_lg()
             .on_mouse_down_out({
                 let close = close.clone();
                 let trigger_bounds = self.bounds.clone();

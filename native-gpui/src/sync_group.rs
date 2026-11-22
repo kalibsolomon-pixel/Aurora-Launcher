@@ -408,7 +408,7 @@ impl Syncing {
                             .flex()
                             .items_center()
                             .gap(px(8.))
-                            .child(ui::eyebrow(t, "WHAT SYNCS"))
+                            .child(ui::caption(t, "Synced items"))
                             .when(dormant, |row| {
                                 row.child(ui::caption(t, "· Applies when synced group is turned on"))
                             }),
@@ -417,7 +417,7 @@ impl Syncing {
                         div()
                             .grid()
                             .grid_cols(2)
-                            .gap(px(6.))
+                            .gap(px(8.))
                             .child(choice("sync-group-vanilla", "Game settings, controls and graphics", draft.vanilla, |d, v| d.vanilla = v))
                             .child(choice("sync-group-aurora", "Aurora settings and profiles", draft.aurora, |d, v| d.aurora = v))
                             .child(choice("sync-group-packs", "Resource and shader packs", draft.packs, |d, v| d.packs = v))

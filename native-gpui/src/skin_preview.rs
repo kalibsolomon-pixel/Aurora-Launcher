@@ -344,29 +344,10 @@ impl Render for SkinPreview {
             .flex_col()
             .items_center()
             .justify_center()
-            .gap(px(10.))
+            .gap(px(8.))
             .overflow_hidden()
             .rounded(t.radius)
-            .bg(gpui::linear_gradient(
-                180.,
-                gpui::linear_color_stop(
-                    gpui::Hsla {
-                        l: (t.sunken.l + 0.13).min(1.),
-                        s: t.accent.s * 0.35,
-                        a: 1.0,
-                        ..t.accent
-                    },
-                    0.,
-                ),
-                gpui::linear_color_stop(
-                    gpui::Hsla {
-                        l: (t.sunken.l + 0.08).min(1.),
-                        a: 1.0,
-                        ..t.sunken
-                    },
-                    0.72,
-                ),
-            ))
+            .bg(t.sunken)
             .border_1()
             .border_color(t.border_subtle)
             .when(neutral, |stage| {
