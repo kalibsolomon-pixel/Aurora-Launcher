@@ -139,15 +139,13 @@ mod catalog {
     fn paths_catalog() -> &'static PathCatalog {
         static PATHS: OnceLock<PathCatalog> = OnceLock::new();
         PATHS.get_or_init(|| {
-            let compressed = include_bytes!(concat!(env!("OUT_DIR"), "/symbols_paths.deflate"));
-            let raw = aurora_launcher_lib::inflate_raw(compressed)
-                .expect("bundled Material Symbols paths must inflate");
+            let raw: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/symbols_paths.bin"));
             let mut cursor = 0usize;
-            let count = read_u32(&raw, &mut cursor) as usize;
+            let count = read_u32(raw, &mut cursor) as usize;
             let mut blob = String::with_capacity(raw.len());
             let mut entries = Vec::with_capacity(count);
             for _ in 0..count {
-                let name_len = read_u16(&raw, &mut cursor);
+                let name_len = read_u16(raw, &mut cursor);
                 let name_start = blob.len();
                 let name_str =
                     std::str::from_utf8(&raw[cursor..cursor + name_len]).expect("symbol utf8");
@@ -155,7 +153,7 @@ mod catalog {
                 let name_range = name_start..blob.len();
                 cursor += name_len;
 
-                let path_len = read_u16(&raw, &mut cursor);
+                let path_len = read_u16(raw, &mut cursor);
                 let path_start = blob.len();
                 let path_str =
                     std::str::from_utf8(&raw[cursor..cursor + path_len]).expect("path utf8");
@@ -172,18 +170,16 @@ mod catalog {
     fn search_catalog() -> &'static SearchCatalog {
         static SEARCH: OnceLock<SearchCatalog> = OnceLock::new();
         SEARCH.get_or_init(|| {
-            let compressed = include_bytes!(concat!(env!("OUT_DIR"), "/symbols_search.deflate"));
-            let raw = aurora_launcher_lib::inflate_raw(compressed)
-                .expect("bundled Material Symbols search metadata must inflate");
+            let raw: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/symbols_search.bin"));
             let mut cursor = 0usize;
-            let count = read_u32(&raw, &mut cursor) as usize;
+            let count = read_u32(raw, &mut cursor) as usize;
             let mut blob = String::with_capacity(raw.len());
             let mut entries = Vec::with_capacity(count);
             for _ in 0..count {
                 let category = raw[cursor];
                 cursor += 1;
-                let popularity = read_u32(&raw, &mut cursor);
-                let tags_len = read_u16(&raw, &mut cursor);
+                let popularity = read_u32(raw, &mut cursor);
+                let tags_len = read_u16(raw, &mut cursor);
                 let tags_start = blob.len();
                 let tags_str =
                     std::str::from_utf8(&raw[cursor..cursor + tags_len]).expect("tags utf8");

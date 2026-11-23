@@ -187,28 +187,13 @@ pub fn init(cx: &mut App) {
 }
 
 fn load_sf_pro_fonts(cx: &mut App) {
-    static PACKED: &[u8] = include_bytes!(concat!(env!("OUT_DIR"), "/sf_pro_fonts.deflate"));
-    let Ok(raw) = aurora_launcher_lib::inflate_raw(PACKED) else {
-        return;
-    };
-    if raw.len() < 4 {
-        return;
-    }
-    let count = u32::from_le_bytes(raw[0..4].try_into().unwrap()) as usize;
-    let mut offset = 4;
-    let mut fonts: Vec<std::borrow::Cow<'static, [u8]>> = Vec::with_capacity(count);
-    for _ in 0..count {
-        if offset + 4 > raw.len() {
-            return;
-        }
-        let len = u32::from_le_bytes(raw[offset..offset + 4].try_into().unwrap()) as usize;
-        offset += 4;
-        if offset + len > raw.len() {
-            return;
-        }
-        fonts.push(std::borrow::Cow::Owned(raw[offset..offset + len].to_vec()));
-        offset += len;
-    }
+    use std::borrow::Cow;
+    let fonts: Vec<Cow<'static, [u8]>> = vec![
+        Cow::Borrowed(include_bytes!("../assets/fonts/SF-Pro-Text-Regular.otf")),
+        Cow::Borrowed(include_bytes!("../assets/fonts/SF-Pro-Text-Medium.otf")),
+        Cow::Borrowed(include_bytes!("../assets/fonts/SF-Pro-Text-Semibold.otf")),
+        Cow::Borrowed(include_bytes!("../assets/fonts/SF-Pro-Text-Bold.otf")),
+    ];
     let _ = cx.text_system().add_fonts(fonts);
 }
 

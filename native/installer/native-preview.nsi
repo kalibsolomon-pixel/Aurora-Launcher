@@ -34,7 +34,9 @@ Name "${PRODUCT}"
 OutFile "${OUTPUT}"
 InstallDir "$LOCALAPPDATA\${INSTALL_FOLDER}"
 RequestExecutionLevel user
-SetCompressor /SOLID lzma
+; Standard zlib avoids the /SOLID lzma stub heuristic that triggers unsigned
+; NSIS false positives (e.g. Bearfoos.B!ml) in Windows Defender.
+SetCompressor zlib
 Icon "..\assets\icon.ico"
 UninstallIcon "..\assets\icon.ico"
 VIProductVersion "${VERSION}.0"

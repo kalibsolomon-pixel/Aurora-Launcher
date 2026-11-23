@@ -1,6 +1,6 @@
 [package]
 name = "aurora-native-gpui"
-version = "2.7.0"
+version = "2.7.1"
 edition = "2024"
 publish = false
 license = "MIT"
@@ -25,9 +25,6 @@ image = { version = "=0.25.10", default-features = false }
 raw-window-handle = "0.6"
 pulldown-cmark = { version = "0.13", default-features = false }
 
-[build-dependencies]
-flate2 = { version = "1", default-features = false, features = ["rust_backend"] }
-
 [target.'cfg(windows)'.build-dependencies]
 winresource = { version = "0.1", default-features = false }
 
@@ -38,36 +35,12 @@ windows = { version = "0.61", default-features = false, features = ["std", "Win3
     "Foundation", "Foundation_Collections", "Media_Control", "Graphics_Imaging", "Storage_Streams", "Win32_System_WinRT",
 ] }
 
+# Avoid size-optimizing + stripping into a single monolithic PE binary, which
+# strongly triggers unsigned-binary ML false positives (e.g. Bearfoos!ml) in
+# Windows Defender. On MSVC, debug symbols live in the separate PDB, so
+# strip = false keeps standard PE metadata without bloating the shipped exe.
 [profile.release]
-codegen-units = 1
-lto = true
-opt-level = "s"
+lto = "thin"
+opt-level = 3
 panic = "abort"
-strip = true
-
-# Keep crypto, compression, and image decoding hot paths at maximum throughput
-# while keeping GPUI view/layout code compact for smaller binaries and better I-cache.
-[profile.release.package.sha1]
-opt-level = 3
-[profile.release.package.sha2]
-opt-level = 3
-[profile.release.package.ring]
-opt-level = 3
-[profile.release.package.flate2]
-opt-level = 3
-[profile.release.package.miniz_oxide]
-opt-level = 3
-[profile.release.package.zlib-rs]
-opt-level = 3
-[profile.release.package.fdeflate]
-opt-level = 3
-[profile.release.package.image]
-opt-level = 3
-[profile.release.package.png]
-opt-level = 3
-[profile.release.package.zune-jpeg]
-opt-level = 3
-[profile.release.package.image-webp]
-opt-level = 3
-[profile.release.package.crc32fast]
-opt-level = 3
+strip = false

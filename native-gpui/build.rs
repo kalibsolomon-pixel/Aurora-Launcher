@@ -1,10 +1,8 @@
 use std::fs;
-use std::io::Write as _;
 use std::path::PathBuf;
 
 fn main() {
     pack_material_symbols();
-    pack_sf_pro_fonts();
 
     #[cfg(windows)]
     {
@@ -17,17 +15,20 @@ fn main() {
         resource.set("OriginalFilename", "aurora-launcher.exe");
         resource.set("InternalName", "aurora-launcher");
         resource.set("FileDescription", "Aurora Launcher");
+        resource.set("CompanyName", "Aurora Launcher contributors");
+        resource.set("LegalCopyright", "Aurora Launcher contributors");
         resource
             .compile()
             .expect("the Aurora application icon resource must compile");
     }
 }
 
-/// Compresses the Material Symbols table from `../native/src/symbols_data.rs`
-/// into two raw-DEFLATE blobs (`symbols_paths.deflate` for icon rendering and
-/// `symbols_search.deflate` for icon-picker tags/categories/popularity) so
-/// release binaries stay compact and search metadata stays out of RAM until
-/// the icon picker is opened.
+/// Packs the Material Symbols table from `../native/src/symbols_data.rs`
+/// into two uncompressed binary tables (`symbols_paths.bin` for icon rendering
+/// and `symbols_search.bin` for icon-picker tags/categories/popularity).
+/// Keeping them uncompressed avoids high-entropy blobs in `.rdata` (which
+/// trigger unsigned-binary ML false positives in Windows Defender) and skips
+/// runtime decompression; the NSIS installer compresses them for distribution.
 fn pack_material_symbols() {
     let source_path = "../native/src/symbols_data.rs";
     println!("cargo:rerun-if-changed={source_path}");
@@ -97,7 +98,7 @@ fn pack_material_symbols() {
         raw_paths.extend_from_slice(&(u16::try_from(pb.len()).expect("path len")).to_le_bytes());
         raw_paths.extend_from_slice(pb);
     }
-    write_deflated(&out_dir.join("symbols_paths.deflate"), &raw_paths);
+    fs::write(out_dir.join("symbols_paths.bin"), &raw_paths).expect("write symbols paths blob");
 
     // Pack search blob: u32 count, then per entry: u8 category, u32 popularity, u16 tags_len, tags.
     let mut raw_search = Vec::with_capacity(1_400_000);
@@ -109,36 +110,7 @@ fn pack_material_symbols() {
         raw_search.extend_from_slice(&(u16::try_from(tb.len()).expect("tags len")).to_le_bytes());
         raw_search.extend_from_slice(tb);
     }
-    write_deflated(&out_dir.join("symbols_search.deflate"), &raw_search);
-}
-
-fn write_deflated(path: &std::path::Path, raw: &[u8]) {
-    let mut encoder = flate2::write::DeflateEncoder::new(Vec::new(), flate2::Compression::best());
-    encoder.write_all(raw).expect("deflate write");
-    let compressed = encoder.finish().expect("deflate finish");
-    fs::write(path, compressed).expect("write deflated symbols blob");
-}
-
-/// Compresses the subsetted SF Pro Text font weights (Regular, Medium,
-/// Semibold, Bold) into a single raw-DEFLATE blob (`sf_pro_fonts.deflate`)
-/// so the binary stays small while shipping Apple's SF Pro typography.
-fn pack_sf_pro_fonts() {
-    const WEIGHTS: [&str; 4] = [
-        "assets/fonts/SF-Pro-Text-Regular.otf",
-        "assets/fonts/SF-Pro-Text-Medium.otf",
-        "assets/fonts/SF-Pro-Text-Semibold.otf",
-        "assets/fonts/SF-Pro-Text-Bold.otf",
-    ];
-    let out_dir = PathBuf::from(std::env::var_os("OUT_DIR").expect("OUT_DIR set by cargo"));
-    let mut raw = Vec::with_capacity(800_000);
-    raw.extend_from_slice(&(WEIGHTS.len() as u32).to_le_bytes());
-    for rel in WEIGHTS {
-        println!("cargo:rerun-if-changed={rel}");
-        let bytes = fs::read(rel).unwrap_or_else(|e| panic!("failed to read {rel}: {e}"));
-        raw.extend_from_slice(&(bytes.len() as u32).to_le_bytes());
-        raw.extend_from_slice(&bytes);
-    }
-    write_deflated(&out_dir.join("sf_pro_fonts.deflate"), &raw);
+    fs::write(out_dir.join("symbols_search.bin"), &raw_search).expect("write symbols search blob");
 }
 
 fn parse_rust_str(input: &str) -> Option<(String, &str)> {
