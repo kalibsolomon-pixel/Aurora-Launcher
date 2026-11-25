@@ -33,6 +33,9 @@ pub struct LaunchOptions {
     window: Option<(u16, u16)>,
     /// Launch Minecraft directly in fullscreen (`--fullscreen`).
     fullscreen: bool,
+    /// Launcher-owned low-latency GC preset (equal heap, pre-touch, collector
+    /// selection). `None` keeps vanilla launch behavior.
+    gc_preset: Option<crate::launch::gc_preset::GcPreset>,
 }
 
 impl LaunchOptions {
@@ -46,7 +49,24 @@ impl LaunchOptions {
             additional_jvm_arguments,
             window,
             fullscreen: false,
+            gc_preset: None,
         }
+    }
+
+    /// Sets the launcher-owned low-latency GC preset.
+    pub fn with_gc_preset(mut self, preset: crate::launch::gc_preset::GcPreset) -> Self {
+        self.gc_preset = Some(preset);
+        self
+    }
+    /// Applies the preset only when host memory selected one.
+    pub fn with_gc_preset_if_some(
+        mut self,
+        preset: Option<crate::launch::gc_preset::GcPreset>,
+    ) -> Self {
+        if let Some(preset) = preset {
+            self.gc_preset = Some(preset);
+        }
+        self
     }
 
     pub fn with_fullscreen(mut self, fullscreen: bool) -> Self {
@@ -617,6 +637,14 @@ pub fn resolve_launch_spec_with_java(
         jvm_arguments.push(ResolvedArgument::Plain(
             crate::instances::settings::heap_argument(memory_mib),
         ));
+        // The launcher-owned GC preset pairs equal `-Xms` and pre-touch with
+        // the collector selection; it must precede plan/user arguments so the
+        // boundary stays first-in-vector authoritative.
+        if let Some(preset) = options.gc_preset {
+            for argument in crate::launch::gc_preset::gc_preset_arguments(preset, memory_mib) {
+                jvm_arguments.push(ResolvedArgument::Plain(argument));
+            }
+        }
     }
     jvm_arguments.extend(resolve_groups(&plan.jvm_arguments, features, &values)?);
     if let Some(logging) = &plan.logging {

@@ -7524,6 +7524,20 @@ async fn play_instance_with_target(
                 configuration.validated_jvm_arguments().map_err(|error| {
                     CommandError::new("launch_jvm_arguments_invalid", error.to_string())
                 })?;
+            // The Performance performance mode opts into the launcher-owned
+            // low-latency GC preset (equal heap + pre-touch + collector
+            // selection driven by host memory) on top of the heap ownership.
+            let gc_preset = if configuration.performance_mode()
+                == Some(crate::instances::performance::PerformanceMode::Performance)
+            {
+                crate::launch::gc_preset::select_gc_preset(
+                    crate::instances::performance::host_facts()
+                        .total_mib
+                        .map(|mib| u32::try_from(mib).unwrap_or(u32::MAX)),
+                )
+            } else {
+                None
+            };
             let launch_options = crate::launch::resolve::LaunchOptions::new(
                 configuration.memory_mib(),
                 additional_jvm_arguments,
@@ -7531,7 +7545,8 @@ async fn play_instance_with_target(
                     .window()
                     .map(|window| (window.width(), window.height())),
             )
-            .with_fullscreen(configuration.fullscreen());
+            .with_fullscreen(configuration.fullscreen())
+            .with_gc_preset_if_some(gc_preset);
             let features = launch_options.feature_profile();
 
             // Custom Java is executed and validated afresh for every launch;

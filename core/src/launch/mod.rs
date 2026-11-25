@@ -4,6 +4,7 @@ pub(crate) mod activity_bridge;
 pub(crate) mod activity_log;
 pub(crate) mod boundary;
 pub mod diagnostics;
+pub mod gc_preset;
 pub mod logs;
 pub mod offline;
 pub mod process;
