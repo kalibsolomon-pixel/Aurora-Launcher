@@ -318,6 +318,32 @@ impl Drop for GameJob {
 }
 
 #[cfg(windows)]
+fn apply_eco_qos_opt_out(child: &tokio::process::Child) -> bool {
+    use windows_sys::Win32::System::Threading::{
+        PROCESS_POWER_THROTTLING_CURRENT_VERSION, PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
+        PROCESS_POWER_THROTTLING_STATE, ProcessPowerThrottling, SetProcessInformation,
+    };
+    let Some(handle) = child.raw_handle() else {
+        return false;
+    };
+    let state = PROCESS_POWER_THROTTLING_STATE {
+        Version: PROCESS_POWER_THROTTLING_CURRENT_VERSION,
+        ControlMask: PROCESS_POWER_THROTTLING_EXECUTION_SPEED,
+        StateMask: 0,
+    };
+    // Best-effort, fail-soft: older Windows 10 builds lack ProcessPowerThrottling.
+    // Applied while suspended so all JVM threads inherit HighQoS from startup.
+    unsafe {
+        SetProcessInformation(
+            handle,
+            ProcessPowerThrottling,
+            (&state as *const PROCESS_POWER_THROTTLING_STATE).cast(),
+            std::mem::size_of::<PROCESS_POWER_THROTTLING_STATE>() as u32,
+        ) != 0
+    }
+}
+
+#[cfg(windows)]
 fn resume_spawned_child(child: &tokio::process::Child) -> bool {
     use windows_sys::Win32::{
         Foundation::{CloseHandle, INVALID_HANDLE_VALUE},
@@ -513,6 +539,10 @@ pub(crate) fn spawn_supervised_with_bridge(
     let process_id = child.id();
     #[cfg(windows)]
     let job = GameJob::assign(&child);
+    #[cfg(windows)]
+    if spec.eco_qos_opt_out() {
+        let _ = apply_eco_qos_opt_out(&child);
+    }
     #[cfg(windows)]
     if !resume_spawned_child(&child) {
         let _ = child.start_kill();
@@ -1450,5 +1480,173 @@ mod tests {
         assert!(tokio::net::TcpStream::connect(address).await.is_err());
         assert!(handle.snapshot().is_none());
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    #[ignore = "fake burst stdout/stderr stress fixture; never Java"]
+    fn fake_child_log_burst_stress() {
+        use std::io::Write;
+        for i in 0..256 {
+            println!("INFO burst-{i} FIXTURE-PROCESS-TOKEN ok");
+            if i % 8 == 0 {
+                eprintln!("WARN err-{i} FIXTURE-PROCESS-TOKEN");
+            }
+        }
+        std::io::stdout().flush().unwrap();
+        std::io::stderr().flush().unwrap();
+    }
+
+    #[cfg(windows)]
+    #[tokio::test]
+    async fn eco_qos_opt_out_applies_to_suspended_child_handle() {
+        let mut command = tokio::process::Command::new(std::env::current_exe().unwrap());
+        command
+            .args([
+                "--exact",
+                "launch::process::tests::fake_child_log_burst_stress",
+                "--ignored",
+                "--nocapture",
+            ])
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .kill_on_drop(true)
+            .creation_flags(windows_sys::Win32::System::Threading::CREATE_SUSPENDED);
+        let mut child = command.spawn().unwrap();
+        let applied = apply_eco_qos_opt_out(&child);
+        let _ = child.start_kill();
+        let _ = child.wait().await;
+        assert!(
+            applied,
+            "Windows 10 1709+ / 11 should accept ProcessPowerThrottling opt-out"
+        );
+    }
+
+    async fn wait_terminal_result(
+        instance_id: &str,
+        timeout: Duration,
+    ) -> Result<ProcessSnapshot, String> {
+        tokio::time::timeout(timeout, async {
+            loop {
+                let state = snapshot(instance_id);
+                if !state.status.blocks_launch() {
+                    return state;
+                }
+                tokio::time::sleep(Duration::from_millis(25)).await;
+            }
+        })
+        .await
+        .map_err(|_| format!("fake child '{instance_id}' did not reach a terminal state"))
+    }
+
+    async fn wait_terminal_within(instance_id: &str, timeout: Duration) -> ProcessSnapshot {
+        wait_terminal_result(instance_id, timeout)
+            .await
+            .unwrap_or_else(|msg| panic!("{msg}"))
+    }
+
+    #[test]
+    #[ignore = "fake gated subprocess for deterministic duplicate-launch test; never Java"]
+    fn fake_child_wait_for_release_marker() {
+        let deadline = std::time::Instant::now() + Duration::from_secs(15);
+        while std::time::Instant::now() < deadline {
+            if std::path::Path::new("release-child").exists() {
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        std::process::exit(1);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn stress_concurrent_launches_and_log_burst_redaction() {
+        struct ReleaseMarkerGuard(PathBuf);
+        impl Drop for ReleaseMarkerGuard {
+            fn drop(&mut self) {
+                let _ = std::fs::write(&self.0, b"release");
+            }
+        }
+
+        let root = test_root("stress-concurrent");
+
+        // Deterministic duplicate-launch rejection while a gated child is running.
+        // Uses a release marker file instead of platform-specific stop() so it works
+        // identically on Windows, Linux, and macOS and always releases on panic.
+        let dup_root = root.join("inst-dup");
+        std::fs::create_dir_all(&dup_root).unwrap();
+        let dup_logs = dup_root.join("logs");
+        let dup_id = "stress-inst-dup";
+        let release_guard = ReleaseMarkerGuard(dup_root.join("release-child"));
+        let dup_spec = LaunchSpec::fake_process(
+            dup_id,
+            std::env::current_exe().unwrap(),
+            "launch::process::tests::fake_child_wait_for_release_marker",
+            dup_root.clone(),
+        )
+        .with_test_eco_qos_opt_out(true);
+        let dup_running = spawn_supervised(dup_spec.clone(), &dup_logs, Arc::new(|_| {})).unwrap();
+        let dup_running_status = dup_running.status;
+        let dup_result = spawn_supervised(dup_spec, &dup_logs, Arc::new(|_| {}));
+
+        // 12 concurrent burst-logging launches across multi-threaded tokio workers.
+        let mut handles = Vec::new();
+        for idx in 0..12usize {
+            let instance_root = root.join(format!("inst-{idx}"));
+            let logs_dir = instance_root.join("logs");
+            let id = format!("stress-inst-{idx}");
+            handles.push(tokio::spawn(async move {
+                let spec = LaunchSpec::fake_process(
+                    &id,
+                    std::env::current_exe().unwrap(),
+                    "launch::process::tests::fake_child_log_burst_stress",
+                    instance_root.clone(),
+                )
+                .with_test_eco_qos_opt_out(idx % 2 == 0);
+                let running = spawn_supervised(spec, &logs_dir, Arc::new(|_| {})).unwrap();
+                assert_eq!(running.status, LaunchProcessStatus::Running);
+                let terminal = wait_terminal_within(&id, Duration::from_secs(15)).await;
+                assert_eq!(terminal.status, LaunchProcessStatus::Exited);
+                assert_eq!(terminal.exit_code, Some(0));
+                let log_file = std::fs::read_dir(&logs_dir)
+                    .unwrap()
+                    .next()
+                    .unwrap()
+                    .unwrap()
+                    .path();
+                let body = std::fs::read_to_string(log_file).unwrap();
+                assert!(!body.contains("FIXTURE-PROCESS-TOKEN"));
+                assert!(body.contains("INFO burst-255 [redacted] ok"));
+                assert!(body.contains("WARN err-248 [redacted]"));
+            }));
+        }
+
+        // Collect all outcomes before cleanup so no failure leaves the gated
+        // child running or leaks the temporary fixture directory.
+        let mut worker_errors = Vec::new();
+        for handle in handles {
+            if let Err(err) = handle.await {
+                worker_errors.push(err);
+            }
+        }
+
+        // Release and reap the gated child on every platform, then remove the
+        // temporary root before asserting any captured outcomes.
+        drop(release_guard);
+        let dup_terminal = wait_terminal_result(dup_id, Duration::from_secs(15)).await;
+        let remove_result = std::fs::remove_dir_all(&root);
+
+        assert_eq!(dup_running_status, LaunchProcessStatus::Running);
+        assert!(matches!(
+            dup_result,
+            Err(LaunchProcessError::AlreadyRunning { .. })
+        ));
+        assert!(
+            worker_errors.is_empty(),
+            "concurrent stress workers failed: {worker_errors:?}"
+        );
+        let dup_terminal = dup_terminal.unwrap();
+        assert_eq!(dup_terminal.status, LaunchProcessStatus::Exited);
+        assert_eq!(dup_terminal.exit_code, Some(0));
+        remove_result.unwrap();
     }
 }

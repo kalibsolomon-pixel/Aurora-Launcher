@@ -36,6 +36,9 @@ pub struct LaunchOptions {
     /// Launcher-owned low-latency GC preset (equal heap, pre-touch, collector
     /// selection). `None` keeps vanilla launch behavior.
     gc_preset: Option<crate::launch::gc_preset::GcPreset>,
+    /// Opt the spawned Windows child JVM out of EcoQoS power throttling
+    /// (Performance mode only; fail-soft on older Windows / non-Windows).
+    eco_qos_opt_out: bool,
 }
 
 impl LaunchOptions {
@@ -50,6 +53,7 @@ impl LaunchOptions {
             window,
             fullscreen: false,
             gc_preset: None,
+            eco_qos_opt_out: false,
         }
     }
 
@@ -58,7 +62,7 @@ impl LaunchOptions {
         self.gc_preset = Some(preset);
         self
     }
-    /// Applies the preset only when host memory selected one.
+    /// Applies the preset only when host memory, heap, and Java major selected one.
     pub fn with_gc_preset_if_some(
         mut self,
         preset: Option<crate::launch::gc_preset::GcPreset>,
@@ -66,6 +70,12 @@ impl LaunchOptions {
         if let Some(preset) = preset {
             self.gc_preset = Some(preset);
         }
+        self
+    }
+
+    /// Opts the spawned Windows child JVM out of EcoQoS power throttling.
+    pub fn with_eco_qos_opt_out(mut self, enabled: bool) -> Self {
+        self.eco_qos_opt_out = enabled;
         self
     }
 
@@ -130,6 +140,7 @@ pub struct LaunchSpec {
     asset_index: String,
     logging_config: Option<PathBuf>,
     extra_redactions: Vec<SecretString>,
+    eco_qos_opt_out: bool,
 }
 
 impl LaunchSpec {
@@ -195,6 +206,10 @@ impl LaunchSpec {
     }
     pub fn logging_config(&self) -> Option<&Path> {
         self.logging_config.as_deref()
+    }
+    #[cfg_attr(not(any(windows, test)), allow(dead_code))]
+    pub(crate) fn eco_qos_opt_out(&self) -> bool {
+        self.eco_qos_opt_out
     }
 
     pub(crate) fn command_arguments(&self) -> Vec<ResolvedArgument> {
@@ -271,7 +286,14 @@ impl LaunchSpec {
             asset_index: String::new(),
             logging_config: None,
             extra_redactions: vec![SecretString::new("FIXTURE-PROCESS-TOKEN")],
+            eco_qos_opt_out: false,
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn with_test_eco_qos_opt_out(mut self, enabled: bool) -> Self {
+        self.eco_qos_opt_out = enabled;
+        self
     }
 }
 
@@ -628,8 +650,9 @@ pub fn resolve_launch_spec_with_java(
             .transpose()?,
     };
 
+    let plan_jvm_arguments = resolve_groups(&plan.jvm_arguments, features, &values)?;
     let mut jvm_arguments =
-        Vec::with_capacity(1 + plan.jvm_arguments.len() + options.additional_jvm_arguments.len());
+        Vec::with_capacity(7 + plan_jvm_arguments.len() + options.additional_jvm_arguments.len());
     // The launcher-owned heap argument comes first: Aurora owns the heap,
     // and the configuration boundary already rejected user heap flags, so
     // no duplicate `-Xmx` can exist in the vector.
@@ -637,16 +660,28 @@ pub fn resolve_launch_spec_with_java(
         jvm_arguments.push(ResolvedArgument::Plain(
             crate::instances::settings::heap_argument(memory_mib),
         ));
-        // The launcher-owned GC preset pairs equal `-Xms` and pre-touch with
-        // the collector selection; it must precede plan/user arguments so the
-        // boundary stays first-in-vector authoritative.
-        if let Some(preset) = options.gc_preset {
-            for argument in crate::launch::gc_preset::gc_preset_arguments(preset, memory_mib) {
-                jvm_arguments.push(ResolvedArgument::Plain(argument));
+        // The launcher-owned GC preset pairs guarded `-Xms`/pre-touch with the
+        // collector selection; skip the preset if plan/loader/user arguments
+        // already enable a collector so dual collectors can never break boot.
+        if let Some(mut preset) = options.gc_preset {
+            let plan_and_user_args = plan_jvm_arguments
+                .iter()
+                .map(|arg| arg.expose())
+                .chain(options.additional_jvm_arguments.iter().map(String::as_str));
+            let has_collector_conflict = crate::launch::gc_preset::has_conflicting_collector_flag(
+                plan_and_user_args.clone(),
+            );
+            if !has_collector_conflict {
+                if crate::launch::gc_preset::has_initial_heap_flag(plan_and_user_args) {
+                    preset.pin_initial_heap_and_pretouch = false;
+                }
+                for argument in crate::launch::gc_preset::gc_preset_arguments(preset, memory_mib) {
+                    jvm_arguments.push(ResolvedArgument::Plain(argument));
+                }
             }
         }
     }
-    jvm_arguments.extend(resolve_groups(&plan.jvm_arguments, features, &values)?);
+    jvm_arguments.extend(plan_jvm_arguments);
     if let Some(logging) = &plan.logging {
         jvm_arguments.push(substitute_argument(&logging.argument, &values)?);
     }
@@ -704,6 +739,7 @@ pub fn resolve_launch_spec_with_java(
         asset_index: plan.asset_index.clone(),
         logging_config,
         extra_redactions: Vec::new(),
+        eco_qos_opt_out: options.eco_qos_opt_out,
     })
 }
 
@@ -2083,5 +2119,94 @@ mod tests {
         assert_eq!(process::snapshot(id.as_str()).exit_code, Some(0));
         assert!(handle.snapshot().is_none());
         println!("Normal quit: exit 0; activity cleared; disposable game remains valid");
+    }
+
+    #[test]
+    fn gc_preset_skips_on_plan_collector_conflict_and_propagates_eco_qos() {
+        let fixture = Fixture::new();
+        let preset = crate::launch::gc_preset::select_gc_preset(Some(16 * 1024), 4096, 25).unwrap();
+        let options = LaunchOptions::new(4096, Vec::new(), None)
+            .with_gc_preset(preset)
+            .with_eco_qos_opt_out(true);
+
+        // Normal plan: emits -Xmx4096m, -Xms4096m, -XX:+AlwaysPreTouch, -XX:+UseZGC and EcoQoS opt-out.
+        let spec = resolve_launch_spec(
+            &fixture.managed,
+            &fixture.id,
+            &plan(),
+            &fixture.manifest,
+            &fixture.java,
+            &session(),
+            &FeatureProfile::none(),
+            &options,
+        )
+        .unwrap();
+        let args: Vec<&str> = spec.jvm_arguments().iter().map(|a| a.expose()).collect();
+        assert_eq!(args[0], "-Xmx4096m");
+        assert_eq!(args[1], "-Xms4096m");
+        assert_eq!(args[2], "-XX:+AlwaysPreTouch");
+        assert_eq!(args[3], "-XX:+UseZGC");
+        assert!(spec.eco_qos_opt_out());
+
+        // Plan/loader specifying a collector: skips entire GC preset to prevent dual-collector crash.
+        for collector_flag in ["-XX:+UseG1GC", "-XX:-UseG1GC", "-Xgcpolicy:gencon"] {
+            let mut conflicting_plan = plan();
+            conflicting_plan.jvm_arguments.push(LaunchArgument {
+                features: Vec::new(),
+                values: vec![collector_flag.to_owned()],
+            });
+            let spec_conflict = resolve_launch_spec(
+                &fixture.managed,
+                &fixture.id,
+                &conflicting_plan,
+                &fixture.manifest,
+                &fixture.java,
+                &session(),
+                &FeatureProfile::none(),
+                &options,
+            )
+            .unwrap();
+            let conflict_args: Vec<&str> = spec_conflict
+                .jvm_arguments()
+                .iter()
+                .map(|a| a.expose())
+                .collect();
+            assert!(conflict_args.contains(&collector_flag));
+            assert!(!conflict_args.contains(&"-XX:+UseZGC"));
+            assert!(!conflict_args.contains(&"-XX:+AlwaysPreTouch"));
+        }
+
+        // Plan specifying -Xms / InitialHeapSize / MinHeapSize: keeps collector flag
+        // but drops duplicate -Xms / AlwaysPreTouch.
+        for initial_heap_flag in [
+            "-Xms1024m",
+            "-XX:InitialHeapSize=1g",
+            "-XX:MinHeapSize=512m",
+        ] {
+            let mut xms_plan = plan();
+            xms_plan.jvm_arguments.push(LaunchArgument {
+                features: Vec::new(),
+                values: vec![initial_heap_flag.to_owned()],
+            });
+            let spec_xms = resolve_launch_spec(
+                &fixture.managed,
+                &fixture.id,
+                &xms_plan,
+                &fixture.manifest,
+                &fixture.java,
+                &session(),
+                &FeatureProfile::none(),
+                &options,
+            )
+            .unwrap();
+            let xms_args: Vec<&str> = spec_xms
+                .jvm_arguments()
+                .iter()
+                .map(|a| a.expose())
+                .collect();
+            assert!(xms_args.contains(&"-XX:+UseZGC"));
+            assert!(!xms_args.contains(&"-Xms4096m"));
+            assert!(!xms_args.contains(&"-XX:+AlwaysPreTouch"));
+        }
     }
 }

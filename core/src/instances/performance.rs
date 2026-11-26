@@ -139,14 +139,14 @@ pub fn recommend(facts: MemoryFacts, mode: Option<PerformanceMode>) -> MemoryAdv
         }
         _ => None,
     };
-    let target = if mode == Some(PerformanceMode::Efficient) {
-        1536
-    } else {
-        2048
+    let target = match mode {
+        Some(PerformanceMode::Efficient) => 1536,
+        Some(PerformanceMode::Performance) => 4096,
+        _ => 2048,
     };
     let recommendation = budget.filter(|b| *b >= 512).map(|b| b.min(target) as u32);
     let explanation = if recommendation.is_some() {
-        "Conservative heuristic: reserve 4096 MiB from total RAM and 2048 MiB from currently available RAM for OS/background, native Java and unknown shared-GPU pressure. Efficient targets at most 1536 MiB; other modes at most 2048 MiB. Performance currently matches Balanced. This is not a measured optimum. Only an explicit draft change and Save applies it."
+        "Conservative heuristic: reserve 4096 MiB from total RAM and 2048 MiB from currently available RAM for OS/background, native Java and unknown shared-GPU pressure. Efficient targets a 1536 MiB ceiling, Balanced/Custom target a 2048 MiB ceiling, and Performance targets a 4096 MiB ceiling (providing headroom for low-latency GC when host RAM permits, with no implied automatic FPS gain). This is not a measured optimum. Only an explicit draft change and Save applies it."
     } else {
         "No recommendation: memory/architecture information is missing, inconsistent, stale or leaves less than 512 MiB after reserves. Your saved heap is unchanged."
     };
@@ -256,14 +256,42 @@ mod tests {
                 let advice = recommend(facts(total, Some(total - 2048), "x86_64"), Some(mode));
                 assert_eq!(
                     advice.recommended_mib,
-                    Some(if mode == PerformanceMode::Efficient {
-                        1536
-                    } else {
-                        2048
+                    Some(match mode {
+                        PerformanceMode::Efficient => 1536,
+                        PerformanceMode::Performance => 4096,
+                        PerformanceMode::Balanced | PerformanceMode::Custom => 2048,
                     })
                 );
             }
         }
+        // Constrained hosts still respect reserves under Performance mode:
+        // 6 GiB total -> total - 4096 = 2048 MiB ceiling.
+        assert_eq!(
+            recommend(
+                facts(6144, Some(5120), "x86_64"),
+                Some(PerformanceMode::Performance)
+            )
+            .recommended_mib,
+            Some(2048)
+        );
+        // 7 GiB total with 5 GiB available -> 3072 MiB.
+        assert_eq!(
+            recommend(
+                facts(7168, Some(5120), "x86_64"),
+                Some(PerformanceMode::Performance)
+            )
+            .recommended_mib,
+            Some(3072)
+        );
+        // 8 GiB total with only 4.5 GiB available -> available - 2048 = 2560 MiB.
+        assert_eq!(
+            recommend(
+                facts(8192, Some(4608), "x86_64"),
+                Some(PerformanceMode::Performance)
+            )
+            .recommended_mib,
+            Some(2560)
+        );
         assert_eq!(
             recommend(facts(8192, Some(3072), "x86_64"), None).recommended_mib,
             Some(1024)

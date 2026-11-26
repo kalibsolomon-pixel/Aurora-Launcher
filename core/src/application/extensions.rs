@@ -637,6 +637,8 @@ pub async fn launch_instance_offline(
     let additional_jvm_arguments = configuration
         .validated_jvm_arguments()
         .map_err(|error| CommandError::new("launch_jvm_arguments_invalid", error.to_string()))?;
+    let performance_mode = configuration.performance_mode()
+        == Some(crate::instances::performance::PerformanceMode::Performance);
     let launch_options = crate::launch::resolve::LaunchOptions::new(
         configuration.memory_mib(),
         additional_jvm_arguments,
@@ -644,7 +646,8 @@ pub async fn launch_instance_offline(
             .window()
             .map(|window| (window.width(), window.height())),
     )
-    .with_fullscreen(configuration.fullscreen());
+    .with_fullscreen(configuration.fullscreen())
+    .with_eco_qos_opt_out(performance_mode);
     let features = launch_options.feature_profile();
 
     // Validate local custom Java or local managed Java without network access.

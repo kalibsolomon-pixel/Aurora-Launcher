@@ -3122,10 +3122,11 @@ pub fn get_instance_performance_advice(
             "Open a registered instance to request memory advice.",
         )
     })?;
-    let mut advice = crate::instances::performance::recommend(
-        crate::instances::performance::host_facts(),
-        request.mode,
-    );
+    let mode = request
+        .mode
+        .or_else(|| record.configuration().performance_mode());
+    let mut advice =
+        crate::instances::performance::recommend(crate::instances::performance::host_facts(), mode);
     advice.argument_notices = crate::instances::performance::argument_notices(
         record.configuration().additional_jvm_arguments(),
     );
@@ -7524,16 +7525,20 @@ async fn play_instance_with_target(
                 configuration.validated_jvm_arguments().map_err(|error| {
                     CommandError::new("launch_jvm_arguments_invalid", error.to_string())
                 })?;
-            // The Performance performance mode opts into the launcher-owned
-            // low-latency GC preset (equal heap + pre-touch + collector
-            // selection driven by host memory) on top of the heap ownership.
-            let gc_preset = if configuration.performance_mode()
-                == Some(crate::instances::performance::PerformanceMode::Performance)
-            {
+            // The Performance performance mode opts managed-runtime launches
+            // into the launcher-owned low-latency GC preset (guarded by exact
+            // Java major, host RAM, and configured heap; custom Java builds
+            // are skipped because a custom HotSpot build may omit ZGC/G1) and
+            // opts all Performance launches out of Windows EcoQoS.
+            let performance_mode = configuration.performance_mode()
+                == Some(crate::instances::performance::PerformanceMode::Performance);
+            let gc_preset = if performance_mode && configuration.java().is_none() {
                 crate::launch::gc_preset::select_gc_preset(
                     crate::instances::performance::host_facts()
                         .total_mib
                         .map(|mib| u32::try_from(mib).unwrap_or(u32::MAX)),
+                    configuration.memory_mib(),
+                    game_plan.java().major_version(),
                 )
             } else {
                 None
@@ -7546,7 +7551,8 @@ async fn play_instance_with_target(
                     .map(|window| (window.width(), window.height())),
             )
             .with_fullscreen(configuration.fullscreen())
-            .with_gc_preset_if_some(gc_preset);
+            .with_gc_preset_if_some(gc_preset)
+            .with_eco_qos_opt_out(performance_mode);
             let features = launch_options.feature_profile();
 
             // Custom Java is executed and validated afresh for every launch;
