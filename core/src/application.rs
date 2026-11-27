@@ -7681,113 +7681,160 @@ async fn play_instance_with_target(
 
             emit_launch_phase(&app, "assemblingArguments");
             let current_platform = crate::minecraft::rules::PlatformProfile::current()?;
+            let launch_plan =
+                crate::launch::resolve::LaunchPlan::from_game_plan(&game_plan, current_platform);
+            let synced_prepared = if prepared.game().is_some_and(|installed| {
+                crate::launch::resolve::manifest_needs_upstream_sync(installed, &launch_plan)
+            }) {
+                let _operation =
+                    crate::instances::lifecycle::lock_instance_operation(&managed, &instance)
+                        .map_err(|_| crate::launch::boundary::BoundaryError::Busy)?;
+                let mut install_context = crate::install::InstallContext::official();
+                let processors_need_java = game_plan
+                    .neoforge_loader()
+                    .is_some_and(crate::neoforge::plan::NeoForgePlan::requires_install_time_java)
+                    || game_plan
+                        .forge_loader()
+                        .is_some_and(crate::forge::plan::ForgePlan::requires_install_time_java);
+                if processors_need_java {
+                    if let Some(java_path) = custom_java
+                        .as_ref()
+                        .map(|external| external.path().to_path_buf())
+                        .or_else(|| managed_java.clone())
+                    {
+                        install_context = install_context.with_processor_java(java_path);
+                    }
+                }
+                crate::install::install_game(
+                    &managed,
+                    &instance,
+                    &game_plan,
+                    &install_context,
+                    &mut |_| {},
+                    crate::install::InstallFaults::default(),
+                )
+                .await?;
+                drop(_operation);
+                Some(prepared.refresh_after_game_sync(&managed)?)
+            } else {
+                None
+            };
             let _ = crate::launch::offline::save_receipt(
                 &managed,
                 &instance,
                 &game_plan,
                 current_platform,
             );
-            let launch_plan =
-                crate::launch::resolve::LaunchPlan::from_game_plan(&game_plan, current_platform);
-            prepared.with_validated(&managed, |installed| {
-                // Retain Windows write/delete exclusion through the normal spawn.
-                let _custom_java_guard = custom_java
-                    .as_ref()
-                    .map(|java| java.lock_for_launch())
-                    .transpose()
-                    .map_err(|error| {
-                        CommandError::new("launch_custom_java_invalid", error.message)
-                    })?;
-                let validated_loader_family = record.installed().platform.kind();
-                if record.installed().platform.supports_mods()
-                    && managed.instance_paths(&instance).mods().is_dir()
-                {
-                    let mut inventory = crate::instance_mods::scan(&managed, &instance)?;
-                    crate::instance_mods::add_loader_builtins(&managed, &instance, &mut inventory);
-                    if let Some(problem) = crate::mod_compatibility::validate(
-                        &inventory,
-                        &record.installed().minecraft_version,
-                        record.installed().platform.version().unwrap_or(""),
-                        Some(game_plan.java().major_version()),
-                        validated_loader_family,
-                    )
-                    .first()
+            synced_prepared
+                .as_ref()
+                .unwrap_or(&prepared)
+                .with_validated(&managed, |installed| {
+                    // Retain Windows write/delete exclusion through the normal spawn.
+                    let _custom_java_guard = custom_java
+                        .as_ref()
+                        .map(|java| java.lock_for_launch())
+                        .transpose()
+                        .map_err(|error| {
+                            CommandError::new("launch_custom_java_invalid", error.message)
+                        })?;
+                    let validated_loader_family = record.installed().platform.kind();
+                    if record.installed().platform.supports_mods()
+                        && managed.instance_paths(&instance).mods().is_dir()
                     {
-                        return Err(CommandError::new(
-                            "launch_mod_incompatible",
-                            problem.message.clone(),
-                        ));
+                        let mut inventory = crate::instance_mods::scan(&managed, &instance)?;
+                        crate::instance_mods::add_loader_builtins(
+                            &managed,
+                            &instance,
+                            &mut inventory,
+                        );
+                        if let Some(problem) = crate::mod_compatibility::validate(
+                            &inventory,
+                            &record.installed().minecraft_version,
+                            record.installed().platform.version().unwrap_or(""),
+                            Some(game_plan.java().major_version()),
+                            validated_loader_family,
+                        )
+                        .first()
+                        {
+                            return Err(CommandError::new(
+                                "launch_mod_incompatible",
+                                problem.message.clone(),
+                            ));
+                        }
                     }
-                }
-                let java = match (&custom_java, &managed_java) {
-                    (Some(external), _) => crate::launch::resolve::LaunchJava::External(external),
-                    (None, Some(path)) => crate::launch::resolve::LaunchJava::Managed(path),
-                    (None, None) => {
-                        return Err(CommandError::new(
-                            "launch_runtime_not_ready",
-                            "No validated Java is available for this launch.",
-                        ));
-                    }
-                };
-                let spec = crate::launch::resolve::resolve_launch_spec_with_java(
-                    &managed,
-                    &instance,
-                    &launch_plan,
-                    installed,
-                    java,
-                    &session,
-                    &features,
-                    &launch_options,
-                )?;
-                let spec = if let Some(target) = &quick_target {
-                    if let crate::gameplay_history::QuickLaunchTarget::Singleplayer {
-                        world, ..
-                    } = target
-                    {
-                        validate_quick_world(&managed, &instance, world)?;
-                    }
-                    spec.with_quick_target(target)
-                } else {
-                    spec
-                };
+                    let java = match (&custom_java, &managed_java) {
+                        (Some(external), _) => {
+                            crate::launch::resolve::LaunchJava::External(external)
+                        }
+                        (None, Some(path)) => crate::launch::resolve::LaunchJava::Managed(path),
+                        (None, None) => {
+                            return Err(CommandError::new(
+                                "launch_runtime_not_ready",
+                                "No validated Java is available for this launch.",
+                            ));
+                        }
+                    };
+                    let spec = crate::launch::resolve::resolve_launch_spec_with_java(
+                        &managed,
+                        &instance,
+                        &launch_plan,
+                        installed,
+                        java,
+                        &session,
+                        &features,
+                        &launch_options,
+                    )?;
+                    let spec = if let Some(target) = &quick_target {
+                        if let crate::gameplay_history::QuickLaunchTarget::Singleplayer {
+                            world,
+                            ..
+                        } = target
+                        {
+                            validate_quick_world(&managed, &instance, world)?;
+                        }
+                        spec.with_quick_target(target)
+                    } else {
+                        spec
+                    };
 
-                emit_launch_phase(&app, "startingProcess");
-                let listener_app = app.clone();
-                let presence_name = record.display_name().to_owned();
-                let presence_version = record.installed().minecraft_version.clone();
-                let presence_platform = match &record.installed().platform {
-                    crate::instances::platform::PlatformPin::Vanilla {} => "Vanilla",
-                    crate::instances::platform::PlatformPin::NeoForge { .. } => "NeoForge",
-                    _ => "Fabric",
-                }
-                .to_owned();
-                let presence_aurora = crate::instance_mods::bootstrap_status(&managed, &instance)
-                    .ok()
-                    .flatten()
-                    .as_deref()
-                    == Some("active");
-                let bridge_digest = crate::aurora::load_installed_state(&managed, &instance)
-                    .ok()
-                    .flatten()
-                    .map(|state| state.artifact().sha256().to_owned());
-                let bridge = crate::launch::activity_bridge::supported(
-                    presence_aurora,
-                    &presence_version,
-                    bridge_digest.as_deref(),
-                )
-                .then(|| crate::launch::activity_bridge::Session::prepare_for_protocol(2).ok())
-                .flatten();
-                let gameplay = bridge.as_ref().map(|session| session.handle());
-                let recorder = Arc::new(std::sync::Mutex::new(
-                    None::<Arc<crate::gameplay_history::Recorder>>,
-                ));
-                if let Some(handle) = &gameplay {
-                    let recorder = recorder.clone();
-                    handle.set_observer(Arc::new(move |snapshot| {
-                        let active = recorder.lock().ok().and_then(|guard| guard.clone());
-                        if let Some(active) = active {
-                            use crate::gameplay_history::Mode;
-                            let (mode, world, server, display) = match snapshot {
+                    emit_launch_phase(&app, "startingProcess");
+                    let listener_app = app.clone();
+                    let presence_name = record.display_name().to_owned();
+                    let presence_version = record.installed().minecraft_version.clone();
+                    let presence_platform = match &record.installed().platform {
+                        crate::instances::platform::PlatformPin::Vanilla {} => "Vanilla",
+                        crate::instances::platform::PlatformPin::NeoForge { .. } => "NeoForge",
+                        _ => "Fabric",
+                    }
+                    .to_owned();
+                    let presence_aurora =
+                        crate::instance_mods::bootstrap_status(&managed, &instance)
+                            .ok()
+                            .flatten()
+                            .as_deref()
+                            == Some("active");
+                    let bridge_digest = crate::aurora::load_installed_state(&managed, &instance)
+                        .ok()
+                        .flatten()
+                        .map(|state| state.artifact().sha256().to_owned());
+                    let bridge = crate::launch::activity_bridge::supported(
+                        presence_aurora,
+                        &presence_version,
+                        bridge_digest.as_deref(),
+                    )
+                    .then(|| crate::launch::activity_bridge::Session::prepare_for_protocol(2).ok())
+                    .flatten();
+                    let gameplay = bridge.as_ref().map(|session| session.handle());
+                    let recorder = Arc::new(std::sync::Mutex::new(
+                        None::<Arc<crate::gameplay_history::Recorder>>,
+                    ));
+                    if let Some(handle) = &gameplay {
+                        let recorder = recorder.clone();
+                        handle.set_observer(Arc::new(move |snapshot| {
+                            let active = recorder.lock().ok().and_then(|guard| guard.clone());
+                            if let Some(active) = active {
+                                use crate::gameplay_history::Mode;
+                                let (mode, world, server, display) = match snapshot {
                                 Some(snapshot) => match snapshot.state {
                                     crate::launch::activity_bridge::GameplayState::MainMenu => {
                                         (Mode::MainMenu, None, None, None)
@@ -7809,110 +7856,113 @@ async fn play_instance_with_target(
                                 },
                                 None => (Mode::Unknown, None, None, None),
                             };
-                            let _ = active.observe(mode, world, server, display);
-                        }
-                    }));
-                }
-                // Minecraft writes this after handling the login packet, for normal
-                // launches as well as Quick Play. A new path cannot replay old data.
-                let logs = managed.instance_paths(&instance).logs().to_path_buf();
-                let activity_log = (presence_version == "1.21.11")
-                    .then(|| {
-                        crate::launch::activity_log::SessionLog::new(managed.data_root(), &logs)
-                    })
-                    .flatten();
-                let spec = match &activity_log {
-                    // The activity log is verified on 1.21.11 only; other
-                    // versions Quick Play without visit history.
-                    Some(log) => spec.with_activity_log(log.argument()),
-                    None => spec,
-                };
-                let history_paths = managed.clone();
-                let history_instance = instance.clone();
-                let observation = std::sync::Mutex::new(None);
-                let snapshot = crate::launch::process::spawn_supervised_with_bridge(
-                    spec,
-                    managed.instance_paths(&instance).logs(),
-                    Arc::new(move |snapshot| {
-                        match snapshot.status {
-                            crate::launch::state::LaunchProcessStatus::Running => {
-                                if let Ok(store) =
-                                    crate::gameplay_history::Store::open_managed(&history_paths)
-                                {
-                                    let id = activity_log
-                                        .as_ref()
-                                        .map_or_else(uuid::Uuid::new_v4, |log| log.id());
-                                    if let Ok(active) =
-                                        store.start_with_id(history_instance.clone(), id)
+                                let _ = active.observe(mode, world, server, display);
+                            }
+                        }));
+                    }
+                    // Minecraft writes this after handling the login packet, for normal
+                    // launches as well as Quick Play. A new path cannot replay old data.
+                    let logs = managed.instance_paths(&instance).logs().to_path_buf();
+                    let activity_log = (presence_version == "1.21.11")
+                        .then(|| {
+                            crate::launch::activity_log::SessionLog::new(managed.data_root(), &logs)
+                        })
+                        .flatten();
+                    let spec = match &activity_log {
+                        // The activity log is verified on 1.21.11 only; other
+                        // versions Quick Play without visit history.
+                        Some(log) => spec.with_activity_log(log.argument()),
+                        None => spec,
+                    };
+                    let history_paths = managed.clone();
+                    let history_instance = instance.clone();
+                    let observation = std::sync::Mutex::new(None);
+                    let snapshot = crate::launch::process::spawn_supervised_with_bridge(
+                        spec,
+                        managed.instance_paths(&instance).logs(),
+                        Arc::new(move |snapshot| {
+                            match snapshot.status {
+                                crate::launch::state::LaunchProcessStatus::Running => {
+                                    if let Ok(store) =
+                                        crate::gameplay_history::Store::open_managed(&history_paths)
                                     {
-                                        let active = Arc::new(active);
-                                        if let Ok(mut guard) = recorder.lock() {
-                                            *guard = Some(active.clone());
-                                        }
-                                        if let Some(log) = activity_log.clone()
-                                            && let Ok(mut guard) = observation.lock()
+                                        let id = activity_log
+                                            .as_ref()
+                                            .map_or_else(uuid::Uuid::new_v4, |log| log.id());
+                                        if let Ok(active) =
+                                            store.start_with_id(history_instance.clone(), id)
                                         {
-                                            *guard = Some(
-                                                crate::launch::activity_log::Observation::start(
-                                                    log, active,
-                                                ),
-                                            );
+                                            let active = Arc::new(active);
+                                            if let Ok(mut guard) = recorder.lock() {
+                                                *guard = Some(active.clone());
+                                            }
+                                            if let Some(log) = activity_log.clone()
+                                                && let Ok(mut guard) = observation.lock()
+                                            {
+                                                *guard = Some(
+                                                    crate::launch::activity_log::Observation::start(
+                                                        log, active,
+                                                    ),
+                                                );
+                                            }
                                         }
                                     }
                                 }
-                            }
-                            crate::launch::state::LaunchProcessStatus::Exited
-                            | crate::launch::state::LaunchProcessStatus::Failed
-                            | crate::launch::state::LaunchProcessStatus::Stopped => {
-                                // The process has terminated; its saved settings
-                                // enter the synced group off the observer thread.
-                                let sync_paths = history_paths.clone();
-                                let sync_instance = history_instance.clone();
-                                std::thread::spawn(move || {
-                                    let _ = crate::instance_sync::group::after_exit(
-                                        &sync_paths,
-                                        &sync_instance,
-                                    );
-                                });
-                                if let Some(active) =
-                                    recorder.lock().ok().and_then(|mut guard| guard.take())
-                                {
-                                    let outcome = match snapshot.status {
-                                        crate::launch::state::LaunchProcessStatus::Exited => {
-                                            crate::gameplay_history::Outcome::Normal
-                                        }
-                                        crate::launch::state::LaunchProcessStatus::Stopped => {
-                                            crate::gameplay_history::Outcome::Interrupted
-                                        }
-                                        _ => crate::gameplay_history::Outcome::Abnormal,
-                                    };
-                                    if let Some(watcher) =
-                                        observation.lock().ok().and_then(|mut guard| guard.take())
+                                crate::launch::state::LaunchProcessStatus::Exited
+                                | crate::launch::state::LaunchProcessStatus::Failed
+                                | crate::launch::state::LaunchProcessStatus::Stopped => {
+                                    // The process has terminated; its saved settings
+                                    // enter the synced group off the observer thread.
+                                    let sync_paths = history_paths.clone();
+                                    let sync_instance = history_instance.clone();
+                                    std::thread::spawn(move || {
+                                        let _ = crate::instance_sync::group::after_exit(
+                                            &sync_paths,
+                                            &sync_instance,
+                                        );
+                                    });
+                                    if let Some(active) =
+                                        recorder.lock().ok().and_then(|mut guard| guard.take())
                                     {
-                                        watcher.finish();
+                                        let outcome = match snapshot.status {
+                                            crate::launch::state::LaunchProcessStatus::Exited => {
+                                                crate::gameplay_history::Outcome::Normal
+                                            }
+                                            crate::launch::state::LaunchProcessStatus::Stopped => {
+                                                crate::gameplay_history::Outcome::Interrupted
+                                            }
+                                            _ => crate::gameplay_history::Outcome::Abnormal,
+                                        };
+                                        if let Some(watcher) = observation
+                                            .lock()
+                                            .ok()
+                                            .and_then(|mut guard| guard.take())
+                                        {
+                                            watcher.finish();
+                                        }
+                                        let _ = active.finish(outcome);
                                     }
-                                    let _ = active.finish(outcome);
                                 }
+                                _ => {}
                             }
-                            _ => {}
-                        }
-                        crate::discord::process_changed(crate::discord::GameActivity {
-                            instance_id: snapshot.instance_id.clone(),
-                            instance_name: presence_name.clone(),
-                            minecraft_version: presence_version.clone(),
-                            platform: presence_platform.clone(),
-                            aurora_active: presence_aurora,
-                            status: snapshot.status,
-                            started_at: snapshot.started_at_unix_seconds,
-                            gameplay: gameplay.clone(),
-                        });
-                        let _ = listener_app.emit("launch-state", LaunchProcessDto::from(snapshot));
-                    }),
-                    Some(game_plan.java().major_version()),
-                    bridge,
-                )?;
-                Ok(snapshot.into())
-            })
+                            crate::discord::process_changed(crate::discord::GameActivity {
+                                instance_id: snapshot.instance_id.clone(),
+                                instance_name: presence_name.clone(),
+                                minecraft_version: presence_version.clone(),
+                                platform: presence_platform.clone(),
+                                aurora_active: presence_aurora,
+                                status: snapshot.status,
+                                started_at: snapshot.started_at_unix_seconds,
+                                gameplay: gameplay.clone(),
+                            });
+                            let _ =
+                                listener_app.emit("launch-state", LaunchProcessDto::from(snapshot));
+                        }),
+                        Some(game_plan.java().major_version()),
+                        bridge,
+                    )?;
+                    Ok(snapshot.into())
+                })
         });
         let mut stopped = crate::launch::process::ProcessSnapshot::stopped(instance.as_str());
         stopped.message = Some("Stopped by you".into());

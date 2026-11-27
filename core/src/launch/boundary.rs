@@ -65,6 +65,23 @@ impl LaunchSnapshot {
         &self.record
     }
 
+    pub(crate) fn game(&self) -> Option<&InstalledGameManifest> {
+        self.game.as_ref()
+    }
+
+    /// Re-captures the snapshot after an in-place game sync during Play,
+    /// requiring the instance record and Aurora state to remain unchanged.
+    pub(crate) fn refresh_after_game_sync(
+        &self,
+        managed: &ManagedPaths,
+    ) -> Result<Self, BoundaryError> {
+        let current = Self::capture(managed, self.record.id())?;
+        if current.record != self.record || current.aurora != self.aurora {
+            return Err(BoundaryError::Stale);
+        }
+        Ok(current)
+    }
+
     /// The callback must be synchronous and finish process reservation/spawn
     /// before returning. No runtime/session/network awaits occur under these
     /// locks. Ordering matches Aurora commit: content -> registry -> process.

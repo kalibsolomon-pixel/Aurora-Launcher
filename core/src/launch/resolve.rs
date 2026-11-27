@@ -875,6 +875,77 @@ fn substitute_argument(
     })
 }
 
+/// Reports whether `installed` already records every managed file required
+/// by `plan` for the same Minecraft version and platform.
+pub fn manifest_has_required_launch_files(
+    installed: &InstalledGameManifest,
+    plan: &LaunchPlan,
+) -> bool {
+    if installed.minecraft_version() != plan.minecraft_version
+        || installed.platform() != plan.platform_contribution
+    {
+        return false;
+    }
+    for relative in &plan.libraries {
+        let installed_path = format!("libraries/{relative}");
+        if require_manifest_role(
+            installed,
+            &installed_path,
+            &[InstalledFileRole::Library],
+            LaunchResolveError::Classpath,
+        )
+        .is_err()
+        {
+            return false;
+        }
+    }
+    let client_relative = format!("versions/{}/client.jar", plan.minecraft_version);
+    if require_manifest_role(
+        installed,
+        &client_relative,
+        &[InstalledFileRole::Client],
+        LaunchResolveError::Classpath,
+    )
+    .is_err()
+    {
+        return false;
+    }
+    let asset_index_relative = format!("assets/indexes/{}.json", plan.asset_index);
+    if require_manifest_role(
+        installed,
+        &asset_index_relative,
+        &[InstalledFileRole::AssetIndex],
+        LaunchResolveError::Assets,
+    )
+    .is_err()
+    {
+        return false;
+    }
+    if let Some(logging) = &plan.logging {
+        let relative = format!("versions/{}/{}", plan.minecraft_version, logging.file_name);
+        if require_manifest_role(
+            installed,
+            &relative,
+            &[InstalledFileRole::LoggingConfig],
+            LaunchResolveError::Logging,
+        )
+        .is_err()
+        {
+            return false;
+        }
+    }
+    true
+}
+
+/// Reports whether `installed` matches the pinned Minecraft version and
+/// platform of `plan` but is missing a required launch file because upstream
+/// metadata changed in place (e.g. Mojang bumped a library artifact version).
+pub fn manifest_needs_upstream_sync(installed: &InstalledGameManifest, plan: &LaunchPlan) -> bool {
+    installed.minecraft_version() == plan.minecraft_version
+        && installed.platform() == plan.platform_contribution
+        && !manifest_has_required_launch_files(installed, plan)
+}
+
 fn require_manifest_role(
     installed: &InstalledGameManifest,
     path: &str,
@@ -1289,6 +1360,36 @@ mod tests {
                 .iter()
                 .any(|a| a.expose().contains("${"))
         );
+    }
+
+    #[test]
+    fn manifest_needs_upstream_sync_detects_in_place_library_bump_only() {
+        let fixture = Fixture::new();
+        let mut live_plan = plan();
+        assert!(manifest_has_required_launch_files(
+            &fixture.manifest,
+            &live_plan
+        ));
+        assert!(!manifest_needs_upstream_sync(&fixture.manifest, &live_plan));
+
+        // Upstream Mojang manifest bumped a library artifact in place for the
+        // same Minecraft version and platform.
+        live_plan
+            .libraries
+            .push("org/lwjgl/lwjgl-freetype/3.4.1-mojang-2.15.0.3/lwjgl-freetype-3.4.1-mojang-2.15.0.3.jar".into());
+        assert!(!manifest_has_required_launch_files(
+            &fixture.manifest,
+            &live_plan
+        ));
+        assert!(manifest_needs_upstream_sync(&fixture.manifest, &live_plan));
+
+        // A different Minecraft version is a version mismatch, not upstream drift.
+        let mut wrong_version = live_plan.clone();
+        wrong_version.minecraft_version = "26.3".into();
+        assert!(!manifest_needs_upstream_sync(
+            &fixture.manifest,
+            &wrong_version
+        ));
     }
 
     #[tokio::test]
